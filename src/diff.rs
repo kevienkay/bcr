@@ -96,14 +96,29 @@ pub fn run(args: &DiffArgs) -> i32 {
 
 /// 按忽略选项归一化一行，仅用于匹配，不改变输出内容
 fn normalize(line: &str, args: &DiffArgs) -> String {
-    let s = if args.ignore_whitespace {
+    normalize_line(
+        line,
+        args.ignore_whitespace,
+        args.ignore_trailing,
+        args.ignore_case,
+    )
+}
+
+/// 归一化原语（GUI 并排视图与 CLI 共用）
+pub(crate) fn normalize_line(
+    line: &str,
+    ignore_whitespace: bool,
+    ignore_trailing: bool,
+    ignore_case: bool,
+) -> String {
+    let s = if ignore_whitespace {
         line.chars().filter(|c| !c.is_whitespace()).collect()
-    } else if args.ignore_trailing {
+    } else if ignore_trailing {
         line.trim_end().to_string()
     } else {
         line.to_string()
     };
-    if args.ignore_case {
+    if ignore_case {
         s.to_lowercase()
     } else {
         s

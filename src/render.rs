@@ -119,7 +119,8 @@ fn emit_op(
 }
 
 /// 对单行做字符级 diff，返回左右两侧的分段 (文本, 是否变更)
-fn intra_line(old: &str, new: &str) -> (Vec<(String, bool)>, Vec<(String, bool)>) {
+/// （GUI 并排视图的行内高亮复用）
+pub(crate) fn intra_line(old: &str, new: &str) -> (Vec<(String, bool)>, Vec<(String, bool)>) {
     let old_chars: Vec<char> = old.chars().collect();
     let new_chars: Vec<char> = new.chars().collect();
     let ops = capture_diff_slices(Algorithm::Myers, &old_chars, &new_chars);

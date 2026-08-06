@@ -1,8 +1,10 @@
 mod compare;
 mod diff;
 mod fsscan;
+mod gui;
 mod merge;
 mod render;
+mod sideview;
 mod sync;
 
 use clap::{Parser, Subcommand};
@@ -32,6 +34,9 @@ enum Commands {
 
     /// 目录同步（update/mirror/two-way，支持 dry-run 预览）
     Sync(sync::SyncArgs),
+
+    /// GUI 并排 Diff 视图（egui）
+    Gui(gui::GuiArgs),
 }
 
 fn main() {
@@ -41,6 +46,7 @@ fn main() {
         Commands::Compare(args) => compare::run(&args),
         Commands::Merge(args) => merge::run(&args),
         Commands::Sync(args) => sync::run(&args),
+        Commands::Gui(args) => gui::run(&args),
     };
     std::process::exit(code);
 }
