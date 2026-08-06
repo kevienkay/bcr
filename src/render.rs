@@ -243,3 +243,127 @@ fn group_hunks(ops: &[DiffOp]) -> Vec<Vec<usize>> {
     }
     hunks
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 用真实 diff ops 构造测试输入，保证分组逻辑面对的是引擎真实输出
+    fn ops_for(base: &[&str], new: &[&str]) -> Vec<DiffOp> {
+        capture_diff_slices(Algorithm::Patience, base, new)
+    }
+
+    #[test]
+    fn group_hunks_empty_ops_no_hunks() {
+        let base: Vec<&str> = vec![];
+        let new: Vec<&str> = vec![];
+        assert!(group_hunks(&ops_for(&base, &new)).is_empty());
+    }
+
+    #[test]
+    fn group_hunks_identical_no_hunks() {
+        let base = vec!["a", "b", "c"];
+        assert!(group_hunks(&ops_for(&base, &base)).is_empty());
+    }
+
+    #[test]
+    fn group_hunks_single_change_one_hunk() {
+        let base = vec!["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+        let new = vec!["1", "2", "X", "4", "5", "6", "7", "8", "9", "10"];
+        let hunks = group_hunks(&ops_for(&base, &new));
+        assert_eq!(hunks.len(), 1);
+    }
+
+    #[test]
+    fn group_hunks_distant_changes_split() {
+        // 100 行中第 5 行与第 95 行分别修改，间隔远超 2*CTX → 应拆成两个 hunk
+        let base: Vec<String> = (1..=100).map(|i| format!("line{i}")).collect();
+        let mut new = base.clone();
+        new[4] = "CHANGED5".into();
+        new[94] = "CHANGED95".into();
+        let b: Vec<&str> = base.iter().map(String::as_str).collect();
+        let n: Vec<&str> = new.iter().map(String::as_str).collect();
+        assert_eq!(group_hunks(&ops_for(&b, &n)).len(), 2);
+    }
+
+    #[test]
+    fn group_hunks_close_changes_merged() {
+        // 相邻两行修改，间隔在 2*CTX 内 → 合并为一个 hunk
+        let base: Vec<String> = (1..=20).map(|i| format!("line{i}")).collect();
+        let mut new = base.clone();
+        new[4] = "CHANGED5".into();
+        new[6] = "CHANGED7".into();
+        let b: Vec<&str> = base.iter().map(String::as_str).collect();
+        let n: Vec<&str> = new.iter().map(String::as_str).collect();
+        assert_eq!(group_hunks(&ops_for(&b, &n)).len(), 1);
+    }
+
+    #[test]
+    fn group_hunks_borderline_gap_split() {
+        // 间隔恰好 2*CTX 行内 → 合并；超过 2*CTX 才拆分
+        // 改动位于 index 4（0-based）与 index 12：gap_old = 12-5 = 7 > 6 → 两个 hunk
+        let base: Vec<String> = (1..=40).map(|i| format!("line{i}")).collect();
+        let mut new = base.clone();
+        new[4] = "CHANGED5".into();
+        new[12] = "CHANGED13".into();
+        let b: Vec<&str> = base.iter().map(String::as_str).collect();
+        let n: Vec<&str> = new.iter().map(String::as_str).collect();
+        assert_eq!(group_hunks(&ops_for(&b, &n)).len(), 2);
+    }
+
+    #[test]
+    fn group_hunks_borderline_gap_merged() {
+        // 间隔恰为 2*CTX=6 行未改动（gap_old=6）→ 仍合并为一个 hunk
+        let base: Vec<String> = (1..=40).map(|i| format!("line{i}")).collect();
+        let mut new = base.clone();
+        new[4] = "CHANGED5".into();
+        new[11] = "CHANGED12".into(); // gap_old = 11-5 = 6 ≤ 6 → 合并
+        let b: Vec<&str> = base.iter().map(String::as_str).collect();
+        let n: Vec<&str> = new.iter().map(String::as_str).collect();
+        assert_eq!(group_hunks(&ops_for(&b, &n)).len(), 1);
+    }
+
+    #[test]
+    fn intra_line_identical_no_changed_segments() {
+        let (l, r) = intra_line("hello world", "hello world");
+        assert!(l.iter().all(|(_, changed)| !changed));
+        assert!(r.iter().all(|(_, changed)| !changed));
+        let joined: String = l.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(joined, "hello world");
+    }
+
+    #[test]
+    fn intra_line_single_char_change() {
+        let (l, r) = intra_line("foo bar", "foo baz");
+        // 拼接后必须还原整行内容
+        let lj: String = l.iter().map(|(s, _)| s.as_str()).collect();
+        let rj: String = r.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(lj, "foo bar");
+        assert_eq!(rj, "foo baz");
+        // 且至少各有一个变更段
+        assert!(l.iter().any(|(_, c)| *c));
+        assert!(r.iter().any(|(_, c)| *c));
+    }
+
+    #[test]
+    fn intra_line_unicode_chars() {
+        let (l, r) = intra_line("中文测试", "中文修改");
+        let lj: String = l.iter().map(|(s, _)| s.as_str()).collect();
+        let rj: String = r.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(lj, "中文测试");
+        assert_eq!(rj, "中文修改");
+        // 相同前缀“中文”不应标记为变更
+        assert_eq!(l[0].1, false);
+        assert_eq!(l[1].1, false);
+    }
+
+    #[test]
+    fn intra_line_insertion_only() {
+        let (l, r) = intra_line("ab", "aXb");
+        let rj: String = r.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(rj, "aXb");
+        // 左侧无删除，右侧有插入
+        assert!(!l.iter().any(|(_, c)| *c));
+        assert!(r.iter().any(|(_, c)| *c));
+    }
+}

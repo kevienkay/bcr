@@ -257,3 +257,212 @@ fn do_copy(from: &Path, to: &Path) -> io::Result<()> {
     filetime::set_file_mtime(to, FileTime::from_system_time(mtime))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn args(left: &str, right: &str, mode: &str) -> SyncArgs {
+        SyncArgs {
+            left: left.into(),
+            right: right.into(),
+            mode: mode.into(),
+            reverse: false,
+            dry_run: false,
+            compare_content: false,
+            includes: vec![],
+            excludes: vec![],
+            summary: false,
+        }
+    }
+
+    fn write_tree(dir: &std::path::Path, entries: &[(&str, &str, i64)]) {
+        for (rel, content, mtime_secs) in entries {
+            let p = dir.join(rel);
+            if let Some(parent) = p.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(&p, content).unwrap();
+            let t = filetime::FileTime::from_unix_time(*mtime_secs, 0);
+            filetime::set_file_mtime(&p, t).unwrap();
+        }
+    }
+
+    #[test]
+    fn update_mode_copies_new_files() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("new.txt", "hello", 1_700_000_000)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        assert_eq!(run(&a), 0);
+        assert_eq!(fs::read_to_string(dst.path().join("new.txt")).unwrap(), "hello");
+    }
+
+    #[test]
+    fn update_mode_skips_newer_dst() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // 源旧目标新 → update 应跳过
+        write_tree(src.path(), &[("f.txt", "old", 1_700_000_000)]);
+        write_tree(dst.path(), &[("f.txt", "newer", 1_700_000_100)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        assert_eq!(run(&a), 0);
+        assert_eq!(fs::read_to_string(dst.path().join("f.txt")).unwrap(), "newer");
+    }
+
+    #[test]
+    fn update_mode_overwrites_when_src_newer() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("f.txt", "newer", 1_700_000_100)]);
+        write_tree(dst.path(), &[("f.txt", "old", 1_700_000_000)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        assert_eq!(run(&a), 0);
+        assert_eq!(fs::read_to_string(dst.path().join("f.txt")).unwrap(), "newer");
+    }
+
+    #[test]
+    fn update_mode_keeps_dst_only_files() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(dst.path(), &[("only.txt", "x", 1_700_000_000)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        assert_eq!(run(&a), 0);
+        assert!(dst.path().join("only.txt").exists());
+    }
+
+    #[test]
+    fn dry_run_does_not_write() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("new.txt", "hello", 1_700_000_000)]);
+        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        a.dry_run = true;
+        assert_eq!(run(&a), 1); // 有计划 → 退出码 1
+        assert!(!dst.path().join("new.txt").exists());
+    }
+
+    #[test]
+    fn mirror_mode_deletes_dst_only_files() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(dst.path(), &[("old.txt", "x", 1_700_000_000)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "mirror");
+        assert_eq!(run(&a), 0);
+        assert!(!dst.path().join("old.txt").exists());
+    }
+
+    #[test]
+    fn mirror_mode_overwrites_regardless_of_mtime() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // 目标更新也会被镜像覆盖
+        write_tree(src.path(), &[("f.txt", "src", 1_700_000_000)]);
+        write_tree(dst.path(), &[("f.txt", "dst", 1_700_000_100)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "mirror");
+        assert_eq!(run(&a), 0);
+        assert_eq!(fs::read_to_string(dst.path().join("f.txt")).unwrap(), "src");
+    }
+
+    #[test]
+    fn two_way_syncs_both_sides() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("l.txt", "L", 1_700_000_000)]);
+        write_tree(dst.path(), &[("r.txt", "R", 1_700_000_000)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        assert_eq!(run(&a), 0);
+        assert!(dst.path().join("l.txt").exists());
+        assert!(src.path().join("r.txt").exists());
+    }
+
+    #[test]
+    fn two_way_newer_wins() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // 左侧新 → 覆盖右侧
+        write_tree(src.path(), &[("both.txt", "L", 1_700_000_100)]);
+        write_tree(dst.path(), &[("both.txt", "R", 1_700_000_000)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        assert_eq!(run(&a), 0);
+        assert_eq!(fs::read_to_string(dst.path().join("both.txt")).unwrap(), "L");
+        // 右侧新 → 覆盖左侧
+        write_tree(src.path(), &[("both2.txt", "L", 1_700_000_000)]);
+        write_tree(dst.path(), &[("both2.txt", "R", 1_700_000_100)]);
+        let b = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        assert_eq!(run(&b), 0);
+        assert_eq!(fs::read_to_string(src.path().join("both2.txt")).unwrap(), "R");
+    }
+
+    #[test]
+    fn two_way_conflict_on_same_mtime_different_size() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // 快速模式下同大小同 mtime 会被判为一致；这里用不同大小触发冲突分支
+        write_tree(src.path(), &[("f.txt", "LONGER", 1_700_000_000)]);
+        write_tree(dst.path(), &[("f.txt", "R", 1_700_000_000)]);
+        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        assert_eq!(run(&a), 1); // 冲突 → 退出码 1
+    }
+
+    #[test]
+    fn two_way_conflict_compare_content_same_size() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // 同大小同 mtime 但内容不同：快速模式判为一致，compare-content 模式判冲突
+        write_tree(src.path(), &[("f.txt", "L", 1_700_000_000)]);
+        write_tree(dst.path(), &[("f.txt", "R", 1_700_000_000)]);
+        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        a.compare_content = true;
+        assert_eq!(run(&a), 1);
+    }
+
+    #[test]
+    fn two_way_compare_content_resolves_same_content() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // mtime 相同但内容相同 → compare-content 模式判定一致，不冲突
+        write_tree(src.path(), &[("f.txt", "same", 1_700_000_000)]);
+        write_tree(dst.path(), &[("f.txt", "same", 1_700_000_000)]);
+        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        a.compare_content = true;
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn reverse_swaps_direction() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // 反转后 dst 成为源：dst 独有的文件应被复制回 src
+        write_tree(dst.path(), &[("only.txt", "x", 1_700_000_000)]);
+        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        a.reverse = true;
+        assert_eq!(run(&a), 0);
+        assert!(src.path().join("only.txt").exists());
+    }
+
+    #[test]
+    fn do_copy_creates_parents_and_preserves_mtime() {
+        let dir = tempdir().unwrap();
+        let from = dir.path().join("from.txt");
+        let to = dir.path().join("a/b/to.txt");
+        fs::write(&from, "data").unwrap();
+        let t = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        filetime::set_file_mtime(&from, t).unwrap();
+        do_copy(&from, &to).unwrap();
+        assert_eq!(fs::read_to_string(&to).unwrap(), "data");
+        let mtime = fs::metadata(&to).unwrap().modified().unwrap();
+        let expected: std::time::SystemTime = t.into();
+        assert_eq!(mtime, expected);
+    }
+
+    #[test]
+    fn do_copy_missing_source_errors() {
+        let dir = tempdir().unwrap();
+        let from = dir.path().join("missing.txt");
+        let to = dir.path().join("to.txt");
+        assert!(do_copy(&from, &to).is_err());
+    }
+}

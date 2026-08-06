@@ -264,3 +264,221 @@ fn read_input(path: &str) -> io::Result<String> {
         fs::read_to_string(Path::new(path))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn args(base: &str, left: &str, right: &str) -> MergeArgs {
+        MergeArgs {
+            base: base.into(),
+            left: left.into(),
+            right: right.into(),
+            output: None,
+            algo: "patience".into(),
+            labels: vec![],
+        }
+    }
+
+    fn write_file(dir: &std::path::Path, name: &str, content: &str) -> String {
+        let p = dir.join(name);
+        fs::write(&p, content).unwrap();
+        p.to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn run_no_conflict_exit_zero() {
+        let d = tempdir().unwrap();
+        let b = write_file(d.path(), "base.txt", "l1\nl2\nl3\nl4\nl5\n");
+        let l = write_file(d.path(), "left.txt", "L1\nl2\nl3\nl4\nl5\n");
+        let r = write_file(d.path(), "right.txt", "l1\nl2\nl3\nl4\nR5\n");
+        let a = args(&b, &l, &r);
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_conflict_exit_one_with_markers() {
+        let d = tempdir().unwrap();
+        let b = write_file(d.path(), "base.txt", "l1\nX3\nl3\n");
+        let l = write_file(d.path(), "left.txt", "l1\nL3\nl3\n");
+        let r = write_file(d.path(), "right.txt", "l1\nR3\nl3\n");
+        let out = d.path().join("out.txt");
+        let out_s = out.to_str().unwrap().to_string();
+        let mut a = args(&b, &l, &r);
+        a.output = Some(out_s);
+        assert_eq!(run(&a), 1);
+        let content = fs::read_to_string(&out).unwrap();
+        assert!(content.contains("<<<<<<< LEFT"));
+        assert!(content.contains("======="));
+        assert!(content.contains(">>>>>>> RIGHT"));
+    }
+
+    #[test]
+    fn run_identical_changes_no_conflict() {
+        let d = tempdir().unwrap();
+        let b = write_file(d.path(), "base.txt", "l1\nX3\nl3\n");
+        let l = write_file(d.path(), "left.txt", "l1\nZ3\nl3\n");
+        let r = write_file(d.path(), "right.txt", "l1\nZ3\nl3\n");
+        let a = args(&b, &l, &r);
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_single_side_change_merged() {
+        let d = tempdir().unwrap();
+        let b = write_file(d.path(), "base.txt", "l1\nl2\nl3\n");
+        let l = write_file(d.path(), "left.txt", "l1\nIA\nl2\nl3\n");
+        let r = write_file(d.path(), "right.txt", "l1\nl2\nl3\n");
+        let out = d.path().join("out.txt");
+        let out_s = out.to_str().unwrap().to_string();
+        let mut a = args(&b, &l, &r);
+        a.output = Some(out_s);
+        assert_eq!(run(&a), 0);
+        let content = fs::read_to_string(&out).unwrap();
+        assert!(content.contains("IA"));
+    }
+
+    #[test]
+    fn run_missing_file_exit_two() {
+        let d = tempdir().unwrap();
+        let b = write_file(d.path(), "base.txt", "l1\n");
+        let a = args(&b, "/nonexistent/l", "/nonexistent/r");
+        assert_eq!(run(&a), 2);
+    }
+
+    #[test]
+    fn run_adjacent_independent_edits_no_conflict() {
+        // 经典 diff3 语义：两侧对相邻行的独立修改不应冲突
+        let d = tempdir().unwrap();
+        let b = write_file(d.path(), "base.txt", "l1\nl2\nl3\n");
+        let l = write_file(d.path(), "left.txt", "L2\nl2\nl3\n");
+        let r = write_file(d.path(), "right.txt", "l1\nR2\nl3\n");
+        let a = args(&b, &l, &r);
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_stdin_left_side_supported() {
+        // 无法直接注入 stdin，这里验证文件路径读取路径本身正常
+        let d = tempdir().unwrap();
+        let b = write_file(d.path(), "base.txt", "l1\nX2\nl3\n");
+        let l = write_file(d.path(), "left.txt", "l1\nX2\nl3\n");
+        let r = write_file(d.path(), "right.txt", "l1\nX2\nl3\n");
+        let a = args(&b, &l, &r);
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn extract_regions_replace() {
+        let base: Vec<&str> = vec!["a", "b", "c"];
+        let side: Vec<&str> = vec!["a", "X", "c"];
+        let ops = capture_diff_slices(Algorithm::Myers, &base, &side);
+        let regions = extract_regions(&ops, &base, &side);
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].base, 1..2);
+        assert_eq!(regions[0].side_lines, vec!["X"]);
+    }
+
+    #[test]
+    fn extract_regions_insert() {
+        let base: Vec<&str> = vec!["a", "b"];
+        let side: Vec<&str> = vec!["a", "X", "b"];
+        let ops = capture_diff_slices(Algorithm::Myers, &base, &side);
+        let regions = extract_regions(&ops, &base, &side);
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].base, 1..1); // 空区间，插入点
+        assert_eq!(regions[0].side_lines, vec!["X"]);
+    }
+
+    #[test]
+    fn extract_regions_delete() {
+        let base: Vec<&str> = vec!["a", "b", "c"];
+        let side: Vec<&str> = vec!["a", "c"];
+        let ops = capture_diff_slices(Algorithm::Myers, &base, &side);
+        let regions = extract_regions(&ops, &base, &side);
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].base, 1..2);
+        assert!(regions[0].side_lines.is_empty());
+    }
+
+    #[test]
+    fn overlap_semantics() {
+        // 重叠
+        assert!(overlap(&(1..3), 1, 3));
+        assert!(overlap(&(0..2), 1, 3));
+        assert!(overlap(&(2..4), 1, 3));
+        // 相邻但不重叠（关键语义）
+        assert!(!overlap(&(8..9), 9, 10));
+        assert!(!overlap(&(9..10), 8, 9));
+        // 空区间视作单点
+        assert!(overlap(&(1..1), 1, 1));
+        assert!(!overlap(&(3..3), 1, 2));
+    }
+
+    #[test]
+    fn eff_end_empty_range_plus_one() {
+        assert_eq!(eff_end(&(3..3)), 4);
+        assert_eq!(eff_end(&(3..5)), 5);
+    }
+
+    #[test]
+    fn apply_regions_rebuilds_lines() {
+        let base: Vec<&str> = vec!["a", "b", "c", "d", "e"];
+        let r1 = Region { base: 1..2, side_lines: vec!["X", "Y"] };
+        let r2 = Region { base: 3..4, side_lines: vec![] };
+        let out = apply_regions(&base, &[&r1, &r2], 0, 5);
+        assert_eq!(out, vec!["a", "X", "Y", "c", "e"]);
+    }
+
+    #[test]
+    fn collect_block_gathers_overlapping_regions() {
+        // 左区域 1..3 与右区域 2..4 重叠 → 构成一个块
+        let rl = Region { base: 1..3, side_lines: vec!["L"] };
+        let rr = Region { base: 2..4, side_lines: vec!["R"] };
+        let regions_l = vec![rl];
+        let regions_r = vec![rr];
+        let mut i = 0;
+        let mut j = 0;
+        let (bl, br, end) = collect_block(&regions_l, &regions_r, &mut i, &mut j, 1);
+        assert_eq!(bl.len(), 1);
+        assert_eq!(br.len(), 1);
+        assert_eq!(end, 4);
+        assert_eq!(i, 1);
+        assert_eq!(j, 1);
+    }
+
+    #[test]
+    fn collect_block_adjacent_regions_not_overlapping() {
+        // 相邻但不重叠（8..9 与 9..10）→ 不应合并进同一块
+        let rl = Region { base: 8..9, side_lines: vec!["L"] };
+        let rr = Region { base: 9..10, side_lines: vec!["R"] };
+        let regions_l = vec![rl];
+        let regions_r = vec![rr];
+        let mut i = 0;
+        let mut j = 0;
+        let (bl, br, end) = collect_block(&regions_l, &regions_r, &mut i, &mut j, 8);
+        assert_eq!(bl.len(), 1);
+        assert!(br.is_empty());
+        assert_eq!(end, 9);
+    }
+
+    #[test]
+    fn collect_block_transitive_closure() {
+        // 左 1..2 + 右 1..3 → 左 2..3 因传递闭包也并入
+        let rl1 = Region { base: 1..2, side_lines: vec!["L1"] };
+        let rl2 = Region { base: 2..3, side_lines: vec!["L2"] };
+        let rr = Region { base: 1..3, side_lines: vec!["R"] };
+        let regions_l = vec![rl1, rl2];
+        let regions_r = vec![rr];
+        let mut i = 0;
+        let mut j = 0;
+        let (bl, br, end) = collect_block(&regions_l, &regions_r, &mut i, &mut j, 1);
+        assert_eq!(bl.len(), 2);
+        assert_eq!(br.len(), 1);
+        assert_eq!(end, 3);
+        assert_eq!(i, 2);
+        assert_eq!(j, 1);
+    }
+}

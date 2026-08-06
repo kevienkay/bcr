@@ -133,3 +133,140 @@ fn hash_file(path: &Path) -> io::Result<blake3::Hash> {
     }
     Ok(hasher.finalize())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn filter(includes: &[&str], excludes: &[&str]) -> Filter {
+        let inc: Vec<String> = includes.iter().map(|s| s.to_string()).collect();
+        let exc: Vec<String> = excludes.iter().map(|s| s.to_string()).collect();
+        Filter::new(&inc, &exc).unwrap()
+    }
+
+    #[test]
+    fn filter_empty_accepts_all() {
+        let f = filter(&[], &[]);
+        assert!(f.accept("a.txt"));
+        assert!(f.accept("sub/b.rs"));
+        assert!(!f.is_excluded("anything"));
+    }
+
+    #[test]
+    fn filter_include_whitelist() {
+        let f = filter(&["*.rs"], &[]);
+        assert!(f.accept("main.rs"));
+        assert!(!f.accept("main.c"));
+        assert!(!f.accept("sub/mod.txt"));
+    }
+
+    #[test]
+    fn filter_exclude_blacklist() {
+        let f = filter(&[], &["*.log", "target/**"]);
+        assert!(!f.accept("x.log"));
+        assert!(f.accept("x.txt"));
+        assert!(!f.accept("target/debug/bcr"));
+        // globset 的 dir/** 匹配目录本身时需要尾斜杠写法（scan 会两种都试）
+        assert!(f.is_excluded("target/"));
+        assert!(f.is_excluded("target/debug"));
+    }
+
+    #[test]
+    fn filter_include_and_exclude_combined() {
+        let f = filter(&["*.rs"], &["test/**"]);
+        assert!(f.accept("src/main.rs"));
+        assert!(!f.accept("test/mod.rs"));
+    }
+
+    #[test]
+    fn filter_invalid_glob_errors() {
+        let inc = vec!["[".to_string()]; // 非法 glob
+        assert!(Filter::new(&inc, &[]).is_err());
+    }
+
+    #[test]
+    fn scan_indexes_files_recursively() {
+        let dir = tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("sub/deep")).unwrap();
+        fs::write(dir.path().join("a.txt"), "aaa").unwrap();
+        fs::write(dir.path().join("sub/b.txt"), "bb").unwrap();
+        fs::write(dir.path().join("sub/deep/c.txt"), "c").unwrap();
+        let f = filter(&[], &[]);
+        let map = scan(dir.path(), &f).unwrap();
+        assert_eq!(map.len(), 3);
+        assert!(map.contains_key("a.txt"));
+        assert!(map.contains_key("sub/b.txt"));
+        assert!(map.contains_key("sub/deep/c.txt"));
+        assert_eq!(map["a.txt"].size, 3);
+        assert_eq!(map["sub/b.txt"].size, 2);
+    }
+
+    #[test]
+    fn scan_respects_exclude_on_dir_and_file() {
+        let dir = tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("skip")).unwrap();
+        fs::write(dir.path().join("keep.txt"), "k").unwrap();
+        fs::write(dir.path().join("skip/drop.txt"), "d").unwrap();
+        fs::write(dir.path().join("skip.log"), "l").unwrap();
+        let f = filter(&[], &["skip/**", "*.log"]);
+        let map = scan(dir.path(), &f).unwrap();
+        assert!(map.contains_key("keep.txt"));
+        assert!(!map.contains_key("skip/drop.txt"));
+        assert!(!map.contains_key("skip.log"));
+    }
+
+    #[test]
+    fn scan_respects_include_whitelist() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.rs"), "1").unwrap();
+        fs::write(dir.path().join("b.txt"), "2").unwrap();
+        let f = filter(&["*.rs"], &[]);
+        let map = scan(dir.path(), &f).unwrap();
+        assert!(map.contains_key("a.rs"));
+        assert!(!map.contains_key("b.txt"));
+    }
+
+    #[test]
+    fn scan_empty_dir_returns_empty_map() {
+        let dir = tempdir().unwrap();
+        let f = filter(&[], &[]);
+        assert!(scan(dir.path(), &f).unwrap().is_empty());
+    }
+
+    #[test]
+    fn content_equal_same_content_true() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        fs::write(d1.path().join("f.txt"), "hello").unwrap();
+        fs::write(d2.path().join("f.txt"), "hello").unwrap();
+        assert!(content_equal(d1.path(), d2.path(), "f.txt").unwrap());
+    }
+
+    #[test]
+    fn content_equal_different_content_false() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        fs::write(d1.path().join("f.txt"), "hello").unwrap();
+        fs::write(d2.path().join("f.txt"), "world").unwrap();
+        assert!(!content_equal(d1.path(), d2.path(), "f.txt").unwrap());
+    }
+
+    #[test]
+    fn content_equal_large_file() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        let big = "x".repeat(200_000); // 跨多个 64KB 缓冲块
+        fs::write(d1.path().join("f.txt"), &big).unwrap();
+        fs::write(d2.path().join("f.txt"), &big).unwrap();
+        assert!(content_equal(d1.path(), d2.path(), "f.txt").unwrap());
+    }
+
+    #[test]
+    fn content_equal_missing_file_errors() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        assert!(content_equal(d1.path(), d2.path(), "nope.txt").is_err());
+    }
+}

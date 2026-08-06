@@ -167,3 +167,142 @@ fn emit(status: char, rel: &str, color: bool) {
         println!("[{status}] {rel}");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn args(left: &str, right: &str) -> CompareArgs {
+        CompareArgs {
+            left: left.into(),
+            right: right.into(),
+            compare_content: false,
+            includes: vec![],
+            excludes: vec![],
+            show_same: false,
+            summary: false,
+            color: "never".into(),
+        }
+    }
+
+    /// 构建目录树：entries 为 (相对路径, 内容)，统一写入固定 mtime 保证快速模式可比
+    fn make_tree(dir: &std::path::Path, entries: &[(&str, &str)]) {
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        for (rel, content) in entries {
+            let p = dir.join(rel);
+            if let Some(parent) = p.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(p, content).unwrap();
+            filetime::set_file_mtime(&dir.join(rel), fixed).unwrap();
+        }
+    }
+
+    #[test]
+    fn run_identical_dirs_exit_zero() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("a.txt", "x"), ("sub/b.txt", "y")]);
+        make_tree(d2.path(), &[("a.txt", "x"), ("sub/b.txt", "y")]);
+        let a = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_different_dirs_exit_one() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("only_l.txt", "x")]);
+        make_tree(d2.path(), &[("only_r.txt", "x")]);
+        let a = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        assert_eq!(run(&a), 1);
+    }
+
+    #[test]
+    fn run_missing_dir_exit_two() {
+        let d = tempdir().unwrap();
+        let a = args(d.path().to_str().unwrap(), "/nonexistent/bcr-dir");
+        assert_eq!(run(&a), 2);
+    }
+
+    #[test]
+    fn run_quick_mode_mtime_diff_counts_as_differ() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("f.txt", "same")]);
+        make_tree(d2.path(), &[("f.txt", "same")]);
+        // 内容相同但 mtime 不同 → 快速模式判为不同
+        let old = filetime::FileTime::from_unix_time(1_600_000_000, 0);
+        filetime::set_file_mtime(d1.path().join("f.txt"), old).unwrap();
+        let new = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        filetime::set_file_mtime(d2.path().join("f.txt"), new).unwrap();
+        let a = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        assert_eq!(run(&a), 1);
+    }
+
+    #[test]
+    fn run_content_mode_ignores_mtime() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("f.txt", "same")]);
+        make_tree(d2.path(), &[("f.txt", "same")]);
+        let old = filetime::FileTime::from_unix_time(1_600_000_000, 0);
+        filetime::set_file_mtime(d1.path().join("f.txt"), old).unwrap();
+        let new = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        filetime::set_file_mtime(d2.path().join("f.txt"), new).unwrap();
+        let mut a = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        a.compare_content = true;
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_content_mode_detects_different_content() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("f.txt", "aaa")]);
+        make_tree(d2.path(), &[("f.txt", "bbb")]);
+        let t = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        filetime::set_file_mtime(d1.path().join("f.txt"), t).unwrap();
+        filetime::set_file_mtime(d2.path().join("f.txt"), t).unwrap();
+        let mut a = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        a.compare_content = true;
+        assert_eq!(run(&a), 1);
+    }
+
+    #[test]
+    fn run_include_filter_limits_comparison() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("keep.txt", "x"), ("drop.txt", "y")]);
+        make_tree(d2.path(), &[("keep.txt", "x")]);
+        // 不带 include：drop.txt 仅左侧 → 有差异
+        let a = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        assert_eq!(run(&a), 1);
+        // 带 include：drop.txt 被过滤 → 无差异
+        let mut b = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        b.includes = vec!["keep.txt".into()];
+        assert_eq!(run(&b), 0);
+    }
+
+    #[test]
+    fn run_exclude_filter_ignores_files() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("keep.txt", "x"), ("skip.txt", "y")]);
+        make_tree(d2.path(), &[("keep.txt", "x")]);
+        let mut a = args(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        a.excludes = vec!["skip.txt".into()];
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn emit_formats_plain_status() {
+        // 不校验 stdout，只保证不 panic，且颜色路径逻辑可用
+        emit('L', "a.txt", false);
+        emit('R', "a.txt", false);
+        emit('C', "a.txt", false);
+        emit('S', "a.txt", false);
+    }
+}

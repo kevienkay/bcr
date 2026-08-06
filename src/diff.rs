@@ -119,3 +119,146 @@ fn read_input(path: &str) -> io::Result<String> {
         fs::read_to_string(Path::new(path))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn args() -> DiffArgs {
+        DiffArgs {
+            left: String::new(),
+            right: String::new(),
+            algo: "patience".into(),
+            ignore_whitespace: false,
+            ignore_trailing: false,
+            ignore_case: false,
+            color: "never".into(),
+            labels: vec![],
+        }
+    }
+
+    #[test]
+    fn normalize_default_keeps_line() {
+        let a = args();
+        assert_eq!(normalize("  Hello World  ", &a), "  Hello World  ");
+    }
+
+    #[test]
+    fn normalize_ignore_whitespace_strips_all() {
+        let mut a = args();
+        a.ignore_whitespace = true;
+        assert_eq!(normalize("  a \t b \n c ", &a), "abc");
+    }
+
+    #[test]
+    fn normalize_ignore_trailing_trims_end() {
+        let mut a = args();
+        a.ignore_trailing = true;
+        assert_eq!(normalize("hello   ", &a), "hello");
+        // 行首空白保留
+        assert_eq!(normalize("  hello  ", &a), "  hello");
+    }
+
+    #[test]
+    fn normalize_ignore_case_lowercases() {
+        let mut a = args();
+        a.ignore_case = true;
+        assert_eq!(normalize("Hello World", &a), "hello world");
+    }
+
+    #[test]
+    fn normalize_combined_options() {
+        let mut a = args();
+        a.ignore_whitespace = true;
+        a.ignore_case = true;
+        assert_eq!(normalize("  Foo Bar ", &a), "foobar");
+    }
+
+    #[test]
+    fn run_identical_files_exit_zero() {
+        let dir = tempdir().unwrap();
+        let p = dir.path().join("a.txt");
+        fs::write(&p, "x\ny\n").unwrap();
+        let mut a = args();
+        a.left = p.to_str().unwrap().into();
+        a.right = p.to_str().unwrap().into();
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_different_files_exit_one() {
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "a\nb\n").unwrap();
+        fs::write(&r, "a\nc\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        assert_eq!(run(&a), 1);
+    }
+
+    #[test]
+    fn run_missing_file_exit_two() {
+        let mut a = args();
+        a.left = "/nonexistent/bcr-test-l".into();
+        a.right = "/nonexistent/bcr-test-r".into();
+        assert_eq!(run(&a), 2);
+    }
+
+    #[test]
+    fn run_ignore_whitespace_affects_exit_code() {
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "a b\n").unwrap();
+        fs::write(&r, "ab\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        assert_eq!(run(&a), 1);
+        a.ignore_whitespace = true;
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_ignore_case_affects_exit_code() {
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "Hello\n").unwrap();
+        fs::write(&r, "hello\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        assert_eq!(run(&a), 1);
+        a.ignore_case = true;
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn run_algo_myers_and_patience_both_work() {
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "one\ntwo\nthree\n").unwrap();
+        fs::write(&r, "one\nTWO\nthree\n").unwrap();
+        for algo in ["myers", "patience"] {
+            let mut a = args();
+            a.algo = algo.into();
+            a.left = l.to_str().unwrap().into();
+            a.right = r.to_str().unwrap().into();
+            assert_eq!(run(&a), 1, "algo={algo}");
+        }
+    }
+
+    #[test]
+    fn read_input_reads_file() {
+        let dir = tempdir().unwrap();
+        let p = dir.path().join("in.txt");
+        fs::write(&p, "line1\nline2\n").unwrap();
+        assert_eq!(read_input(p.to_str().unwrap()).unwrap(), "line1\nline2\n");
+    }
+}
