@@ -7,3 +7,6 @@ description = "Beyond Compare 风格的文件对比工具（Rust 实现）"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 similar = "2"
+walkdir = "2"
+blake3 = "1"
+globset = "0.4"

@@ -1,3 +1,4 @@
+mod compare;
 mod diff;
 mod render;
 
@@ -19,12 +20,16 @@ struct Cli {
 enum Commands {
     /// 对比两个文本文件（unified 格式输出，支持行内高亮）
     Diff(diff::DiffArgs),
+
+    /// 对比两个目录树（快速元数据比较或深度内容比较）
+    Compare(compare::CompareArgs),
 }
 
 fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
         Commands::Diff(args) => diff::run(&args),
+        Commands::Compare(args) => compare::run(&args),
     };
     std::process::exit(code);
 }
