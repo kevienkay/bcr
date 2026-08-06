@@ -1,8 +1,16 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff 引擎** + **M2：文件夹对比**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并**。
 
 ## 功能
+
+### M3 三路合并（`bcr merge`）
+
+- `bcr merge <BASE> <LEFT> <RIGHT>`：经典 diff3 算法，两侧变更基于 base 行号归并
+- 合并规则：单侧修改取该侧；两侧相同修改无冲突；两侧不同修改输出 git 风格冲突块
+- 冲突标记：`<<<<<<< LEFT / ======= / >>>>>>> RIGHT`，可用 `-L` 自定义标签
+- `-o` 输出到文件（有冲突也写出，供人工处理）、`-` 支持 stdin
+- 退出码：0=无冲突，1=有冲突，2=错误（可直接作为 `git mergetool`）
 
 ### M2 文件夹对比（`bcr compare`）
 
@@ -26,6 +34,15 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff 引擎
 
 ```bash
 cargo build --release
+
+# 三路合并（无冲突自动合并）
+bcr merge base.py left.py right.py -o merged.py
+
+# 冲突时输出标记块，退出码 1
+# <<<<<<< LEFT / ======= / >>>>>>> RIGHT
+
+# 作为 git mergetool 使用（M3 后支持）
+git mergetool --tool=bcr
 
 # 目录对比（快速模式）
 bcr compare old-dir new-dir
@@ -64,6 +81,7 @@ src/main.rs     CLI 入口（clap 子命令分发）
 src/diff.rs     M1 参数解析、输入读取、diff 引擎（similar::capture_diff_slices）
 src/render.rs   M1 unified 渲染：hunk 分组、行内高亮、ANSI 着色
 src/compare.rs  M2 目录扫描（walkdir）、双模式比较、glob 过滤、状态输出
+src/merge.rs    M3 三路合并：diff3 归并（collect_block + apply_regions）、冲突标记
 ```
 
 关键设计：
@@ -76,14 +94,16 @@ src/compare.rs  M2 目录扫描（walkdir）、双模式比较、glob 过滤、�
 
 - [x] M1 文本 diff
 - [x] M2 文件夹对比（walkdir + blake3 + 过滤规则）
-- [ ] M3 三路合并 + 冲突标记
+- [x] M3 三路合并 + 冲突标记
 - [ ] M4 同步引擎（镜像/双向/更新 + dry-run 预览）
 - [ ] M5 GUI（egui 并排 Diff 视图）
 - [ ] M6 远程/压缩包适配层（SFTP / ZIP 虚拟 FS）
 
-## 已知限制（M1/M2）
+## 已知限制（M1-M3）
 
 - 整文件读入内存，超大文件（> 数百 MB）需后续引入分块比较
 - 不处理 "No newline at end of file" 标记
-- 二进制文件未做检测（M1 仅文本）
+- 二进制文件未做检测（M1/M3 仅文本）
 - 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确
+- M3 三处 stdin 不能同时用（`-` 只能出现一次）
+- 与 git 的行为差异：两侧对**相邻行**的独立修改，bcr 按经典 diff3 语义无冲突合并，git 保守判冲突

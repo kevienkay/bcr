@@ -1,5 +1,6 @@
 mod compare;
 mod diff;
+mod merge;
 mod render;
 
 use clap::{Parser, Subcommand};
@@ -23,6 +24,9 @@ enum Commands {
 
     /// 对比两个目录树（快速元数据比较或深度内容比较）
     Compare(compare::CompareArgs),
+
+    /// 三路合并（Base + Left + Right），冲突输出标记块
+    Merge(merge::MergeArgs),
 }
 
 fn main() {
@@ -30,6 +34,7 @@ fn main() {
     let code = match cli.command {
         Commands::Diff(args) => diff::run(&args),
         Commands::Compare(args) => compare::run(&args),
+        Commands::Merge(args) => merge::run(&args),
     };
     std::process::exit(code);
 }
