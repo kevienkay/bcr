@@ -79,6 +79,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "clap",
+ "filetime",
  "globset",
  "similar",
  "walkdir",
@@ -182,6 +183,16 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
 dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
  "libc",
 ]
 

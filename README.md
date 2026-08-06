@@ -1,8 +1,18 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎**。
 
 ## 功能
+
+### M4 目录同步（`bcr sync`）
+
+- `bcr sync <LEFT> <RIGHT>`，三种模式：
+  - `--mode update`（默认）：单向复制新增/更新（源较新才覆盖），不删除
+  - `--mode mirror`：单向镜像，源为准无条件覆盖，并删除目标侧独有文件
+  - `--mode two-way`：双向，新增/更新以 mtime 新者胜；mtime 相同且内容不同（需 `--compare-content`）报冲突跳过
+- `--reverse` 反转方向（默认 LEFT → RIGHT）、`--dry-run` 只预览不执行
+- 复制保留源 mtime（幂等：同步后再跑无操作）、自动建目录、`--include/--exclude` 过滤、`--summary`
+- 退出码：0=成功，1=有冲突/有计划(dry-run)，2=错误
 
 ### M3 三路合并（`bcr merge`）
 
@@ -34,6 +44,15 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 
 ```bash
 cargo build --release
+
+# 预览同步计划（不执行）
+bcr sync src/ backup/ --mode mirror --dry-run
+
+# 单向更新（左→右）
+bcr sync src/ backup/ --mode update
+
+# 双向同步，内容级冲突检测
+bcr sync laptop/ nas/ --mode two-way --compare-content --summary
 
 # 三路合并（无冲突自动合并）
 bcr merge base.py left.py right.py -o merged.py
@@ -82,6 +101,8 @@ src/diff.rs     M1 参数解析、输入读取、diff 引擎（similar::capture_
 src/render.rs   M1 unified 渲染：hunk 分组、行内高亮、ANSI 着色
 src/compare.rs  M2 目录扫描（walkdir）、双模式比较、glob 过滤、状态输出
 src/merge.rs    M3 三路合并：diff3 归并（collect_block + apply_regions）、冲突标记
+src/fsscan.rs   共享扫描/过滤/哈希模块（compare 与 sync 共用）
+src/sync.rs     M4 同步引擎：三模式计划生成、dry-run、mtime 保留复制
 ```
 
 关键设计：
@@ -95,11 +116,11 @@ src/merge.rs    M3 三路合并：diff3 归并（collect_block + apply_regions�
 - [x] M1 文本 diff
 - [x] M2 文件夹对比（walkdir + blake3 + 过滤规则）
 - [x] M3 三路合并 + 冲突标记
-- [ ] M4 同步引擎（镜像/双向/更新 + dry-run 预览）
+- [x] M4 同步引擎（镜像/双向/更新 + dry-run 预览）
 - [ ] M5 GUI（egui 并排 Diff 视图）
 - [ ] M6 远程/压缩包适配层（SFTP / ZIP 虚拟 FS）
 
-## 已知限制（M1-M3）
+## 已知限制（M1-M4）
 
 - 整文件读入内存，超大文件（> 数百 MB）需后续引入分块比较
 - 不处理 "No newline at end of file" 标记
@@ -107,3 +128,5 @@ src/merge.rs    M3 三路合并：diff3 归并（collect_block + apply_regions�
 - 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确
 - M3 三处 stdin 不能同时用（`-` 只能出现一次）
 - 与 git 的行为差异：两侧对**相邻行**的独立修改，bcr 按经典 diff3 语义无冲突合并，git 保守判冲突
+- sync 快速模式下无法检测“mtime 相同但内容不同”，two-way 冲突检测需 `--compare-content`
+- sync 的 mirror 删除只删文件，不清理空目录
