@@ -1,4 +1,5 @@
 use crate::fsscan::{FileMeta, Filter};
+use crate::i18n::{fmt, Key};
 use crate::vfs::{LocalVfs, Vfs};
 use clap::Args;
 use std::io::{self, IsTerminal};
@@ -199,18 +200,18 @@ pub fn compare_vfs(
 pub fn run(args: &CompareArgs) -> i32 {
     // 本地路径需要是目录；zip:// 与 sftp:// 交给 vfs::open 处理
     if !crate::vfs::is_remote(&args.left) && !Path::new(&args.left).is_dir() {
-        eprintln!("bcr: 不是目录: {}", args.left);
+        eprintln!("bcr: {}", fmt(Key::NotDir, &[&args.left]));
         return 2;
     }
     if !crate::vfs::is_remote(&args.right) && !Path::new(&args.right).is_dir() {
-        eprintln!("bcr: 不是目录: {}", args.right);
+        eprintln!("bcr: {}", fmt(Key::NotDir, &[&args.right]));
         return 2;
     }
 
     let filter = match Filter::new(&args.includes, &args.excludes) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("bcr: 过滤规则错误: {e}");
+            eprintln!("bcr: {}", fmt(Key::FilterError, &[&e.to_string()]));
             return 2;
         }
     };
@@ -218,14 +219,14 @@ pub fn run(args: &CompareArgs) -> i32 {
     let left = match crate::vfs::open(&args.left) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("bcr: 打开 {} 失败: {e}", args.left);
+            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[&args.left, &e.to_string()]));
             return 2;
         }
     };
     let right = match crate::vfs::open(&args.right) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("bcr: 打开 {} 失败: {e}", args.right);
+            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[&args.right, &e.to_string()]));
             return 2;
         }
     };
@@ -233,7 +234,7 @@ pub fn run(args: &CompareArgs) -> i32 {
     let result = match compare_vfs(left.as_ref(), right.as_ref(), &filter, args.compare_content) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("bcr: 扫描失败: {e}");
+            eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&e.to_string()]));
             return 2;
         }
     };
@@ -258,8 +259,16 @@ pub fn run(args: &CompareArgs) -> i32 {
     if args.summary {
         let s = result.stats;
         println!(
-            "统计: {} 相同, {} 仅左侧, {} 仅右侧, {} 内容不同",
-            s.same, s.left_only, s.right_only, s.differ
+            "{}",
+            fmt(
+                Key::SummaryCompare,
+                &[
+                    &s.same.to_string(),
+                    &s.left_only.to_string(),
+                    &s.right_only.to_string(),
+                    &s.differ.to_string(),
+                ]
+            )
         );
     }
 

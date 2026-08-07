@@ -1,3 +1,4 @@
+use crate::i18n::{fmt, Key};
 use crate::render;
 use clap::Args;
 use similar::{capture_diff_slices, Algorithm};
@@ -44,14 +45,14 @@ pub fn run(args: &DiffArgs) -> i32 {
     let left = match read_input(&args.left) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: 无法读取 {}: {e}", args.left);
+            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.left, &e.to_string()]));
             return 2;
         }
     };
     let right = match read_input(&args.right) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: 无法读取 {}: {e}", args.right);
+            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.right, &e.to_string()]));
             return 2;
         }
     };

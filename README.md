@@ -1,8 +1,16 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（ZIP/SFTP）**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统** + **I18N：多语言**。
 
 ## 功能
+
+### I18N 多语言支持
+
+- 支持 10 种语言：中文、English、Deutsch、日本語、한국어、Español、Português、العربية、Русский、Français
+- CLI：`bcr --lang de ...` 全局参数，或环境变量 `BCR_LANG=de`（未指定时按系统 `LANG` 推断，默认中文）
+- GUI：工具栏语言下拉框即时切换，持久化到 `~/.bcr-gui.toml`
+- 覆盖全部 CLI 输出（错误消息/统计行/同步标签）与 GUI 文案（菜单/工具栏/标签页/Git 弹窗）
+- 翻译表由宏保证穷尽：新增文案若缺少任一语言翻译会编译失败
 
 ### M6 虚拟文件系统（`zip://` / `sftp://`）
 
@@ -69,6 +77,11 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 
 ```bash
 cargo build --release
+
+# 多语言：--lang 或 BCR_LANG（zh/en/de/ja/ko/es/pt/ar/ru/fr）
+bcr --lang en diff old.rs new.rs
+BCR_LANG=de bcr compare src/ backup/ --summary
+bcr gui --lang ja old.rs new.rs
 
 # GUI 并排 Diff 视图
 bcr gui old.rs new.rs
@@ -138,6 +151,8 @@ src/gui/         M5 egui 窗口：mod.rs（多标签/主题/持久化）、difft
                  dirtab（目录导航）、mergetab（三路合并）、common（虚拟化渲染/着色）
 src/vfs/        M6 虚拟文件系统：mod.rs（Vfs trait + LocalVfs + 路径解析）、zip.rs（ZIP 只读）、
                 sftp.rs（russh 纯 Rust SFTP）
+src/i18n.rs     I18N：Lang 枚举 + Key 枚举 + 全局语言 + t()/fmt()
+src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 ```
 
 关键设计：

@@ -286,6 +286,42 @@ check_contains "M6.8 缺失条目标记 [L]" "[L] diff.txt" "$(cat m6_sub.txt)"
 printf 'not-a-zip' > m6_bad.zip
 "$BIN" compare m6_dir "zip://$WORK/m6_bad.zip" > /dev/null 2>&1; check "M6.9 非法 zip 退出码=2" 2 "$?"
 
+echo "=============================================="
+echo " I18N: 多语言"
+echo "=============================================="
+# --lang en：错误消息与统计行应为英文
+"$BIN" --lang en diff a_missing.txt b_missing.txt 2>&1 | head -1 > i18n_err.txt
+check_contains "I18N.1 --lang en 错误消息" "cannot read" "$(cat i18n_err.txt)"
+
+"$BIN" --lang de compare /nonexistent-a /nonexistent-b 2>&1 | head -1 > i18n_de.txt
+check_contains "I18N.2 --lang de 错误消息" "kein Verzeichnis" "$(cat i18n_de.txt)"
+
+"$BIN" --lang ja compare /nonexistent-a /nonexistent-b 2>&1 | head -1 > i18n_ja.txt
+check_contains "I18N.3 --lang ja 错误消息" "ディレクトリではありません" "$(cat i18n_ja.txt)"
+
+# 环境变量 BCR_LANG 生效
+BCR_LANG=fr "$BIN" compare /nonexistent-a /nonexistent-b 2>&1 | head -1 > i18n_fr.txt
+check_contains "I18N.4 BCR_LANG=fr 错误消息" "pas un répertoire" "$(cat i18n_fr.txt)"
+
+# 默认中文（无 --lang 时）
+"$BIN" compare /nonexistent-a /nonexistent-b 2>&1 | head -1 > i18n_zh.txt
+check_contains "I18N.5 默认中文" "不是目录" "$(cat i18n_zh.txt)"
+
+# 非法语言代码回退中文
+"$BIN" --lang xx compare /nonexistent-a /nonexistent-b 2>&1 | head -1 > i18n_fb.txt
+check_contains "I18N.6 非法语言回退中文" "不是目录" "$(cat i18n_fb.txt)"
+
+# --lang es 统计行（compare --summary）
+mkdir -p i18n_d1 i18n_d2
+printf 'a' > i18n_d1/only.txt
+printf 'b' > i18n_d2/only2.txt
+"$BIN" --lang es compare i18n_d1 i18n_d2 --summary 2>&1 | tail -1 > i18n_sum.txt
+check_contains "I18N.7 --lang es 统计行" "resumen" "$(cat i18n_sum.txt)"
+
+# --lang ru sync dry-run 输出
+"$BIN" --lang ru sync i18n_d1 i18n_d2 --dry-run 2>&1 | head -1 > i18n_sync.txt
+check_contains "I18N.8 --lang ru sync 输出" "[COPY]" "$(cat i18n_sync.txt)"
+
 echo
 echo "=============================================="
 echo " 验收结果: $PASS 通过 / $FAIL 失败"

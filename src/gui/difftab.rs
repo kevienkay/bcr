@@ -1,6 +1,7 @@
 //! 并排 Diff 标签页：虚拟化渲染、行内高亮、搜索、差异/行号跳转。
 
 use super::common::*;
+use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::sideview::{build_rows, RowTag, SideRow, Stats, ViewOptions};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
 
@@ -80,10 +81,10 @@ impl DiffTab {
 
     pub fn title(&self) -> String {
         match (&self.left, &self.right) {
-            (Some(l), Some(r)) => format!("Diff: {} ↔ {}", basename(&l.path), basename(&r.path)),
-            (Some(l), None) => format!("Diff: {}", basename(&l.path)),
-            (None, Some(r)) => format!("Diff: {}", basename(&r.path)),
-            (None, None) => "Diff".to_string(),
+            (Some(l), Some(r)) => format!("{}: {} ↔ {}", t(I18nKey::DiffTitle), basename(&l.path), basename(&r.path)),
+            (Some(l), None) => format!("{}: {}", t(I18nKey::DiffTitle), basename(&l.path)),
+            (None, Some(r)) => format!("{}: {}", t(I18nKey::DiffTitle), basename(&r.path)),
+            (None, None) => t(I18nKey::DiffTitle).to_string(),
         }
     }
 
@@ -96,8 +97,8 @@ impl DiffTab {
                 self.recompute();
                 self.error = None;
             }
-            (Err(e), _) => self.error = Some(format!("无法读取 {l}: {e}")),
-            (_, Err(e)) => self.error = Some(format!("无法读取 {r}: {e}")),
+            (Err(e), _) => self.error = Some(fmt(I18nKey::CannotRead, &[l, &e.to_string()])),
+            (_, Err(e)) => self.error = Some(fmt(I18nKey::CannotRead, &[r, &e.to_string()])),
         }
     }
 
@@ -109,7 +110,7 @@ impl DiffTab {
                 self.recompute();
                 self.error = None;
             }
-            Err(e) => self.error = Some(format!("无法读取 {path}: {e}")),
+            Err(e) => self.error = Some(fmt(I18nKey::CannotRead, &[path, &e.to_string()])),
         }
     }
 
@@ -121,7 +122,7 @@ impl DiffTab {
                 self.recompute();
                 self.error = None;
             }
-            Err(e) => self.error = Some(format!("无法读取 {path}: {e}")),
+            Err(e) => self.error = Some(fmt(I18nKey::CannotRead, &[path, &e.to_string()])),
         }
     }
 
@@ -300,30 +301,30 @@ impl DiffTab {
         // 搜索/跳转工具条
         egui::Panel::top("difftab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button("打开左侧…").clicked() {
+                if ui.button(t(I18nKey::OpenLeft)).clicked() {
                     if let Some(p) = super::pick_file() {
                         self.load_left(&p, self.opts);
                     }
                 }
-                if ui.button("打开右侧…").clicked() {
+                if ui.button(t(I18nKey::OpenRight)).clicked() {
                     if let Some(p) = super::pick_file() {
                         self.load_right(&p, self.opts);
                     }
                 }
                 ui.separator();
-                if ui.checkbox(&mut self.show_stats, "统计栏").changed() {}
+                if ui.checkbox(&mut self.show_stats, t(I18nKey::StatsPanel)).changed() {}
                 ui.separator();
-                if ui.checkbox(&mut self.opts.ignore_whitespace, "忽略空白").changed() {
+                if ui.checkbox(&mut self.opts.ignore_whitespace, t(I18nKey::IgnoreWs)).changed() {
                     self.recompute();
                 }
-                if ui.checkbox(&mut self.opts.ignore_trailing, "忽略行尾空白").changed() {
+                if ui.checkbox(&mut self.opts.ignore_trailing, t(I18nKey::IgnoreTrailing)).changed() {
                     self.recompute();
                 }
-                if ui.checkbox(&mut self.opts.ignore_case, "忽略大小写").changed() {
+                if ui.checkbox(&mut self.opts.ignore_case, t(I18nKey::IgnoreCase)).changed() {
                     self.recompute();
                 }
                 ui.separator();
-                if ui.button("✏️ 编辑左侧").clicked() {
+                if ui.button(t(I18nKey::EditLeft)).clicked() {
                     if let Some(l) = &self.left {
                         self.editing = Some(EditState {
                             side: EditSide::Left,
@@ -332,7 +333,7 @@ impl DiffTab {
                         });
                     }
                 }
-                if ui.button("✏️ 编辑右侧").clicked() {
+                if ui.button(t(I18nKey::EditRight)).clicked() {
                     if let Some(r) = &self.right {
                         self.editing = Some(EditState {
                             side: EditSide::Right,
@@ -342,13 +343,13 @@ impl DiffTab {
                     }
                 }
                 ui.separator();
-                if ui.button("重新加载").clicked() {
+                if ui.button(t(I18nKey::Reload)).clicked() {
                     self.reload();
                 }
                 ui.separator();
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut self.search.query)
-                        .hint_text("搜索 (Ctrl+F, Enter 下一个, Esc 清除)")
+                        .hint_text(t(I18nKey::SearchHint))
                         .desired_width(220.0),
                 );
                 if self.search.focus {
@@ -358,10 +359,10 @@ impl DiffTab {
                 if resp.changed() {
                     self.update_search();
                 }
-                if ui.button("⬆").on_hover_text("上一个匹配").clicked() {
+                if ui.button("⬆").on_hover_text(t(I18nKey::PrevMatch)).clicked() {
                     self.prev_match();
                 }
-                if ui.button("⬇").on_hover_text("下一个匹配").clicked() {
+                if ui.button("⬇").on_hover_text(t(I18nKey::NextMatch)).clicked() {
                     self.next_match();
                 }
                 if let Some(k) = self.search.current {
@@ -374,7 +375,7 @@ impl DiffTab {
                     .unwrap_or_default();
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut goto_text)
-                        .hint_text("行号 (Ctrl+G)")
+                        .hint_text(t(I18nKey::GotoHint))
                         .desired_width(70.0),
                 );
                 if self.goto_focus {
@@ -383,7 +384,7 @@ impl DiffTab {
                 }
                 self.goto_line = goto_text.parse().ok();
                 if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                    || ui.button("跳转").clicked()
+                    || ui.button(t(I18nKey::Goto)).clicked()
                 {
                     if let Some(line) = self.goto_line {
                         if line >= 1 {
@@ -392,15 +393,14 @@ impl DiffTab {
                     }
                 }
                 ui.separator();
-                ui.label(format!(
-                    "差异 {} / {}",
-                    self.diff_rows.len(),
-                    self.rows.len()
+                ui.label(fmt(
+                    I18nKey::DiffCount,
+                    &[&self.diff_rows.len().to_string(), &self.rows.len().to_string()],
                 ));
-                if ui.button("F7 下一个差异").clicked() {
+                if ui.button(t(I18nKey::NextDiff)).clicked() {
                     self.next_diff();
                 }
-                if ui.button("Shift+F7 上一个差异").clicked() {
+                if ui.button(t(I18nKey::PrevDiff)).clicked() {
                     self.prev_diff();
                 }
             });
@@ -408,12 +408,12 @@ impl DiffTab {
 
         // 错误弹窗
         if let Some(err) = self.error.clone() {
-            egui::Window::new("错误")
+            egui::Window::new(t(I18nKey::Error))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
                     ui.colored_label(Color32::from_rgb(240, 110, 110), err);
-                    if ui.button("关闭").clicked() {
+                    if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }
                 });
@@ -422,8 +422,8 @@ impl DiffTab {
         // 编辑窗口
         if let Some(edit) = &mut self.editing {
             let side_name = match edit.side {
-                EditSide::Left => "左侧",
-                EditSide::Right => "右侧",
+                EditSide::Left => t(I18nKey::SideLeft),
+                EditSide::Right => t(I18nKey::SideRight),
             };
             let mut close = false;
             let mut save = false;
@@ -443,13 +443,13 @@ impl DiffTab {
                             );
                         });
                     ui.horizontal(|ui| {
-                        if ui.button("💾 保存").clicked() {
+                        if ui.button(t(I18nKey::Save)).clicked() {
                             save = true;
                         }
-                        if ui.button("取消").clicked() {
+                        if ui.button(t(I18nKey::Cancel)).clicked() {
                             close = true;
                         }
-                        ui.label("Ctrl+S 保存");
+                        ui.label(t(I18nKey::SaveHint));
                     });
                     if ui.input(|i| i.modifiers.command && i.key_pressed(Key::S)) {
                         save = true;
@@ -471,10 +471,10 @@ impl DiffTab {
                             EditSide::Left => self.load_left(&path, self.opts),
                             EditSide::Right => self.load_right(&path, self.opts),
                         }
-                        self.error = Some(format!("已保存 {path}"));
+                        self.error = Some(fmt(I18nKey::Saved, &[&path]));
                     }
                     Err(e) => {
-                        self.error = Some(format!("保存失败: {e}"));
+                        self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
                     }
                 }
             }
@@ -487,7 +487,7 @@ impl DiffTab {
             if self.rows.is_empty() {
                 ui.centered_and_justified(|ui| {
                     ui.label(
-                        egui::RichText::new("打开两个文件开始并排对比\nbcr gui left.txt right.txt\n或将文件拖入窗口")
+                        egui::RichText::new(t(I18nKey::DiffEmptyHint))
                             .size(18.0)
                             .color(ui.visuals().weak_text_color()),
                     );
@@ -554,20 +554,20 @@ impl DiffTab {
                 ui.separator();
                 ui.horizontal(|ui| {
                     let st = self.stats;
-                    ui.label(format!("相同 {}", st.equal));
-                    ui.colored_label(Color32::from_rgb(240, 120, 120), format!("删除 {}", st.delete));
-                    ui.colored_label(Color32::from_rgb(120, 230, 130), format!("插入 {}", st.insert));
-                    ui.colored_label(Color32::from_rgb(235, 210, 100), format!("修改 {}", st.replace));
+                    ui.label(format!("{} {}", t(I18nKey::StatSame), st.equal));
+                    ui.colored_label(Color32::from_rgb(240, 120, 120), format!("{} {}", t(I18nKey::StatDelete), st.delete));
+                    ui.colored_label(Color32::from_rgb(120, 230, 130), format!("{} {}", t(I18nKey::StatInsert), st.insert));
+                    ui.colored_label(Color32::from_rgb(235, 210, 100), format!("{} {}", t(I18nKey::StatReplace), st.replace));
                     ui.separator();
                     match (&self.left, &self.right) {
                         (Some(l), Some(r)) => {
                             ui.label(format!("{}  ↔  {}", l.path, r.path));
                         }
                         (Some(l), None) => {
-                            ui.label(format!("{}  ↔  (未打开右侧)", l.path));
+                            ui.label(fmt(I18nKey::NotOpenRight, &[&l.path]));
                         }
                         (None, Some(r)) => {
-                            ui.label(format!("(未打开左侧)  ↔  {}", r.path));
+                            ui.label(fmt(I18nKey::NotOpenLeft, &[&r.path]));
                         }
                         (None, None) => {}
                     }

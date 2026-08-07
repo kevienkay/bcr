@@ -1,3 +1,4 @@
+use crate::i18n::{fmt, Key};
 use clap::Args;
 use similar::{capture_diff_slices, Algorithm, DiffOp, DiffTag};
 use std::fs;
@@ -115,21 +116,21 @@ pub fn run(args: &MergeArgs) -> i32 {
     let base = match read_input(&args.base) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: 无法读取 {}: {e}", args.base);
+            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.base, &e.to_string()]));
             return 2;
         }
     };
     let left = match read_input(&args.left) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: 无法读取 {}: {e}", args.left);
+            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.left, &e.to_string()]));
             return 2;
         }
     };
     let right = match read_input(&args.right) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: 无法读取 {}: {e}", args.right);
+            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.right, &e.to_string()]));
             return 2;
         }
     };
@@ -183,7 +184,7 @@ pub fn run(args: &MergeArgs) -> i32 {
             content.push('\n');
         }
         if let Err(e) = fs::write(Path::new(path), content) {
-            eprintln!("bcr: 写入 {} 失败: {e}", path);
+            eprintln!("bcr: {}", fmt(Key::WriteFailed, &[path, &e.to_string()]));
             return 2;
         }
     } else {

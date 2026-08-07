@@ -1,4 +1,5 @@
 use crate::fsscan::Filter;
+use crate::i18n::{fmt, t, Key};
 use crate::vfs::{self, Vfs};
 use clap::Args;
 use std::io;
@@ -62,14 +63,14 @@ pub fn run(args: &SyncArgs) -> i32 {
     let src_vfs = match vfs::open(src) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("bcr: 打开 {} 失败: {e}", src);
+            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[src, &e.to_string()]));
             return 2;
         }
     };
     let dst_vfs = match vfs::open(dst) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("bcr: 打开 {} 失败: {e}", dst);
+            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[dst, &e.to_string()]));
             return 2;
         }
     };
@@ -77,7 +78,7 @@ pub fn run(args: &SyncArgs) -> i32 {
     let filter = match Filter::new(&args.includes, &args.excludes) {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("bcr: 过滤规则错误: {e}");
+            eprintln!("bcr: {}", fmt(Key::FilterError, &[&e.to_string()]));
             return 2;
         }
     };
@@ -85,14 +86,14 @@ pub fn run(args: &SyncArgs) -> i32 {
     let src_map = match src_vfs.scan(&filter) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("bcr: 扫描 {} 失败: {e}", src);
+            eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&format!("{}: {}", src, e)]));
             return 2;
         }
     };
     let dst_map = match dst_vfs.scan(&filter) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("bcr: 扫描 {} 失败: {e}", dst);
+            eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&format!("{}: {}", dst, e)]));
             return 2;
         }
     };
@@ -121,7 +122,7 @@ pub fn run(args: &SyncArgs) -> i32 {
                     match vfs::content_equal_vfs(src_vfs.as_ref(), dst_vfs.as_ref(), key) {
                         Ok(eq) => eq,
                         Err(e) => {
-                            eprintln!("bcr: 读取 {} 失败: {e}", key);
+                            eprintln!("bcr: {}", fmt(Key::ReadFailed, &[key, &e.to_string()]));
                             return 2;
                         }
                     }
@@ -147,7 +148,7 @@ pub fn run(args: &SyncArgs) -> i32 {
                         } else {
                             plan.push(Plan::Skip {
                                 rel: key.clone(),
-                                reason: "目标侧较新",
+                                reason: t(Key::ReasonDstNewer),
                             });
                         }
                     }
@@ -177,7 +178,7 @@ pub fn run(args: &SyncArgs) -> i32 {
                 "mirror" => plan.push(Plan::Delete { rel: key.clone() }),
                 "update" => plan.push(Plan::Skip {
                     rel: key.clone(),
-                    reason: "仅存在于目标侧",
+                    reason: t(Key::ReasonDstOnly),
                 }),
                 _ => plan.push(Plan::Copy {
                     rel: key.clone(),
@@ -204,39 +205,48 @@ pub fn run(args: &SyncArgs) -> i32 {
                 } else {
                     (dst_vfs.as_ref(), src_vfs.as_ref())
                 };
-                println!("[COPY]   {rel} -> {}", to.describe());
+                println!("{}", fmt(Key::TagCopy, &[rel, &to.describe()]));
                 if !args.dry_run {
                     if let Err(e) = do_copy_vfs(from, to, rel) {
-                        eprintln!("bcr: 复制 {rel} 失败: {e}");
+                        eprintln!("bcr: {}", fmt(Key::CopyFailed, &[rel, &e.to_string()]));
                         n_error += 1;
                     }
                 }
             }
             Plan::Delete { rel } => {
                 n_delete += 1;
-                println!("[DELETE] {rel}");
+                println!("{}", fmt(Key::TagDelete, &[rel]));
                 if !args.dry_run {
                     if let Err(e) = dst_vfs.delete(rel) {
-                        eprintln!("bcr: 删除 {rel} 失败: {e}");
+                        eprintln!("bcr: {}", fmt(Key::DeleteFailed, &[rel, &e.to_string()]));
                         n_error += 1;
                     }
                 }
             }
             Plan::Skip { rel, reason } => {
                 n_skip += 1;
-                println!("[SKIP]   {rel} ({reason})");
+                println!("{}", fmt(Key::TagSkip, &[rel, reason]));
             }
             Plan::Conflict { rel } => {
                 n_conflict += 1;
-                println!("[CONFLICT] {rel} (两侧同时修改且无法判定新者，跳过)");
+                println!("{}", fmt(Key::TagConflict, &[rel]));
             }
         }
     }
 
     if args.summary {
         println!(
-            "统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误",
-            n_copy, n_delete, n_skip, n_conflict, n_error
+            "{}",
+            fmt(
+                Key::SummarySync,
+                &[
+                    &n_copy.to_string(),
+                    &n_delete.to_string(),
+                    &n_skip.to_string(),
+                    &n_conflict.to_string(),
+                    &n_error.to_string(),
+                ]
+            )
         );
     }
 

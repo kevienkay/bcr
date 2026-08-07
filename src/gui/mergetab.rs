@@ -1,6 +1,7 @@
 //! 三路合并标签页：BASE/LEFT/RIGHT 三栏渲染、冲突导航与解决、保存。
 
 use super::common::*;
+use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::mergeview::{build_merge_view, render_merged, MergeView, Resolution};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
 
@@ -40,11 +41,13 @@ impl MergeTab {
     }
 
     pub fn title(&self) -> String {
-        format!(
-            "合并: {} ↔ {} ↔ {}",
-            basename(&self.base_path),
-            basename(&self.left_path),
-            basename(&self.right_path)
+        fmt(
+            I18nKey::MergeTitle,
+            &[
+                &basename(&self.base_path),
+                &basename(&self.left_path),
+                &basename(&self.right_path),
+            ],
         )
     }
 
@@ -56,15 +59,15 @@ impl MergeTab {
         ) {
             (Ok(b), Ok(l), Ok(r)) => (b, l, r),
             (Err(e), _, _) => {
-                self.error = Some(format!("无法读取 {}: {e}", self.base_path));
+                self.error = Some(fmt(I18nKey::CannotRead, &[&self.base_path, &e.to_string()]));
                 return;
             }
             (_, Err(e), _) => {
-                self.error = Some(format!("无法读取 {}: {e}", self.left_path));
+                self.error = Some(fmt(I18nKey::CannotRead, &[&self.left_path, &e.to_string()]));
                 return;
             }
             (_, _, Err(e)) => {
-                self.error = Some(format!("无法读取 {}: {e}", self.right_path));
+                self.error = Some(fmt(I18nKey::CannotRead, &[&self.right_path, &e.to_string()]));
                 return;
             }
         };
@@ -137,15 +140,14 @@ impl MergeTab {
         }
         match std::fs::write(&path, content) {
             Ok(()) => {
-                self.error = Some(format!(
-                    "已保存 {}（未解决冲突 {} 处，输出 git 风格冲突标记）",
-                    path.display(),
-                    unresolved
+                self.error = Some(fmt(
+                    I18nKey::MergeSaved,
+                    &[&path.display().to_string(), &unresolved.to_string()],
                 ));
                 true
             }
             Err(e) => {
-                self.error = Some(format!("写入失败: {e}"));
+                self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
                 false
             }
         }
@@ -154,44 +156,44 @@ impl MergeTab {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("mergetab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button("重新加载").clicked() {
+                if ui.button(t(I18nKey::Reload)).clicked() {
                     self.reload();
                 }
-                if ui.button("保存合并结果…").clicked() {
+                if ui.button(t(I18nKey::SaveMerged)).clicked() {
                     self.save();
                 }
                 ui.separator();
-                if ui.checkbox(&mut self.show_preview, "实时预览").changed() {}
+                if ui.checkbox(&mut self.show_preview, t(I18nKey::LivePreview)).changed() {}
                 ui.separator();
-                ui.label(format!("冲突 {} 处", self.view.conflicts));
-                if ui.button("F7 下一冲突").clicked() {
+                ui.label(fmt(I18nKey::ConflictsCount, &[&self.view.conflicts.to_string()]));
+                if ui.button(t(I18nKey::NextConflict)).clicked() {
                     self.next_conflict();
                 }
-                if ui.button("Shift+F7 上一冲突").clicked() {
+                if ui.button(t(I18nKey::PrevConflict)).clicked() {
                     self.prev_conflict();
                 }
                 ui.separator();
-                if ui.button("取左侧").clicked() {
+                if ui.button(t(I18nKey::TakeLeft)).clicked() {
                     self.resolve_current(Resolution::Left);
                 }
-                if ui.button("取右侧").clicked() {
+                if ui.button(t(I18nKey::TakeRight)).clicked() {
                     self.resolve_current(Resolution::Right);
                 }
-                if ui.button("取 BASE").clicked() {
+                if ui.button(t(I18nKey::TakeBase)).clicked() {
                     self.resolve_current(Resolution::Base);
                 }
                 // 显示当前冲突块的解决状态
                 if let Some(bi) = self.current_conflict_block() {
                     if let Some(blk) = self.view.blocks.get(bi) {
                         ui.separator();
-                        ui.label(format!(
-                            "当前冲突解决: {}",
-                            match blk.resolution {
-                                Resolution::Auto => "未解决（默认取左）",
-                                Resolution::Left => "取左侧",
-                                Resolution::Right => "取右侧",
-                                Resolution::Base => "取 BASE",
-                            }
+                        ui.label(fmt(
+                            I18nKey::CurrentRes,
+                            &[match blk.resolution {
+                                Resolution::Auto => t(I18nKey::ResAuto),
+                                Resolution::Left => t(I18nKey::TakeLeft),
+                                Resolution::Right => t(I18nKey::TakeRight),
+                                Resolution::Base => t(I18nKey::TakeBase),
+                            }],
                         ));
                     }
                 }
@@ -199,12 +201,12 @@ impl MergeTab {
         });
 
         if let Some(err) = self.error.clone() {
-            egui::Window::new("提示")
+            egui::Window::new(t(I18nKey::Hint))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
                     ui.label(err);
-                    if ui.button("关闭").clicked() {
+                    if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }
                 });
@@ -228,16 +230,16 @@ impl MergeTab {
                 .collect();
             egui::Panel::bottom("merge_preview").show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.strong("合并结果预览");
+                    ui.strong(t(I18nKey::MergePreview));
                     ui.separator();
-                    ui.label(format!("{} 行", lines.len()));
+                    ui.label(fmt(I18nKey::MergeLines, &[&lines.len().to_string()]));
                     if unresolved > 0 {
                         ui.colored_label(
                             Color32::from_rgb(240, 180, 60),
-                            format!("⚠ {} 处冲突未解决（输出含冲突标记）", unresolved),
+                            fmt(I18nKey::MergeUnresolved, &[&unresolved.to_string()]),
                         );
                     } else {
-                        ui.colored_label(Color32::from_rgb(110, 230, 120), "✓ 全部冲突已解决");
+                        ui.colored_label(Color32::from_rgb(110, 230, 120), t(I18nKey::MergeAllResolved));
                     }
                 });
                 let fg = text_color(ui);
@@ -268,7 +270,7 @@ impl MergeTab {
             if self.view.rows.is_empty() && self.view.conflicts == 0 {
                 ui.centered_and_justified(|ui| {
                     ui.label(
-                        egui::RichText::new("bcr gui --merge BASE LEFT RIGHT\n或打开三路合并")
+                        egui::RichText::new(t(I18nKey::MergeEmpty))
                             .size(16.0)
                             .color(ui.visuals().weak_text_color()),
                     );

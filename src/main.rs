@@ -2,6 +2,7 @@ mod compare;
 mod diff;
 mod fsscan;
 mod gui;
+mod i18n;
 mod merge;
 mod mergeview;
 mod render;
@@ -19,6 +20,10 @@ use clap::{Parser, Subcommand};
     arg_required_else_help = true
 )]
 struct Cli {
+    /// 语言：zh/en/de/ja/ko/es/pt/ar/ru/fr（默认取 BCR_LANG 或系统 LANG）
+    #[arg(long, global = true)]
+    lang: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -43,6 +48,14 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
+    // 初始化语言：--lang 优先，其次 BCR_LANG/系统 LANG，最后中文
+    let lang = cli
+        .lang
+        .as_deref()
+        .and_then(i18n::Lang::parse)
+        .or_else(i18n::Lang::from_env)
+        .unwrap_or(i18n::Lang::Zh);
+    i18n::set_lang(lang);
     let code = match cli.command {
         Commands::Diff(args) => diff::run(&args),
         Commands::Compare(args) => compare::run(&args),

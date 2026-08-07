@@ -3,6 +3,7 @@
 use super::common::*;
 use crate::compare::{compare_dirs, CompareResult, FileStatus};
 use crate::fsscan::Filter;
+use crate::i18n::{fmt, t, Key as I18nKey};
 use eframe::egui::{self, Color32, Key, Pos2, Vec2};
 use std::collections::HashSet;
 
@@ -65,14 +66,14 @@ impl DirTab {
     }
 
     pub fn title(&self) -> String {
-        format!("目录: {} ↔ {}", basename(&self.left), basename(&self.right))
+        fmt(I18nKey::DirTitle, &[&basename(&self.left), &basename(&self.right)])
     }
 
     pub fn refresh(&mut self) {
         let filter = match Filter::new(&split_globs(&self.includes), &split_globs(&self.excludes)) {
             Ok(f) => f,
             Err(e) => {
-                self.error = Some(format!("过滤规则错误: {e}"));
+                self.error = Some(fmt(I18nKey::FilterError, &[&e.to_string()]));
                 self.result = None;
                 self.flat.clear();
                 return;
@@ -91,7 +92,7 @@ impl DirTab {
                 self.result = Some(r);
             }
             Err(e) => {
-                self.error = Some(format!("扫描失败: {e}"));
+                self.error = Some(fmt(I18nKey::ScanFailed, &[&e.to_string()]));
                 self.result = None;
             }
         }
@@ -237,17 +238,17 @@ impl DirTab {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("dirtab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button("刷新").clicked() {
+                if ui.button(t(I18nKey::Refresh)).clicked() {
                     self.refresh();
                 }
                 ui.separator();
-                if ui.checkbox(&mut self.compare_content, "内容比对(哈希)").changed() {
+                if ui.checkbox(&mut self.compare_content, t(I18nKey::ContentHash)).changed() {
                     self.refresh();
                 }
-                if ui.checkbox(&mut self.only_diff, "仅显示差异").changed() {
+                if ui.checkbox(&mut self.only_diff, t(I18nKey::OnlyDiff)).changed() {
                     self.rebuild_tree();
                 }
-                if ui.checkbox(&mut self.show_same, "显示相同").changed() {
+                if ui.checkbox(&mut self.show_same, t(I18nKey::ShowSame)).changed() {
                     if !self.only_diff {
                         self.rebuild_tree();
                     }
@@ -256,18 +257,18 @@ impl DirTab {
                 let mut inc = self.includes.clone();
                 let r1 = ui.add(
                     egui::TextEdit::singleline(&mut inc)
-                        .hint_text("包含 glob（逗号分隔）")
+                        .hint_text(t(I18nKey::IncludeGlob))
                         .desired_width(150.0),
                 );
                 let mut exc = self.excludes.clone();
                 let r2 = ui.add(
                     egui::TextEdit::singleline(&mut exc)
-                        .hint_text("排除 glob（逗号分隔）")
+                        .hint_text(t(I18nKey::ExcludeGlob))
                         .desired_width(150.0),
                 );
                 if (r1.changed() && r1.lost_focus())
                     || (r2.changed() && r2.lost_focus())
-                    || ui.button("应用过滤").clicked()
+                    || ui.button(t(I18nKey::ApplyFilter)).clicked()
                 {
                     self.includes = inc;
                     self.excludes = exc;
@@ -276,21 +277,26 @@ impl DirTab {
                 ui.separator();
                 if let Some(r) = &self.result {
                     let s = r.stats;
-                    ui.label(format!(
-                        "相同 {} / 仅左 {} / 仅右 {} / 不同 {}",
-                        s.same, s.left_only, s.right_only, s.differ
+                    ui.label(fmt(
+                        I18nKey::DirStats,
+                        &[
+                            &s.same.to_string(),
+                            &s.left_only.to_string(),
+                            &s.right_only.to_string(),
+                            &s.differ.to_string(),
+                        ],
                     ));
                 }
             });
         });
 
         if let Some(err) = self.error.clone() {
-            egui::Window::new("提示")
+            egui::Window::new(t(I18nKey::Hint))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
                     ui.colored_label(Color32::from_rgb(240, 110, 110), err);
-                    if ui.button("关闭").clicked() {
+                    if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }
                 });
@@ -305,7 +311,7 @@ impl DirTab {
             if self.flat.is_empty() {
                 ui.centered_and_justified(|ui| {
                     ui.label(
-                        egui::RichText::new("无差异文件（或目录为空）\n↑↓ 选择 · ← → 折叠/展开 · Enter 打开")
+                        egui::RichText::new(t(I18nKey::NoDiff))
                             .size(16.0)
                             .color(ui.visuals().weak_text_color()),
                     );

@@ -65,6 +65,9 @@ impl Tab {
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 struct Settings {
     theme: String, // "system" | "dark" | "light"
+    /// 语言代码（"zh"/"en"/...），空 = 跟随 CLI/环境
+    #[serde(default)]
+    lang: String,
     #[serde(default = "default_true")]
     show_stats: bool,
     #[serde(default)]
@@ -109,6 +112,13 @@ impl Settings {
             "light" => ThemePreference::Light,
             _ => ThemePreference::System,
         }
+    }
+
+    /// GUI 语言：设置值 > 环境变量/CLI > 中文
+    fn lang(&self) -> crate::i18n::Lang {
+        crate::i18n::Lang::parse(&self.lang)
+            .or_else(crate::i18n::Lang::from_env)
+            .unwrap_or(crate::i18n::Lang::Zh)
     }
 }
 
@@ -273,17 +283,17 @@ impl eframe::App for DiffApp {
         // 顶部菜单栏
         egui::Panel::top("menu").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button("📁 打开文件对比…").clicked() {
+                if ui.button(crate::i18n::t(crate::i18n::Key::MenuOpenFiles)).clicked() {
                     self.open_diff_files();
                 }
-                if ui.button("📂 目录对比…").clicked() {
+                if ui.button(crate::i18n::t(crate::i18n::Key::MenuOpenDir)).clicked() {
                     self.open_dir_compare();
                 }
-                if ui.button("🔀 三路合并…").clicked() {
+                if ui.button(crate::i18n::t(crate::i18n::Key::MenuOpenMerge)).clicked() {
                     self.open_merge();
                 }
                 ui.separator();
-                if ui.button("🐙 Git").clicked() {
+                if ui.button(crate::i18n::t(crate::i18n::Key::MenuGit)).clicked() {
                     self.show_git_help = !self.show_git_help;
                 }
                 ui.separator();
@@ -300,7 +310,7 @@ impl eframe::App for DiffApp {
                     // 关闭按钮
                     let close_resp = ui
                         .small_button("✕")
-                        .on_hover_text("关闭标签页");
+                        .on_hover_text(crate::i18n::t(crate::i18n::Key::CloseTab));
                     if close_resp.clicked() {
                         close = Some(i);
                     }
@@ -311,22 +321,44 @@ impl eframe::App for DiffApp {
                 if let Some(i) = close {
                     self.close_tab(i);
                 }
-                if ui.button("+").on_hover_text("新建并排 Diff 标签").clicked() {
+                if ui
+                    .button("+")
+                    .on_hover_text(crate::i18n::t(crate::i18n::Key::NewDiffTab))
+                    .clicked()
+                {
                     self.new_diff_tab();
                 }
 
+                ui.separator();
+                // 语言切换
+                let mut lang_changed = false;
+                let mut new_lang = crate::i18n::current();
+                ui.horizontal(|ui| {
+                    ui.label(crate::i18n::t(crate::i18n::Key::Language));
+                    for l in crate::i18n::Lang::ALL {
+                        if ui.selectable_label(new_lang == l, l.native_name()).clicked() {
+                            new_lang = l;
+                            lang_changed = true;
+                        }
+                    }
+                });
+                if lang_changed {
+                    self.settings.lang = new_lang.code().to_string();
+                    self.settings.save();
+                    crate::i18n::set_lang(new_lang);
+                }
                 ui.separator();
                 // 主题切换
                 let mut pref = self.settings.theme_pref();
                 let mut changed = false;
                 ui.horizontal(|ui| {
-                    ui.label("主题:");
-                    for (label, p) in [
-                        ("系统", ThemePreference::System),
-                        ("深色", ThemePreference::Dark),
-                        ("浅色", ThemePreference::Light),
+                    ui.label(crate::i18n::t(crate::i18n::Key::Theme));
+                    for (key, p) in [
+                        (crate::i18n::Key::ThemeSystem, ThemePreference::System),
+                        (crate::i18n::Key::ThemeDark, ThemePreference::Dark),
+                        (crate::i18n::Key::ThemeLight, ThemePreference::Light),
                     ] {
-                        if ui.selectable_label(pref == p, label).clicked() {
+                        if ui.selectable_label(pref == p, crate::i18n::t(key)).clicked() {
                             pref = p;
                             changed = true;
                         }
@@ -354,11 +386,11 @@ impl eframe::App for DiffApp {
                 "\tcmd = bcr merge \"$BASE\" \"$LOCAL\" \"$REMOTE\" -o \"$MERGED\"",
             ];
             let config = lines.join("\n");
-            egui::Window::new("Git 集成")
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::GitTitle))
                 .collapsible(false)
                 .default_size([560.0, 340.0])
                 .show(ui.ctx(), |ui| {
-                    ui.label("把 bcr 作为 git difftool / mergetool（写入 ~/.gitconfig）：");
+                    ui.label(crate::i18n::t(crate::i18n::Key::GitDesc));
                     ui.add_space(4.0);
                     egui::ScrollArea::vertical()
                         .max_height(160.0)
@@ -369,19 +401,19 @@ impl eframe::App for DiffApp {
                         });
                     ui.add_space(4.0);
                     ui.horizontal(|ui| {
-                        if ui.button("📋 复制配置").clicked() {
+                        if ui.button(crate::i18n::t(crate::i18n::Key::GitCopy)).clicked() {
                             ui.ctx().copy_text(config.clone());
                             self.show_git_help = false;
                         }
-                        if ui.button("关闭").clicked() {
+                        if ui.button(crate::i18n::t(crate::i18n::Key::Close)).clicked() {
                             self.show_git_help = false;
                         }
                     });
                     ui.separator();
-                    ui.label("使用：");
+                    ui.label(crate::i18n::t(crate::i18n::Key::GitUsage));
                     ui.monospace("git difftool --tool=bcr");
                     ui.monospace("git mergetool --tool=bcr");
-                    ui.label("退出码与 git 兼容（0=无差异/无冲突，1=有差异/冲突，2=错误）");
+                    ui.label(crate::i18n::t(crate::i18n::Key::GitExit));
                 });
         }
 
@@ -390,7 +422,7 @@ impl eframe::App for DiffApp {
             egui::CentralPanel::default().show(ui, |ui| {
                 ui.centered_and_justified(|ui| {
                     ui.label(
-                        RichText::new("bcr GUI — 并排 Diff / 目录对比 / 三路合并\n\n打开文件对比，或将文件/目录拖入窗口")
+                        RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
                             .size(18.0)
                             .color(ui.visuals().weak_text_color()),
                     );
@@ -436,11 +468,13 @@ impl eframe::App for DiffApp {
 /// 运行 GUI 事件循环，返回进程退出码
 pub fn run(args: &GuiArgs) -> i32 {
     let settings = Settings::load();
+    let gui_lang = settings.lang();
+    crate::i18n::set_lang(gui_lang);
     let win = settings.window_size.unwrap_or([1360.0, 860.0]);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([win[0], win[1]])
-            .with_title("bcr — 对比工具"),
+            .with_title(crate::i18n::t(crate::i18n::Key::WinTitle)),
         ..Default::default()
     };
 
@@ -516,7 +550,7 @@ pub fn run(args: &GuiArgs) -> i32 {
     ) {
         Ok(()) => 0,
         Err(e) => {
-            eprintln!("bcr: GUI 启动失败: {e}");
+            eprintln!("bcr: {}", crate::i18n::fmt(crate::i18n::Key::GuiFail, &[&e.to_string()]));
             2
         }
     }
