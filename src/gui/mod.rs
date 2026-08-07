@@ -65,6 +65,20 @@ impl Tab {
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 struct Settings {
     theme: String, // "system" | "dark" | "light"
+    #[serde(default = "default_true")]
+    show_stats: bool,
+    #[serde(default)]
+    ignore_whitespace: bool,
+    #[serde(default)]
+    ignore_trailing: bool,
+    #[serde(default)]
+    ignore_case: bool,
+    #[serde(default)]
+    window_size: Option<[f32; 2]>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Settings {
@@ -103,6 +117,7 @@ struct DiffApp {
     tabs: Vec<Tab>,
     active: usize,
     settings: Settings,
+    show_git_help: bool,
 }
 
 impl DiffApp {
@@ -111,6 +126,7 @@ impl DiffApp {
             tabs: Vec::new(),
             active: 0,
             settings,
+            show_git_help: false,
         }
     }
 
@@ -132,10 +148,11 @@ impl DiffApp {
     fn new_diff_tab(&mut self) {
         let mut t = DiffTab::new();
         t.opts = ViewOptions {
-            ignore_whitespace: false,
-            ignore_trailing: false,
-            ignore_case: false,
+            ignore_whitespace: self.settings.ignore_whitespace,
+            ignore_trailing: self.settings.ignore_trailing,
+            ignore_case: self.settings.ignore_case,
         };
+        t.show_stats = self.settings.show_stats;
         self.add_tab(Tab::Diff(t));
     }
 
@@ -246,6 +263,11 @@ fn pick_dir() -> Option<String> {
 
 impl eframe::App for DiffApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // 记录窗口大小用于退出时持久化
+        if let Some(rect) = ui.ctx().input(|i| i.viewport().inner_rect) {
+            self.settings.window_size = Some([rect.width(), rect.height()]);
+        }
+
         self.handle_dropped(ui.ctx());
 
         // 顶部菜单栏
@@ -259,6 +281,10 @@ impl eframe::App for DiffApp {
                 }
                 if ui.button("🔀 三路合并…").clicked() {
                     self.open_merge();
+                }
+                ui.separator();
+                if ui.button("🐙 Git").clicked() {
+                    self.show_git_help = !self.show_git_help;
                 }
                 ui.separator();
 
@@ -318,6 +344,47 @@ impl eframe::App for DiffApp {
             });
         });
 
+        // Git 配置帮助弹窗
+        if self.show_git_help {
+            let lines = [
+                "[difftool \"bcr\"]",
+                "\tcmd = bcr diff \"$LOCAL\" \"$REMOTE\" -L \"$LOCAL\" -L \"$REMOTE\"",
+                "",
+                "[mergetool \"bcr\"]",
+                "\tcmd = bcr merge \"$BASE\" \"$LOCAL\" \"$REMOTE\" -o \"$MERGED\"",
+            ];
+            let config = lines.join("\n");
+            egui::Window::new("Git 集成")
+                .collapsible(false)
+                .default_size([560.0, 340.0])
+                .show(ui.ctx(), |ui| {
+                    ui.label("把 bcr 作为 git difftool / mergetool（写入 ~/.gitconfig）：");
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical()
+                        .max_height(160.0)
+                        .show(ui, |ui| {
+                            for l in &lines {
+                                ui.monospace(*l);
+                            }
+                        });
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("📋 复制配置").clicked() {
+                            ui.ctx().copy_text(config.clone());
+                            self.show_git_help = false;
+                        }
+                        if ui.button("关闭").clicked() {
+                            self.show_git_help = false;
+                        }
+                    });
+                    ui.separator();
+                    ui.label("使用：");
+                    ui.monospace("git difftool --tool=bcr");
+                    ui.monospace("git mergetool --tool=bcr");
+                    ui.label("退出码与 git 兼容（0=无差异/无冲突，1=有差异/冲突，2=错误）");
+                });
+        }
+
         // 当前标签内容
         if self.tabs.is_empty() {
             egui::CentralPanel::default().show(ui, |ui| {
@@ -368,20 +435,34 @@ impl eframe::App for DiffApp {
 
 /// 运行 GUI 事件循环，返回进程退出码
 pub fn run(args: &GuiArgs) -> i32 {
+    let settings = Settings::load();
+    let win = settings.window_size.unwrap_or([1360.0, 860.0]);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1360.0, 860.0])
+            .with_inner_size([win[0], win[1]])
             .with_title("bcr — 对比工具"),
         ..Default::default()
     };
 
-    let settings = Settings::load();
+    let theme_pref = settings.theme_pref();
     let mut app = DiffApp::new(settings);
-    let opts = ViewOptions {
-        ignore_whitespace: args.ignore_whitespace,
-        ignore_trailing: args.ignore_trailing,
-        ignore_case: args.ignore_case,
+    // CLI 参数优先；未指定时应用持久化忽略选项
+    let mut opts = ViewOptions {
+        ignore_whitespace: args.ignore_whitespace || app.settings.ignore_whitespace,
+        ignore_trailing: args.ignore_trailing || app.settings.ignore_trailing,
+        ignore_case: args.ignore_case || app.settings.ignore_case,
     };
+    // CLI 显式参数优先于持久化值
+    if args.ignore_whitespace {
+        opts.ignore_whitespace = true;
+    }
+    if args.ignore_trailing {
+        opts.ignore_trailing = true;
+    }
+    if args.ignore_case {
+        opts.ignore_case = true;
+    }
+    let show_stats = app.settings.show_stats;
 
     // CLI 参数初始化标签
     if let Some(m) = &args.merge {
@@ -397,17 +478,20 @@ pub fn run(args: &GuiArgs) -> i32 {
                     app.add_tab(Tab::Dir(DirTab::new(l, r)));
                 } else {
                     let mut t = DiffTab::new();
+                    t.show_stats = show_stats;
                     t.load_pair(l, r, opts);
                     app.add_tab(Tab::Diff(t));
                 }
             }
             (Some(l), None) => {
                 let mut t = DiffTab::new();
+                t.show_stats = show_stats;
                 t.load_left(l, opts);
                 app.add_tab(Tab::Diff(t));
             }
             (None, Some(r)) => {
                 let mut t = DiffTab::new();
+                t.show_stats = show_stats;
                 t.load_right(r, opts);
                 app.add_tab(Tab::Diff(t));
             }
@@ -426,6 +510,7 @@ pub fn run(args: &GuiArgs) -> i32 {
                         .insert(egui::TextStyle::Monospace, egui::FontId::monospace(FONT_SIZE));
                 });
             }
+            cc.egui_ctx.set_theme(theme_pref);
             Ok(Box::new(app))
         }),
     ) {
@@ -436,3 +521,271 @@ pub fn run(args: &GuiArgs) -> i32 {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gui::difftab::{EditSide, EditState};
+    use crate::mergeview::{render_merged, Resolution};
+    use crate::sideview::RowTag;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn write(dir: &std::path::Path, name: &str, content: &str) -> String {
+        let p = dir.join(name);
+        if let Some(parent) = p.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(&p, content).unwrap();
+        p.to_str().unwrap().to_string()
+    }
+
+    // ---- DiffTab：加载/跳转/搜索/编辑状态 ----------------
+
+    #[test]
+    fn difftab_load_and_jump() {
+        let d = tempdir().unwrap();
+        // 大文件：跳转才会产生实际滚动偏移
+        let mut big_l = String::new();
+        let mut big_r = String::new();
+        for i in 0..50 {
+            big_l.push_str(&format!("l{i}\n"));
+            big_r.push_str(&format!("r{i}\n"));
+        }
+        let l = write(d.path(), "l.txt", &big_l);
+        let r = write(d.path(), "r.txt", &big_r);
+        let mut t = DiffTab::new();
+        t.load_pair(&l, &r, ViewOptions::default());
+        assert_eq!(t.rows.len(), 50);
+        assert!(!t.diff_rows.is_empty());
+        // 差异跳转会定位到差异行
+        t.next_diff();
+        assert!(t.diff_pos.is_some());
+        t.next_diff();
+        t.prev_diff();
+        // 行号跳转（第 40 行）产生滚动偏移
+        t.jump_to_row(40);
+        assert!(t.scroll.y > 0.0);
+    }
+
+    #[test]
+    fn difftab_search_highlights_matches() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.txt", "foo\nbar\nfoo\nbaz\n");
+        let r = write(d.path(), "r.txt", "foo\nqux\nfoo\nbaz\n");
+        let mut t = DiffTab::new();
+        t.load_pair(&l, &r, ViewOptions::default());
+        t.search.query = "foo".to_string();
+        t.update_search();
+        assert_eq!(t.search.matches.len(), 2);
+        t.next_match();
+        assert_eq!(t.search.current, Some(0));
+        t.next_match();
+        assert_eq!(t.search.current, Some(1));
+        t.next_match(); // 循环回 0
+        assert_eq!(t.search.current, Some(0));
+        t.prev_match();
+        assert_eq!(t.search.current, Some(1));
+    }
+
+    #[test]
+    fn difftab_edit_state_and_save() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.txt", "a\nb\n");
+        let r = write(d.path(), "r.txt", "a\nb\n");
+        let mut t = DiffTab::new();
+        t.load_pair(&l, &r, ViewOptions::default());
+        // 打开编辑左侧
+        t.editing = Some(EditState {
+            side: EditSide::Left,
+            path: l.clone(),
+            content: "a\nEDITED\n".to_string(),
+        });
+        assert!(t.editing.is_some());
+        // 保存（模拟 Ctrl+S 分支，这里直接调用保存逻辑：写文件 + 重新加载）
+        let (path, side) = t.editing.as_ref().map(|e| (e.path.clone(), e.side)).unwrap();
+        fs::write(&path, "a\nEDITED\n").unwrap();
+        match side {
+            EditSide::Left => t.load_left(&path, t.opts),
+            EditSide::Right => t.load_right(&path, t.opts),
+        }
+        t.editing = None;
+        assert!(t.editing.is_none());
+        // 重新加载后 diff 应检测到差异
+        assert!(t.rows.iter().any(|r| r.tag != RowTag::Equal));
+    }
+
+    #[test]
+    fn difftab_renders_headless() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.txt", "a\nb\nc\n");
+        let r = write(d.path(), "r.txt", "a\nX\nc\n");
+        let mut t = DiffTab::new();
+        t.load_pair(&l, &r, ViewOptions::default());
+        egui::__run_test_ui(|ui| {
+            t.ui(ui);
+        });
+    }
+
+    #[test]
+    fn difftab_empty_renders_headless() {
+        let mut t = DiffTab::new();
+        egui::__run_test_ui(|ui| {
+            t.ui(ui);
+        });
+    }
+
+    // ---- DirTab：树构建/折叠/键盘导航 ----------------
+
+    #[test]
+    fn dirtab_tree_and_navigation() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        // 统一 mtime：保证只有内容差异被检出
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        for (dir, name, content) in [
+            (d1.path(), "same.txt", "x"),
+            (d1.path(), "sub/a.txt", "a"),
+            (d1.path(), "sub/deep/b.txt", "b"),
+            (d1.path(), "only_l.txt", "y"),
+            (d2.path(), "same.txt", "x"),
+            (d2.path(), "sub/a.txt", "a"),
+            (d2.path(), "sub/deep/b.txt", "b"),
+        ] {
+            let p = dir.join(name);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, content).unwrap();
+            filetime::set_file_mtime(&p, fixed).unwrap();
+        }
+        let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        t.refresh();
+        assert!(t.result.is_some());
+        // only_diff 默认 → 只有 only_l.txt 是差异文件
+        assert!(!t.flat.is_empty());
+        assert!(t.flat.iter().any(|r| r.name == "only_l.txt"));
+        assert!(!t.flat.iter().any(|r| r.name == "same.txt"));
+        assert!(!t.flat.iter().any(|r| r.name == "a.txt"));
+        // 键盘选择 + 回车 → 打开请求
+        t.selected = t.flat.iter().position(|r| !r.is_dir);
+        t.open_selected();
+        assert!(t.open_diff.is_some());
+        assert_eq!(t.open_diff.as_deref(), Some("only_l.txt"));
+    }
+
+    #[test]
+    fn dirtab_collapse_hides_children() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        write(d1.path(), "sub/a.txt", "a");
+        write(d1.path(), "sub/b.txt", "b");
+        write(d2.path(), "sub/a.txt", "a");
+        write(d2.path(), "sub/b.txt", "b");
+        let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        t.only_diff = false;
+        t.show_same = true;
+        t.refresh();
+        let dir_idx = t.flat.iter().position(|r| r.is_dir).unwrap();
+        let dir_path = t.flat[dir_idx].path.clone();
+        let before = t.flat.len();
+        assert!(before > 1);
+        t.toggle_dir(&dir_path);
+        let after = t.flat.len();
+        assert!(after < before);
+        t.toggle_dir(&dir_path);
+        assert_eq!(t.flat.len(), before);
+    }
+
+    #[test]
+    fn dirtab_renders_headless() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        write(d1.path(), "a.txt", "x");
+        write(d1.path(), "sub/b.txt", "b");
+        write(d2.path(), "a.txt", "x");
+        write(d2.path(), "sub/b.txt", "b");
+        let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        t.only_diff = false;
+        t.show_same = true;
+        egui::__run_test_ui(|ui| {
+            t.ui(ui);
+        });
+        assert!(t.result.is_some());
+    }
+
+    // ---- MergeTab：冲突导航/解决/预览 ----------------
+
+    #[test]
+    fn mergetab_conflict_navigation_and_resolution() {
+        let d = tempdir().unwrap();
+        let b = write(d.path(), "base.txt", "l1\nX\nl3\nl4\nY\nl6\n");
+        let l = write(d.path(), "left.txt", "l1\nL\nl3\nl4\nL2\nl6\n");
+        let r = write(d.path(), "right.txt", "l1\nR\nl3\nl4\nR2\nl6\n");
+        let mut t = MergeTab::new(&b, &l, &r);
+        assert_eq!(t.view.conflicts, 2);
+        assert_eq!(t.view.conflict_block_indices.len(), 2);
+        // 冲突导航
+        t.next_conflict();
+        assert_eq!(t.conflict_idx, Some(0));
+        t.next_conflict();
+        assert_eq!(t.conflict_idx, Some(1));
+        t.next_conflict(); // 循环
+        assert_eq!(t.conflict_idx, Some(0));
+        t.prev_conflict();
+        assert_eq!(t.conflict_idx, Some(1));
+        // 解决当前冲突（取右侧）
+        t.resolve_current(Resolution::Right);
+        let bi = t.current_conflict_block().unwrap();
+        assert_eq!(t.view.blocks[bi].resolution, Resolution::Right);
+        // 预览输出：第一个冲突已解决，第二个未解决
+        let (lines, unresolved) = render_merged(&t.view, "LEFT", "RIGHT");
+        assert_eq!(unresolved, 1);
+        assert!(lines.iter().any(|l| l == "R2"));
+    }
+
+    #[test]
+    fn mergetab_renders_headless() {
+        let d = tempdir().unwrap();
+        let b = write(d.path(), "base.txt", "l1\nX\nl3\n");
+        let l = write(d.path(), "left.txt", "l1\nL\nl3\n");
+        let r = write(d.path(), "right.txt", "l1\nR\nl3\n");
+        let mut t = MergeTab::new(&b, &l, &r);
+        egui::__run_test_ui(|ui| {
+            t.ui(ui);
+        });
+    }
+
+    // ---- 设置持久化 ----------------
+
+    #[test]
+    fn settings_roundtrip() {
+        let mut s = Settings::default();
+        s.theme = "dark".to_string();
+        s.show_stats = false;
+        s.ignore_whitespace = true;
+        s.window_size = Some([1000.0, 700.0]);
+        let toml_str = toml::to_string(&s).unwrap();
+        let back: Settings = toml::from_str(&toml_str).unwrap();
+        assert_eq!(back.theme, "dark");
+        assert!(!back.show_stats);
+        assert!(back.ignore_whitespace);
+        assert_eq!(back.window_size, Some([1000.0, 700.0]));
+        // 旧配置兼容：缺失字段用默认值
+        let old: Settings = toml::from_str("theme = \"light\"\n").unwrap();
+        assert!(old.show_stats);
+        assert!(!old.ignore_whitespace);
+        assert_eq!(old.theme_pref(), ThemePreference::Light);
+    }
+
+    #[test]
+    fn app_tab_lifecycle() {
+        let mut app = DiffApp::new(Settings::default());
+        assert!(app.tabs.is_empty());
+        app.new_diff_tab();
+        assert_eq!(app.tabs.len(), 1);
+        assert_eq!(app.active, 0);
+        app.close_tab(0);
+        assert!(app.tabs.is_empty());
+        assert_eq!(app.active, 0);
+    }
+}
+

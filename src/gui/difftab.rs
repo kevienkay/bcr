@@ -23,6 +23,13 @@ pub struct SearchState {
     pub focus: bool,
 }
 
+/// 行内编辑状态
+#[derive(Clone, Copy)]
+pub enum EditSide {
+    Left,
+    Right,
+}
+
 pub struct DiffTab {
     pub left: Option<LoadedFile>,
     pub right: Option<LoadedFile>,
@@ -40,6 +47,15 @@ pub struct DiffTab {
     /// 待跳转行号（1-based）
     pub goto_line: Option<usize>,
     pub goto_focus: bool,
+    /// 编辑状态（编辑左侧/右侧内容）
+    pub editing: Option<EditState>,
+}
+
+/// 编辑窗口状态
+pub struct EditState {
+    pub side: EditSide,
+    pub path: String,
+    pub content: String,
 }
 
 impl DiffTab {
@@ -58,6 +74,7 @@ impl DiffTab {
             search: SearchState::default(),
             goto_line: None,
             goto_focus: false,
+            editing: None,
         }
     }
 
@@ -306,6 +323,25 @@ impl DiffTab {
                     self.recompute();
                 }
                 ui.separator();
+                if ui.button("✏️ 编辑左侧").clicked() {
+                    if let Some(l) = &self.left {
+                        self.editing = Some(EditState {
+                            side: EditSide::Left,
+                            path: l.path.clone(),
+                            content: l.content.clone(),
+                        });
+                    }
+                }
+                if ui.button("✏️ 编辑右侧").clicked() {
+                    if let Some(r) = &self.right {
+                        self.editing = Some(EditState {
+                            side: EditSide::Right,
+                            path: r.path.clone(),
+                            content: r.content.clone(),
+                        });
+                    }
+                }
+                ui.separator();
                 if ui.button("重新加载").clicked() {
                     self.reload();
                 }
@@ -381,6 +417,70 @@ impl DiffTab {
                         self.error = None;
                     }
                 });
+        }
+
+        // 编辑窗口
+        if let Some(edit) = &mut self.editing {
+            let side_name = match edit.side {
+                EditSide::Left => "左侧",
+                EditSide::Right => "右侧",
+            };
+            let mut close = false;
+            let mut save = false;
+            egui::Window::new(format!("编辑{side_name}: {}", edit.path))
+                .default_size([800.0, 600.0])
+                .resizable(true)
+                .show(ui.ctx(), |ui| {
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut edit.content)
+                                    .font(egui::TextStyle::Monospace)
+                                    .desired_width(f32::INFINITY)
+                                    .desired_rows(30)
+                                    .code_editor(),
+                            );
+                        });
+                    ui.horizontal(|ui| {
+                        if ui.button("💾 保存").clicked() {
+                            save = true;
+                        }
+                        if ui.button("取消").clicked() {
+                            close = true;
+                        }
+                        ui.label("Ctrl+S 保存");
+                    });
+                    if ui.input(|i| i.modifiers.command && i.key_pressed(Key::S)) {
+                        save = true;
+                    }
+                });
+            if save {
+                // 先克隆所需数据，避免同时借用 self.editing 与 self 方法
+                let (path, side) = self
+                    .editing
+                    .as_ref()
+                    .map(|e| (e.path.clone(), e.side))
+                    .unwrap();
+                let content = self.editing.as_ref().map(|e| e.content.clone()).unwrap();
+                match std::fs::write(&path, content) {
+                    Ok(()) => {
+                        close = true;
+                        // 保存后重新加载对应侧并重算 diff
+                        match side {
+                            EditSide::Left => self.load_left(&path, self.opts),
+                            EditSide::Right => self.load_right(&path, self.opts),
+                        }
+                        self.error = Some(format!("已保存 {path}"));
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("保存失败: {e}"));
+                    }
+                }
+            }
+            if close {
+                self.editing = None;
+            }
         }
 
         egui::CentralPanel::default().show(ui, |ui| {

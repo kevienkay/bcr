@@ -8,11 +8,15 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 
 - `bcr gui [LEFT] [RIGHT]`：egui 桌面应用，三种标签页，多标签管理
   - **并排 Diff**：左右并排渲染，行内字符级高亮，虚拟化渲染（支持超大文件），同步滚动
-  - **目录对比**：差异文件列表（`[L]/[R]/[C]` 状态 + 两侧大小），glob 过滤，双击打开并排 Diff
-  - **三路合并**：BASE/LEFT/RIGHT 三栏渲染，冲突块导航（F7/Shift+F7），取左/取右/取 BASE 解决，保存合并结果（未解决冲突输出 git 风格标记）
+    - 行内编辑：✏️ 编辑左侧/右侧（Ctrl+S 保存后自动重算 diff）
+    - 搜索高亮（Ctrl+F）、行号跳转（Ctrl+G）、差异跳转（F7/Shift+F7）
+  - **目录对比**：**树形视图**（▶/▼ 折叠子目录、缩进层级），`[L]/[R]/[C]` 状态 + 两侧大小，
+    glob 过滤，**键盘导航**（↑↓ 选择、←→ 折叠、Enter 打开）、双击打开并排 Diff
+  - **三路合并**：BASE/LEFT/RIGHT 三栏渲染，冲突块导航（F7/Shift+F7），取左/取右/取 BASE 解决，
+    **底部实时预览**（未解决冲突高亮并输出 git 风格标记），保存合并结果
 - 工具栏：忽略空白/行尾空白/大小写（即时重算）、重新加载、统计栏开关
-- 快捷键：Ctrl+F 搜索（Enter 下一个、Esc 清除）、Ctrl+G 行号跳转、F7/Shift+F7 差异跳转
-- 主题切换（系统/深色/浅色）+ 设置持久化（`~/.bcr-gui.toml`）
+- **主题切换（系统/深色/浅色）+ 设置持久化**：窗口大小、忽略选项、统计栏开关、主题均存入 `~/.bcr-gui.toml`，下次启动自动恢复
+- **Git 集成**：🐙 弹窗展示 difftool/mergetool 配置，一键复制，可直接 `git difftool --tool=bcr` / `git mergetool --tool=bcr`
 - 拖放文件/目录加载；`bcr gui --merge BASE LEFT RIGHT` 直接打开三路合并
 
 ### M4 目录同步（`bcr sync`）

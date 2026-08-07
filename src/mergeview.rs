@@ -69,6 +69,8 @@ pub struct MergeView {
     pub conflicts: usize,
     /// 每个冲突块起始行索引（rows 内）
     pub conflict_rows: Vec<usize>,
+    /// 每个冲突块在 blocks 中的索引（与 conflict_rows 一一对应）
+    pub conflict_block_indices: Vec<usize>,
 }
 
 /// 构建三路合并视图
@@ -91,6 +93,8 @@ pub fn build_merge_view(base: &str, left: &str, right: &str) -> MergeView {
         if kind == BlockKind::Conflict {
             view.conflicts += 1;
             view.conflict_rows.push(view.rows.len());
+            // blocks 尚未 push，当前长度即本块在 blocks 中的下标
+            view.conflict_block_indices.push(view.blocks.len());
         }
         expand_block(blk, &base_lines, kind, &mut view);
         view.blocks.push(info);
@@ -359,5 +363,38 @@ mod tests {
         let v = build_merge_view("", "", "");
         assert_eq!(v.conflicts, 0);
         assert!(v.rows.is_empty());
+    }
+
+    #[test]
+    fn conflict_block_indices_match_rows() {
+        // 构造两个冲突块 + 中间的公共区，验证 conflict_rows 与 blocks 下标一一对应
+        let base = "l1\nX2\nl3\nl4\nX5\nl6\n";
+        let left = "l1\nL2\nl3\nl4\nL5\nl6\n";
+        let right = "l1\nR2\nl3\nl4\nR5\nl6\n";
+        let v = build_merge_view(base, left, right);
+        assert_eq!(v.conflicts, 2);
+        assert_eq!(v.conflict_rows.len(), 2);
+        assert_eq!(v.conflict_block_indices.len(), 2);
+        // 每个 conflict_block_indices 指向 blocks 中 kind==Conflict 的块
+        for &bi in &v.conflict_block_indices {
+            assert_eq!(v.blocks[bi].kind, BlockKind::Conflict);
+        }
+        // 不同冲突块索引不重复
+        assert_ne!(v.conflict_block_indices[0], v.conflict_block_indices[1]);
+    }
+
+    #[test]
+    fn conflict_block_indices_resolve_blocks() {
+        // 用 conflict_rows 找到的起始行必须落在对应冲突块的 rows 区间内
+        let base = "a\nX\nb\n";
+        let left = "a\nL\nb\n";
+        let right = "a\nR\nb\n";
+        let v = build_merge_view(base, left, right);
+        assert_eq!(v.conflicts, 1);
+        let row = v.conflict_rows[0];
+        let bi = v.conflict_block_indices[0];
+        // 该行属于冲突块（in_conflict 标记一致）
+        assert!(v.rows[row].in_conflict);
+        assert_eq!(v.blocks[bi].kind, BlockKind::Conflict);
     }
 }

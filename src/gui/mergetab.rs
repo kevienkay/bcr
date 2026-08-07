@@ -15,6 +15,9 @@ pub struct MergeTab {
     pub conflict_idx: Option<usize>,
     pub label_l: String,
     pub label_r: String,
+    /// 预览窗格滚动偏移
+    pub preview_scroll: Vec2,
+    pub show_preview: bool,
 }
 
 impl MergeTab {
@@ -29,6 +32,8 @@ impl MergeTab {
             conflict_idx: None,
             label_l: "LEFT".to_string(),
             label_r: "RIGHT".to_string(),
+            preview_scroll: Vec2::ZERO,
+            show_preview: true,
         };
         t.reload();
         t
@@ -68,27 +73,10 @@ impl MergeTab {
         self.error = None;
     }
 
-    fn current_conflict_block(&self) -> Option<usize> {
+    /// 当前冲突块在 blocks 中的索引（通过 conflict_block_indices 精确定位）
+    pub(crate) fn current_conflict_block(&self) -> Option<usize> {
         self.conflict_idx
-            .and_then(|k| self.view.conflict_rows.get(k).copied())
-            .and_then(|row| {
-                self.view
-                    .rows
-                    .get(row)
-                    .map(|r| r.base_no.unwrap_or(0))
-            })
-            .and_then(|base_no| {
-                // 通过 base 行号反查块
-                let mut cursor = 0usize;
-                for (bi, blk) in self.view.blocks.iter().enumerate() {
-                    let block_end = cursor + blk.base.len();
-                    if blk.kind == BlockKind::Conflict && base_no >= cursor + 1 && base_no <= block_end {
-                        return Some(bi);
-                    }
-                    cursor = block_end;
-                }
-                None
-            })
+            .and_then(|k| self.view.conflict_block_indices.get(k).copied())
     }
 
     pub fn next_conflict(&mut self) {
@@ -173,6 +161,8 @@ impl MergeTab {
                     self.save();
                 }
                 ui.separator();
+                if ui.checkbox(&mut self.show_preview, "实时预览").changed() {}
+                ui.separator();
                 ui.label(format!("冲突 {} 处", self.view.conflicts));
                 if ui.button("F7 下一冲突").clicked() {
                     self.next_conflict();
@@ -227,6 +217,51 @@ impl MergeTab {
             } else {
                 self.next_conflict();
             }
+        }
+
+        // 底部实时预览窗格（显示保存将得到的结果，未解决冲突高亮）
+        if self.show_preview {
+            let (lines, unresolved) = render_merged(&self.view, &self.label_l, &self.label_r);
+            let preview_lines: Vec<(&str, bool)> = lines
+                .iter()
+                .map(|l| (l.as_str(), l.starts_with("<<<<<<<") || l.starts_with("=======") || l.starts_with(">>>>>>>")))
+                .collect();
+            egui::Panel::bottom("merge_preview").show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.strong("合并结果预览");
+                    ui.separator();
+                    ui.label(format!("{} 行", lines.len()));
+                    if unresolved > 0 {
+                        ui.colored_label(
+                            Color32::from_rgb(240, 180, 60),
+                            format!("⚠ {} 处冲突未解决（输出含冲突标记）", unresolved),
+                        );
+                    } else {
+                        ui.colored_label(Color32::from_rgb(110, 230, 120), "✓ 全部冲突已解决");
+                    }
+                });
+                let fg = text_color(ui);
+                let out = super::show_rows(ui, preview_lines.len(), ROW_H, |ui, range| {
+                    for idx in range {
+                        let (text, is_marker) = preview_lines[idx];
+                        let (rect, _) = ui.allocate_exact_size(
+                            Vec2::new(ui.available_width().max(400.0), ROW_H),
+                            egui::Sense::hover(),
+                        );
+                        if is_marker {
+                            paint_bg(ui, rect, Some(bg_match_current()));
+                        }
+                        ui.painter().text(
+                            Pos2::new(rect.left() + 4.0, rect.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            text,
+                            egui::FontId::monospace(FONT_SIZE),
+                            fg,
+                        );
+                    }
+                });
+                self.preview_scroll = out.state.offset;
+            });
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
