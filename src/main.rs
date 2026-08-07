@@ -7,6 +7,7 @@ mod mergeview;
 mod render;
 mod sideview;
 mod sync;
+mod vfs;
 
 use clap::{Parser, Subcommand};
 

@@ -3,7 +3,7 @@
 use super::common::*;
 use crate::compare::{compare_dirs, CompareResult, FileStatus};
 use crate::fsscan::Filter;
-use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
+use eframe::egui::{self, Color32, Key, Pos2, Vec2};
 use std::collections::HashSet;
 
 /// 目录标签页

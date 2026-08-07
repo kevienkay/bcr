@@ -253,6 +253,39 @@ mkdir -p m4_s5/a/b && echo deep > m4_s5/a/b/c.txt
 "$BIN" sync m4_s5 m4_d5 > /dev/null 2>&1; check "M4.22 嵌套目录自动创建=0" 0 "$?"
 if [ -f m4_d5/a/b/c.txt ]; then pass "M4.23 深层目标已创建"; else fail "M4.23 深层目标已创建"; fi
 
+echo "=============================================="
+echo " M6: 虚拟文件系统（ZIP）"
+echo "=============================================="
+mkdir -p m6_dir/sub
+printf 'same-content' > m6_dir/same.txt
+printf 'version-1' > m6_dir/diff.txt
+printf 'deep-content' > m6_dir/sub/deep.txt
+(cd m6_dir && zip -qr ../m6_arch.zip .)
+
+# 对照目录：same.txt 相同、diff.txt 不同、sub/deep.txt 相同
+mkdir -p m6_other/sub
+printf 'same-content' > m6_other/same.txt
+printf 'version-2' > m6_other/diff.txt
+printf 'deep-content' > m6_other/sub/deep.txt
+
+"$BIN" compare m6_other "zip://$WORK/m6_arch.zip" --compare-content --show-same > m6_out.txt; rc=$?
+check "M6.1 本地 vs zip 有差异=1" 1 "$rc"
+check_contains "M6.2 内容不同 [C]" "[C] diff.txt" "$(cat m6_out.txt)"
+check_contains "M6.3 内容相同 [S]" "[S] same.txt" "$(cat m6_out.txt)"
+check_contains "M6.4 子目录条目" "[S] sub/deep.txt" "$(cat m6_out.txt)"
+
+"$BIN" compare "zip://$WORK/m6_arch.zip" "zip://$WORK/m6_arch.zip" --compare-content > /dev/null; check "M6.5 zip vs zip 无差异=0" 0 "$?"
+
+"$BIN" compare m6_other "zip://$WORK/m6_arch.zip" --include 'same.txt' --compare-content > /dev/null; check "M6.6 include 过滤作用于 zip" 0 "$?"
+
+# 子集 zip（缺 diff.txt）：该文件应显示为仅左侧
+(cd m6_dir && zip -qr ../m6_subset.zip . -x 'diff.txt')
+"$BIN" compare m6_other "zip://$WORK/m6_subset.zip" --compare-content > m6_sub.txt; check "M6.7 缺失条目=1" 1 "$?"
+check_contains "M6.8 缺失条目标记 [L]" "[L] diff.txt" "$(cat m6_sub.txt)"
+
+printf 'not-a-zip' > m6_bad.zip
+"$BIN" compare m6_dir "zip://$WORK/m6_bad.zip" > /dev/null 2>&1; check "M6.9 非法 zip 退出码=2" 2 "$?"
+
 echo
 echo "=============================================="
 echo " 验收结果: $PASS 通过 / $FAIL 失败"

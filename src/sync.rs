@@ -1,9 +1,8 @@
-use crate::fsscan::{content_equal, scan, Filter};
+use crate::fsscan::Filter;
+use crate::vfs::{self, Vfs};
 use clap::Args;
-use filetime::FileTime;
-use std::fs;
 use std::io;
-use std::path::Path;
+use std::time::SystemTime;
 
 /// sync 子命令参数
 #[derive(Args, Debug)]
@@ -59,16 +58,21 @@ pub fn run(args: &SyncArgs) -> i32 {
     } else {
         (&args.left, &args.right)
     };
-    let src_dir = Path::new(src);
-    let dst_dir = Path::new(dst);
-    if !src_dir.is_dir() {
-        eprintln!("bcr: 不是目录: {}", src);
-        return 2;
-    }
-    if !dst_dir.is_dir() {
-        eprintln!("bcr: 不是目录: {}", dst);
-        return 2;
-    }
+
+    let src_vfs = match vfs::open(src) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("bcr: 打开 {} 失败: {e}", src);
+            return 2;
+        }
+    };
+    let dst_vfs = match vfs::open(dst) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("bcr: 打开 {} 失败: {e}", dst);
+            return 2;
+        }
+    };
 
     let filter = match Filter::new(&args.includes, &args.excludes) {
         Ok(f) => f,
@@ -78,14 +82,14 @@ pub fn run(args: &SyncArgs) -> i32 {
         }
     };
 
-    let src_map = match scan(src_dir, &filter) {
+    let src_map = match src_vfs.scan(&filter) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("bcr: 扫描 {} 失败: {e}", src);
             return 2;
         }
     };
-    let dst_map = match scan(dst_dir, &filter) {
+    let dst_map = match dst_vfs.scan(&filter) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("bcr: 扫描 {} 失败: {e}", dst);
@@ -114,7 +118,7 @@ pub fn run(args: &SyncArgs) -> i32 {
                 let same = if s.size != d.size {
                     false
                 } else if args.compare_content {
-                    match content_equal(src_dir, dst_dir, key) {
+                    match vfs::content_equal_vfs(src_vfs.as_ref(), dst_vfs.as_ref(), key) {
                         Ok(eq) => eq,
                         Err(e) => {
                             eprintln!("bcr: 读取 {} 失败: {e}", key);
@@ -196,13 +200,13 @@ pub fn run(args: &SyncArgs) -> i32 {
             Plan::Copy { rel, from_src } => {
                 n_copy += 1;
                 let (from, to) = if *from_src {
-                    (src_dir, dst_dir)
+                    (src_vfs.as_ref(), dst_vfs.as_ref())
                 } else {
-                    (dst_dir, src_dir)
+                    (dst_vfs.as_ref(), src_vfs.as_ref())
                 };
-                println!("[COPY]   {rel} -> {}", to.display());
+                println!("[COPY]   {rel} -> {}", to.describe());
                 if !args.dry_run {
-                    if let Err(e) = do_copy(&from.join(rel), &to.join(rel)) {
+                    if let Err(e) = do_copy_vfs(from, to, rel) {
                         eprintln!("bcr: 复制 {rel} 失败: {e}");
                         n_error += 1;
                     }
@@ -212,7 +216,7 @@ pub fn run(args: &SyncArgs) -> i32 {
                 n_delete += 1;
                 println!("[DELETE] {rel}");
                 if !args.dry_run {
-                    if let Err(e) = fs::remove_file(dst_dir.join(rel)) {
+                    if let Err(e) = dst_vfs.delete(rel) {
                         eprintln!("bcr: 删除 {rel} 失败: {e}");
                         n_error += 1;
                     }
@@ -247,14 +251,16 @@ pub fn run(args: &SyncArgs) -> i32 {
     }
 }
 
-/// 复制文件并保留源 mtime（避免下次同步误判为过时）
-fn do_copy(from: &Path, to: &Path) -> io::Result<()> {
-    if let Some(parent) = to.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::copy(from, to)?;
-    let mtime = fs::metadata(from)?.modified()?;
-    filetime::set_file_mtime(to, FileTime::from_system_time(mtime))?;
+/// 跨后端复制并保留源 mtime（避免下次同步误判为过时）
+fn do_copy_vfs(from: &dyn Vfs, to: &dyn Vfs, rel: &str) -> io::Result<()> {
+    // 先读源 mtime
+    let mtime = {
+        let mut filter = Filter::new(&[], &[]).unwrap();
+        let map = from.scan(&mut filter)?;
+        map.get(rel).map(|m| m.mtime).unwrap_or(SystemTime::UNIX_EPOCH)
+    };
+    from.copy_to(rel, to)?;
+    to.set_mtime(rel, mtime)?;
     Ok(())
 }
 
@@ -444,14 +450,17 @@ mod tests {
     }
 
     #[test]
-    fn do_copy_creates_parents_and_preserves_mtime() {
+    fn do_copy_vfs_creates_parents_and_preserves_mtime() {
         let dir = tempdir().unwrap();
         let from = dir.path().join("from.txt");
-        let to = dir.path().join("a/b/to.txt");
         fs::write(&from, "data").unwrap();
         let t = filetime::FileTime::from_unix_time(1_700_000_000, 0);
         filetime::set_file_mtime(&from, t).unwrap();
-        do_copy(&from, &to).unwrap();
+        let src = crate::vfs::LocalVfs::new(dir.path()).unwrap();
+        let dst_dir = tempdir().unwrap();
+        let dst = crate::vfs::LocalVfs::new(dst_dir.path()).unwrap();
+        do_copy_vfs(&src, &dst, "from.txt").unwrap();
+        let to = dst_dir.path().join("from.txt");
         assert_eq!(fs::read_to_string(&to).unwrap(), "data");
         let mtime = fs::metadata(&to).unwrap().modified().unwrap();
         let expected: std::time::SystemTime = t.into();
@@ -459,10 +468,11 @@ mod tests {
     }
 
     #[test]
-    fn do_copy_missing_source_errors() {
+    fn do_copy_vfs_missing_source_errors() {
         let dir = tempdir().unwrap();
-        let from = dir.path().join("missing.txt");
-        let to = dir.path().join("to.txt");
-        assert!(do_copy(&from, &to).is_err());
+        let src = crate::vfs::LocalVfs::new(dir.path()).unwrap();
+        let dst_dir = tempdir().unwrap();
+        let dst = crate::vfs::LocalVfs::new(dst_dir.path()).unwrap();
+        assert!(do_copy_vfs(&src, &dst, "missing.txt").is_err());
     }
 }

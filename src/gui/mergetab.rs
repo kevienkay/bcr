@@ -1,7 +1,7 @@
 //! 三路合并标签页：BASE/LEFT/RIGHT 三栏渲染、冲突导航与解决、保存。
 
 use super::common::*;
-use crate::mergeview::{build_merge_view, render_merged, BlockKind, MergeView, Resolution};
+use crate::mergeview::{build_merge_view, render_merged, MergeView, Resolution};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
 
 pub struct MergeTab {

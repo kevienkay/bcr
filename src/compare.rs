@@ -1,4 +1,5 @@
-use crate::fsscan::{content_equal, scan, FileMeta, Filter};
+use crate::fsscan::{FileMeta, Filter};
+use crate::vfs::{LocalVfs, Vfs};
 use clap::Args;
 use std::io::{self, IsTerminal};
 use std::path::Path;
@@ -100,23 +101,35 @@ pub struct CompareResult {
 /// 对比两个目录树，返回结构化结果。
 ///
 /// 行为与 CLI 一致：快速模式比较大小+mtime；compare_content 时对大小相同的
-/// 文件对做 blake3 哈希比对。读取失败的文件记入 warnings 并跳过。
+/// 文件对做哈希比对。读取失败的文件记入 warnings 并跳过。
 pub fn compare_dirs(
     left_dir: &Path,
     right_dir: &Path,
     filter: &Filter,
     compare_content: bool,
 ) -> io::Result<CompareResult> {
-    let left = scan(left_dir, filter)?;
-    let right = scan(right_dir, filter)?;
+    let left = LocalVfs::new(left_dir)?;
+    let right = LocalVfs::new(right_dir)?;
+    compare_vfs(&left, &right, filter, compare_content)
+}
+
+/// 对比两个虚拟文件系统后端，返回结构化结果（CLI/GUI/远程共用）。
+pub fn compare_vfs(
+    left: &dyn Vfs,
+    right: &dyn Vfs,
+    filter: &Filter,
+    compare_content: bool,
+) -> io::Result<CompareResult> {
+    let left_map = left.scan(filter)?;
+    let right_map = right.scan(filter)?;
 
     // 合并 key 集合（已排序，保证输出顺序稳定）
-    let mut keys: Vec<&String> = Vec::with_capacity(left.len() + right.len());
-    for k in left.keys() {
+    let mut keys: Vec<&String> = Vec::with_capacity(left_map.len() + right_map.len());
+    for k in left_map.keys() {
         keys.push(k);
     }
-    for k in right.keys() {
-        if !left.contains_key(k) {
+    for k in right_map.keys() {
+        if !left_map.contains_key(k) {
             keys.push(k);
         }
     }
@@ -124,12 +137,12 @@ pub fn compare_dirs(
 
     let mut result = CompareResult::default();
     for key in keys {
-        match (left.get(key), right.get(key)) {
+        match (left_map.get(key), right_map.get(key)) {
             (Some(l), Some(r)) => {
                 let same = if l.size != r.size {
                     false
                 } else if compare_content {
-                    match content_equal(left_dir, right_dir, key) {
+                    match crate::vfs::content_equal_vfs(left, right, key) {
                         Ok(eq) => eq,
                         Err(e) => {
                             result.warnings.push(format!("读取 {key} 失败: {e}"));
@@ -182,14 +195,14 @@ pub fn compare_dirs(
 }
 
 /// 运行 compare 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
+/// 运行 compare 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
 pub fn run(args: &CompareArgs) -> i32 {
-    let left_dir = Path::new(&args.left);
-    let right_dir = Path::new(&args.right);
-    if !left_dir.is_dir() {
+    // 本地路径需要是目录；zip:// 与 sftp:// 交给 vfs::open 处理
+    if !crate::vfs::is_remote(&args.left) && !Path::new(&args.left).is_dir() {
         eprintln!("bcr: 不是目录: {}", args.left);
         return 2;
     }
-    if !right_dir.is_dir() {
+    if !crate::vfs::is_remote(&args.right) && !Path::new(&args.right).is_dir() {
         eprintln!("bcr: 不是目录: {}", args.right);
         return 2;
     }
@@ -202,7 +215,22 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     };
 
-    let result = match compare_dirs(left_dir, right_dir, &filter, args.compare_content) {
+    let left = match crate::vfs::open(&args.left) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("bcr: 打开 {} 失败: {e}", args.left);
+            return 2;
+        }
+    };
+    let right = match crate::vfs::open(&args.right) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("bcr: 打开 {} 失败: {e}", args.right);
+            return 2;
+        }
+    };
+
+    let result = match compare_vfs(left.as_ref(), right.as_ref(), &filter, args.compare_content) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("bcr: 扫描失败: {e}");

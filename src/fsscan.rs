@@ -1,10 +1,14 @@
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::{self, Read};
+use std::io;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
+
+#[cfg(test)]
+use std::fs::File;
+#[cfg(test)]
+use std::io::Read;
 
 /// 文件元数据（快速比较用）
 #[derive(Debug, Clone)]
@@ -116,10 +120,14 @@ pub fn scan(root: &Path, filter: &Filter) -> io::Result<BTreeMap<String, FileMet
 }
 
 /// 对两侧同路径文件做 blake3 哈希比对
+///
+/// 生产代码已改用 [`crate::vfs::content_equal_vfs`]，此函数仅保留给 fsscan 自身测试。
+#[cfg(test)]
 pub fn content_equal(left_dir: &Path, right_dir: &Path, rel: &str) -> io::Result<bool> {
     Ok(hash_file(&left_dir.join(rel))? == hash_file(&right_dir.join(rel))?)
 }
 
+#[cfg(test)]
 fn hash_file(path: &Path) -> io::Result<blake3::Hash> {
     let mut f = File::open(path)?;
     let mut hasher = blake3::Hasher::new();
