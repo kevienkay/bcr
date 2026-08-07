@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build (debug)
+        run: cargo build --locked
+
+      - name: Unit tests
+        run: cargo test --locked
+
+      - name: Build (release)
+        run: cargo build --release --locked
+
+      - name: Acceptance tests (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: bash tests/acceptance.sh
+
+      - name: Acceptance tests (Windows, Git Bash)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: bash tests/acceptance.sh
+
+      - name: CLI smoke — i18n (English)
+        run: |
+          ./target/release/bcr --lang en diff Cargo.toml Cargo.lock || test $? -eq 1
+          ./target/release/bcr --lang de compare /nonexistent /nonexistent 2>&1 | grep -q "kein Verzeichnis"

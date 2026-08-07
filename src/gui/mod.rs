@@ -85,12 +85,13 @@ fn default_true() -> bool {
 }
 
 impl Settings {
+    /// 跨平台配置目录：macOS/Linux 用 $HOME，Windows 用 %USERPROFILE%
     fn path() -> PathBuf {
-        let mut p = std::env::var("HOME")
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("."));
-        p.push(".bcr-gui.toml");
-        p
+        home.join(".bcr-gui.toml")
     }
 
     fn load() -> Self {
@@ -446,13 +447,15 @@ impl eframe::App for DiffApp {
         }
 
         if let Some(rel) = open_diff_req {
-            // 目录对比双击 → 打开该文件的并排 diff
+            // 目录对比双击 → 打开该文件的并排 diff（用 Path::join 保证跨平台分隔符）
             if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
                 let (l, r) = (dir_tab.left.clone(), dir_tab.right.clone());
                 let mut t = DiffTab::new();
+                let l = std::path::Path::new(&l).join(&rel);
+                let r = std::path::Path::new(&r).join(&rel);
                 t.load_pair(
-                    &format!("{}/{}", l.trim_end_matches('/'), rel),
-                    &format!("{}/{}", r.trim_end_matches('/'), rel),
+                    &l.to_string_lossy(),
+                    &r.to_string_lossy(),
                     ViewOptions::default(),
                 );
                 self.add_tab(Tab::Diff(t));
