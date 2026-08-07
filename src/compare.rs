@@ -1,4 +1,4 @@
-use crate::fsscan::{content_equal, scan, Filter};
+use crate::fsscan::{content_equal, scan, FileMeta, Filter};
 use clap::Args;
 use std::io::{self, IsTerminal};
 use std::path::Path;
@@ -43,6 +43,144 @@ pub struct CompareArgs {
     pub color: String,
 }
 
+/// 文件比较状态
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileStatus {
+    Same,
+    LeftOnly,
+    RightOnly,
+    Differ,
+}
+
+impl FileStatus {
+    pub fn letter(self) -> char {
+        match self {
+            FileStatus::Same => 'S',
+            FileStatus::LeftOnly => 'L',
+            FileStatus::RightOnly => 'R',
+            FileStatus::Differ => 'C',
+        }
+    }
+}
+
+/// 单个文件的比较条目
+#[derive(Debug, Clone)]
+pub struct FileEntry {
+    pub rel: String,
+    pub status: FileStatus,
+    pub left: Option<FileMeta>,
+    pub right: Option<FileMeta>,
+}
+
+/// 比较统计
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CompareStats {
+    pub same: usize,
+    pub left_only: usize,
+    pub right_only: usize,
+    pub differ: usize,
+}
+
+impl CompareStats {
+    pub fn has_differences(self) -> bool {
+        self.left_only + self.right_only + self.differ > 0
+    }
+}
+
+/// 目录比较结果（CLI 与 GUI 共用）
+#[derive(Debug, Default)]
+pub struct CompareResult {
+    /// 排序后的条目（BTreeMap 顺序）
+    pub entries: Vec<FileEntry>,
+    pub stats: CompareStats,
+    /// 比较过程中的非致命警告（如读取失败被跳过）
+    pub warnings: Vec<String>,
+}
+
+/// 对比两个目录树，返回结构化结果。
+///
+/// 行为与 CLI 一致：快速模式比较大小+mtime；compare_content 时对大小相同的
+/// 文件对做 blake3 哈希比对。读取失败的文件记入 warnings 并跳过。
+pub fn compare_dirs(
+    left_dir: &Path,
+    right_dir: &Path,
+    filter: &Filter,
+    compare_content: bool,
+) -> io::Result<CompareResult> {
+    let left = scan(left_dir, filter)?;
+    let right = scan(right_dir, filter)?;
+
+    // 合并 key 集合（已排序，保证输出顺序稳定）
+    let mut keys: Vec<&String> = Vec::with_capacity(left.len() + right.len());
+    for k in left.keys() {
+        keys.push(k);
+    }
+    for k in right.keys() {
+        if !left.contains_key(k) {
+            keys.push(k);
+        }
+    }
+    keys.sort();
+
+    let mut result = CompareResult::default();
+    for key in keys {
+        match (left.get(key), right.get(key)) {
+            (Some(l), Some(r)) => {
+                let same = if l.size != r.size {
+                    false
+                } else if compare_content {
+                    match content_equal(left_dir, right_dir, key) {
+                        Ok(eq) => eq,
+                        Err(e) => {
+                            result.warnings.push(format!("读取 {key} 失败: {e}"));
+                            continue;
+                        }
+                    }
+                } else {
+                    l.mtime == r.mtime
+                };
+                if same {
+                    result.stats.same += 1;
+                    result.entries.push(FileEntry {
+                        rel: key.clone(),
+                        status: FileStatus::Same,
+                        left: Some(l.clone()),
+                        right: Some(r.clone()),
+                    });
+                } else {
+                    result.stats.differ += 1;
+                    result.entries.push(FileEntry {
+                        rel: key.clone(),
+                        status: FileStatus::Differ,
+                        left: Some(l.clone()),
+                        right: Some(r.clone()),
+                    });
+                }
+            }
+            (Some(l), None) => {
+                result.stats.left_only += 1;
+                result.entries.push(FileEntry {
+                    rel: key.clone(),
+                    status: FileStatus::LeftOnly,
+                    left: Some(l.clone()),
+                    right: None,
+                });
+            }
+            (None, Some(r)) => {
+                result.stats.right_only += 1;
+                result.entries.push(FileEntry {
+                    rel: key.clone(),
+                    status: FileStatus::RightOnly,
+                    left: None,
+                    right: Some(r.clone()),
+                });
+            }
+            (None, None) => unreachable!(),
+        }
+    }
+    Ok(result)
+}
+
 /// 运行 compare 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
 pub fn run(args: &CompareArgs) -> i32 {
     let left_dir = Path::new(&args.left);
@@ -64,20 +202,17 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     };
 
-    let left = match scan(left_dir, &filter) {
-        Ok(m) => m,
+    let result = match compare_dirs(left_dir, right_dir, &filter, args.compare_content) {
+        Ok(r) => r,
         Err(e) => {
-            eprintln!("bcr: 扫描 {} 失败: {e}", args.left);
+            eprintln!("bcr: 扫描失败: {e}");
             return 2;
         }
     };
-    let right = match scan(right_dir, &filter) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("bcr: 扫描 {} 失败: {e}", args.right);
-            return 2;
-        }
-    };
+
+    for w in &result.warnings {
+        eprintln!("bcr: {w}");
+    }
 
     let color = match args.color.as_str() {
         "always" => true,
@@ -85,69 +220,22 @@ pub fn run(args: &CompareArgs) -> i32 {
         _ => io::stdout().is_terminal(),
     };
 
-    // 合并 key 集合（已排序，保证输出顺序稳定）
-    let mut keys: Vec<&String> = Vec::with_capacity(left.len() + right.len());
-    for k in left.keys() {
-        keys.push(k);
-    }
-    for k in right.keys() {
-        if !left.contains_key(k) {
-            keys.push(k);
+    for entry in &result.entries {
+        if entry.status == FileStatus::Same && !args.show_same {
+            continue;
         }
-    }
-    keys.sort();
-
-    let mut n_same = 0usize;
-    let mut n_left_only = 0usize;
-    let mut n_right_only = 0usize;
-    let mut n_differ = 0usize;
-
-    for key in keys {
-        match (left.get(key), right.get(key)) {
-            (Some(l), Some(r)) => {
-                let same = if l.size != r.size {
-                    false
-                } else if args.compare_content {
-                    match content_equal(left_dir, right_dir, key) {
-                        Ok(eq) => eq,
-                        Err(e) => {
-                            eprintln!("bcr: 读取 {} 失败: {e}", key);
-                            continue;
-                        }
-                    }
-                } else {
-                    l.mtime == r.mtime
-                };
-                if same {
-                    n_same += 1;
-                    if args.show_same {
-                        emit('S', key, color);
-                    }
-                } else {
-                    n_differ += 1;
-                    emit('C', key, color);
-                }
-            }
-            (Some(_), None) => {
-                n_left_only += 1;
-                emit('L', key, color);
-            }
-            (None, Some(_)) => {
-                n_right_only += 1;
-                emit('R', key, color);
-            }
-            (None, None) => unreachable!(),
-        }
+        emit(entry.status.letter(), &entry.rel, color);
     }
 
     if args.summary {
+        let s = result.stats;
         println!(
             "统计: {} 相同, {} 仅左侧, {} 仅右侧, {} 内容不同",
-            n_same, n_left_only, n_right_only, n_differ
+            s.same, s.left_only, s.right_only, s.differ
         );
     }
 
-    if n_left_only + n_right_only + n_differ > 0 {
+    if result.stats.has_differences() {
         1
     } else {
         0
@@ -198,6 +286,10 @@ mod tests {
             fs::write(p, content).unwrap();
             filetime::set_file_mtime(&dir.join(rel), fixed).unwrap();
         }
+    }
+
+    fn empty_filter() -> Filter {
+        Filter::new(&[], &[]).unwrap()
     }
 
     #[test]
@@ -304,5 +396,55 @@ mod tests {
         emit('R', "a.txt", false);
         emit('C', "a.txt", false);
         emit('S', "a.txt", false);
+    }
+
+    // ---- compare_dirs 结构化 API ----
+
+    #[test]
+    fn compare_dirs_reports_statuses_and_stats() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("same.txt", "x"), ("diff.txt", "v1"), ("only_l.txt", "a")]);
+        make_tree(d2.path(), &[("same.txt", "x"), ("diff.txt", "v22"), ("only_r.txt", "b")]);
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false).unwrap();
+        let by_rel: std::collections::BTreeMap<&str, FileStatus> = r
+            .entries
+            .iter()
+            .map(|e| (e.rel.as_str(), e.status))
+            .collect();
+        assert_eq!(by_rel["same.txt"], FileStatus::Same);
+        assert_eq!(by_rel["diff.txt"], FileStatus::Differ);
+        assert_eq!(by_rel["only_l.txt"], FileStatus::LeftOnly);
+        assert_eq!(by_rel["only_r.txt"], FileStatus::RightOnly);
+        assert_eq!(r.stats.same, 1);
+        assert_eq!(r.stats.differ, 1);
+        assert_eq!(r.stats.left_only, 1);
+        assert_eq!(r.stats.right_only, 1);
+        assert!(r.stats.has_differences());
+        // 顺序稳定（BTreeMap 排序）
+        let rels: Vec<&str> = r.entries.iter().map(|e| e.rel.as_str()).collect();
+        assert_eq!(rels, vec!["diff.txt", "only_l.txt", "only_r.txt", "same.txt"]);
+    }
+
+    #[test]
+    fn compare_dirs_identical_dirs_no_differences() {
+        let d = tempdir().unwrap();
+        make_tree(d.path(), &[("a.txt", "x"), ("sub/b.txt", "y")]);
+        let r = compare_dirs(d.path(), d.path(), &empty_filter(), false).unwrap();
+        assert!(!r.stats.has_differences());
+        assert_eq!(r.stats.same, 2);
+        assert!(r.warnings.is_empty());
+    }
+
+    #[test]
+    fn compare_dirs_entries_carry_metadata() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("f.txt", "12345")]);
+        make_tree(d2.path(), &[("f.txt", "12345")]);
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false).unwrap();
+        let e = &r.entries[0];
+        assert_eq!(e.left.as_ref().unwrap().size, 5);
+        assert_eq!(e.right.as_ref().unwrap().size, 5);
     }
 }

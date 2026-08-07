@@ -1,0 +1,129 @@
+//! GUI 公共绘制辅助：颜色、单元格渲染（含行内高亮）、虚拟化行高常量。
+
+use crate::sideview::Cell;
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Vec2};
+
+/// 虚拟化行高
+pub const ROW_H: f32 = 20.0;
+/// 等宽字体大小
+pub const FONT_SIZE: f32 = 14.0;
+
+/// 差异底色（半透明，深浅主题通用）
+pub fn bg_delete() -> Color32 {
+    Color32::from_rgba_unmultiplied(220, 60, 60, 60)
+}
+pub fn bg_insert() -> Color32 {
+    Color32::from_rgba_unmultiplied(60, 200, 90, 55)
+}
+pub fn bg_replace_l() -> Color32 {
+    Color32::from_rgba_unmultiplied(220, 80, 80, 70)
+}
+pub fn bg_replace_r() -> Color32 {
+    Color32::from_rgba_unmultiplied(70, 210, 100, 70)
+}
+pub fn bg_match() -> Color32 {
+    Color32::from_rgba_unmultiplied(230, 200, 60, 45)
+}
+pub fn bg_match_current() -> Color32 {
+    Color32::from_rgba_unmultiplied(240, 190, 40, 90)
+}
+/// 行内高亮（变更段背景）
+pub fn hl_delete() -> Color32 {
+    Color32::from_rgba_unmultiplied(225, 90, 90, 150)
+}
+pub fn hl_insert() -> Color32 {
+    Color32::from_rgba_unmultiplied(90, 225, 120, 150)
+}
+pub fn hl_replace_l() -> Color32 {
+    Color32::from_rgba_unmultiplied(230, 100, 100, 160)
+}
+pub fn hl_replace_r() -> Color32 {
+    Color32::from_rgba_unmultiplied(100, 230, 130, 160)
+}
+/// 行号颜色
+pub const GUTTER: Color32 = Color32::from_gray(120);
+
+/// 绘制一行单元格的背景
+pub fn paint_bg(ui: &egui::Ui, rect: Rect, bg: Option<Color32>) {
+    if let Some(c) = bg {
+        ui.painter().rect_filled(rect, 0.0, c);
+    }
+}
+
+/// 在单元格内绘制带行内高亮的文本（LayoutJob 分段着色）
+pub fn paint_cell(ui: &egui::Ui, rect: Rect, cell: Option<&Cell>, fg: Color32, hl: Option<Color32>) {
+    let Some(cell) = cell else { return };
+    let mut job = egui::text::LayoutJob::default();
+    for (seg, changed) in &cell.segments {
+        job.append(
+            seg,
+            0.0,
+            egui::TextFormat {
+                font_id: FontId::monospace(FONT_SIZE),
+                color: fg,
+                background: if *changed { hl.unwrap_or(Color32::TRANSPARENT) } else { Color32::TRANSPARENT },
+                ..Default::default()
+            },
+        );
+    }
+    let galley = ui.painter().layout_job(job);
+    let y = rect.center().y - galley.size().y / 2.0;
+    ui.painter()
+        .galley(Pos2::new(rect.left() + 4.0, y), galley, fg);
+}
+
+/// 绘制行号（右对齐在 gutter 内）
+pub fn paint_line_no(ui: &egui::Ui, rect: Rect, no: Option<usize>) {
+    if let Some(n) = no {
+        ui.painter().text(
+            Pos2::new(rect.right() - 4.0, rect.center().y),
+            Align2::RIGHT_CENTER,
+            n.to_string(),
+            FontId::monospace(12.0),
+            GUTTER,
+        );
+    }
+}
+
+/// 计算行号列宽
+pub fn gutter_width(max_no: usize) -> f32 {
+    let digits = max_no.max(1).to_string().len() as f32;
+    digits * 8.0 + 16.0
+}
+
+/// 主题下的前景文本色
+pub fn text_color(ui: &egui::Ui) -> Color32 {
+    ui.visuals().text_color()
+}
+
+/// 虚拟化渲染行（row_h 为实际行高；内部关闭 item_spacing 垂直间距保证对齐）
+pub fn show_rows<R>(
+    ui: &mut egui::Ui,
+    total: usize,
+    row_h: f32,
+    add: impl FnOnce(&mut egui::Ui, std::ops::Range<usize>) -> R,
+) -> egui::scroll_area::ScrollAreaOutput<R> {
+    // 临时关闭 item spacing，使行高精确 = row_h
+    let prev = ui.spacing().item_spacing.y;
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let out = egui::ScrollArea::both()
+        .auto_shrink([false, false])
+        .show_rows(ui, row_h, total, add);
+    ui.spacing_mut().item_spacing.y = prev;
+    out
+}
+
+/// 状态色（目录对比/合并视图用）
+pub fn status_color(ui: &egui::Ui, letter: char) -> Color32 {
+    match letter {
+        'L' => Color32::from_rgb(235, 100, 100),
+        'R' => Color32::from_rgb(110, 150, 240),
+        'C' => Color32::from_rgb(235, 200, 90),
+        'M' => Color32::from_rgb(235, 200, 90),
+        _ => ui.visuals().weak_text_color(),
+    }
+}
+
+pub fn vec2(x: f32, y: f32) -> Vec2 {
+    Vec2::new(x, y)
+}

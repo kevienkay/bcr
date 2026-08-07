@@ -4,15 +4,16 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 
 ## 功能
 
-### M5 GUI 并排 Diff（`bcr gui`）
+### M5 GUI（`bcr gui`）— 完整版
 
-- `bcr gui [LEFT] [RIGHT]`：egui 桌面窗口，左右并排渲染 diff
-- 行级着色：删除（红底）/ 插入（绿底）/ 修改（红绿底）；修改行做行内字符级高亮
-- 两侧行号独立跟踪，共享滚动，支持横向/纵向滚动
-- 顶部工具栏：打开文件（系统对话框）、忽略空白/行尾空白/大小写（即时重算）、重新加载
-- 支持拖放文件到窗口（两个文件成对加载，单个文件补充另一侧）
-- 底部统计栏：相同/删除/插入/修改行数 + 当前文件对
-- 复用 M1 的 diff 引擎与归一化选项，CLI/GUI 行为一致
+- `bcr gui [LEFT] [RIGHT]`：egui 桌面应用，三种标签页，多标签管理
+  - **并排 Diff**：左右并排渲染，行内字符级高亮，虚拟化渲染（支持超大文件），同步滚动
+  - **目录对比**：差异文件列表（`[L]/[R]/[C]` 状态 + 两侧大小），glob 过滤，双击打开并排 Diff
+  - **三路合并**：BASE/LEFT/RIGHT 三栏渲染，冲突块导航（F7/Shift+F7），取左/取右/取 BASE 解决，保存合并结果（未解决冲突输出 git 风格标记）
+- 工具栏：忽略空白/行尾空白/大小写（即时重算）、重新加载、统计栏开关
+- 快捷键：Ctrl+F 搜索（Enter 下一个、Esc 清除）、Ctrl+G 行号跳转、F7/Shift+F7 差异跳转
+- 主题切换（系统/深色/浅色）+ 设置持久化（`~/.bcr-gui.toml`）
+- 拖放文件/目录加载；`bcr gui --merge BASE LEFT RIGHT` 直接打开三路合并
 
 ### M4 目录同步（`bcr sync`）
 
@@ -118,7 +119,9 @@ src/merge.rs    M3 三路合并：diff3 归并（collect_block + apply_regions�
 src/fsscan.rs   共享扫描/过滤/哈希模块（compare 与 sync 共用）
 src/sync.rs     M4 同步引擎：三模式计划生成、dry-run、mtime 保留复制
 src/sideview.rs M5 并排 diff 数据模型：行级 ops 展开为并排行（行号+行内高亮），纯逻辑可单测
-src/gui.rs      M5 egui 窗口：工具栏/统计栏/双栏滚动渲染（基于 sideview 模型）
+src/mergeview.rs M5 三路合并视图模型：块级对齐 + 冲突标记 + 解决选择
+src/gui/         M5 egui 窗口：mod.rs（多标签/主题/持久化）、difftab（并排+搜索+跳转）、
+                 dirtab（目录导航）、mergetab（三路合并）、common（虚拟化渲染/着色）
 ```
 
 关键设计：
@@ -141,7 +144,7 @@ src/gui.rs      M5 egui 窗口：工具栏/统计栏/双栏滚动渲染（基于
 - 整文件读入内存，超大文件（> 数百 MB）需后续引入分块比较
 - 不处理 "No newline at end of file" 标记
 - 二进制文件未做检测（M1/M3/M5 仅文本）
-- M5 GUI 未做虚拟化渲染，超大文件（> 数万行）会卡顿；拖放仅支持本地文件
+- M5 目录对比的 glob 过滤在 GUI 中以逗号分隔输入；拖放仅支持本地文件
 - 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确
 - M3 三处 stdin 不能同时用（`-` 只能出现一次）
 - 与 git 的行为差异：两侧对**相邻行**的独立修改，bcr 按经典 diff3 语义无冲突合并，git 保守判冲突

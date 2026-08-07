@@ -3,6 +3,7 @@ mod diff;
 mod fsscan;
 mod gui;
 mod merge;
+mod mergeview;
 mod render;
 mod sideview;
 mod sync;

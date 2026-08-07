@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use walkdir::WalkDir;
 
 /// 文件元数据（快速比较用）
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileMeta {
     pub size: u64,
     pub mtime: SystemTime,

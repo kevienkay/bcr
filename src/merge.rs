@@ -36,6 +36,80 @@ struct Region<'a> {
     side_lines: Vec<&'a str>,
 }
 
+/// 一个归并块：覆盖 base 区间 [base)，左侧/右侧应用变更后的行序列
+/// （GUI 三路合并视图与 CLI 共用）
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MergeBlock<'a> {
+    pub base: Range<usize>,
+    pub left: Vec<&'a str>,
+    pub right: Vec<&'a str>,
+    /// 两侧都改了且内容不同 → 冲突
+    pub conflict: bool,
+}
+
+/// 计算三路归并块序列（公共区 + 变更区，按 base 行号有序）。
+///
+/// 输出与 `run()` 的归并结果逐块对应：非冲突块取 left（内容等于 right 或未改侧）；
+/// 冲突块由调用方决定如何输出/渲染。
+pub(crate) fn compute_blocks<'a>(
+    base: &[&'a str],
+    left: &[&'a str],
+    right: &[&'a str],
+    algo: Algorithm,
+) -> Vec<MergeBlock<'a>> {
+    let ops_l = capture_diff_slices(algo, base, left);
+    let ops_r = capture_diff_slices(algo, base, right);
+    let regions_l = extract_regions(&ops_l, base, left);
+    let regions_r = extract_regions(&ops_r, base, right);
+
+    let mut blocks: Vec<MergeBlock<'a>> = Vec::new();
+    let mut cur = 0usize;
+    let mut i = 0usize;
+    let mut j = 0usize;
+
+    while i < regions_l.len() || j < regions_r.len() {
+        // 下一个变更区域的 base 起点
+        let next = match (regions_l.get(i), regions_r.get(j)) {
+            (Some(a), Some(b)) => a.base.start.min(b.base.start),
+            (Some(a), None) => a.base.start,
+            (None, Some(b)) => b.base.start,
+            (None, None) => break,
+        };
+        // 公共区
+        if next > cur {
+            blocks.push(MergeBlock {
+                base: cur..next,
+                left: base[cur..next].to_vec(),
+                right: base[cur..next].to_vec(),
+                conflict: false,
+            });
+        }
+
+        // 收集重叠（传递闭包）区域，构成一个处理块
+        let (block_l, block_r, end) = collect_block(&regions_l, &regions_r, &mut i, &mut j, next);
+        let lv = apply_regions(base, &block_l, next, end);
+        let rv = apply_regions(base, &block_r, next, end);
+        let conflict = !block_l.is_empty() && !block_r.is_empty() && lv != rv;
+        blocks.push(MergeBlock {
+            base: next..end,
+            left: lv,
+            right: rv,
+            conflict,
+        });
+        cur = end;
+    }
+    // 尾部公共区
+    if cur < base.len() {
+        blocks.push(MergeBlock {
+            base: cur..base.len(),
+            left: base[cur..].to_vec(),
+            right: base[cur..].to_vec(),
+            conflict: false,
+        });
+    }
+    blocks
+}
+
 /// 运行 merge 子命令，返回进程退出码（0=无冲突，1=有冲突，2=错误）
 pub fn run(args: &MergeArgs) -> i32 {
     let base = match read_input(&args.base) {
@@ -69,11 +143,8 @@ pub fn run(args: &MergeArgs) -> i32 {
     let left_lines: Vec<&str> = left.lines().collect();
     let right_lines: Vec<&str> = right.lines().collect();
 
-    // 两个 diff 都基于 base 行号，归并即可得到三路合并结果
-    let ops_l = capture_diff_slices(algo, &base_lines, &left_lines);
-    let ops_r = capture_diff_slices(algo, &base_lines, &right_lines);
-    let regions_l = extract_regions(&ops_l, &base_lines, &left_lines);
-    let regions_r = extract_regions(&ops_r, &base_lines, &right_lines);
+    // 归并为块序列（公共区 + 变更区，按 base 行号有序）
+    let blocks = compute_blocks(&base_lines, &left_lines, &right_lines, algo);
 
     let label_l = args.labels.first().cloned().unwrap_or_else(|| "LEFT".to_string());
     let label_r = args
@@ -84,51 +155,25 @@ pub fn run(args: &MergeArgs) -> i32 {
 
     let mut out: Vec<String> = Vec::new();
     let mut conflicts = 0usize;
-    let mut cur = 0usize; // base 游标
-    let mut i = 0usize;
-    let mut j = 0usize;
 
-    while i < regions_l.len() || j < regions_r.len() {
-        // 下一个变更区域的 base 起点
-        let next = match (regions_l.get(i), regions_r.get(j)) {
-            (Some(a), Some(b)) => a.base.start.min(b.base.start),
-            (Some(a), None) => a.base.start,
-            (None, Some(b)) => b.base.start,
-            (None, None) => break,
-        };
-        // 两侧都未改动的公共区
-        for line in &base_lines[cur..next] {
-            out.push((*line).to_string());
-        }
-
-        // 收集与 [next, end) 重叠（传递闭包）的变更区域，构成一个处理块
-        let (block_l, block_r, end) = collect_block(&regions_l, &regions_r, &mut i, &mut j, next);
-        let lv = apply_regions(&base_lines, &block_l, next, end);
-        let rv = apply_regions(&base_lines, &block_r, next, end);
-
-        if block_l.is_empty() {
-            // 只有右侧改动
-            out.extend(rv.iter().map(|s| s.to_string()));
-        } else if block_r.is_empty() {
-            // 只有左侧改动
-            out.extend(lv.iter().map(|s| s.to_string()));
-        } else if lv == rv {
-            // 两侧改动相同 → 无冲突
-            out.extend(lv.iter().map(|s| s.to_string()));
-        } else {
-            // 冲突
+    for blk in &blocks {
+        if blk.conflict {
             conflicts += 1;
             out.push(format!("<<<<<<< {label_l}"));
-            out.extend(lv.iter().map(|s| s.to_string()));
+            out.extend(blk.left.iter().map(|s| s.to_string()));
             out.push("=======".to_string());
-            out.extend(rv.iter().map(|s| s.to_string()));
+            out.extend(blk.right.iter().map(|s| s.to_string()));
             out.push(format!(">>>>>>> {label_r}"));
+        } else if blk.left == blk.right {
+            // 公共区或两侧相同修改
+            out.extend(blk.left.iter().map(|s| s.to_string()));
+        } else if blk.left == base_lines[blk.base.clone()] {
+            // 左侧未改 → 只有右侧改动
+            out.extend(blk.right.iter().map(|s| s.to_string()));
+        } else {
+            // 右侧未改 → 只有左侧改动
+            out.extend(blk.left.iter().map(|s| s.to_string()));
         }
-        cur = end;
-    }
-    // 尾部公共区
-    for line in &base_lines[cur..] {
-        out.push((*line).to_string());
     }
 
     // 输出
@@ -183,13 +228,13 @@ fn extract_regions<'a>(
 }
 
 /// 收集与 [start, end) 重叠（含传递闭包）的两侧区域，返回块内容与块结束行号
-fn collect_block<'a>(
-    regions_l: &'a [Region<'a>],
-    regions_r: &'a [Region<'a>],
+fn collect_block<'a, 'b>(
+    regions_l: &'b [Region<'a>],
+    regions_r: &'b [Region<'a>],
     i: &mut usize,
     j: &mut usize,
     start: usize,
-) -> (Vec<&'a Region<'a>>, Vec<&'a Region<'a>>, usize) {
+) -> (Vec<&'b Region<'a>>, Vec<&'b Region<'a>>, usize) {
     let mut bl: Vec<&Region<'a>> = Vec::new();
     let mut br: Vec<&Region<'a>> = Vec::new();
     let mut end = start;
@@ -197,7 +242,11 @@ fn collect_block<'a>(
         let mut changed = false;
         if let Some(a) = regions_l.get(*i) {
             if overlap(&a.base, start, end) {
-                end = end.max(eff_end(&a.base));
+                // 空区间（纯插入）不扩展块尾，避免吞掉相邻公共区；
+                // 非空区间才把块尾推进到其结束行。
+                if !a.base.is_empty() {
+                    end = end.max(a.base.end);
+                }
                 bl.push(a);
                 *i += 1;
                 changed = true;
@@ -205,7 +254,9 @@ fn collect_block<'a>(
         }
         if let Some(b) = regions_r.get(*j) {
             if overlap(&b.base, start, end) {
-                end = end.max(eff_end(&b.base));
+                if !b.base.is_empty() {
+                    end = end.max(b.base.end);
+                }
                 br.push(b);
                 *j += 1;
                 changed = true;
