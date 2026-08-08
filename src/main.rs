@@ -46,7 +46,26 @@ enum Commands {
     Gui(gui::GuiArgs),
 }
 
+/// 平台初始化：Windows 控制台切换到 UTF-8 代码页，保证中文输出不乱码。
+#[cfg(windows)]
+fn init_platform() {
+    // SetConsoleOutputCP(65001) / SetConsoleCP(65001)
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn SetConsoleOutputCP(wCodePageID: u32) -> i32;
+        fn SetConsoleCP(wCodePageID: u32) -> i32;
+    }
+    unsafe {
+        SetConsoleOutputCP(65001);
+        SetConsoleCP(65001);
+    }
+}
+
+#[cfg(not(windows))]
+fn init_platform() {}
+
 fn main() {
+    init_platform();
     let cli = Cli::parse();
     // 初始化语言：--lang 优先，其次 BCR_LANG/系统 LANG，最后中文
     let lang = cli

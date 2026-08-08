@@ -468,6 +468,47 @@ impl eframe::App for DiffApp {
     }
 }
 
+/// 加载系统中文字体作为 fallback（egui 默认字体不含 CJK，三端中文 UI 都需要）。
+/// 按平台探测常见中文字体路径，找到第一个存在的加载。
+fn install_cjk_fonts(ctx: &egui::Context) {
+    let candidates: &[&str] = if cfg!(target_os = "windows") {
+        &[
+            "C:\\Windows\\Fonts\\msyh.ttc", // 微软雅黑
+            "C:\\Windows\\Fonts\\simhei.ttf", // 黑体
+            "C:\\Windows\\Fonts\\simsun.ttc", // 宋体
+        ]
+    } else if cfg!(target_os = "macos") {
+        &[
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+            "/System/Library/Fonts/Hiragino Sans GB.ttc",
+            "/Library/Fonts/Arial Unicode.ttf",
+        ]
+    } else {
+        &[
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+        ]
+    };
+    let Some(path) = candidates.iter().find(|p| std::path::Path::new(p).exists()) else {
+        return;
+    };
+    let Ok(bytes) = std::fs::read(path) else {
+        return;
+    };
+    let mut fonts = egui::FontDefinitions::default();
+    fonts
+        .font_data
+        .insert("cjk".to_owned(), egui::FontData::from_owned(bytes).into());
+    // 追加到比例字体与等宽字体末尾作为 fallback，保留默认拉丁字体
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts.families.entry(family).or_default().push("cjk".to_owned());
+    }
+    ctx.set_fonts(fonts);
+}
+
 /// 运行 GUI 事件循环，返回进程退出码
 pub fn run(args: &GuiArgs) -> i32 {
     let settings = Settings::load();
@@ -540,6 +581,7 @@ pub fn run(args: &GuiArgs) -> i32 {
         "bcr",
         options,
         Box::new(move |cc| {
+            install_cjk_fonts(&cc.egui_ctx);
             for theme in [egui::Theme::Dark, egui::Theme::Light] {
                 cc.egui_ctx.style_mut_of(theme, |style| {
                     style

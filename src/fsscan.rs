@@ -17,6 +17,17 @@ pub struct FileMeta {
     pub mtime: SystemTime,
 }
 
+/// 统一相对路径分隔符：Windows 的 `\` 转为 `/`。
+/// 这样 glob 匹配、GUI 树视图、zip/sftp 对比在所有平台使用同一套 key。
+fn norm_rel(rel: &std::path::Path) -> String {
+    let s = rel.to_string_lossy();
+    if cfg!(windows) {
+        s.replace('\\', "/")
+    } else {
+        s.into_owned()
+    }
+}
+
 /// glob 过滤规则：include 白名单 + exclude 黑名单
 pub struct Filter {
     include: Option<GlobSet>,
@@ -76,7 +87,7 @@ pub fn scan(root: &Path, filter: &Filter) -> io::Result<BTreeMap<String, FileMet
                 return true; // 根目录
             }
             if e.file_type().is_dir() {
-                let s = rel.to_string_lossy();
+                let s = norm_rel(rel);
                 // 两种写法都试，兼容 "sub" 与 "sub/" 模式
                 return !(filter.is_excluded(&s) || filter.is_excluded(&format!("{s}/")));
             }
@@ -97,7 +108,7 @@ pub fn scan(root: &Path, filter: &Filter) -> io::Result<BTreeMap<String, FileMet
             Ok(r) => r,
             Err(_) => continue,
         };
-        let rel_str = rel.to_string_lossy().into_owned();
+        let rel_str = norm_rel(rel);
         if !filter.accept(&rel_str) {
             continue;
         }

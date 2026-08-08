@@ -179,9 +179,11 @@ pub fn run(args: &MergeArgs) -> i32 {
 
     // 输出
     if let Some(path) = &args.output {
-        let mut content = out.join("\n");
+        // 换行风格跟随 base 源文件：Windows CRLF 文件合并后保持 CRLF
+        let nl = if detect_crlf(&args.base) { "\r\n" } else { "\n" };
+        let mut content = out.join(nl);
         if !content.is_empty() {
-            content.push('\n');
+            content.push_str(nl);
         }
         if let Err(e) = fs::write(Path::new(path), content) {
             eprintln!("bcr: {}", fmt(Key::WriteFailed, &[path, &e.to_string()]));
@@ -315,6 +317,22 @@ fn read_input(path: &str) -> io::Result<String> {
     } else {
         fs::read_to_string(Path::new(path))
     }
+}
+
+/// 检测文件是否使用 CRLF 换行（二进制安全：只扫前 64KB）
+fn detect_crlf(path: &str) -> bool {
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut buf = [0u8; 65536];
+    use std::io::Read;
+    let Ok(n) = f.read(&mut buf) else {
+        return false;
+    };
+    let bytes = &buf[..n];
+    let crlf = bytes.windows(2).filter(|w| w == b"\r\n").count();
+    let lf = bytes.iter().filter(|&&b| b == b'\n').count();
+    crlf > 0 && crlf * 2 >= lf // CRLF 占换行的大多数才判定为 CRLF 文件
 }
 
 #[cfg(test)]
