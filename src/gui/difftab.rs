@@ -10,6 +10,9 @@ use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
 pub struct LoadedFile {
     pub path: String,
     pub content: String,
+    /// 解码信息（编码 + BOM），保存时按原编码回写
+    pub encoding: crate::encoding::EncodingKind,
+    pub had_bom: bool,
 }
 
 /// 搜索状态
@@ -95,15 +98,27 @@ impl DiffTab {
 
     pub fn load_pair(&mut self, l: &str, r: &str, opts: ViewOptions) {
         self.opts = opts;
-        match (std::fs::read_to_string(l), std::fs::read_to_string(r)) {
-            (Ok(lc), Ok(rc)) => {
+        match (crate::encoding::read_text(l), crate::encoding::read_text(r)) {
+            (Ok(lf), Ok(rf)) => {
+                if lf.is_binary {
+                    self.error = Some(fmt(I18nKey::BinaryFile, &[l]));
+                    return;
+                }
+                if rf.is_binary {
+                    self.error = Some(fmt(I18nKey::BinaryFile, &[r]));
+                    return;
+                }
                 self.left = Some(LoadedFile {
                     path: l.to_string(),
-                    content: lc,
+                    content: lf.text,
+                    encoding: lf.encoding,
+                    had_bom: lf.had_bom,
                 });
                 self.right = Some(LoadedFile {
                     path: r.to_string(),
-                    content: rc,
+                    content: rf.text,
+                    encoding: rf.encoding,
+                    had_bom: rf.had_bom,
                 });
                 self.recompute();
                 self.error = None;
@@ -115,11 +130,17 @@ impl DiffTab {
 
     pub fn load_left(&mut self, path: &str, opts: ViewOptions) {
         self.opts = opts;
-        match std::fs::read_to_string(path) {
-            Ok(c) => {
+        match crate::encoding::read_text(path) {
+            Ok(tf) => {
+                if tf.is_binary {
+                    self.error = Some(fmt(I18nKey::BinaryFile, &[path]));
+                    return;
+                }
                 self.left = Some(LoadedFile {
                     path: path.to_string(),
-                    content: c,
+                    content: tf.text,
+                    encoding: tf.encoding,
+                    had_bom: tf.had_bom,
                 });
                 self.recompute();
                 self.error = None;
@@ -130,11 +151,17 @@ impl DiffTab {
 
     pub fn load_right(&mut self, path: &str, opts: ViewOptions) {
         self.opts = opts;
-        match std::fs::read_to_string(path) {
-            Ok(c) => {
+        match crate::encoding::read_text(path) {
+            Ok(tf) => {
+                if tf.is_binary {
+                    self.error = Some(fmt(I18nKey::BinaryFile, &[path]));
+                    return;
+                }
                 self.right = Some(LoadedFile {
                     path: path.to_string(),
-                    content: c,
+                    content: tf.text,
+                    encoding: tf.encoding,
+                    had_bom: tf.had_bom,
                 });
                 self.recompute();
                 self.error = None;
@@ -493,7 +520,36 @@ impl DiffTab {
                     .map(|e| (e.path.clone(), e.side))
                     .unwrap();
                 let content = self.editing.as_ref().map(|e| e.content.clone()).unwrap();
-                match std::fs::write(&path, content) {
+                // 按原编码回写（保留 BOM 与编码，避免破坏 GBK/UTF-16 文件）
+                let bytes = match side {
+                    EditSide::Left => self.left.as_ref().map(|f| {
+                        crate::encoding::encode_back(
+                            &crate::encoding::TextFile {
+                                text: String::new(),
+                                encoding: f.encoding,
+                                had_bom: f.had_bom,
+                                is_binary: false,
+                            },
+                            &content,
+                        )
+                    }),
+                    EditSide::Right => self.right.as_ref().map(|f| {
+                        crate::encoding::encode_back(
+                            &crate::encoding::TextFile {
+                                text: String::new(),
+                                encoding: f.encoding,
+                                had_bom: f.had_bom,
+                                is_binary: false,
+                            },
+                            &content,
+                        )
+                    }),
+                };
+                let write_res = match bytes {
+                    Some(b) => std::fs::write(&path, b),
+                    None => Ok(()),
+                };
+                match write_res {
                     Ok(()) => {
                         close = true;
                         // 保存后重新加载对应侧并重算 diff

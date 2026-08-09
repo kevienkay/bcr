@@ -2,7 +2,7 @@ use crate::i18n::{fmt, Key};
 use clap::Args;
 use similar::{capture_diff_slices, Algorithm, DiffOp, DiffTag};
 use std::fs;
-use std::io::{self, Read};
+use std::io;
 use std::ops::Range;
 use std::path::Path;
 
@@ -115,7 +115,11 @@ pub(crate) fn compute_blocks<'a>(
 pub fn run(args: &MergeArgs) -> i32 {
     let base = match read_input(&args.base) {
         Ok(s) => s,
-        Err(e) => {
+        Err(ReadErr::Binary) => {
+            eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.base]));
+            return 2;
+        }
+        Err(ReadErr::Io(e)) => {
             eprintln!(
                 "bcr: {}",
                 fmt(Key::CannotRead, &[&args.base, &e.to_string()])
@@ -125,7 +129,11 @@ pub fn run(args: &MergeArgs) -> i32 {
     };
     let left = match read_input(&args.left) {
         Ok(s) => s,
-        Err(e) => {
+        Err(ReadErr::Binary) => {
+            eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.left]));
+            return 2;
+        }
+        Err(ReadErr::Io(e)) => {
             eprintln!(
                 "bcr: {}",
                 fmt(Key::CannotRead, &[&args.left, &e.to_string()])
@@ -135,7 +143,11 @@ pub fn run(args: &MergeArgs) -> i32 {
     };
     let right = match read_input(&args.right) {
         Ok(s) => s,
-        Err(e) => {
+        Err(ReadErr::Binary) => {
+            eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.right]));
+            return 2;
+        }
+        Err(ReadErr::Io(e)) => {
             eprintln!(
                 "bcr: {}",
                 fmt(Key::CannotRead, &[&args.right, &e.to_string()])
@@ -322,14 +334,19 @@ fn apply_regions<'a>(
     out
 }
 
-fn read_input(path: &str) -> io::Result<String> {
-    if path == "-" {
-        let mut buf = String::new();
-        io::stdin().read_to_string(&mut buf)?;
-        Ok(buf)
-    } else {
-        fs::read_to_string(Path::new(path))
+/// 读取错误：二进制文件 / IO 错误
+#[derive(Debug)]
+enum ReadErr {
+    Binary,
+    Io(io::Error),
+}
+
+fn read_input(path: &str) -> Result<String, ReadErr> {
+    let tf = crate::encoding::read_input(path).map_err(ReadErr::Io)?;
+    if tf.is_binary {
+        return Err(ReadErr::Binary);
     }
+    Ok(tf.text)
 }
 
 /// 检测文件是否使用 CRLF 换行（二进制安全：只扫前 64KB）

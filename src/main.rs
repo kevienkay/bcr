@@ -1,5 +1,6 @@
 mod compare;
 mod diff;
+mod encoding;
 mod fsscan;
 mod gui;
 mod i18n;
@@ -23,6 +24,10 @@ struct Cli {
     /// 语言：zh/en/de/ja/ko/es/pt/ar/ru/fr（默认取 BCR_LANG 或系统 LANG）
     #[arg(long, global = true)]
     lang: Option<String>,
+
+    /// 编码：utf-8/utf-16le/utf-16be/gbk/big5/shift_jis 等（默认自动检测；可用 BCR_ENCODING）
+    #[arg(long, global = true)]
+    encoding: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -75,6 +80,10 @@ fn main() {
         .or_else(i18n::Lang::from_env)
         .unwrap_or(i18n::Lang::Zh);
     i18n::set_lang(lang);
+    // 编码覆盖：--encoding 优先写入 BCR_ENCODING，供 encoding 模块统一读取
+    if let Some(enc) = &cli.encoding {
+        unsafe { std::env::set_var("BCR_ENCODING", enc) };
+    }
     let code = match cli.command {
         Commands::Diff(args) => diff::run(&args),
         Commands::Compare(args) => compare::run(&args),
