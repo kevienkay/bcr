@@ -10,12 +10,12 @@ mod difftab;
 mod dirtab;
 mod mergetab;
 
+use crate::sideview::ViewOptions;
 use common::*;
 use difftab::DiffTab;
 use dirtab::DirTab;
-use mergetab::MergeTab;
-use crate::sideview::ViewOptions;
 use eframe::egui::{self, RichText, ThemePreference};
+use mergetab::MergeTab;
 use std::path::PathBuf;
 
 /// GUI 子命令参数
@@ -168,14 +168,13 @@ impl DiffApp {
     }
 
     fn handle_dropped(&mut self, ctx: &egui::Context) {
-        let dropped: Vec<std::path::PathBuf> = ctx
-            .input(|i| {
-                i.raw
-                    .dropped_files
-                    .iter()
-                    .map(|f| f.path().to_path_buf())
-                    .collect()
-            });
+        let dropped: Vec<std::path::PathBuf> = ctx.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .collect()
+        });
         if dropped.is_empty() {
             return;
         }
@@ -284,17 +283,29 @@ impl eframe::App for DiffApp {
         // 顶部菜单栏
         egui::Panel::top("menu").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button(crate::i18n::t(crate::i18n::Key::MenuOpenFiles)).clicked() {
+                if ui
+                    .button(crate::i18n::t(crate::i18n::Key::MenuOpenFiles))
+                    .clicked()
+                {
                     self.open_diff_files();
                 }
-                if ui.button(crate::i18n::t(crate::i18n::Key::MenuOpenDir)).clicked() {
+                if ui
+                    .button(crate::i18n::t(crate::i18n::Key::MenuOpenDir))
+                    .clicked()
+                {
                     self.open_dir_compare();
                 }
-                if ui.button(crate::i18n::t(crate::i18n::Key::MenuOpenMerge)).clicked() {
+                if ui
+                    .button(crate::i18n::t(crate::i18n::Key::MenuOpenMerge))
+                    .clicked()
+                {
                     self.open_merge();
                 }
                 ui.separator();
-                if ui.button(crate::i18n::t(crate::i18n::Key::MenuGit)).clicked() {
+                if ui
+                    .button(crate::i18n::t(crate::i18n::Key::MenuGit))
+                    .clicked()
+                {
                     self.show_git_help = !self.show_git_help;
                 }
                 ui.separator();
@@ -337,7 +348,10 @@ impl eframe::App for DiffApp {
                 ui.horizontal(|ui| {
                     ui.label(crate::i18n::t(crate::i18n::Key::Language));
                     for l in crate::i18n::Lang::ALL {
-                        if ui.selectable_label(new_lang == l, l.native_name()).clicked() {
+                        if ui
+                            .selectable_label(new_lang == l, l.native_name())
+                            .clicked()
+                        {
                             new_lang = l;
                             lang_changed = true;
                         }
@@ -359,7 +373,10 @@ impl eframe::App for DiffApp {
                         (crate::i18n::Key::ThemeDark, ThemePreference::Dark),
                         (crate::i18n::Key::ThemeLight, ThemePreference::Light),
                     ] {
-                        if ui.selectable_label(pref == p, crate::i18n::t(key)).clicked() {
+                        if ui
+                            .selectable_label(pref == p, crate::i18n::t(key))
+                            .clicked()
+                        {
                             pref = p;
                             changed = true;
                         }
@@ -402,7 +419,10 @@ impl eframe::App for DiffApp {
                         });
                     ui.add_space(4.0);
                     ui.horizontal(|ui| {
-                        if ui.button(crate::i18n::t(crate::i18n::Key::GitCopy)).clicked() {
+                        if ui
+                            .button(crate::i18n::t(crate::i18n::Key::GitCopy))
+                            .clicked()
+                        {
                             ui.ctx().copy_text(config.clone());
                             self.show_git_help = false;
                         }
@@ -473,7 +493,7 @@ impl eframe::App for DiffApp {
 fn install_cjk_fonts(ctx: &egui::Context) {
     let candidates: &[&str] = if cfg!(target_os = "windows") {
         &[
-            "C:\\Windows\\Fonts\\msyh.ttc", // 微软雅黑
+            "C:\\Windows\\Fonts\\msyh.ttc",   // 微软雅黑
             "C:\\Windows\\Fonts\\simhei.ttf", // 黑体
             "C:\\Windows\\Fonts\\simsun.ttc", // 宋体
         ]
@@ -504,7 +524,11 @@ fn install_cjk_fonts(ctx: &egui::Context) {
         .insert("cjk".to_owned(), egui::FontData::from_owned(bytes).into());
     // 追加到比例字体与等宽字体末尾作为 fallback，保留默认拉丁字体
     for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        fonts.families.entry(family).or_default().push("cjk".to_owned());
+        fonts
+            .families
+            .entry(family)
+            .or_default()
+            .push("cjk".to_owned());
     }
     ctx.set_fonts(fonts);
 }
@@ -584,9 +608,10 @@ pub fn run(args: &GuiArgs) -> i32 {
             install_cjk_fonts(&cc.egui_ctx);
             for theme in [egui::Theme::Dark, egui::Theme::Light] {
                 cc.egui_ctx.style_mut_of(theme, |style| {
-                    style
-                        .text_styles
-                        .insert(egui::TextStyle::Monospace, egui::FontId::monospace(FONT_SIZE));
+                    style.text_styles.insert(
+                        egui::TextStyle::Monospace,
+                        egui::FontId::monospace(FONT_SIZE),
+                    );
                 });
             }
             cc.egui_ctx.set_theme(theme_pref);
@@ -595,7 +620,10 @@ pub fn run(args: &GuiArgs) -> i32 {
     ) {
         Ok(()) => 0,
         Err(e) => {
-            eprintln!("bcr: {}", crate::i18n::fmt(crate::i18n::Key::GuiFail, &[&e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                crate::i18n::fmt(crate::i18n::Key::GuiFail, &[&e.to_string()])
+            );
             2
         }
     }
@@ -682,7 +710,11 @@ mod tests {
         });
         assert!(t.editing.is_some());
         // 保存（模拟 Ctrl+S 分支，这里直接调用保存逻辑：写文件 + 重新加载）
-        let (path, side) = t.editing.as_ref().map(|e| (e.path.clone(), e.side)).unwrap();
+        let (path, side) = t
+            .editing
+            .as_ref()
+            .map(|e| (e.path.clone(), e.side))
+            .unwrap();
         fs::write(&path, "a\nEDITED\n").unwrap();
         match side {
             EditSide::Left => t.load_left(&path, t.opts),
@@ -837,11 +869,13 @@ mod tests {
 
     #[test]
     fn settings_roundtrip() {
-        let mut s = Settings::default();
-        s.theme = "dark".to_string();
-        s.show_stats = false;
-        s.ignore_whitespace = true;
-        s.window_size = Some([1000.0, 700.0]);
+        let s = Settings {
+            theme: "dark".to_string(),
+            show_stats: false,
+            ignore_whitespace: true,
+            window_size: Some([1000.0, 700.0]),
+            ..Settings::default()
+        };
         let toml_str = toml::to_string(&s).unwrap();
         let back: Settings = toml::from_str(&toml_str).unwrap();
         assert_eq!(back.theme, "dark");
@@ -867,4 +901,3 @@ mod tests {
         assert_eq!(app.active, 0);
     }
 }
-

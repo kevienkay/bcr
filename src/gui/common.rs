@@ -51,7 +51,13 @@ pub fn paint_bg(ui: &egui::Ui, rect: Rect, bg: Option<Color32>) {
 }
 
 /// 在单元格内绘制带行内高亮的文本（LayoutJob 分段着色）
-pub fn paint_cell(ui: &egui::Ui, rect: Rect, cell: Option<&Cell>, fg: Color32, hl: Option<Color32>) {
+pub fn paint_cell(
+    ui: &egui::Ui,
+    rect: Rect,
+    cell: Option<&Cell>,
+    fg: Color32,
+    hl: Option<Color32>,
+) {
     let Some(cell) = cell else { return };
     let mut job = egui::text::LayoutJob::default();
     for (seg, changed) in &cell.segments {
@@ -61,7 +67,11 @@ pub fn paint_cell(ui: &egui::Ui, rect: Rect, cell: Option<&Cell>, fg: Color32, h
             egui::TextFormat {
                 font_id: FontId::monospace(FONT_SIZE),
                 color: fg,
-                background: if *changed { hl.unwrap_or(Color32::TRANSPARENT) } else { Color32::TRANSPARENT },
+                background: if *changed {
+                    hl.unwrap_or(Color32::TRANSPARENT)
+                } else {
+                    Color32::TRANSPARENT
+                },
                 ..Default::default()
             },
         );

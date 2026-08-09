@@ -86,14 +86,20 @@ pub fn run(args: &SyncArgs) -> i32 {
     let src_map = match src_vfs.scan(&filter) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&format!("{}: {}", src, e)]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::ScanFailed, &[&format!("{}: {}", src, e)])
+            );
             return 2;
         }
     };
     let dst_map = match dst_vfs.scan(&filter) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&format!("{}: {}", dst, e)]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::ScanFailed, &[&format!("{}: {}", dst, e)])
+            );
             return 2;
         }
     };
@@ -252,9 +258,7 @@ pub fn run(args: &SyncArgs) -> i32 {
 
     if n_error > 0 {
         2
-    } else if n_conflict > 0 {
-        1
-    } else if args.dry_run && n_copy + n_delete + n_conflict > 0 {
+    } else if n_conflict > 0 || (args.dry_run && n_copy + n_delete + n_conflict > 0) {
         1
     } else {
         0
@@ -265,9 +269,11 @@ pub fn run(args: &SyncArgs) -> i32 {
 fn do_copy_vfs(from: &dyn Vfs, to: &dyn Vfs, rel: &str) -> io::Result<()> {
     // 先读源 mtime
     let mtime = {
-        let mut filter = Filter::new(&[], &[]).unwrap();
-        let map = from.scan(&mut filter)?;
-        map.get(rel).map(|m| m.mtime).unwrap_or(SystemTime::UNIX_EPOCH)
+        let filter = Filter::new(&[], &[]).unwrap();
+        let map = from.scan(&filter)?;
+        map.get(rel)
+            .map(|m| m.mtime)
+            .unwrap_or(SystemTime::UNIX_EPOCH)
     };
     from.copy_to(rel, to)?;
     to.set_mtime(rel, mtime)?;
@@ -311,9 +317,16 @@ mod tests {
         let src = tempdir().unwrap();
         let dst = tempdir().unwrap();
         write_tree(src.path(), &[("new.txt", "hello", 1_700_000_000)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "update",
+        );
         assert_eq!(run(&a), 0);
-        assert_eq!(fs::read_to_string(dst.path().join("new.txt")).unwrap(), "hello");
+        assert_eq!(
+            fs::read_to_string(dst.path().join("new.txt")).unwrap(),
+            "hello"
+        );
     }
 
     #[test]
@@ -323,9 +336,16 @@ mod tests {
         // 源旧目标新 → update 应跳过
         write_tree(src.path(), &[("f.txt", "old", 1_700_000_000)]);
         write_tree(dst.path(), &[("f.txt", "newer", 1_700_000_100)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "update",
+        );
         assert_eq!(run(&a), 0);
-        assert_eq!(fs::read_to_string(dst.path().join("f.txt")).unwrap(), "newer");
+        assert_eq!(
+            fs::read_to_string(dst.path().join("f.txt")).unwrap(),
+            "newer"
+        );
     }
 
     #[test]
@@ -334,9 +354,16 @@ mod tests {
         let dst = tempdir().unwrap();
         write_tree(src.path(), &[("f.txt", "newer", 1_700_000_100)]);
         write_tree(dst.path(), &[("f.txt", "old", 1_700_000_000)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "update",
+        );
         assert_eq!(run(&a), 0);
-        assert_eq!(fs::read_to_string(dst.path().join("f.txt")).unwrap(), "newer");
+        assert_eq!(
+            fs::read_to_string(dst.path().join("f.txt")).unwrap(),
+            "newer"
+        );
     }
 
     #[test]
@@ -344,7 +371,11 @@ mod tests {
         let src = tempdir().unwrap();
         let dst = tempdir().unwrap();
         write_tree(dst.path(), &[("only.txt", "x", 1_700_000_000)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "update",
+        );
         assert_eq!(run(&a), 0);
         assert!(dst.path().join("only.txt").exists());
     }
@@ -354,7 +385,11 @@ mod tests {
         let src = tempdir().unwrap();
         let dst = tempdir().unwrap();
         write_tree(src.path(), &[("new.txt", "hello", 1_700_000_000)]);
-        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        let mut a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "update",
+        );
         a.dry_run = true;
         assert_eq!(run(&a), 1); // 有计划 → 退出码 1
         assert!(!dst.path().join("new.txt").exists());
@@ -365,7 +400,11 @@ mod tests {
         let src = tempdir().unwrap();
         let dst = tempdir().unwrap();
         write_tree(dst.path(), &[("old.txt", "x", 1_700_000_000)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "mirror");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "mirror",
+        );
         assert_eq!(run(&a), 0);
         assert!(!dst.path().join("old.txt").exists());
     }
@@ -377,7 +416,11 @@ mod tests {
         // 目标更新也会被镜像覆盖
         write_tree(src.path(), &[("f.txt", "src", 1_700_000_000)]);
         write_tree(dst.path(), &[("f.txt", "dst", 1_700_000_100)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "mirror");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "mirror",
+        );
         assert_eq!(run(&a), 0);
         assert_eq!(fs::read_to_string(dst.path().join("f.txt")).unwrap(), "src");
     }
@@ -388,7 +431,11 @@ mod tests {
         let dst = tempdir().unwrap();
         write_tree(src.path(), &[("l.txt", "L", 1_700_000_000)]);
         write_tree(dst.path(), &[("r.txt", "R", 1_700_000_000)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "two-way",
+        );
         assert_eq!(run(&a), 0);
         assert!(dst.path().join("l.txt").exists());
         assert!(src.path().join("r.txt").exists());
@@ -401,15 +448,29 @@ mod tests {
         // 左侧新 → 覆盖右侧
         write_tree(src.path(), &[("both.txt", "L", 1_700_000_100)]);
         write_tree(dst.path(), &[("both.txt", "R", 1_700_000_000)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "two-way",
+        );
         assert_eq!(run(&a), 0);
-        assert_eq!(fs::read_to_string(dst.path().join("both.txt")).unwrap(), "L");
+        assert_eq!(
+            fs::read_to_string(dst.path().join("both.txt")).unwrap(),
+            "L"
+        );
         // 右侧新 → 覆盖左侧
         write_tree(src.path(), &[("both2.txt", "L", 1_700_000_000)]);
         write_tree(dst.path(), &[("both2.txt", "R", 1_700_000_100)]);
-        let b = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        let b = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "two-way",
+        );
         assert_eq!(run(&b), 0);
-        assert_eq!(fs::read_to_string(src.path().join("both2.txt")).unwrap(), "R");
+        assert_eq!(
+            fs::read_to_string(src.path().join("both2.txt")).unwrap(),
+            "R"
+        );
     }
 
     #[test]
@@ -419,7 +480,11 @@ mod tests {
         // 快速模式下同大小同 mtime 会被判为一致；这里用不同大小触发冲突分支
         write_tree(src.path(), &[("f.txt", "LONGER", 1_700_000_000)]);
         write_tree(dst.path(), &[("f.txt", "R", 1_700_000_000)]);
-        let a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "two-way",
+        );
         assert_eq!(run(&a), 1); // 冲突 → 退出码 1
     }
 
@@ -430,7 +495,11 @@ mod tests {
         // 同大小同 mtime 但内容不同：快速模式判为一致，compare-content 模式判冲突
         write_tree(src.path(), &[("f.txt", "L", 1_700_000_000)]);
         write_tree(dst.path(), &[("f.txt", "R", 1_700_000_000)]);
-        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        let mut a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "two-way",
+        );
         a.compare_content = true;
         assert_eq!(run(&a), 1);
     }
@@ -442,7 +511,11 @@ mod tests {
         // mtime 相同但内容相同 → compare-content 模式判定一致，不冲突
         write_tree(src.path(), &[("f.txt", "same", 1_700_000_000)]);
         write_tree(dst.path(), &[("f.txt", "same", 1_700_000_000)]);
-        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "two-way");
+        let mut a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "two-way",
+        );
         a.compare_content = true;
         assert_eq!(run(&a), 0);
     }
@@ -453,7 +526,11 @@ mod tests {
         let dst = tempdir().unwrap();
         // 反转后 dst 成为源：dst 独有的文件应被复制回 src
         write_tree(dst.path(), &[("only.txt", "x", 1_700_000_000)]);
-        let mut a = args(src.path().to_str().unwrap(), dst.path().to_str().unwrap(), "update");
+        let mut a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "update",
+        );
         a.reverse = true;
         assert_eq!(run(&a), 0);
         assert!(src.path().join("only.txt").exists());

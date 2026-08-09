@@ -74,11 +74,25 @@ pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, 
     let lines_r: Vec<&str> = right.lines().collect();
     let keys_l: Vec<String> = lines_l
         .iter()
-        .map(|l| normalize_line(l, opts.ignore_whitespace, opts.ignore_trailing, opts.ignore_case))
+        .map(|l| {
+            normalize_line(
+                l,
+                opts.ignore_whitespace,
+                opts.ignore_trailing,
+                opts.ignore_case,
+            )
+        })
         .collect();
     let keys_r: Vec<String> = lines_r
         .iter()
-        .map(|l| normalize_line(l, opts.ignore_whitespace, opts.ignore_trailing, opts.ignore_case))
+        .map(|l| {
+            normalize_line(
+                l,
+                opts.ignore_whitespace,
+                opts.ignore_trailing,
+                opts.ignore_case,
+            )
+        })
         .collect();
     let ops = capture_diff_slices(algo, &keys_l, &keys_r);
 
@@ -195,7 +209,15 @@ mod tests {
         assert_eq!(rows[0].left_no, Some(1));
         assert_eq!(rows[0].right_no, Some(1));
         assert_eq!(rows[2].left_no, Some(3));
-        assert_eq!(stats, Stats { equal: 3, delete: 0, insert: 0, replace: 0 });
+        assert_eq!(
+            stats,
+            Stats {
+                equal: 3,
+                delete: 0,
+                insert: 0,
+                replace: 0
+            }
+        );
     }
 
     #[test]
@@ -249,11 +271,22 @@ mod tests {
 
     #[test]
     fn ignore_whitespace_merges_rows() {
-        let opts = ViewOptions { ignore_whitespace: true, ..Default::default() };
+        let opts = ViewOptions {
+            ignore_whitespace: true,
+            ..Default::default()
+        };
         let (rows, stats) = build_rows("a b\n", "ab\n", opts);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].tag, RowTag::Equal);
-        assert_eq!(stats, Stats { equal: 1, delete: 0, insert: 0, replace: 0 });
+        assert_eq!(
+            stats,
+            Stats {
+                equal: 1,
+                delete: 0,
+                insert: 0,
+                replace: 0
+            }
+        );
         // 不忽略时是 Replace
         let (rows2, _) = build_rows("a b\n", "ab\n", ViewOptions::default());
         assert_eq!(rows2[0].tag, RowTag::Replace);
@@ -261,21 +294,31 @@ mod tests {
 
     #[test]
     fn ignore_case_merges_rows() {
-        let opts = ViewOptions { ignore_case: true, ..Default::default() };
+        let opts = ViewOptions {
+            ignore_case: true,
+            ..Default::default()
+        };
         let (rows, _) = build_rows("Hello\n", "hello\n", opts);
         assert_eq!(rows[0].tag, RowTag::Equal);
     }
 
     #[test]
     fn ignore_trailing_merges_rows() {
-        let opts = ViewOptions { ignore_trailing: true, ..Default::default() };
+        let opts = ViewOptions {
+            ignore_trailing: true,
+            ..Default::default()
+        };
         let (rows, _) = build_rows("hello  \n", "hello\n", opts);
         assert_eq!(rows[0].tag, RowTag::Equal);
     }
 
     #[test]
     fn unicode_lines_work() {
-        let (rows, stats) = build_rows("中文第一行\n中文第二行\n", "中文第一行\n中文第二行改\n", ViewOptions::default());
+        let (rows, stats) = build_rows(
+            "中文第一行\n中文第二行\n",
+            "中文第一行\n中文第二行改\n",
+            ViewOptions::default(),
+        );
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].tag, RowTag::Replace);
         assert_eq!(stats.replace, 1);

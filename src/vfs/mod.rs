@@ -62,7 +62,9 @@ impl LocalVfs {
                 format!("不是目录: {}", root.display()),
             ));
         }
-        Ok(LocalVfs { root: root.to_path_buf() })
+        Ok(LocalVfs {
+            root: root.to_path_buf(),
+        })
     }
 }
 
@@ -96,10 +98,7 @@ impl Vfs for LocalVfs {
     }
 
     fn set_mtime(&self, rel: &str, t: SystemTime) -> io::Result<()> {
-        filetime::set_file_mtime(
-            self.root.join(rel),
-            filetime::FileTime::from_system_time(t),
-        )
+        filetime::set_file_mtime(self.root.join(rel), filetime::FileTime::from_system_time(t))
     }
 }
 
@@ -159,7 +158,8 @@ mod tests {
         {
             let file = fs::File::create(&zp).unwrap();
             let mut w = ::zip::ZipWriter::new(file);
-            w.start_file("a.txt", ::zip::write::SimpleFileOptions::default()).unwrap();
+            w.start_file("a.txt", ::zip::write::SimpleFileOptions::default())
+                .unwrap();
             use std::io::Write;
             w.write_all(b"zip-content").unwrap();
             w.finish().unwrap();
@@ -197,6 +197,9 @@ mod tests {
         let src = LocalVfs::new(d1.path()).unwrap();
         let dst = LocalVfs::new(d2.path()).unwrap();
         src.copy_to("a.txt", &dst).unwrap();
-        assert_eq!(fs::read_to_string(d2.path().join("a.txt")).unwrap(), "cross");
+        assert_eq!(
+            fs::read_to_string(d2.path().join("a.txt")).unwrap(),
+            "cross"
+        );
     }
 }

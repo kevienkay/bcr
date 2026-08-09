@@ -45,14 +45,20 @@ pub fn run(args: &DiffArgs) -> i32 {
     let left = match read_input(&args.left) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.left, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::CannotRead, &[&args.left, &e.to_string()])
+            );
             return 2;
         }
     };
     let right = match read_input(&args.right) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.right, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::CannotRead, &[&args.right, &e.to_string()])
+            );
             return 2;
         }
     };

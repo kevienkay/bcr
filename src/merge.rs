@@ -116,21 +116,30 @@ pub fn run(args: &MergeArgs) -> i32 {
     let base = match read_input(&args.base) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.base, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::CannotRead, &[&args.base, &e.to_string()])
+            );
             return 2;
         }
     };
     let left = match read_input(&args.left) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.left, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::CannotRead, &[&args.left, &e.to_string()])
+            );
             return 2;
         }
     };
     let right = match read_input(&args.right) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::CannotRead, &[&args.right, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::CannotRead, &[&args.right, &e.to_string()])
+            );
             return 2;
         }
     };
@@ -147,7 +156,11 @@ pub fn run(args: &MergeArgs) -> i32 {
     // 归并为块序列（公共区 + 变更区，按 base 行号有序）
     let blocks = compute_blocks(&base_lines, &left_lines, &right_lines, algo);
 
-    let label_l = args.labels.first().cloned().unwrap_or_else(|| "LEFT".to_string());
+    let label_l = args
+        .labels
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "LEFT".to_string());
     let label_r = args
         .labels
         .get(1)
@@ -180,7 +193,11 @@ pub fn run(args: &MergeArgs) -> i32 {
     // 输出
     if let Some(path) = &args.output {
         // 换行风格跟随 base 源文件：Windows CRLF 文件合并后保持 CRLF
-        let nl = if detect_crlf(&args.base) { "\r\n" } else { "\n" };
+        let nl = if detect_crlf(&args.base) {
+            "\r\n"
+        } else {
+            "\n"
+        };
         let mut content = out.join(nl);
         if !content.is_empty() {
             content.push_str(nl);
@@ -203,11 +220,7 @@ pub fn run(args: &MergeArgs) -> i32 {
 }
 
 /// 从 diff ops 提取一侧的变更区域列表（按 base 行号升序）
-fn extract_regions<'a>(
-    ops: &[DiffOp],
-    base: &[&'a str],
-    side: &[&'a str],
-) -> Vec<Region<'a>> {
+fn extract_regions<'a>(ops: &[DiffOp], base: &[&'a str], side: &[&'a str]) -> Vec<Region<'a>> {
     let _ = base;
     let mut regions = Vec::new();
     for op in ops {
@@ -496,8 +509,14 @@ mod tests {
     #[test]
     fn apply_regions_rebuilds_lines() {
         let base: Vec<&str> = vec!["a", "b", "c", "d", "e"];
-        let r1 = Region { base: 1..2, side_lines: vec!["X", "Y"] };
-        let r2 = Region { base: 3..4, side_lines: vec![] };
+        let r1 = Region {
+            base: 1..2,
+            side_lines: vec!["X", "Y"],
+        };
+        let r2 = Region {
+            base: 3..4,
+            side_lines: vec![],
+        };
         let out = apply_regions(&base, &[&r1, &r2], 0, 5);
         assert_eq!(out, vec!["a", "X", "Y", "c", "e"]);
     }
@@ -505,8 +524,14 @@ mod tests {
     #[test]
     fn collect_block_gathers_overlapping_regions() {
         // 左区域 1..3 与右区域 2..4 重叠 → 构成一个块
-        let rl = Region { base: 1..3, side_lines: vec!["L"] };
-        let rr = Region { base: 2..4, side_lines: vec!["R"] };
+        let rl = Region {
+            base: 1..3,
+            side_lines: vec!["L"],
+        };
+        let rr = Region {
+            base: 2..4,
+            side_lines: vec!["R"],
+        };
         let regions_l = vec![rl];
         let regions_r = vec![rr];
         let mut i = 0;
@@ -522,8 +547,14 @@ mod tests {
     #[test]
     fn collect_block_adjacent_regions_not_overlapping() {
         // 相邻但不重叠（8..9 与 9..10）→ 不应合并进同一块
-        let rl = Region { base: 8..9, side_lines: vec!["L"] };
-        let rr = Region { base: 9..10, side_lines: vec!["R"] };
+        let rl = Region {
+            base: 8..9,
+            side_lines: vec!["L"],
+        };
+        let rr = Region {
+            base: 9..10,
+            side_lines: vec!["R"],
+        };
         let regions_l = vec![rl];
         let regions_r = vec![rr];
         let mut i = 0;
@@ -537,9 +568,18 @@ mod tests {
     #[test]
     fn collect_block_transitive_closure() {
         // 左 1..2 + 右 1..3 → 左 2..3 因传递闭包也并入
-        let rl1 = Region { base: 1..2, side_lines: vec!["L1"] };
-        let rl2 = Region { base: 2..3, side_lines: vec!["L2"] };
-        let rr = Region { base: 1..3, side_lines: vec!["R"] };
+        let rl1 = Region {
+            base: 1..2,
+            side_lines: vec!["L1"],
+        };
+        let rl2 = Region {
+            base: 2..3,
+            side_lines: vec!["L2"],
+        };
+        let rr = Region {
+            base: 1..3,
+            side_lines: vec!["R"],
+        };
         let regions_l = vec![rl1, rl2];
         let regions_r = vec![rr];
         let mut i = 0;

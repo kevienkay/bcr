@@ -5,9 +5,13 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/target/release/bcr"
+if [ ! -x "$BIN" ] && [ -x "$ROOT/target/release/bcr.exe" ]; then
+  BIN="$ROOT/target/release/bcr.exe"
+fi
 if [ ! -x "$BIN" ]; then
   echo "== 构建 release 二进制 =="
   (cd "$ROOT" && cargo build --release) || { echo "构建失败"; exit 2; }
+  if [ -x "$ROOT/target/release/bcr.exe" ]; then BIN="$ROOT/target/release/bcr.exe"; fi
 fi
 
 WORK="$(mktemp -d /tmp/bcr-accept.XXXXXX)"

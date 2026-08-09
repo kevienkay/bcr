@@ -67,7 +67,10 @@ impl MergeTab {
                 return;
             }
             (_, _, Err(e)) => {
-                self.error = Some(fmt(I18nKey::CannotRead, &[&self.right_path, &e.to_string()]));
+                self.error = Some(fmt(
+                    I18nKey::CannotRead,
+                    &[&self.right_path, &e.to_string()],
+                ));
                 return;
             }
         };
@@ -132,8 +135,7 @@ impl MergeTab {
         else {
             return false;
         };
-        let (lines, unresolved) =
-            render_merged(&self.view, &self.label_l, &self.label_r);
+        let (lines, unresolved) = render_merged(&self.view, &self.label_l, &self.label_r);
         let mut content = lines.join("\n");
         if !content.is_empty() {
             content.push('\n');
@@ -163,9 +165,13 @@ impl MergeTab {
                     self.save();
                 }
                 ui.separator();
-                if ui.checkbox(&mut self.show_preview, t(I18nKey::LivePreview)).changed() {}
+                ui.checkbox(&mut self.show_preview, t(I18nKey::LivePreview))
+                    .changed();
                 ui.separator();
-                ui.label(fmt(I18nKey::ConflictsCount, &[&self.view.conflicts.to_string()]));
+                ui.label(fmt(
+                    I18nKey::ConflictsCount,
+                    &[&self.view.conflicts.to_string()],
+                ));
                 if ui.button(t(I18nKey::NextConflict)).clicked() {
                     self.next_conflict();
                 }
@@ -226,7 +232,14 @@ impl MergeTab {
             let (lines, unresolved) = render_merged(&self.view, &self.label_l, &self.label_r);
             let preview_lines: Vec<(&str, bool)> = lines
                 .iter()
-                .map(|l| (l.as_str(), l.starts_with("<<<<<<<") || l.starts_with("=======") || l.starts_with(">>>>>>>")))
+                .map(|l| {
+                    (
+                        l.as_str(),
+                        l.starts_with("<<<<<<<")
+                            || l.starts_with("=======")
+                            || l.starts_with(">>>>>>>"),
+                    )
+                })
                 .collect();
             egui::Panel::bottom("merge_preview").show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -239,7 +252,10 @@ impl MergeTab {
                             fmt(I18nKey::MergeUnresolved, &[&unresolved.to_string()]),
                         );
                     } else {
-                        ui.colored_label(Color32::from_rgb(110, 230, 120), t(I18nKey::MergeAllResolved));
+                        ui.colored_label(
+                            Color32::from_rgb(110, 230, 120),
+                            t(I18nKey::MergeAllResolved),
+                        );
                     }
                 });
                 let fg = text_color(ui);
@@ -319,9 +335,7 @@ fn merge_row_bg(
     }
     // 单侧修改行：仅该侧着色，便于快速定位
     match row.kind {
-        BlockKind::LeftOnly | BlockKind::Same => {
-            (None, Some(bg_replace_l()), None)
-        }
+        BlockKind::LeftOnly | BlockKind::Same => (None, Some(bg_replace_l()), None),
         BlockKind::RightOnly => (None, None, Some(bg_replace_r())),
         BlockKind::Context | BlockKind::Conflict => (None, None, None),
     }
@@ -335,6 +349,7 @@ fn merge_row_hl(row: &crate::mergeview::MergeRow) -> (Option<Color32>, Option<Co
     }
 }
 
+#[allow(clippy::too_many_arguments)] // egui 行绘制参数较多，保持扁平可读
 fn paint_merge_row(
     ui: &mut egui::Ui,
     row: &crate::mergeview::MergeRow,

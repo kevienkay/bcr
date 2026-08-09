@@ -219,14 +219,20 @@ pub fn run(args: &CompareArgs) -> i32 {
     let left = match crate::vfs::open(&args.left) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[&args.left, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::OpenFailed, &[&args.left, &e.to_string()])
+            );
             return 2;
         }
     };
     let right = match crate::vfs::open(&args.right) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[&args.right, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::OpenFailed, &[&args.right, &e.to_string()])
+            );
             return 2;
         }
     };
@@ -321,7 +327,7 @@ mod tests {
                 fs::create_dir_all(parent).unwrap();
             }
             fs::write(p, content).unwrap();
-            filetime::set_file_mtime(&dir.join(rel), fixed).unwrap();
+            filetime::set_file_mtime(dir.join(rel), fixed).unwrap();
         }
     }
 
@@ -441,8 +447,14 @@ mod tests {
     fn compare_dirs_reports_statuses_and_stats() {
         let d1 = tempdir().unwrap();
         let d2 = tempdir().unwrap();
-        make_tree(d1.path(), &[("same.txt", "x"), ("diff.txt", "v1"), ("only_l.txt", "a")]);
-        make_tree(d2.path(), &[("same.txt", "x"), ("diff.txt", "v22"), ("only_r.txt", "b")]);
+        make_tree(
+            d1.path(),
+            &[("same.txt", "x"), ("diff.txt", "v1"), ("only_l.txt", "a")],
+        );
+        make_tree(
+            d2.path(),
+            &[("same.txt", "x"), ("diff.txt", "v22"), ("only_r.txt", "b")],
+        );
         let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false).unwrap();
         let by_rel: std::collections::BTreeMap<&str, FileStatus> = r
             .entries
@@ -460,7 +472,10 @@ mod tests {
         assert!(r.stats.has_differences());
         // 顺序稳定（BTreeMap 排序）
         let rels: Vec<&str> = r.entries.iter().map(|e| e.rel.as_str()).collect();
-        assert_eq!(rels, vec!["diff.txt", "only_l.txt", "only_r.txt", "same.txt"]);
+        assert_eq!(
+            rels,
+            vec!["diff.txt", "only_l.txt", "only_r.txt", "same.txt"]
+        );
     }
 
     #[test]

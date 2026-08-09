@@ -41,9 +41,7 @@ impl ZipVfs {
             if name.is_empty() {
                 continue;
             }
-            let mtime = entry
-                .last_modified()
-                .map(zip_dt_to_systemtime);
+            let mtime = entry.last_modified().map(zip_dt_to_systemtime);
             index.insert(name, (entry.size(), mtime));
         }
 

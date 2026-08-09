@@ -80,14 +80,14 @@ fn emit_op(
             }
         }
         Delete => {
-            for i in op.old_range().start..op.old_range().end {
-                emit_plain('-', lines_l[i], color);
+            for line in &lines_l[op.old_range()] {
+                emit_plain('-', line, color);
                 *old_idx += 1;
             }
         }
         Insert => {
-            for i in op.new_range().start..op.new_range().end {
-                emit_plain('+', lines_r[i], color);
+            for line in &lines_r[op.new_range()] {
+                emit_plain('+', line, color);
                 *new_idx += 1;
             }
         }
@@ -120,7 +120,10 @@ fn emit_op(
 
 /// 对单行做字符级 diff，返回左右两侧的分段 (文本, 是否变更)
 /// （GUI 并排视图的行内高亮复用）
-pub(crate) fn intra_line(old: &str, new: &str) -> (Vec<(String, bool)>, Vec<(String, bool)>) {
+/// 行内 diff 分段：左右两侧各自的 (文本, 是否变更) 列表
+pub(crate) type IntraSegments = (Vec<(String, bool)>, Vec<(String, bool)>);
+
+pub(crate) fn intra_line(old: &str, new: &str) -> IntraSegments {
     let old_chars: Vec<char> = old.chars().collect();
     let new_chars: Vec<char> = new.chars().collect();
     let ops = capture_diff_slices(Algorithm::Myers, &old_chars, &new_chars);
@@ -354,8 +357,8 @@ mod tests {
         assert_eq!(lj, "中文测试");
         assert_eq!(rj, "中文修改");
         // 相同前缀“中文”不应标记为变更
-        assert_eq!(l[0].1, false);
-        assert_eq!(l[1].1, false);
+        assert!(!l[0].1);
+        assert!(!l[1].1);
     }
 
     #[test]

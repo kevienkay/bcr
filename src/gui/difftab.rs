@@ -81,7 +81,12 @@ impl DiffTab {
 
     pub fn title(&self) -> String {
         match (&self.left, &self.right) {
-            (Some(l), Some(r)) => format!("{}: {} ↔ {}", t(I18nKey::DiffTitle), basename(&l.path), basename(&r.path)),
+            (Some(l), Some(r)) => format!(
+                "{}: {} ↔ {}",
+                t(I18nKey::DiffTitle),
+                basename(&l.path),
+                basename(&r.path)
+            ),
             (Some(l), None) => format!("{}: {}", t(I18nKey::DiffTitle), basename(&l.path)),
             (None, Some(r)) => format!("{}: {}", t(I18nKey::DiffTitle), basename(&r.path)),
             (None, None) => t(I18nKey::DiffTitle).to_string(),
@@ -92,8 +97,14 @@ impl DiffTab {
         self.opts = opts;
         match (std::fs::read_to_string(l), std::fs::read_to_string(r)) {
             (Ok(lc), Ok(rc)) => {
-                self.left = Some(LoadedFile { path: l.to_string(), content: lc });
-                self.right = Some(LoadedFile { path: r.to_string(), content: rc });
+                self.left = Some(LoadedFile {
+                    path: l.to_string(),
+                    content: lc,
+                });
+                self.right = Some(LoadedFile {
+                    path: r.to_string(),
+                    content: rc,
+                });
                 self.recompute();
                 self.error = None;
             }
@@ -106,7 +117,10 @@ impl DiffTab {
         self.opts = opts;
         match std::fs::read_to_string(path) {
             Ok(c) => {
-                self.left = Some(LoadedFile { path: path.to_string(), content: c });
+                self.left = Some(LoadedFile {
+                    path: path.to_string(),
+                    content: c,
+                });
                 self.recompute();
                 self.error = None;
             }
@@ -118,7 +132,10 @@ impl DiffTab {
         self.opts = opts;
         match std::fs::read_to_string(path) {
             Ok(c) => {
-                self.right = Some(LoadedFile { path: path.to_string(), content: c });
+                self.right = Some(LoadedFile {
+                    path: path.to_string(),
+                    content: c,
+                });
                 self.recompute();
                 self.error = None;
             }
@@ -229,12 +246,7 @@ impl DiffTab {
             (None, Some(c)) => c,
             (None, None) => 0,
         };
-        let next = self
-            .diff_rows
-            .iter()
-            .position(|&r| r > base)
-            .map(|i| i)
-            .unwrap_or(0);
+        let next = self.diff_rows.iter().position(|&r| r > base).unwrap_or(0);
         self.diff_pos = Some(next);
         self.jump_to_row(self.diff_rows[next]);
     }
@@ -312,15 +324,25 @@ impl DiffTab {
                     }
                 }
                 ui.separator();
-                if ui.checkbox(&mut self.show_stats, t(I18nKey::StatsPanel)).changed() {}
+                ui.checkbox(&mut self.show_stats, t(I18nKey::StatsPanel))
+                    .changed();
                 ui.separator();
-                if ui.checkbox(&mut self.opts.ignore_whitespace, t(I18nKey::IgnoreWs)).changed() {
+                if ui
+                    .checkbox(&mut self.opts.ignore_whitespace, t(I18nKey::IgnoreWs))
+                    .changed()
+                {
                     self.recompute();
                 }
-                if ui.checkbox(&mut self.opts.ignore_trailing, t(I18nKey::IgnoreTrailing)).changed() {
+                if ui
+                    .checkbox(&mut self.opts.ignore_trailing, t(I18nKey::IgnoreTrailing))
+                    .changed()
+                {
                     self.recompute();
                 }
-                if ui.checkbox(&mut self.opts.ignore_case, t(I18nKey::IgnoreCase)).changed() {
+                if ui
+                    .checkbox(&mut self.opts.ignore_case, t(I18nKey::IgnoreCase))
+                    .changed()
+                {
                     self.recompute();
                 }
                 ui.separator();
@@ -359,20 +381,25 @@ impl DiffTab {
                 if resp.changed() {
                     self.update_search();
                 }
-                if ui.button("⬆").on_hover_text(t(I18nKey::PrevMatch)).clicked() {
+                if ui
+                    .button("⬆")
+                    .on_hover_text(t(I18nKey::PrevMatch))
+                    .clicked()
+                {
                     self.prev_match();
                 }
-                if ui.button("⬇").on_hover_text(t(I18nKey::NextMatch)).clicked() {
+                if ui
+                    .button("⬇")
+                    .on_hover_text(t(I18nKey::NextMatch))
+                    .clicked()
+                {
                     self.next_match();
                 }
                 if let Some(k) = self.search.current {
                     ui.label(format!("{}/{}", k + 1, self.search.matches.len()));
                 }
                 ui.separator();
-                let mut goto_text = self
-                    .goto_line
-                    .map(|l| l.to_string())
-                    .unwrap_or_default();
+                let mut goto_text = self.goto_line.map(|l| l.to_string()).unwrap_or_default();
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut goto_text)
                         .hint_text(t(I18nKey::GotoHint))
@@ -395,7 +422,10 @@ impl DiffTab {
                 ui.separator();
                 ui.label(fmt(
                     I18nKey::DiffCount,
-                    &[&self.diff_rows.len().to_string(), &self.rows.len().to_string()],
+                    &[
+                        &self.diff_rows.len().to_string(),
+                        &self.rows.len().to_string(),
+                    ],
                 ));
                 if ui.button(t(I18nKey::NextDiff)).clicked() {
                     self.next_diff();
@@ -495,8 +525,18 @@ impl DiffTab {
                 return;
             }
 
-            let max_no_l = self.rows.iter().filter_map(|r| r.left_no).max().unwrap_or(0);
-            let max_no_r = self.rows.iter().filter_map(|r| r.right_no).max().unwrap_or(0);
+            let max_no_l = self
+                .rows
+                .iter()
+                .filter_map(|r| r.left_no)
+                .max()
+                .unwrap_or(0);
+            let max_no_r = self
+                .rows
+                .iter()
+                .filter_map(|r| r.right_no)
+                .max()
+                .unwrap_or(0);
             let gutter_l = gutter_width(max_no_l);
             let gutter_r = gutter_width(max_no_r);
             // 内容宽度：撑满窗口一半，长行可横向滚动
@@ -517,7 +557,10 @@ impl DiffTab {
             // 匹配行集合（搜索高亮）
             let match_set: std::collections::HashSet<usize> =
                 self.search.matches.iter().copied().collect();
-            let current_match = self.search.current.and_then(|k| self.search.matches.get(k).copied());
+            let current_match = self
+                .search
+                .current
+                .and_then(|k| self.search.matches.get(k).copied());
             let rows = &self.rows;
 
             // 受控滚动 + 虚拟化渲染（统一走 common::show_rows）
@@ -533,7 +576,11 @@ impl DiffTab {
                     };
                     // 搜索命中高亮
                     let (bg_l, bg_r) = if match_set.contains(&i) {
-                        let c = if current_match == Some(i) { bg_match_current() } else { bg_match() };
+                        let c = if current_match == Some(i) {
+                            bg_match_current()
+                        } else {
+                            bg_match()
+                        };
                         (Some(bg_l.unwrap_or(c)), Some(bg_r.unwrap_or(c)))
                     } else {
                         (bg_l, bg_r)
@@ -544,7 +591,9 @@ impl DiffTab {
                         RowTag::Insert => (None, Some(hl_insert())),
                         RowTag::Equal => (None, None),
                     };
-                    paint_diff_row(ui, row, gutter_l, gutter_r, content_w, bg_l, bg_r, hl_l, hl_r, fg);
+                    paint_diff_row(
+                        ui, row, gutter_l, gutter_r, content_w, bg_l, bg_r, hl_l, hl_r, fg,
+                    );
                 }
             });
             self.scroll = out.state.offset;
@@ -555,9 +604,18 @@ impl DiffTab {
                 ui.horizontal(|ui| {
                     let st = self.stats;
                     ui.label(format!("{} {}", t(I18nKey::StatSame), st.equal));
-                    ui.colored_label(Color32::from_rgb(240, 120, 120), format!("{} {}", t(I18nKey::StatDelete), st.delete));
-                    ui.colored_label(Color32::from_rgb(120, 230, 130), format!("{} {}", t(I18nKey::StatInsert), st.insert));
-                    ui.colored_label(Color32::from_rgb(235, 210, 100), format!("{} {}", t(I18nKey::StatReplace), st.replace));
+                    ui.colored_label(
+                        Color32::from_rgb(240, 120, 120),
+                        format!("{} {}", t(I18nKey::StatDelete), st.delete),
+                    );
+                    ui.colored_label(
+                        Color32::from_rgb(120, 230, 130),
+                        format!("{} {}", t(I18nKey::StatInsert), st.insert),
+                    );
+                    ui.colored_label(
+                        Color32::from_rgb(235, 210, 100),
+                        format!("{} {}", t(I18nKey::StatReplace), st.replace),
+                    );
                     ui.separator();
                     match (&self.left, &self.right) {
                         (Some(l), Some(r)) => {
@@ -577,6 +635,7 @@ impl DiffTab {
     }
 }
 
+#[allow(clippy::too_many_arguments)] // egui 行绘制参数较多，保持扁平可读
 fn paint_diff_row(
     ui: &mut egui::Ui,
     row: &SideRow,

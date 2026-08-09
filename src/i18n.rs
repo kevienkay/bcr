@@ -28,13 +28,26 @@ pub enum Lang {
 impl Lang {
     /// 全部语言（GUI 下拉顺序）
     pub const ALL: [Lang; 10] = [
-        Lang::Zh, Lang::En, Lang::De, Lang::Ja, Lang::Ko,
-        Lang::Es, Lang::Pt, Lang::Ar, Lang::Ru, Lang::Fr,
+        Lang::Zh,
+        Lang::En,
+        Lang::De,
+        Lang::Ja,
+        Lang::Ko,
+        Lang::Es,
+        Lang::Pt,
+        Lang::Ar,
+        Lang::Ru,
+        Lang::Fr,
     ];
 
     /// 解析语言代码：支持 "zh"、"zh-CN"、"en" 等；前缀匹配
     pub fn parse(s: &str) -> Option<Lang> {
-        let code = s.split(['-', '_']).next().unwrap_or("").trim().to_ascii_lowercase();
+        let code = s
+            .split(['-', '_'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
         match code.as_str() {
             "zh" | "cn" => Some(Lang::Zh),
             "en" => Some(Lang::En),

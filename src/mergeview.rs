@@ -85,7 +85,10 @@ pub fn build_merge_view(base: &str, left: &str, right: &str) -> MergeView {
         let kind = classify(blk, &base_lines);
         let info = BlockInfo {
             kind,
-            base: base_lines[blk.base.clone()].iter().map(|s| s.to_string()).collect(),
+            base: base_lines[blk.base.clone()]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             left: blk.left.iter().map(|s| s.to_string()).collect(),
             right: blk.right.iter().map(|s| s.to_string()).collect(),
             resolution: Resolution::Auto,
@@ -121,20 +124,21 @@ fn classify(blk: &MergeBlock<'_>, base: &[&str]) -> BlockKind {
 }
 
 /// 把块展开为对齐行（行数 = 三侧最大值，不足留空）
-fn expand_block(
-    blk: &MergeBlock<'_>,
-    base: &[&str],
-    kind: BlockKind,
-    view: &mut MergeView,
-) {
+fn expand_block(blk: &MergeBlock<'_>, base: &[&str], kind: BlockKind, view: &mut MergeView) {
     let base_len = blk.base.end - blk.base.start;
     let n = base_len.max(blk.left.len()).max(blk.right.len());
     for i in 0..n {
         // 该行是否有 base 行（i 落在 base 区间内）
         let base_line = (i < base_len).then(|| base[blk.base.start + i]);
         let base_cell = base_line.map(|s| highlight_base(s, blk, i, kind));
-        let left_cell = blk.left.get(i).map(|s| highlight_left(s, base, blk, i, kind));
-        let right_cell = blk.right.get(i).map(|s| highlight_right(s, base, blk, i, kind));
+        let left_cell = blk
+            .left
+            .get(i)
+            .map(|s| highlight_left(s, base, blk, i, kind));
+        let right_cell = blk
+            .right
+            .get(i)
+            .map(|s| highlight_right(s, base, blk, i, kind));
         let base_no = base_line.map(|_| blk.base.start + i + 1);
         view.rows.push(MergeRow {
             base: base_cell,
@@ -149,8 +153,14 @@ fn expand_block(
 
 fn cell_with_segments(text: &str, segs: Option<Vec<(String, bool)>>) -> Cell {
     match segs {
-        Some(s) => Cell { text: text.to_string(), segments: s },
-        None => Cell { text: text.to_string(), segments: vec![(text.to_string(), false)] },
+        Some(s) => Cell {
+            text: text.to_string(),
+            segments: s,
+        },
+        None => Cell {
+            text: text.to_string(),
+            segments: vec![(text.to_string(), false)],
+        },
     }
 }
 
@@ -192,7 +202,13 @@ fn highlight_left(s: &str, base: &[&str], blk: &MergeBlock<'_>, i: usize, kind: 
     }
 }
 
-fn highlight_right(s: &str, base: &[&str], blk: &MergeBlock<'_>, i: usize, kind: BlockKind) -> Cell {
+fn highlight_right(
+    s: &str,
+    base: &[&str],
+    blk: &MergeBlock<'_>,
+    i: usize,
+    kind: BlockKind,
+) -> Cell {
     match kind {
         BlockKind::RightOnly | BlockKind::Conflict => {
             let base_len = blk.base.end - blk.base.start;
@@ -249,7 +265,11 @@ mod tests {
     #[test]
     fn single_side_changes_classified() {
         // 左侧改第 1 行，右侧改第 3 行 → LeftOnly + RightOnly
-        let v = build_merge_view("l1\nl2\nl3\nl4\nl5\n", "L1\nl2\nl3\nl4\nl5\n", "l1\nl2\nl3\nl4\nR5\n");
+        let v = build_merge_view(
+            "l1\nl2\nl3\nl4\nl5\n",
+            "L1\nl2\nl3\nl4\nl5\n",
+            "l1\nl2\nl3\nl4\nR5\n",
+        );
         assert_eq!(v.conflicts, 0);
         let kinds: Vec<BlockKind> = v.blocks.iter().map(|b| b.kind).collect();
         assert!(kinds.contains(&BlockKind::LeftOnly));
@@ -284,14 +304,22 @@ mod tests {
         let kinds: Vec<BlockKind> = v.blocks.iter().map(|b| b.kind).collect();
         assert!(kinds.contains(&BlockKind::LeftOnly));
         // 插入行：base 为空、left 有内容
-        let insert_row = v.rows.iter().find(|r| r.left.is_some() && r.base.is_none()).unwrap();
+        let insert_row = v
+            .rows
+            .iter()
+            .find(|r| r.left.is_some() && r.base.is_none())
+            .unwrap();
         assert_eq!(insert_row.left.as_ref().unwrap().text, "IA");
         assert_eq!(insert_row.kind, BlockKind::LeftOnly);
     }
 
     #[test]
     fn line_numbers_track_base() {
-        let v = build_merge_view("l1\nl2\nl3\nl4\nl5\n", "l1\nX\nl3\nl4\nl5\n", "l1\nl2\nl3\nY\nl5\n");
+        let v = build_merge_view(
+            "l1\nl2\nl3\nl4\nl5\n",
+            "l1\nX\nl3\nl4\nl5\n",
+            "l1\nl2\nl3\nY\nl5\n",
+        );
         let numbers: Vec<Option<usize>> = v.rows.iter().map(|r| r.base_no).collect();
         assert_eq!(numbers, vec![Some(1), Some(2), Some(3), Some(4), Some(5)]);
     }
@@ -303,7 +331,15 @@ mod tests {
         assert_eq!(unresolved, 1);
         assert_eq!(
             out,
-            vec!["l1", "<<<<<<< LEFT", "L", "=======", "R", ">>>>>>> RIGHT", "l3"]
+            vec![
+                "l1",
+                "<<<<<<< LEFT",
+                "L",
+                "=======",
+                "R",
+                ">>>>>>> RIGHT",
+                "l3"
+            ]
         );
     }
 
@@ -351,8 +387,22 @@ mod tests {
         assert_eq!(v.conflicts, 1);
         let row = &v.rows[0];
         // left/right 均有行内高亮分段
-        let lj: String = row.left.as_ref().unwrap().segments.iter().map(|(s, _)| s.as_str()).collect();
-        let rj: String = row.right.as_ref().unwrap().segments.iter().map(|(s, _)| s.as_str()).collect();
+        let lj: String = row
+            .left
+            .as_ref()
+            .unwrap()
+            .segments
+            .iter()
+            .map(|(s, _)| s.as_str())
+            .collect();
+        let rj: String = row
+            .right
+            .as_ref()
+            .unwrap()
+            .segments
+            .iter()
+            .map(|(s, _)| s.as_str())
+            .collect();
         assert_eq!(lj, "foo baz");
         assert_eq!(rj, "foo qux");
         assert!(row.left.as_ref().unwrap().segments.iter().any(|(_, c)| *c));

@@ -66,7 +66,10 @@ impl DirTab {
     }
 
     pub fn title(&self) -> String {
-        fmt(I18nKey::DirTitle, &[&basename(&self.left), &basename(&self.right)])
+        fmt(
+            I18nKey::DirTitle,
+            &[&basename(&self.left), &basename(&self.right)],
+        )
     }
 
     pub fn refresh(&mut self) {
@@ -188,7 +191,9 @@ impl DirTab {
 
     pub(crate) fn open_selected(&mut self) {
         let Some(idx) = self.selected else { return };
-        let Some(row) = self.flat.get(idx) else { return };
+        let Some(row) = self.flat.get(idx) else {
+            return;
+        };
         let (is_dir, path, entry) = (row.is_dir, row.path.clone(), row.entry);
         if is_dir {
             self.toggle_dir(&path);
@@ -242,16 +247,24 @@ impl DirTab {
                     self.refresh();
                 }
                 ui.separator();
-                if ui.checkbox(&mut self.compare_content, t(I18nKey::ContentHash)).changed() {
+                if ui
+                    .checkbox(&mut self.compare_content, t(I18nKey::ContentHash))
+                    .changed()
+                {
                     self.refresh();
                 }
-                if ui.checkbox(&mut self.only_diff, t(I18nKey::OnlyDiff)).changed() {
+                if ui
+                    .checkbox(&mut self.only_diff, t(I18nKey::OnlyDiff))
+                    .changed()
+                {
                     self.rebuild_tree();
                 }
-                if ui.checkbox(&mut self.show_same, t(I18nKey::ShowSame)).changed() {
-                    if !self.only_diff {
-                        self.rebuild_tree();
-                    }
+                if ui
+                    .checkbox(&mut self.show_same, t(I18nKey::ShowSame))
+                    .changed()
+                    && !self.only_diff
+                {
+                    self.rebuild_tree();
                 }
                 ui.separator();
                 let mut inc = self.includes.clone();

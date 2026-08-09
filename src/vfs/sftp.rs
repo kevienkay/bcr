@@ -41,13 +41,18 @@ fn parse_url(rest: &str) -> io::Result<(String, Option<String>, String, u16, Str
         None => (host_port_path, "/"),
     };
     let (host, port) = match host_part.rsplit_once(':') {
-        Some((h, p)) if p.chars().all(|c| c.is_ascii_digit()) => {
-            (h, p.parse::<u16>().map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "非法端口"))?)
-        }
+        Some((h, p)) if p.chars().all(|c| c.is_ascii_digit()) => (
+            h,
+            p.parse::<u16>()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "非法端口"))?,
+        ),
         _ => (host_part, 22),
     };
     if host.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "sftp:// 缺少主机名"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "sftp:// 缺少主机名",
+        ));
     }
     let (user, pass) = match auth {
         Some(a) => match a.split_once(':') {
@@ -56,7 +61,11 @@ fn parse_url(rest: &str) -> io::Result<(String, Option<String>, String, u16, Str
         },
         None => ("root".to_string(), None),
     };
-    let path = if path.is_empty() { "/".to_string() } else { path.to_string() };
+    let path = if path.is_empty() {
+        "/".to_string()
+    } else {
+        path.to_string()
+    };
     Ok((user, pass, host.to_string(), port, path))
 }
 
@@ -92,23 +101,21 @@ impl SftpVfs {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("tokio runtime: {e}")))?;
+            .map_err(|e| io::Error::other(format!("tokio runtime: {e}")))?;
 
         let session = rt.block_on(async {
             let config = Arc::new(russh::client::Config::default());
             let mut session = russh::client::connect(config, (host.as_str(), port), NoVerify)
                 .await
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SSH 连接失败: {e}")))?;
+                .map_err(|e| io::Error::other(format!("SSH 连接失败: {e}")))?;
 
             let authed = match &pass {
-                Some(p) => session
-                    .authenticate_password(&user, p)
-                    .await
-                    .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, format!("认证失败: {e}")))?,
-                None => session
-                    .authenticate_none(&user)
-                    .await
-                    .map_err(|e| io::Error::new(io::ErrorKind::PermissionDenied, format!("认证失败: {e}")))?,
+                Some(p) => session.authenticate_password(&user, p).await.map_err(|e| {
+                    io::Error::new(io::ErrorKind::PermissionDenied, format!("认证失败: {e}"))
+                })?,
+                None => session.authenticate_none(&user).await.map_err(|e| {
+                    io::Error::new(io::ErrorKind::PermissionDenied, format!("认证失败: {e}"))
+                })?,
             };
             if !authed.success() {
                 return Err(io::Error::new(
@@ -120,14 +127,19 @@ impl SftpVfs {
             let channel = session
                 .channel_open_session()
                 .await
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("通道失败: {e}")))?;
+                .map_err(|e| io::Error::other(format!("通道失败: {e}")))?;
             let stream = channel.into_stream();
             SftpSession::new(stream)
                 .await
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SFTP 握手失败: {e}")))
+                .map_err(|e| io::Error::other(format!("SFTP 握手失败: {e}")))
         })?;
 
-        Ok(SftpVfs { desc, rt, session, root })
+        Ok(SftpVfs {
+            desc,
+            rt,
+            session,
+            root,
+        })
     }
 
     /// 拼接远程绝对路径
@@ -145,7 +157,7 @@ impl SftpVfs {
         let rd = self
             .rt
             .block_on(self.session.read_dir(dir))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("read_dir {dir}: {e}")))?;
+            .map_err(|e| io::Error::other(format!("read_dir {dir}: {e}")))?;
         for entry in rd {
             let name = entry.file_name();
             if name == "." || name == ".." {
@@ -154,7 +166,11 @@ impl SftpVfs {
             let rel = if dir == self.root {
                 name.clone()
             } else {
-                format!("{}/{}", dir.trim_start_matches(&self.root).trim_start_matches('/'), name)
+                format!(
+                    "{}/{}",
+                    dir.trim_start_matches(&self.root).trim_start_matches('/'),
+                    name
+                )
             };
             let rel = rel.trim_start_matches('/').to_string();
             let meta = entry.metadata();
@@ -163,16 +179,14 @@ impl SftpVfs {
                     continue;
                 }
                 self.scan_rec(&self.abs(&rel), filter, out)?;
-            } else if meta.file_type().is_file() {
-                if filter.accept(&rel) {
-                    out.insert(
-                        rel,
-                        FileMeta {
-                            size: meta.len(),
-                            mtime: meta.modified().unwrap_or(UNIX_EPOCH),
-                        },
-                    );
-                }
+            } else if meta.file_type().is_file() && filter.accept(&rel) {
+                out.insert(
+                    rel,
+                    FileMeta {
+                        size: meta.len(),
+                        mtime: meta.modified().unwrap_or(UNIX_EPOCH),
+                    },
+                );
             }
         }
         Ok(())
@@ -193,19 +207,22 @@ impl Vfs for SftpVfs {
     fn read(&self, rel: &str) -> io::Result<Vec<u8>> {
         self.rt
             .block_on(self.session.read(self.abs(rel)))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("读取 {rel}: {e}")))
+            .map_err(|e| io::Error::other(format!("读取 {rel}: {e}")))
     }
 
     fn exists(&self, rel: &str) -> io::Result<bool> {
         self.rt
             .block_on(self.session.try_exists(self.abs(rel)))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("exists {rel}: {e}")))
+            .map_err(|e| io::Error::other(format!("exists {rel}: {e}")))
     }
 
     fn write(&self, rel: &str, data: &[u8]) -> io::Result<()> {
         // 逐级创建父目录
         let abs = self.abs(rel);
-        let parent = abs.rsplit_once('/').map(|(p, _)| p.to_string()).unwrap_or_default();
+        let parent = abs
+            .rsplit_once('/')
+            .map(|(p, _)| p.to_string())
+            .unwrap_or_default();
         if !parent.is_empty() {
             let mut cur = String::new();
             for seg in parent.split('/') {
@@ -219,13 +236,13 @@ impl Vfs for SftpVfs {
         }
         self.rt
             .block_on(self.session.write(abs, data))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("写入 {rel}: {e}")))
+            .map_err(|e| io::Error::other(format!("写入 {rel}: {e}")))
     }
 
     fn delete(&self, rel: &str) -> io::Result<()> {
         self.rt
             .block_on(self.session.remove_file(self.abs(rel)))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("删除 {rel}: {e}")))
+            .map_err(|e| io::Error::other(format!("删除 {rel}: {e}")))
     }
 
     fn set_mtime(&self, rel: &str, t: SystemTime) -> io::Result<()> {
@@ -239,7 +256,7 @@ impl Vfs for SftpVfs {
         attrs.mtime = Some(secs);
         self.rt
             .block_on(self.session.set_metadata(self.abs(rel), attrs))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("set_mtime {rel}: {e}")))
+            .map_err(|e| io::Error::other(format!("set_mtime {rel}: {e}")))
     }
 }
 
@@ -249,7 +266,8 @@ mod tests {
 
     #[test]
     fn parse_url_full() {
-        let (u, p, h, port, path) = parse_url("alice:secret@example.com:2222/home/alice/proj").unwrap();
+        let (u, p, h, port, path) =
+            parse_url("alice:secret@example.com:2222/home/alice/proj").unwrap();
         assert_eq!(u, "alice");
         assert_eq!(p.as_deref(), Some("secret"));
         assert_eq!(h, "example.com");
