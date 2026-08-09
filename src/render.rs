@@ -11,6 +11,7 @@ const BG_GREEN: &str = "\x1b[42m";
 const RESET: &str = "\x1b[0m";
 
 /// 渲染 unified diff（带行内高亮）
+/// syntax 非空且 color 时，上下文行使用语法着色；-/+ 行保持 diff 语义色（语法让位）
 pub fn render_unified(
     ops: &[DiffOp],
     lines_l: &[&str],
@@ -18,6 +19,7 @@ pub fn render_unified(
     label_l: &str,
     label_r: &str,
     color: bool,
+    syntax: Option<&'static syntect::parsing::SyntaxReference>,
 ) {
     println!("--- {label_l}");
     println!("+++ {label_r}");
@@ -48,14 +50,22 @@ pub fn render_unified(
         for &op_i in group {
             let op = &ops[op_i];
             while old_idx < op.old_range().start {
-                emit_plain(' ', lines_l[old_idx], color);
+                emit_plain(' ', lines_l[old_idx], color, syntax);
                 old_idx += 1;
                 new_idx += 1;
             }
-            emit_op(op, lines_l, lines_r, &mut old_idx, &mut new_idx, color);
+            emit_op(
+                op,
+                lines_l,
+                lines_r,
+                &mut old_idx,
+                &mut new_idx,
+                color,
+                syntax,
+            );
         }
         while old_idx < old_end {
-            emit_plain(' ', lines_l[old_idx], color);
+            emit_plain(' ', lines_l[old_idx], color, syntax);
             old_idx += 1;
         }
         let _ = new_idx; // hunk 内部与 new 侧行号保持同步即可，hunk 结束后不再使用
@@ -69,25 +79,26 @@ fn emit_op(
     old_idx: &mut usize,
     new_idx: &mut usize,
     color: bool,
+    syntax: Option<&'static syntect::parsing::SyntaxReference>,
 ) {
     use similar::DiffTag::*;
     match op.tag() {
         Equal => {
             for _ in 0..(op.old_range().end - op.old_range().start) {
-                emit_plain(' ', lines_l[*old_idx], color);
+                emit_plain(' ', lines_l[*old_idx], color, syntax);
                 *old_idx += 1;
                 *new_idx += 1;
             }
         }
         Delete => {
             for line in &lines_l[op.old_range()] {
-                emit_plain('-', line, color);
+                emit_plain('-', line, color, syntax);
                 *old_idx += 1;
             }
         }
         Insert => {
             for line in &lines_r[op.new_range()] {
-                emit_plain('+', line, color);
+                emit_plain('+', line, color, syntax);
                 *new_idx += 1;
             }
         }
@@ -107,11 +118,11 @@ fn emit_op(
                 *new_idx += 1;
             }
             for k in paired..d {
-                emit_plain('-', lines_l[op.old_range().start + k], color);
+                emit_plain('-', lines_l[op.old_range().start + k], color, syntax);
                 *old_idx += 1;
             }
             for k in paired..i {
-                emit_plain('+', lines_r[op.new_range().start + k], color);
+                emit_plain('+', lines_r[op.new_range().start + k], color, syntax);
                 *new_idx += 1;
             }
         }
@@ -163,7 +174,12 @@ pub(crate) fn intra_line(old: &str, new: &str) -> IntraSegments {
     (left, right)
 }
 
-fn emit_plain(sign: char, text: &str, color: bool) {
+fn emit_plain(
+    sign: char,
+    text: &str,
+    color: bool,
+    syntax: Option<&'static syntect::parsing::SyntaxReference>,
+) {
     if !color {
         println!("{sign}{text}");
         return;
@@ -171,8 +187,40 @@ fn emit_plain(sign: char, text: &str, color: bool) {
     match sign {
         '-' => println!("{RED}{sign}{text}{RESET}"),
         '+' => println!("{GREEN}{sign}{text}{RESET}"),
-        _ => println!(" {text}"),
+        _ => {
+            // 上下文行：语法着色（语法让位 diff 语义色，仅上下文行启用）
+            if let Some(syn) = syntax {
+                emit_syntax_line(' ', text, syn);
+            } else {
+                println!(" {text}");
+            }
+        }
     }
+}
+
+/// 输出带语法着色的行（256 色 ANSI），行首空格保持原样
+fn emit_syntax_line(sign: char, text: &str, syntax: &syntect::parsing::SyntaxReference) {
+    let segs = crate::highlight::highlight_line(text, syntax);
+    if segs.is_empty() {
+        println!("{sign}{text}");
+        return;
+    }
+    let mut out = String::new();
+    out.push(sign);
+    let mut pos = 0usize;
+    for (start, len, (r, g, b)) in segs {
+        if start > pos {
+            out.push_str(&text[pos..start]);
+        }
+        out.push_str(&format!("\x1b[38;2;{r};{g};{b}m"));
+        out.push_str(&text[start..start + len]);
+        out.push_str(RESET);
+        pos = start + len;
+    }
+    if pos < text.len() {
+        out.push_str(&text[pos..]);
+    }
+    println!("{out}");
 }
 
 /// 带行内高亮的分段输出：变更段加粗 + 背景色

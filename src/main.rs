@@ -3,6 +3,7 @@ mod diff;
 mod encoding;
 mod fsscan;
 mod gui;
+mod highlight;
 mod i18n;
 mod merge;
 mod mergeview;
@@ -28,6 +29,10 @@ struct Cli {
     /// 编码：utf-8/utf-16le/utf-16be/gbk/big5/shift_jis 等（默认自动检测；可用 BCR_ENCODING）
     #[arg(long, global = true)]
     encoding: Option<String>,
+
+    /// 文本文件大小上限（MB，默认 64；超过按文本加载报错，可用 BCR_MAX_SIZE）
+    #[arg(long, global = true)]
+    max_size: Option<u64>,
 
     #[command(subcommand)]
     command: Commands,
@@ -83,6 +88,10 @@ fn main() {
     // 编码覆盖：--encoding 优先写入 BCR_ENCODING，供 encoding 模块统一读取
     if let Some(enc) = &cli.encoding {
         unsafe { std::env::set_var("BCR_ENCODING", enc) };
+    }
+    // 大小上限：--max-size 优先写入 BCR_MAX_SIZE（MB）
+    if let Some(mb) = cli.max_size {
+        unsafe { std::env::set_var("BCR_MAX_SIZE", mb.to_string()) };
     }
     let code = match cli.command {
         Commands::Diff(args) => diff::run(&args),

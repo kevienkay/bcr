@@ -78,7 +78,11 @@ impl Vfs for LocalVfs {
     }
 
     fn read(&self, rel: &str) -> io::Result<Vec<u8>> {
-        std::fs::read(self.root.join(rel))
+        let p = self.root.join(rel);
+        let f = std::fs::File::open(&p)?;
+        // mmap 只读映射后立即复制为 Vec：减少一次内核→用户缓冲拷贝，
+        // 且不长期持有映射（避免外部修改文件触发 SIGBUS）
+        unsafe { Ok(memmap2::Mmap::map(&f)?.to_vec()) }
     }
 
     fn exists(&self, rel: &str) -> io::Result<bool> {

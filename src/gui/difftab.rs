@@ -13,6 +13,8 @@ pub struct LoadedFile {
     /// 解码信息（编码 + BOM），保存时按原编码回写
     pub encoding: crate::encoding::EncodingKind,
     pub had_bom: bool,
+    /// 按路径解析的语法（无匹配 = None，纯文本）
+    pub syntax: Option<&'static syntect::parsing::SyntaxReference>,
 }
 
 /// 搜索状态
@@ -113,12 +115,14 @@ impl DiffTab {
                     content: lf.text,
                     encoding: lf.encoding,
                     had_bom: lf.had_bom,
+                    syntax: crate::highlight::syntax_for(l),
                 });
                 self.right = Some(LoadedFile {
                     path: r.to_string(),
                     content: rf.text,
                     encoding: rf.encoding,
                     had_bom: rf.had_bom,
+                    syntax: crate::highlight::syntax_for(r),
                 });
                 self.recompute();
                 self.error = None;
@@ -141,6 +145,7 @@ impl DiffTab {
                     content: tf.text,
                     encoding: tf.encoding,
                     had_bom: tf.had_bom,
+                    syntax: crate::highlight::syntax_for(path),
                 });
                 self.recompute();
                 self.error = None;
@@ -162,6 +167,7 @@ impl DiffTab {
                     content: tf.text,
                     encoding: tf.encoding,
                     had_bom: tf.had_bom,
+                    syntax: crate::highlight::syntax_for(path),
                 });
                 self.recompute();
                 self.error = None;
@@ -618,6 +624,9 @@ impl DiffTab {
                 .current
                 .and_then(|k| self.search.matches.get(k).copied());
             let rows = &self.rows;
+            // 左右语法（按文件路径解析，供行内语法高亮）
+            let syn_l = self.left.as_ref().and_then(|f| f.syntax);
+            let syn_r = self.right.as_ref().and_then(|f| f.syntax);
 
             // 受控滚动 + 虚拟化渲染（统一走 common::show_rows）
             let out = super::show_rows(ui, rows.len(), ROW_H, |ui, range| {
@@ -648,7 +657,8 @@ impl DiffTab {
                         RowTag::Equal => (None, None),
                     };
                     paint_diff_row(
-                        ui, row, gutter_l, gutter_r, content_w, bg_l, bg_r, hl_l, hl_r, fg,
+                        ui, row, gutter_l, gutter_r, content_w, bg_l, bg_r, hl_l, hl_r, fg, syn_l,
+                        syn_r,
                     );
                 }
             });
@@ -703,6 +713,8 @@ fn paint_diff_row(
     hl_l: Option<Color32>,
     hl_r: Option<Color32>,
     fg: Color32,
+    syn_l: Option<&'static syntect::parsing::SyntaxReference>,
+    syn_r: Option<&'static syntect::parsing::SyntaxReference>,
 ) {
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(gutter_l + content_w + gutter_r + content_w, ROW_H),
@@ -717,7 +729,7 @@ fn paint_diff_row(
     paint_line_no(ui, gutter_rect, row.left_no);
     let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_l);
-    paint_cell(ui, content_rect, row.left.as_ref(), fg, hl_l);
+    paint_cell(ui, content_rect, row.left.as_ref(), fg, hl_l, syn_l);
 
     // 右 gutter + 内容
     let x_r = x + gutter_l + content_w;
@@ -726,7 +738,7 @@ fn paint_diff_row(
     paint_line_no(ui, gutter_rect, row.right_no);
     let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_r);
-    paint_cell(ui, content_rect, row.right.as_ref(), fg, hl_r);
+    paint_cell(ui, content_rect, row.right.as_ref(), fg, hl_r, syn_r);
 }
 
 fn basename(p: &str) -> String {

@@ -12,6 +12,60 @@ use encoding_rs::Encoding;
 use std::io::{self, Read};
 use std::path::Path;
 
+/// 文本读取默认大小上限（字节）。超过时拒绝按文本加载，防止 OOM。
+pub const DEFAULT_MAX_TEXT_BYTES: u64 = 64 * 1024 * 1024;
+
+/// 读取文件前检查大小上限（`BCR_MAX_SIZE` 环境变量可覆盖，单位 MB；0 表示不限制）
+pub fn check_size(path: &str) -> io::Result<()> {
+    let max = env_max_bytes();
+    if max == 0 {
+        return Ok(());
+    }
+    let meta = std::fs::metadata(Path::new(path))?;
+    if meta.len() > max {
+        return Err(io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            format!(
+                "文件过大: {} ({} bytes > {} bytes 上限)",
+                path,
+                meta.len(),
+                max
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// 从 `BCR_MAX_SIZE`（MB）解析上限字节数；未设置返回默认值。
+fn env_max_bytes() -> u64 {
+    if let Ok(v) = std::env::var("BCR_MAX_SIZE") {
+        if let Ok(mb) = v.trim().parse::<u64>() {
+            return mb * 1024 * 1024;
+        }
+    }
+    DEFAULT_MAX_TEXT_BYTES
+}
+
+/// 读取本地文件并解码（`-` 表示 stdin）
+pub fn read_input(path: &str) -> io::Result<TextFile> {
+    if path == "-" {
+        let mut buf = Vec::new();
+        io::stdin().read_to_end(&mut buf)?;
+        Ok(decode(&buf))
+    } else {
+        check_size(path)?;
+        let data = std::fs::read(Path::new(path))?;
+        Ok(decode(&data))
+    }
+}
+
+/// 读取本地文件并解码（不处理 stdin）
+pub fn read_text(path: &str) -> io::Result<TextFile> {
+    check_size(path)?;
+    let data = std::fs::read(Path::new(path))?;
+    Ok(decode(&data))
+}
+
 /// 检测/指定的编码种类
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EncodingKind {
@@ -50,24 +104,6 @@ pub struct TextFile {
     pub had_bom: bool,
     /// 判定为二进制文件（不应按文本处理）
     pub is_binary: bool,
-}
-
-/// 读取本地文件并解码（`-` 表示 stdin）
-pub fn read_input(path: &str) -> io::Result<TextFile> {
-    if path == "-" {
-        let mut buf = Vec::new();
-        io::stdin().read_to_end(&mut buf)?;
-        Ok(decode(&buf))
-    } else {
-        let data = std::fs::read(Path::new(path))?;
-        Ok(decode(&data))
-    }
-}
-
-/// 读取本地文件并解码（不处理 stdin）
-pub fn read_text(path: &str) -> io::Result<TextFile> {
-    let data = std::fs::read(Path::new(path))?;
-    Ok(decode(&data))
 }
 
 /// 字节 → TextFile 的完整检测链

@@ -132,6 +132,8 @@ pub enum Key {
     ReadFailed,
     /// 二进制文件: {}（不支持文本处理）
     BinaryFile,
+    /// 文件过大: {}（超过 {}MB 上限）
+    FileTooLarge,
     /// 统计: {} 相同, {} 仅左侧, {} 仅右侧, {} 内容不同
     SummaryCompare,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误

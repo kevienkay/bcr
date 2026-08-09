@@ -33,6 +33,10 @@ pub struct DiffArgs {
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
 
+    /// 上下文行语法着色（需要 color，按左侧文件扩展名识别语言）
+    #[arg(long)]
+    pub highlight: bool,
+
     /// 输出标签，最多两个（对应左右两侧），默认使用文件名
     #[arg(short = 'L', num_args = 1..=2)]
     pub labels: Vec<String>,
@@ -44,6 +48,13 @@ pub fn run(args: &DiffArgs) -> i32 {
         Ok(s) => s,
         Err(ReadErr::Binary) => {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.left]));
+            return 2;
+        }
+        Err(ReadErr::TooLarge) => {
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::FileTooLarge, &[&args.left, &max_size_mb()])
+            );
             return 2;
         }
         Err(ReadErr::Io(e)) => {
@@ -58,6 +69,13 @@ pub fn run(args: &DiffArgs) -> i32 {
         Ok(s) => s,
         Err(ReadErr::Binary) => {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.right]));
+            return 2;
+        }
+        Err(ReadErr::TooLarge) => {
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::FileTooLarge, &[&args.right, &max_size_mb()])
+            );
             return 2;
         }
         Err(ReadErr::Io(e)) => {
@@ -78,6 +96,12 @@ pub fn run(args: &DiffArgs) -> i32 {
         "always" => true,
         "never" => false,
         _ => io::stdout().is_terminal(),
+    };
+    // 语法高亮：--highlight 且彩色输出时启用，按左侧文件扩展名识别语言
+    let syntax = if args.highlight && color {
+        crate::highlight::syntax_for(&args.left)
+    } else {
+        None
     };
 
     let label_l = args
@@ -103,7 +127,7 @@ pub fn run(args: &DiffArgs) -> i32 {
         return 0; // 无差异
     }
 
-    render::render_unified(&ops, &lines_l, &lines_r, &label_l, &label_r, color);
+    render::render_unified(&ops, &lines_l, &lines_r, &label_l, &label_r, color, syntax);
     1 // 有差异
 }
 
@@ -138,15 +162,29 @@ pub(crate) fn normalize_line(
     }
 }
 
-/// 读取错误：二进制文件 / IO 错误
+/// 读取错误：二进制文件 / 文件过大 / IO 错误
 #[derive(Debug)]
 enum ReadErr {
     Binary,
+    TooLarge,
     Io(io::Error),
 }
 
+/// 当前大小上限（MB，用于错误提示）
+fn max_size_mb() -> String {
+    std::env::var("BCR_MAX_SIZE")
+        .ok()
+        .unwrap_or_else(|| (crate::encoding::DEFAULT_MAX_TEXT_BYTES / 1024 / 1024).to_string())
+}
+
 fn read_input(path: &str) -> Result<String, ReadErr> {
-    let tf = crate::encoding::read_input(path).map_err(ReadErr::Io)?;
+    let tf = crate::encoding::read_input(path).map_err(|e| {
+        if e.kind() == io::ErrorKind::FileTooLarge {
+            ReadErr::TooLarge
+        } else {
+            ReadErr::Io(e)
+        }
+    })?;
     if tf.is_binary {
         return Err(ReadErr::Binary);
     }
@@ -168,6 +206,7 @@ mod tests {
             ignore_trailing: false,
             ignore_case: false,
             color: "never".into(),
+            highlight: false,
             labels: vec![],
         }
     }

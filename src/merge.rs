@@ -119,6 +119,13 @@ pub fn run(args: &MergeArgs) -> i32 {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.base]));
             return 2;
         }
+        Err(ReadErr::TooLarge) => {
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::FileTooLarge, &[&args.base, &max_size_mb()])
+            );
+            return 2;
+        }
         Err(ReadErr::Io(e)) => {
             eprintln!(
                 "bcr: {}",
@@ -133,6 +140,13 @@ pub fn run(args: &MergeArgs) -> i32 {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.left]));
             return 2;
         }
+        Err(ReadErr::TooLarge) => {
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::FileTooLarge, &[&args.left, &max_size_mb()])
+            );
+            return 2;
+        }
         Err(ReadErr::Io(e)) => {
             eprintln!(
                 "bcr: {}",
@@ -145,6 +159,13 @@ pub fn run(args: &MergeArgs) -> i32 {
         Ok(s) => s,
         Err(ReadErr::Binary) => {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.right]));
+            return 2;
+        }
+        Err(ReadErr::TooLarge) => {
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::FileTooLarge, &[&args.right, &max_size_mb()])
+            );
             return 2;
         }
         Err(ReadErr::Io(e)) => {
@@ -334,15 +355,29 @@ fn apply_regions<'a>(
     out
 }
 
-/// 读取错误：二进制文件 / IO 错误
+/// 读取错误：二进制文件 / 文件过大 / IO 错误
 #[derive(Debug)]
 enum ReadErr {
     Binary,
+    TooLarge,
     Io(io::Error),
 }
 
+/// 当前大小上限（MB，用于错误提示）
+fn max_size_mb() -> String {
+    std::env::var("BCR_MAX_SIZE")
+        .ok()
+        .unwrap_or_else(|| (crate::encoding::DEFAULT_MAX_TEXT_BYTES / 1024 / 1024).to_string())
+}
+
 fn read_input(path: &str) -> Result<String, ReadErr> {
-    let tf = crate::encoding::read_input(path).map_err(ReadErr::Io)?;
+    let tf = crate::encoding::read_input(path).map_err(|e| {
+        if e.kind() == io::ErrorKind::FileTooLarge {
+            ReadErr::TooLarge
+        } else {
+            ReadErr::Io(e)
+        }
+    })?;
     if tf.is_binary {
         return Err(ReadErr::Binary);
     }

@@ -306,13 +306,19 @@ impl MergeTab {
                 let mut sa = egui::ScrollArea::both().auto_shrink([false, false]);
                 sa = sa.vertical_scroll_offset(self.scroll.y);
                 sa = sa.horizontal_scroll_offset(self.scroll.x);
+                let syn_b = crate::highlight::syntax_for(&self.base_path);
+                let syn_l = crate::highlight::syntax_for(&self.left_path);
+                let syn_r = crate::highlight::syntax_for(&self.right_path);
                 sa.show_rows(ui, ROW_H, rows.len(), |ui, range| {
                     ui.set_min_width(total_w);
                     for i in range {
                         let row = &rows[i];
                         let (bg_b, bg_l, bg_r) = merge_row_bg(row);
                         let (hl_l, hl_r) = merge_row_hl(row);
-                        paint_merge_row(ui, row, gutter, col_w, bg_b, bg_l, bg_r, hl_l, hl_r, fg);
+                        paint_merge_row(
+                            ui, row, gutter, col_w, bg_b, bg_l, bg_r, hl_l, hl_r, fg, syn_b, syn_l,
+                            syn_r,
+                        );
                     }
                 })
             };
@@ -361,6 +367,9 @@ fn paint_merge_row(
     hl_l: Option<Color32>,
     hl_r: Option<Color32>,
     fg: Color32,
+    syn_b: Option<&'static syntect::parsing::SyntaxReference>,
+    syn_l: Option<&'static syntect::parsing::SyntaxReference>,
+    syn_r: Option<&'static syntect::parsing::SyntaxReference>,
 ) {
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(gutter * 3.0 + col_w * 3.0, ROW_H),
@@ -375,7 +384,7 @@ fn paint_merge_row(
     paint_line_no(ui, g, row.base_no);
     let c = Rect::from_min_size(Pos2::new(x + gutter, y), vec2(col_w, ROW_H));
     paint_bg(ui, c, bg_b);
-    paint_cell(ui, c, row.base.as_ref(), fg, None);
+    paint_cell(ui, c, row.base.as_ref(), fg, None, syn_b);
 
     // LEFT 列
     let xl = x + gutter + col_w;
@@ -384,7 +393,7 @@ fn paint_merge_row(
     paint_line_no(ui, g, None);
     let c = Rect::from_min_size(Pos2::new(xl + gutter, y), vec2(col_w, ROW_H));
     paint_bg(ui, c, bg_l);
-    paint_cell(ui, c, row.left.as_ref(), fg, hl_l);
+    paint_cell(ui, c, row.left.as_ref(), fg, hl_l, syn_l);
 
     // RIGHT 列
     let xr = xl + gutter + col_w;
@@ -393,7 +402,7 @@ fn paint_merge_row(
     paint_line_no(ui, g, None);
     let c = Rect::from_min_size(Pos2::new(xr + gutter, y), vec2(col_w, ROW_H));
     paint_bg(ui, c, bg_r);
-    paint_cell(ui, c, row.right.as_ref(), fg, hl_r);
+    paint_cell(ui, c, row.right.as_ref(), fg, hl_r, syn_r);
 }
 
 fn basename(p: &str) -> String {

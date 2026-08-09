@@ -51,22 +51,37 @@ pub fn paint_bg(ui: &egui::Ui, rect: Rect, bg: Option<Color32>) {
 }
 
 /// 在单元格内绘制带行内高亮的文本（LayoutJob 分段着色）
+/// syntax 非空时叠加语法前景色（diff 语义管背景，语法管前景）
 pub fn paint_cell(
     ui: &egui::Ui,
     rect: Rect,
     cell: Option<&Cell>,
     fg: Color32,
     hl: Option<Color32>,
+    syntax: Option<&'static syntect::parsing::SyntaxReference>,
 ) {
     let Some(cell) = cell else { return };
+    // 语法分段：字节偏移 -> (r,g,b)
+    let syntax_segs = syntax.map(|s| crate::highlight::highlight_line(&cell.text, s));
     let mut job = egui::text::LayoutJob::default();
+    let mut off = 0usize; // 当前字节偏移（cell.text 内）
     for (seg, changed) in &cell.segments {
+        let seg_start = off;
+        let seg_end = off + seg.len();
+        let color = syntax_segs
+            .as_ref()
+            .and_then(|segs| {
+                segs.iter()
+                    .find(|(s, l, _)| *s < seg_end && *s + *l > seg_start)
+                    .map(|(_, _, rgb)| Color32::from_rgb(rgb.0, rgb.1, rgb.2))
+            })
+            .unwrap_or(fg);
         job.append(
             seg,
             0.0,
             egui::TextFormat {
                 font_id: FontId::monospace(FONT_SIZE),
-                color: fg,
+                color,
                 background: if *changed {
                     hl.unwrap_or(Color32::TRANSPARENT)
                 } else {
@@ -75,6 +90,7 @@ pub fn paint_cell(
                 ..Default::default()
             },
         );
+        off = seg_end;
     }
     let galley = ui.painter().layout_job(job);
     let y = rect.center().y - galley.size().y / 2.0;
