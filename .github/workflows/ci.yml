@@ -74,4 +74,6 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then BIN="./target/release/bcr.exe"; else BIN="./target/release/bcr"; fi
           "$BIN" --lang en diff Cargo.toml Cargo.lock || test $? -eq 1
-          "$BIN" --lang de compare /nonexistent /nonexistent 2>&1 | grep -q "kein Verzeichnis"
+          # compare 对不存在目录按设计返回 2；先捕获输出再 grep，避免 pipefail 误判失败
+          OUT="$("$BIN" --lang de compare /nonexistent /nonexistent 2>&1 || true)"
+          printf '%s' "$OUT" | grep -q "kein Verzeichnis"
