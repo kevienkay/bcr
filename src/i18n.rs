@@ -95,14 +95,15 @@ impl Lang {
         }
     }
 
-    /// 尝试从环境变量 BCR_LANG / LANG 推断
+    /// 尝试从环境变量 BCR_LANG 推断。
+    ///
+    /// 只认应用自己的 BCR_LANG，不读系统 LANG/LC_ALL：
+    /// 默认语言固定为中文（验收标准），避免 CI/服务器 locale 为
+    /// en_US 等时程序被意外切成英文。用户想换语言请显式用
+    /// `--lang` 或 `BCR_LANG`。
     pub fn from_env() -> Option<Lang> {
-        for var in ["BCR_LANG", "LANG", "LC_ALL"] {
-            if let Ok(v) = std::env::var(var) {
-                if let Some(l) = Lang::parse(&v) {
-                    return Some(l);
-                }
-            }
+        if let Ok(v) = std::env::var("BCR_LANG") {
+            return Lang::parse(&v);
         }
         None
     }

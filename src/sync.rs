@@ -122,9 +122,12 @@ pub fn run(args: &SyncArgs) -> i32 {
     for key in keys {
         match (src_map.get(key), dst_map.get(key)) {
             (Some(s), Some(d)) => {
+                // 镜像模式：mtime 相同仅代表"疑似一致"，需内容确认。
+                // 秒级 mtime 的文件系统（ext4/overlayfs/Git Bash）上，
+                // 同 size 同 mtime 的文件内容可能不同，快速判断会漏覆盖。
                 let same = if s.size != d.size {
                     false
-                } else if args.compare_content {
+                } else if args.compare_content || (mode == "mirror" && s.mtime == d.mtime) {
                     match vfs::content_equal_vfs(src_vfs.as_ref(), dst_vfs.as_ref(), key) {
                         Ok(eq) => eq,
                         Err(e) => {

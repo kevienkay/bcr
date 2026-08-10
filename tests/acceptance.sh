@@ -18,6 +18,20 @@ WORK="$(mktemp -d /tmp/bcr-accept.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
 
+# 跨平台：GNU stat 用 -c %Y（Linux/Git Bash），BSD stat 用 -f %m（macOS）
+mtime_of() {
+  if stat -c %Y "$1" >/dev/null 2>&1; then
+    stat -c %Y "$1"
+  else
+    stat -f %m "$1"
+  fi
+}
+# Windows（Git Bash）下把 /tmp 路径转成原生路径，zip 后端才能打开
+ZIP_WORK="$WORK"
+if command -v cygpath >/dev/null 2>&1; then
+  ZIP_WORK="$(cygpath -m "$WORK")"
+fi
+
 PASS=0; FAIL=0; FAILED=()
 pass() { PASS=$((PASS+1)); echo "  ✅ $1"; }
 fail() { FAIL=$((FAIL+1)); FAILED+=("$1"); echo "  ❌ $1"; }
@@ -217,7 +231,7 @@ if [ -f m4_dst/old.txt ]; then pass "M4.7 update 不删除目标独有"; else fa
 
 "$BIN" sync m4_src m4_dst --dry-run > /dev/null; check "M4.8 update 幂等=0" 0 "$?"
 
-m1=$(stat -f %m m4_src/upd.txt 2>/dev/null); m2=$(stat -f %m m4_dst/upd.txt 2>/dev/null)
+m1=$(mtime_of m4_src/upd.txt); m2=$(mtime_of m4_dst/upd.txt)
 if [ "$m1" = "$m2" ]; then pass "M4.9 复制保留源 mtime"; else fail "M4.9 复制保留源 mtime  [$m1 != $m2]"; fi
 
 mkdir -p m4_s2 m4_d2
@@ -272,23 +286,23 @@ printf 'same-content' > m6_other/same.txt
 printf 'version-2' > m6_other/diff.txt
 printf 'deep-content' > m6_other/sub/deep.txt
 
-"$BIN" compare m6_other "zip://$WORK/m6_arch.zip" --compare-content --show-same > m6_out.txt; rc=$?
+"$BIN" compare m6_other "zip://$ZIP_WORK/m6_arch.zip" --compare-content --show-same > m6_out.txt; rc=$?
 check "M6.1 本地 vs zip 有差异=1" 1 "$rc"
 check_contains "M6.2 内容不同 [C]" "[C] diff.txt" "$(cat m6_out.txt)"
 check_contains "M6.3 内容相同 [S]" "[S] same.txt" "$(cat m6_out.txt)"
 check_contains "M6.4 子目录条目" "[S] sub/deep.txt" "$(cat m6_out.txt)"
 
-"$BIN" compare "zip://$WORK/m6_arch.zip" "zip://$WORK/m6_arch.zip" --compare-content > /dev/null; check "M6.5 zip vs zip 无差异=0" 0 "$?"
+"$BIN" compare "zip://$ZIP_WORK/m6_arch.zip" "zip://$ZIP_WORK/m6_arch.zip" --compare-content > /dev/null; check "M6.5 zip vs zip 无差异=0" 0 "$?"
 
-"$BIN" compare m6_other "zip://$WORK/m6_arch.zip" --include 'same.txt' --compare-content > /dev/null; check "M6.6 include 过滤作用于 zip" 0 "$?"
+"$BIN" compare m6_other "zip://$ZIP_WORK/m6_arch.zip" --include 'same.txt' --compare-content > /dev/null; check "M6.6 include 过滤作用于 zip" 0 "$?"
 
 # 子集 zip（缺 diff.txt）：该文件应显示为仅左侧
 (cd m6_dir && zip -qr ../m6_subset.zip . -x 'diff.txt')
-"$BIN" compare m6_other "zip://$WORK/m6_subset.zip" --compare-content > m6_sub.txt; check "M6.7 缺失条目=1" 1 "$?"
+"$BIN" compare m6_other "zip://$ZIP_WORK/m6_subset.zip" --compare-content > m6_sub.txt; check "M6.7 缺失条目=1" 1 "$?"
 check_contains "M6.8 缺失条目标记 [L]" "[L] diff.txt" "$(cat m6_sub.txt)"
 
 printf 'not-a-zip' > m6_bad.zip
-"$BIN" compare m6_dir "zip://$WORK/m6_bad.zip" > /dev/null 2>&1; check "M6.9 非法 zip 退出码=2" 2 "$?"
+"$BIN" compare m6_dir "zip://$ZIP_WORK/m6_bad.zip" > /dev/null 2>&1; check "M6.9 非法 zip 退出码=2" 2 "$?"
 
 echo "=============================================="
 echo " I18N: 多语言"
