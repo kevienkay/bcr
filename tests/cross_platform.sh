@@ -72,10 +72,15 @@ fi
 printf 'a\r\nb\r\n' > xp5_base.txt
 printf 'a\r\nB\r\n' > xp5_left.txt
 printf 'a\r\nb\r\nc\r\n' > xp5_right.txt
-"$BIN" merge xp5_base.txt xp5_left.txt xp5_right.txt -o xp5_out.txt > /dev/null 2>&1
+"$BIN" merge xp5_base.txt xp5_left.txt xp5_right.txt -o xp5_out.txt > xp5_merge.log 2>&1
+merge_rc=$?
 if [ -f xp5_out.txt ] && LC_ALL=C grep -q "$(printf '\r')" xp5_out.txt; then
   pass "XP5 merge 输出保持 CRLF"
 else
+  echo "  XP5 诊断: merge_rc=$merge_rc 文件存在=$([ -f xp5_out.txt ] && echo yes || echo no)"
+  echo "    base: $(od -An -c xp5_base.txt | head -3 | tr '\n' ' ')"
+  [ -f xp5_out.txt ] && echo "    out:  $(od -An -c xp5_out.txt | head -3 | tr '\n' ' ')"
+  echo "    merge log: $(cat xp5_merge.log 2>/dev/null | tr '\n' ' ')"
   fail "XP5 merge 输出应为 CRLF"
 fi
 
