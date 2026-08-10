@@ -46,7 +46,9 @@ mkzip() {
   local py=python3; command -v python3 >/dev/null 2>&1 || py=python
   local abs_src abs_out
   abs_src="$(cd "$src_dir" && pwd)"
-  abs_out="$(cd "$(dirname "$out_zip")" && pwd)/$(basename "$out_zip")"
+  # 与 zip 命令分支保持一致：输出路径相对 src_dir 解析
+  # （调用形如 mkzip m6_dir ../m6_arch.zip，../ 是相对 src_dir 的）
+  abs_out="$(cd "$src_dir" && cd "$(dirname "$out_zip")" && pwd)/$(basename "$out_zip")"
   # Git Bash 的 POSIX 路径 Python 打不开，转成原生 Windows 路径
   if command -v cygpath >/dev/null 2>&1; then
     abs_src="$(cygpath -m "$abs_src")"
