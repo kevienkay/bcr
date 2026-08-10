@@ -32,6 +32,40 @@ if command -v cygpath >/dev/null 2>&1; then
   ZIP_WORK="$(cygpath -m "$WORK")"
 fi
 
+# 跨平台 ZIP 打包：优先 zip 命令；Windows runner 无 zip 时回退 Python zipfile
+mkzip() {
+  local src_dir="$1" out_zip="$2" exclude="${3:-}"
+  if command -v zip >/dev/null 2>&1; then
+    if [ -n "$exclude" ]; then
+      (cd "$src_dir" && zip -qr "$out_zip" . -x "$exclude")
+    else
+      (cd "$src_dir" && zip -qr "$out_zip" .)
+    fi
+    return $?
+  fi
+  local py=python3; command -v python3 >/dev/null 2>&1 || py=python
+  local abs_src abs_out
+  abs_src="$(cd "$src_dir" && pwd)"
+  abs_out="$(cd "$(dirname "$out_zip")" && pwd)/$(basename "$out_zip")"
+  # Git Bash 的 POSIX 路径 Python 打不开，转成原生 Windows 路径
+  if command -v cygpath >/dev/null 2>&1; then
+    abs_src="$(cygpath -m "$abs_src")"
+    abs_out="$(cygpath -m "$abs_out")"
+  fi
+  "$py" - "$abs_src" "$abs_out" "$exclude" <<'PYEOF'
+import os, sys, zipfile
+src, out, exclude = sys.argv[1], sys.argv[2], (sys.argv[3] or None)
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _, files in os.walk(src):
+        for f in files:
+            p = os.path.join(root, f)
+            rel = os.path.relpath(p, src).replace(os.sep, "/")
+            if exclude and rel == exclude:
+                continue
+            z.write(p, rel)
+PYEOF
+}
+
 PASS=0; FAIL=0; FAILED=()
 pass() { PASS=$((PASS+1)); echo "  ✅ $1"; }
 fail() { FAIL=$((FAIL+1)); FAILED+=("$1"); echo "  ❌ $1"; }
@@ -278,7 +312,7 @@ mkdir -p m6_dir/sub
 printf 'same-content' > m6_dir/same.txt
 printf 'version-1' > m6_dir/diff.txt
 printf 'deep-content' > m6_dir/sub/deep.txt
-(cd m6_dir && zip -qr ../m6_arch.zip .)
+mkzip m6_dir ../m6_arch.zip
 
 # 对照目录：same.txt 相同、diff.txt 不同、sub/deep.txt 相同
 mkdir -p m6_other/sub
@@ -297,7 +331,7 @@ check_contains "M6.4 子目录条目" "[S] sub/deep.txt" "$(cat m6_out.txt)"
 "$BIN" compare m6_other "zip://$ZIP_WORK/m6_arch.zip" --include 'same.txt' --compare-content > /dev/null; check "M6.6 include 过滤作用于 zip" 0 "$?"
 
 # 子集 zip（缺 diff.txt）：该文件应显示为仅左侧
-(cd m6_dir && zip -qr ../m6_subset.zip . -x 'diff.txt')
+mkzip m6_dir ../m6_subset.zip diff.txt
 "$BIN" compare m6_other "zip://$ZIP_WORK/m6_subset.zip" --compare-content > m6_sub.txt; check "M6.7 缺失条目=1" 1 "$?"
 check_contains "M6.8 缺失条目标记 [L]" "[L] diff.txt" "$(cat m6_sub.txt)"
 
