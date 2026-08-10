@@ -50,7 +50,7 @@ if touch xp3_A.txt 2>/dev/null && touch xp3_a.txt 2>/dev/null \
   printf 'X\n' > xp3_l/a.txt
   printf 'X\n' > xp3_r/A.txt
   printf 'Y\n' > xp3_r/a.txt
-  "$BIN" compare xp3_l xp3_r > /dev/null 2>&1
+  "$BIN" compare xp3_l xp3_r --compare-content > /dev/null 2>&1
   check "XP3 大小写敏感：a.txt 内容不同=1" 1 "$?"
   echo "       (文件系统大小写敏感)"
 else
