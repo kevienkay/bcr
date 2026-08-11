@@ -519,6 +519,10 @@ pub struct Mp3tagArgs {
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
+
+    /// 以 JSON 契约输出结果（schema: mp3tag.v1）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// CLI 入口：输出字段级差异，退出码 0=标签一致，1=标签有差异，2=错误
@@ -526,10 +530,39 @@ pub fn run(args: &Mp3tagArgs) -> i32 {
     let cmp = match compare_mp3(&args.left, &args.right) {
         Ok(c) => c,
         Err(e) => {
+            if args.json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&crate::jsonout::error_envelope(
+                        "mp3tag.v1",
+                        "mp3tag",
+                        &e.to_string(),
+                    ))
+                    .unwrap_or_default()
+                );
+            }
             eprintln!("bcr: {}", e);
             return 2;
         }
     };
+
+    // JSON 契约输出(mp3tag.v1)
+    if args.json {
+        let fields: Vec<(String, Option<String>, Option<String>)> = cmp
+            .diffs
+            .iter()
+            .map(|d| (d.field.to_string(), d.left.clone(), d.right.clone()))
+            .collect();
+        let v = crate::jsonout::envelope_mp3tag(
+            &args.left,
+            &args.right,
+            &fields,
+            cmp.has_differences(),
+        );
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        return if cmp.has_differences() { 1 } else { 0 };
+    }
+
     let use_color = match args.color.as_str() {
         "always" => true,
         "never" => false,

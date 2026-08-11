@@ -44,6 +44,10 @@ pub struct CsvArgs {
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
+
+    /// 以 JSON 契约输出结果（schema: csv.v1）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// 解析后的表格：表头 + 数据行
@@ -295,6 +299,25 @@ pub fn run(args: &CsvArgs) -> i32 {
     let b = Table::new(&read(&args.right), delim, args.no_header);
 
     let (lines, stats) = compare_csv(&a, &b, args.key.as_deref());
+
+    // JSON 契约输出(csv.v1)
+    if args.json {
+        let v = crate::jsonout::envelope_csv(
+            &args.left,
+            &args.right,
+            stats.same,
+            stats.left_only,
+            stats.right_only,
+            stats.modified,
+        );
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        return if stats.left_only + stats.right_only + stats.modified > 0 {
+            1
+        } else {
+            0
+        };
+    }
+
     let color = match args.color.as_str() {
         "always" => true,
         "never" => false,

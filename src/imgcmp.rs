@@ -251,6 +251,10 @@ pub struct ImgcmpArgs {
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
+
+    /// 以 JSON 契约输出结果（schema: imgcmp.v1）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// CLI 入口：输出尺寸/差异统计，退出码 0=无差异，1=有差异，2=错误
@@ -258,10 +262,42 @@ pub fn run(args: &ImgcmpArgs) -> i32 {
     let pair = match compare_paths(&args.left, &args.right) {
         Ok(p) => p,
         Err(e) => {
+            if args.json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&crate::jsonout::error_envelope(
+                        "imgcmp.v1",
+                        "imgcmp",
+                        &e.to_string(),
+                    ))
+                    .unwrap_or_default()
+                );
+            }
             eprintln!("bcr: {}", e);
             return 2;
         }
     };
+
+    // JSON 契约输出(imgcmp.v1)
+    if args.json {
+        let s = pair.stats;
+        let v = crate::jsonout::envelope_imgcmp(
+            &args.left,
+            &args.right,
+            s.left_w,
+            s.left_h,
+            s.right_w,
+            s.right_h,
+            s.size_differs,
+            s.diff_pixels,
+            s.total_pixels,
+            s.diff_ratio,
+            s.bounds,
+        );
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        return if s.has_differences() { 1 } else { 0 };
+    }
+
     let s = pair.stats;
     let use_color = match args.color.as_str() {
         "always" => true,

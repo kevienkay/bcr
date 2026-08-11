@@ -217,6 +217,160 @@ pub fn fsscan_meta_json(m: &FileMeta) -> Value {
     })
 }
 
+/// imgcmp 结果 → JSON 契约(imgcmp.v1)
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
+pub fn envelope_imgcmp(
+    left: &str,
+    right: &str,
+    left_w: u32,
+    left_h: u32,
+    right_w: u32,
+    right_h: u32,
+    size_differs: bool,
+    diff_pixels: u64,
+    total_pixels: u64,
+    diff_ratio: f64,
+    bounds: Option<(u32, u32, u32, u32)>,
+) -> Value {
+    envelope(
+        "imgcmp.v1",
+        "imgcmp",
+        &[("left", json!(left)), ("right", json!(right))],
+        json!({
+            "left_size": [left_w, left_h],
+            "right_size": [right_w, right_h],
+            "size_differs": size_differs,
+            "diff_pixels": diff_pixels,
+            "total_pixels": total_pixels,
+            "diff_ratio": diff_ratio,
+            "bounds": bounds.map(|(x, y, w, h)| json!([x, y, w, h])),
+            "has_differences": size_differs || diff_pixels > 0,
+        }),
+    )
+}
+
+/// mp3tag 结果 → JSON 契约(mp3tag.v1)
+#[allow(dead_code)]
+pub fn envelope_mp3tag(
+    left: &str,
+    right: &str,
+    fields: &[(String, Option<String>, Option<String>)],
+    has_differences: bool,
+) -> Value {
+    let list: Vec<Value> = fields
+        .iter()
+        .map(|(name, l, r)| {
+            json!({
+                "name": name,
+                "left": l,
+                "right": r,
+                "diff": l != r,
+            })
+        })
+        .collect();
+    envelope(
+        "mp3tag.v1",
+        "mp3tag",
+        &[("left", json!(left)), ("right", json!(right))],
+        json!({
+            "fields": list,
+            "has_differences": has_differences,
+        }),
+    )
+}
+
+/// csv 结果 → JSON 契约(csv.v1)
+#[allow(dead_code)]
+pub fn envelope_csv(
+    left: &str,
+    right: &str,
+    same: usize,
+    left_only: usize,
+    right_only: usize,
+    modified: usize,
+) -> Value {
+    envelope(
+        "csv.v1",
+        "csv",
+        &[("left", json!(left)), ("right", json!(right))],
+        json!({
+            "stats": {
+                "same": same,
+                "left_only": left_only,
+                "right_only": right_only,
+                "modified": modified,
+            },
+            "has_differences": left_only + right_only + modified > 0,
+        }),
+    )
+}
+
+/// compare3 结果 → JSON 契约(compare3.v1)
+#[allow(dead_code)]
+pub fn envelope_compare3(
+    base: &str,
+    left: &str,
+    right: &str,
+    entries: &[(String, &'static str)],
+    stats: &crate::compare3::TriStats,
+) -> Value {
+    let list: Vec<Value> = entries
+        .iter()
+        .map(|(rel, status)| json!({ "rel": rel, "status": status }))
+        .collect();
+    envelope(
+        "compare3.v1",
+        "compare3",
+        &[
+            ("base", json!(base)),
+            ("left", json!(left)),
+            ("right", json!(right)),
+        ],
+        json!({
+            "stats": {
+                "same": stats.same,
+                "base_only": stats.base_only,
+                "left_only": stats.left_only,
+                "right_only": stats.right_only,
+                "left_deleted": stats.left_deleted,
+                "right_deleted": stats.right_deleted,
+                "left_modified": stats.left_modified,
+                "right_modified": stats.right_modified,
+                "both_modified": stats.both_modified,
+                "conflict": stats.conflict,
+            },
+            "has_differences": stats.has_differences(),
+            "entries": list,
+        }),
+    )
+}
+
+/// merge 结果 → JSON 契约(merge.v1)
+#[allow(dead_code)]
+pub fn envelope_merge(
+    base: &str,
+    left: &str,
+    right: &str,
+    conflicts: usize,
+    output: Option<&str>,
+) -> Value {
+    envelope(
+        "merge.v1",
+        "merge",
+        &[
+            ("base", json!(base)),
+            ("left", json!(left)),
+            ("right", json!(right)),
+        ],
+        json!({
+            "conflicts": conflicts,
+            "output": output,
+            "has_conflicts": conflicts > 0,
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,5 +434,77 @@ mod tests {
         assert_eq!(op_json(&op)["from"], "left");
         let d = SyncOp::Delete { rel: "x".into() };
         assert_eq!(op_json(&d)["op"], "delete");
+    }
+
+    #[test]
+    fn csv_envelope_shape() {
+        let v = envelope_csv("/a.csv", "/b.csv", 2, 1, 0, 3);
+        assert_eq!(v["schema"], "csv.v1");
+        assert_eq!(v["result"]["stats"]["modified"], 3);
+        assert_eq!(v["result"]["has_differences"], true);
+    }
+
+    #[test]
+    fn mp3tag_envelope_shape() {
+        let fields = vec![(
+            "title".to_string(),
+            Some("A".to_string()),
+            Some("B".to_string()),
+        )];
+        let v = envelope_mp3tag("/a.mp3", "/b.mp3", &fields, true);
+        assert_eq!(v["schema"], "mp3tag.v1");
+        assert_eq!(v["result"]["fields"][0]["diff"], true);
+        assert_eq!(v["result"]["fields"][0]["name"], "title");
+    }
+
+    #[test]
+    fn imgcmp_envelope_shape() {
+        let v = envelope_imgcmp(
+            "/a.png",
+            "/b.png",
+            4,
+            4,
+            4,
+            4,
+            false,
+            8,
+            16,
+            0.5,
+            Some((1, 1, 2, 2)),
+        );
+        assert_eq!(v["schema"], "imgcmp.v1");
+        assert_eq!(v["result"]["diff_pixels"], 8);
+        assert_eq!(v["result"]["bounds"].as_array().unwrap().len(), 4);
+        assert_eq!(v["result"]["has_differences"], true);
+    }
+
+    #[test]
+    fn compare3_envelope_shape() {
+        use crate::compare3::TriStats;
+        let stats = TriStats {
+            same: 1,
+            base_only: 0,
+            left_only: 0,
+            right_only: 0,
+            left_deleted: 0,
+            right_deleted: 0,
+            left_modified: 0,
+            right_modified: 0,
+            both_modified: 0,
+            conflict: 1,
+        };
+        let entries = vec![("f.txt".to_string(), "C")];
+        let v = envelope_compare3("/b", "/l", "/r", &entries, &stats);
+        assert_eq!(v["schema"], "compare3.v1");
+        assert_eq!(v["result"]["stats"]["conflict"], 1);
+        assert_eq!(v["result"]["entries"][0]["status"], "C");
+    }
+
+    #[test]
+    fn merge_envelope_shape() {
+        let v = envelope_merge("/base", "/l", "/r", 2, Some("/out.txt"));
+        assert_eq!(v["schema"], "merge.v1");
+        assert_eq!(v["result"]["conflicts"], 2);
+        assert_eq!(v["result"]["has_conflicts"], true);
     }
 }

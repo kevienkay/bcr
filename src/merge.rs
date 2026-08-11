@@ -29,6 +29,10 @@ pub struct MergeArgs {
     /// 冲突标记标签，最多两个（默认 LEFT / RIGHT）
     #[arg(short = 'L', num_args = 1..=2, default_values = ["LEFT", "RIGHT"])]
     pub labels: Vec<String>,
+
+    /// 以 JSON 契约输出结果（schema: merge.v1，冲突数等）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// 一侧对 base 的一个变更区域：base 行区间 + 该侧的替换内容（可能为空 = 删除）
@@ -223,6 +227,19 @@ pub fn run(args: &MergeArgs) -> i32 {
         }
     }
 
+    // JSON 契约输出(merge.v1)：仅冲突统计，不输出合并内容
+    if args.json {
+        let v = crate::jsonout::envelope_merge(
+            &args.base,
+            &args.left,
+            &args.right,
+            conflicts,
+            args.output.as_deref(),
+        );
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        return if conflicts > 0 { 1 } else { 0 };
+    }
+
     // 输出
     if let Some(path) = &args.output {
         // 换行风格跟随 base 源文件：Windows CRLF 文件合并后保持 CRLF
@@ -414,6 +431,7 @@ mod tests {
             output: None,
             algo: "patience".into(),
             labels: vec![],
+            json: false,
         }
     }
 

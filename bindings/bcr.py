@@ -143,6 +143,85 @@ class SyncResult:
     raw: dict = field(default_factory=dict)
 
 
+@dataclass
+class CsvStats:
+    same: int = 0
+    left_only: int = 0
+    right_only: int = 0
+    modified: int = 0
+
+
+@dataclass
+class CsvResult:
+    stats: CsvStats
+    has_differences: bool
+    raw: dict = field(default_factory=dict)
+
+
+@dataclass
+class TriStats:
+    same: int = 0
+    base_only: int = 0
+    left_only: int = 0
+    right_only: int = 0
+    left_deleted: int = 0
+    right_deleted: int = 0
+    left_modified: int = 0
+    right_modified: int = 0
+    both_modified: int = 0
+    conflict: int = 0
+
+
+@dataclass
+class TriEntry:
+    rel: str
+    status: str
+
+
+@dataclass
+class Compare3Result:
+    stats: TriStats
+    has_differences: bool
+    entries: list[TriEntry]
+    raw: dict = field(default_factory=dict)
+
+
+@dataclass
+class MergeResult:
+    conflicts: int
+    has_conflicts: bool
+    output: Optional[str]
+    raw: dict = field(default_factory=dict)
+
+
+@dataclass
+class Mp3Field:
+    name: str
+    left: Optional[str]
+    right: Optional[str]
+    diff: bool
+
+
+@dataclass
+class Mp3Result:
+    fields: list[Mp3Field]
+    has_differences: bool
+    raw: dict = field(default_factory=dict)
+
+
+@dataclass
+class ImgResult:
+    left_size: tuple[int, int]
+    right_size: tuple[int, int]
+    size_differs: bool
+    diff_pixels: int
+    total_pixels: int
+    diff_ratio: float
+    bounds: Optional[tuple[int, int, int, int]]
+    has_differences: bool
+    raw: dict = field(default_factory=dict)
+
+
 def compare(
     left: str,
     right: str,
@@ -245,6 +324,130 @@ def sync(
 def run(args: list[str]) -> dict:
     """底层透传:执行任意 bcr 子命令并返回解析后的 JSON dict。"""
     return _run(args)
+
+
+def compare3(
+    base: str,
+    left: str,
+    right: str,
+    *,
+    content: bool = False,
+    includes: Optional[list[str]] = None,
+    excludes: Optional[list[str]] = None,
+    show_same: bool = False,
+) -> Compare3Result:
+    """三路文件夹对比。"""
+    args = ["compare3", base, left, right]
+    if content:
+        args.append("--compare-content")
+    for g in includes or []:
+        args += ["--include", g]
+    for g in excludes or []:
+        args += ["--exclude", g]
+    if show_same:
+        args.append("--show-same")
+    data = _run(args)
+    r = data["result"]
+    s = r.get("stats", {})
+    keys = ("same", "base_only", "left_only", "right_only",
+            "left_deleted", "right_deleted", "left_modified",
+            "right_modified", "both_modified", "conflict")
+    return Compare3Result(
+        stats=TriStats(**{k: s.get(k, 0) for k in keys}),
+        has_differences=r.get("has_differences", False),
+        entries=[TriEntry(rel=e["rel"], status=e["status"]) for e in r.get("entries", [])],
+        raw=r,
+    )
+
+
+def csv(
+    left: str,
+    right: str,
+    *,
+    key: Optional[str] = None,
+    delimiter: str = ",",
+    no_header: bool = False,
+) -> CsvResult:
+    """CSV/表格对比。"""
+    args = ["csv", left, right]
+    if key:
+        args += ["--key", key]
+    if delimiter != ",":
+        args += ["--delimiter", delimiter]
+    if no_header:
+        args.append("--no-header")
+    data = _run(args)
+    r = data["result"]
+    s = r.get("stats", {})
+    return CsvResult(
+        stats=CsvStats(**{k: s.get(k, 0) for k in ("same", "left_only", "right_only", "modified")}),
+        has_differences=r.get("has_differences", False),
+        raw=r,
+    )
+
+
+def merge(
+    base: str,
+    left: str,
+    right: str,
+    *,
+    output: Optional[str] = None,
+    algo: str = "patience",
+    labels: Optional[list[str]] = None,
+) -> MergeResult:
+    """三路合并;返回冲突统计(JSON 模式不输出合并内容)。"""
+    args = ["merge", base, left, right, "--algo", algo]
+    if output:
+        args += ["-o", output]
+    for lb in labels or []:
+        args += ["-L", lb]
+    data = _run(args)
+    r = data["result"]
+    return MergeResult(
+        conflicts=r.get("conflicts", 0),
+        has_conflicts=r.get("has_conflicts", False),
+        output=r.get("output"),
+        raw=r,
+    )
+
+
+def mp3tag(left: str, right: str) -> Mp3Result:
+    """MP3 标签对比(ID3v1/v2 字段级)。"""
+    data = _run(["mp3tag", left, right])
+    r = data["result"]
+    return Mp3Result(
+        fields=[
+            Mp3Field(
+                name=f["name"],
+                left=f.get("left"),
+                right=f.get("right"),
+                diff=f.get("diff", False),
+            )
+            for f in r.get("fields", [])
+        ],
+        has_differences=r.get("has_differences", False),
+        raw=r,
+    )
+
+
+def imgcmp(left: str, right: str) -> ImgResult:
+    """图片对比(逐像素差异统计)。"""
+    data = _run(["imgcmp", left, right])
+    r = data["result"]
+    ls = r.get("left_size") or [0, 0]
+    rs = r.get("right_size") or [0, 0]
+    b = r.get("bounds")
+    return ImgResult(
+        left_size=(ls[0], ls[1]),
+        right_size=(rs[0], rs[1]),
+        size_differs=r.get("size_differs", False),
+        diff_pixels=r.get("diff_pixels", 0),
+        total_pixels=r.get("total_pixels", 0),
+        diff_ratio=r.get("diff_ratio", 0.0),
+        bounds=tuple(b) if b else None,
+        has_differences=r.get("has_differences", False),
+        raw=r,
+    )
 
 
 if __name__ == "__main__":

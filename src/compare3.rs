@@ -55,6 +55,10 @@ pub struct Compare3Args {
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
+
+    /// 以 JSON 契约输出结果（schema: compare3.v1）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// 三路文件状态
@@ -367,10 +371,40 @@ pub fn run(args: &Compare3Args) -> i32 {
     ) {
         Ok(r) => r,
         Err(e) => {
+            if args.json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&crate::jsonout::error_envelope(
+                        "compare3.v1",
+                        "compare3",
+                        &e.to_string(),
+                    ))
+                    .unwrap_or_default()
+                );
+            }
             eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&e.to_string()]));
             return 2;
         }
     };
+
+    // JSON 契约输出(compare3.v1)
+    if args.json {
+        let entries: Vec<(String, &'static str)> = result
+            .entries
+            .iter()
+            .filter(|e| args.show_same || e.status != TriStatus::Same)
+            .map(|e| (e.rel.clone(), e.status.tag()))
+            .collect();
+        let v = crate::jsonout::envelope_compare3(
+            &args.base,
+            &args.left,
+            &args.right,
+            &entries,
+            &result.stats,
+        );
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        return if result.stats.has_differences() { 1 } else { 0 };
+    }
 
     let color = match args.color.as_str() {
         "always" => true,
@@ -447,6 +481,7 @@ mod tests {
             show_same: false,
             summary: false,
             color: "never".into(),
+            json: false,
         }
     }
 
