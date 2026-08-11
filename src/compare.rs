@@ -263,12 +263,10 @@ fn detect_moves(result: &mut CompareResult, left: &dyn Vfs, right: &dyn Vfs) {
                 continue;
             }
             // 始终用内容哈希确认移动（与 BC Detect Moves 一致）：
-            // 仅对“仅左侧/仅右侧”候选对读内容，避免 size+mtime 巧合误判
-            let same = match (
-                left.read(&result.entries[li].rel),
-                right.read(&result.entries[ri].rel),
-            ) {
-                (Ok(lb), Ok(rb)) => blake3::hash(&lb) == blake3::hash(&rb),
+            // 仅对“仅左侧/仅右侧”候选对读内容，避免 size+mtime 巧合误判；
+            // 走 Vfs::hash 流式计算，超大文件也不占内存
+            let same = match (left.hash(&result.entries[li].rel), right.hash(&result.entries[ri].rel)) {
+                (Ok(lh), Ok(rh)) => lh == rh,
                 _ => false,
             };
             if same {

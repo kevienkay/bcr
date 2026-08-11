@@ -29,6 +29,13 @@ pub trait Vfs {
     /// 读取文件全部内容
     fn read(&self, rel: &str) -> io::Result<Vec<u8>>;
 
+    /// 流式计算文件 blake3 哈希（分块读取，支持超大文件，内存 O(64KB)）。
+    /// 默认实现走 read()，本地/ZIP 后端覆写为真正的流式。
+    fn hash(&self, rel: &str) -> io::Result<blake3::Hash> {
+        let data = self.read(rel)?;
+        Ok(blake3::hash(&data))
+    }
+
     /// 文件是否存在
     #[allow(dead_code)]
     fn exists(&self, rel: &str) -> io::Result<bool>;
@@ -75,6 +82,22 @@ impl Vfs for LocalVfs {
 
     fn scan(&self, filter: &Filter) -> io::Result<BTreeMap<String, FileMeta>> {
         crate::fsscan::scan(&self.root, filter)
+    }
+
+    fn hash(&self, rel: &str) -> io::Result<blake3::Hash> {
+        use std::io::Read;
+        let p = self.root.join(rel);
+        let mut f = std::fs::File::open(&p)?;
+        let mut hasher = blake3::Hasher::new();
+        let mut buf = [0u8; 65536];
+        loop {
+            let n = f.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+        }
+        Ok(hasher.finalize())
     }
 
     fn read(&self, rel: &str) -> io::Result<Vec<u8>> {
@@ -124,13 +147,9 @@ pub fn is_remote(spec: &str) -> bool {
     spec.starts_with("zip://") || spec.starts_with("sftp://")
 }
 
-/// 跨后端内容比对：读取两侧字节流做 blake3 哈希比较
+/// 跨后端内容比对：流式计算两侧 blake3 哈希比较（内存 O(64KB)，支持超大文件）
 pub fn content_equal_vfs(left: &dyn Vfs, right: &dyn Vfs, rel: &str) -> io::Result<bool> {
-    let hash = |v: &dyn Vfs| -> io::Result<blake3::Hash> {
-        let data = v.read(rel)?;
-        Ok(blake3::hash(&data))
-    };
-    Ok(hash(left)? == hash(right)?)
+    Ok(left.hash(rel)? == right.hash(rel)?)
 }
 
 #[cfg(test)]

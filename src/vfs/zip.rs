@@ -109,6 +109,23 @@ impl Vfs for ZipVfs {
         Ok(buf)
     }
 
+    fn hash(&self, rel: &str) -> io::Result<blake3::Hash> {
+        let mut archive = self.archive.borrow_mut();
+        let mut entry = archive.by_name(rel).map_err(|e| {
+            io::Error::new(io::ErrorKind::NotFound, format!("ZIP 读取 {rel} 失败: {e}"))
+        })?;
+        let mut hasher = blake3::Hasher::new();
+        let mut buf = [0u8; 65536];
+        loop {
+            let n = entry.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+        }
+        Ok(hasher.finalize())
+    }
+
     fn exists(&self, rel: &str) -> io::Result<bool> {
         Ok(self.index.contains_key(rel))
     }
