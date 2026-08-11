@@ -220,9 +220,23 @@ fn eq3(
     compare_content: bool,
 ) -> io::Result<(bool, bool, bool)> {
     // 返回 (base==left, base==right, left==right)
-    let deep = |a: &dyn Vfs, c: &dyn Vfs| -> io::Result<bool> { Ok(a.hash(rel)? == c.hash(rel)?) };
     let (bl, br, lr) = if compare_content {
-        (deep(base, left)?, deep(base, right)?, deep(left, right)?)
+        // 深度模式：任一侧缺失 → 该对不等（不调用 hash，避免 NotFound）
+        let deep = |a: &dyn Vfs,
+                    c: &dyn Vfs,
+                    am: Option<&crate::fsscan::FileMeta>,
+                    cm: Option<&crate::fsscan::FileMeta>|
+         -> io::Result<bool> {
+            match (am, cm) {
+                (Some(_), Some(_)) => Ok(a.hash(rel)? == c.hash(rel)?),
+                _ => Ok(false),
+            }
+        };
+        (
+            deep(base, left, bm, lm)?,
+            deep(base, right, bm, rm)?,
+            deep(left, right, lm, rm)?,
+        )
     } else {
         // 快速模式：size+mtime 都同 → 相同；size 同但 mtime 不同 → 哈希兜底
         // （三路对比语义要求准确，避免复制导致 mtime 不同被误判为冲突）

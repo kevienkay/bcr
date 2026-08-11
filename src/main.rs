@@ -14,6 +14,7 @@ mod i18n;
 mod imgcmp;
 mod jsonout;
 mod merge;
+mod merge3;
 mod mergeview;
 mod mp3tag;
 mod profile;
@@ -79,6 +80,9 @@ enum Commands {
     /// 三路合并（Base + Left + Right），冲突输出标记块
     Merge(merge::MergeArgs),
 
+    /// 三路文件夹合并（BASE + LEFT + RIGHT → 输出目录，文本自动合并）
+    Merge3(merge3::Merge3Args),
+
     /// 目录同步（update/mirror/two-way，支持 dry-run 预览）
     Sync(sync::SyncArgs),
 
@@ -141,6 +145,7 @@ fn main() {
         Commands::Compare3(args) => compare3::run(&args),
         Commands::Csv(args) => csvcmp::run(&args),
         Commands::Merge(args) => merge::run(&args),
+        Commands::Merge3(args) => merge3::run(&args),
         Commands::Sync(args) => sync::run(&args),
         Commands::Session(args) => session::run(&args),
         Commands::Profile(args) => profile::run(&args),
