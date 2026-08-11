@@ -1,188 +1,7 @@
-[entries.19bfe7373dd6e347]
-last_used = 1786449452
+[entries.02a7b8984e99ee63]
+last_used = 1786449628
 
-[entries.19bfe7373dd6e347.left]
-"only_l.txt" = [
-    1,
-    1700000000,
-]
-"same.txt" = [
-    1,
-    1700000000,
-]
-"sub/a.txt" = [
-    1,
-    1700000000,
-]
-"sub/deep/b.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.19bfe7373dd6e347.right]
-"same.txt" = [
-    1,
-    1700000000,
-]
-"sub/a.txt" = [
-    1,
-    1700000000,
-]
-"sub/deep/b.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.19bfe7373dd6e347.result]
-warnings = []
-
-[[entries.19bfe7373dd6e347.result.entries]]
-rel = "only_l.txt"
-status = "LeftOnly"
-attrs_differ = false
-
-[entries.19bfe7373dd6e347.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[[entries.19bfe7373dd6e347.result.entries]]
-rel = "same.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.19bfe7373dd6e347.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.19bfe7373dd6e347.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[[entries.19bfe7373dd6e347.result.entries]]
-rel = "sub/a.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.19bfe7373dd6e347.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.19bfe7373dd6e347.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[[entries.19bfe7373dd6e347.result.entries]]
-rel = "sub/deep/b.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.19bfe7373dd6e347.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.19bfe7373dd6e347.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.19bfe7373dd6e347.result.stats]
-same = 3
-left_only = 1
-right_only = 0
-differ = 0
-moved = 0
-
-[entries.2c93689a735d6ad2]
-last_used = 1786449452
-
-[entries.2c93689a735d6ad2.left]
-"only_l.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.2c93689a735d6ad2.right]
-"only_r.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.2c93689a735d6ad2.result]
-warnings = []
-
-[[entries.2c93689a735d6ad2.result.entries]]
-rel = "only_l.txt"
-status = "Moved"
-moved_to = "only_r.txt"
-attrs_differ = false
-
-[entries.2c93689a735d6ad2.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.2c93689a735d6ad2.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.2c93689a735d6ad2.result.stats]
-same = 0
-left_only = 0
-right_only = 0
-differ = 0
-moved = 1
-
-[entries.3792093439eff7fd]
-last_used = 1786449567
-
-[entries.3792093439eff7fd.left]
-"f.txt" = [
-    12,
-    1700000000,
-]
-
-[entries.3792093439eff7fd.right]
-"f.txt" = [
-    12,
-    1700000000,
-]
-
-[entries.3792093439eff7fd.result]
-warnings = []
-
-[[entries.3792093439eff7fd.result.entries]]
-rel = "f.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.3792093439eff7fd.result.entries.left]
-size = 12
-mtime = 1700000000
-mode = 33188
-
-[entries.3792093439eff7fd.result.entries.right]
-size = 12
-mtime = 1700000000
-mode = 33152
-
-[entries.3792093439eff7fd.result.stats]
-same = 1
-left_only = 0
-right_only = 0
-differ = 0
-moved = 0
-
-[entries.510df08c45c281b3]
-last_used = 1786449567
-
-[entries.510df08c45c281b3.left]
+[entries.02a7b8984e99ee63.left]
 "diff.txt" = [
     1,
     1700000000,
@@ -192,7 +11,7 @@ last_used = 1786449567
     1700000000,
 ]
 
-[entries.510df08c45c281b3.right]
+[entries.02a7b8984e99ee63.right]
 "diff.txt" = [
     1,
     1700000000,
@@ -202,362 +21,90 @@ last_used = 1786449567
     1700000000,
 ]
 
-[entries.510df08c45c281b3.result]
+[entries.02a7b8984e99ee63.result]
 warnings = []
 
-[[entries.510df08c45c281b3.result.entries]]
+[[entries.02a7b8984e99ee63.result.entries]]
 rel = "diff.txt"
 status = "Same"
 attrs_differ = false
 
-[entries.510df08c45c281b3.result.entries.left]
+[entries.02a7b8984e99ee63.result.entries.left]
 size = 1
 mtime = 1700000000
 mode = 33152
 
-[entries.510df08c45c281b3.result.entries.right]
+[entries.02a7b8984e99ee63.result.entries.right]
 size = 1
 mtime = 1700000000
 mode = 33152
 
-[[entries.510df08c45c281b3.result.entries]]
+[[entries.02a7b8984e99ee63.result.entries]]
 rel = "only_l.txt"
 status = "Same"
 attrs_differ = false
 
-[entries.510df08c45c281b3.result.entries.left]
+[entries.02a7b8984e99ee63.result.entries.left]
 size = 6
 mtime = 1700000000
 mode = 33152
 
-[entries.510df08c45c281b3.result.entries.right]
+[entries.02a7b8984e99ee63.result.entries.right]
 size = 6
 mtime = 1700000000
 mode = 33152
 
-[entries.510df08c45c281b3.result.stats]
+[entries.02a7b8984e99ee63.result.stats]
 same = 2
 left_only = 0
 right_only = 0
 differ = 0
 moved = 0
 
-[entries.5a5f626f169f1227]
-last_used = 1786449567
+[entries.086bf8881561e8af]
+last_used = 1786449628
 
-[entries.5a5f626f169f1227.left]
-"f.txt" = [
-    4,
-    1600000000,
-]
-
-[entries.5a5f626f169f1227.right]
-"f.txt" = [
-    4,
+[entries.086bf8881561e8af.left]
+"keep.txt" = [
+    1,
     1700000000,
 ]
 
-[entries.5a5f626f169f1227.result]
+[entries.086bf8881561e8af.right]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.086bf8881561e8af.result]
 warnings = []
 
-[[entries.5a5f626f169f1227.result.entries]]
-rel = "f.txt"
-status = "Differ"
-attrs_differ = false
-
-[entries.5a5f626f169f1227.result.entries.left]
-size = 4
-mtime = 1600000000
-mode = 33152
-
-[entries.5a5f626f169f1227.result.entries.right]
-size = 4
-mtime = 1700000000
-mode = 33152
-
-[entries.5a5f626f169f1227.result.stats]
-same = 0
-left_only = 0
-right_only = 0
-differ = 1
-moved = 0
-
-[entries.633bed74b9603ff0]
-last_used = 1786449452
-
-[entries.633bed74b9603ff0.left]
-"old.txt" = [
-    12,
-    1700000000,
-]
-
-[entries.633bed74b9603ff0.right]
-"new.txt" = [
-    12,
-    1700000000,
-]
-
-[entries.633bed74b9603ff0.result]
-warnings = []
-
-[[entries.633bed74b9603ff0.result.entries]]
-rel = "old.txt"
-status = "Moved"
-moved_to = "new.txt"
-attrs_differ = false
-
-[entries.633bed74b9603ff0.result.entries.left]
-size = 12
-mtime = 1700000000
-mode = 33152
-
-[entries.633bed74b9603ff0.result.entries.right]
-size = 12
-mtime = 1700000000
-mode = 33152
-
-[entries.633bed74b9603ff0.result.stats]
-same = 0
-left_only = 0
-right_only = 0
-differ = 0
-moved = 1
-
-[entries.6c7ac7e5ad99f46c]
-last_used = 1786449567
-
-[entries.6c7ac7e5ad99f46c.left]
-"only_l.txt" = [
-    1,
-    1700000000,
-]
-"same.txt" = [
-    1,
-    1700000000,
-]
-"sub/a.txt" = [
-    1,
-    1700000000,
-]
-"sub/deep/b.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.6c7ac7e5ad99f46c.right]
-"same.txt" = [
-    1,
-    1700000000,
-]
-"sub/a.txt" = [
-    1,
-    1700000000,
-]
-"sub/deep/b.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.6c7ac7e5ad99f46c.result]
-warnings = []
-
-[[entries.6c7ac7e5ad99f46c.result.entries]]
-rel = "only_l.txt"
-status = "LeftOnly"
-attrs_differ = false
-
-[entries.6c7ac7e5ad99f46c.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[[entries.6c7ac7e5ad99f46c.result.entries]]
-rel = "same.txt"
+[[entries.086bf8881561e8af.result.entries]]
+rel = "keep.txt"
 status = "Same"
 attrs_differ = false
 
-[entries.6c7ac7e5ad99f46c.result.entries.left]
+[entries.086bf8881561e8af.result.entries.left]
 size = 1
 mtime = 1700000000
 mode = 33152
 
-[entries.6c7ac7e5ad99f46c.result.entries.right]
+[entries.086bf8881561e8af.result.entries.right]
 size = 1
 mtime = 1700000000
 mode = 33152
 
-[[entries.6c7ac7e5ad99f46c.result.entries]]
-rel = "sub/a.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.6c7ac7e5ad99f46c.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.6c7ac7e5ad99f46c.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[[entries.6c7ac7e5ad99f46c.result.entries]]
-rel = "sub/deep/b.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.6c7ac7e5ad99f46c.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.6c7ac7e5ad99f46c.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.6c7ac7e5ad99f46c.result.stats]
-same = 3
-left_only = 1
-right_only = 0
-differ = 0
-moved = 0
-
-[entries.7451b1e3d4e2d11b]
-last_used = 1786449567
-
-[entries.7451b1e3d4e2d11b.left]
-"a.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.7451b1e3d4e2d11b.right]
-"b.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.7451b1e3d4e2d11b.result]
-warnings = []
-
-[[entries.7451b1e3d4e2d11b.result.entries]]
-rel = "a.txt"
-status = "LeftOnly"
-attrs_differ = false
-
-[entries.7451b1e3d4e2d11b.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[[entries.7451b1e3d4e2d11b.result.entries]]
-rel = "b.txt"
-status = "RightOnly"
-attrs_differ = false
-
-[entries.7451b1e3d4e2d11b.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.7451b1e3d4e2d11b.result.stats]
-same = 0
-left_only = 1
-right_only = 1
-differ = 0
-moved = 0
-
-[entries.751bb6207a9cab93]
-last_used = 1786449452
-
-[entries.751bb6207a9cab93.left]
-"old.txt" = [
-    12,
-    1600000000,
-]
-
-[entries.751bb6207a9cab93.right]
-"new.txt" = [
-    12,
-    1700000000,
-]
-
-[entries.751bb6207a9cab93.result]
-warnings = []
-
-[[entries.751bb6207a9cab93.result.entries]]
-rel = "old.txt"
-status = "Moved"
-moved_to = "new.txt"
-attrs_differ = false
-
-[entries.751bb6207a9cab93.result.entries.left]
-size = 12
-mtime = 1600000000
-mode = 33152
-
-[entries.751bb6207a9cab93.result.entries.right]
-size = 12
-mtime = 1700000000
-mode = 33152
-
-[entries.751bb6207a9cab93.result.stats]
-same = 0
+[entries.086bf8881561e8af.result.stats]
+same = 1
 left_only = 0
 right_only = 0
 differ = 0
-moved = 1
-
-[entries.77d8c74c7304f8f4]
-last_used = 1786449452
-
-[entries.77d8c74c7304f8f4.left]
-"old.txt" = [
-    12,
-    1700000000,
-]
-
-[entries.77d8c74c7304f8f4.right]
-"new.txt" = [
-    12,
-    1700000000,
-]
-
-[entries.77d8c74c7304f8f4.result]
-warnings = []
-
-[[entries.77d8c74c7304f8f4.result.entries]]
-rel = "new.txt"
-status = "RightOnly"
-attrs_differ = false
-
-[entries.77d8c74c7304f8f4.result.entries.right]
-size = 12
-mtime = 1700000000
-mode = 33152
-
-[[entries.77d8c74c7304f8f4.result.entries]]
-rel = "old.txt"
-status = "LeftOnly"
-attrs_differ = false
-
-[entries.77d8c74c7304f8f4.result.entries.left]
-size = 12
-mtime = 1700000000
-mode = 33152
-
-[entries.77d8c74c7304f8f4.result.stats]
-same = 0
-left_only = 1
-right_only = 1
-differ = 0
 moved = 0
 
-[entries.8c2356b414a64c82]
-last_used = 1786449452
+[entries.0fb16b0d6086eb62]
+last_used = 1786449628
 
-[entries.8c2356b414a64c82.left]
+[entries.0fb16b0d6086eb62.left]
 "new.txt" = [
     5,
     1700000000,
@@ -567,11 +114,7 @@ last_used = 1786449452
     1700000000,
 ]
 
-[entries.8c2356b414a64c82.right]
-"new.txt" = [
-    5,
-    1700000000,
-]
+[entries.0fb16b0d6086eb62.right]
 "only.txt" = [
     8,
     1700000000,
@@ -581,294 +124,357 @@ last_used = 1786449452
     1700000000,
 ]
 
-[entries.8c2356b414a64c82.result]
+[entries.0fb16b0d6086eb62.result]
 warnings = []
 
-[[entries.8c2356b414a64c82.result.entries]]
+[[entries.0fb16b0d6086eb62.result.entries]]
 rel = "new.txt"
-status = "Same"
+status = "LeftOnly"
 attrs_differ = false
 
-[entries.8c2356b414a64c82.result.entries.left]
+[entries.0fb16b0d6086eb62.result.entries.left]
 size = 5
 mtime = 1700000000
 mode = 33152
 
-[entries.8c2356b414a64c82.result.entries.right]
-size = 5
-mtime = 1700000000
-mode = 33152
-
-[[entries.8c2356b414a64c82.result.entries]]
+[[entries.0fb16b0d6086eb62.result.entries]]
 rel = "only.txt"
 status = "RightOnly"
 attrs_differ = false
 
-[entries.8c2356b414a64c82.result.entries.right]
+[entries.0fb16b0d6086eb62.result.entries.right]
 size = 8
 mtime = 1700000000
 mode = 33152
 
-[[entries.8c2356b414a64c82.result.entries]]
+[[entries.0fb16b0d6086eb62.result.entries]]
 rel = "same.txt"
 status = "Same"
 attrs_differ = false
 
-[entries.8c2356b414a64c82.result.entries.left]
+[entries.0fb16b0d6086eb62.result.entries.left]
 size = 4
 mtime = 1700000000
 mode = 33152
 
-[entries.8c2356b414a64c82.result.entries.right]
+[entries.0fb16b0d6086eb62.result.entries.right]
 size = 4
 mtime = 1700000000
 mode = 33152
 
-[entries.8c2356b414a64c82.result.stats]
-same = 2
-left_only = 0
+[entries.0fb16b0d6086eb62.result.stats]
+same = 1
+left_only = 1
 right_only = 1
 differ = 0
 moved = 0
 
-[entries.987e5b693d7006e1]
-last_used = 1786449452
+[entries.20a187476558cb55]
+last_used = 1786449628
 
-[entries.987e5b693d7006e1.left]
-"a.txt" = [
+[entries.20a187476558cb55.left]
+"keep.txt" = [
     1,
     1700000000,
 ]
 
-[entries.987e5b693d7006e1.right]
-"b.txt" = [
+[entries.20a187476558cb55.right]
+"keep.txt" = [
     1,
     1700000000,
 ]
 
-[entries.987e5b693d7006e1.result]
+[entries.20a187476558cb55.result]
 warnings = []
 
-[[entries.987e5b693d7006e1.result.entries]]
-rel = "a.txt"
-status = "LeftOnly"
+[[entries.20a187476558cb55.result.entries]]
+rel = "keep.txt"
+status = "Same"
 attrs_differ = false
 
-[entries.987e5b693d7006e1.result.entries.left]
+[entries.20a187476558cb55.result.entries.left]
 size = 1
 mtime = 1700000000
 mode = 33152
 
-[[entries.987e5b693d7006e1.result.entries]]
-rel = "b.txt"
+[entries.20a187476558cb55.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.20a187476558cb55.result.stats]
+same = 1
+left_only = 0
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.32407ac55b4f6b1f]
+last_used = 1786449628
+
+[entries.32407ac55b4f6b1f.left]
+"l1.txt" = [
+    11,
+    1700000000,
+]
+"l2.txt" = [
+    11,
+    1700000000,
+]
+
+[entries.32407ac55b4f6b1f.right]
+"r1.txt" = [
+    11,
+    1700000000,
+]
+"r2.txt" = [
+    11,
+    1700000000,
+]
+
+[entries.32407ac55b4f6b1f.result]
+warnings = []
+
+[[entries.32407ac55b4f6b1f.result.entries]]
+rel = "l1.txt"
+status = "Moved"
+moved_to = "r1.txt"
+attrs_differ = false
+
+[entries.32407ac55b4f6b1f.result.entries.left]
+size = 11
+mtime = 1700000000
+mode = 33152
+
+[entries.32407ac55b4f6b1f.result.entries.right]
+size = 11
+mtime = 1700000000
+mode = 33152
+
+[[entries.32407ac55b4f6b1f.result.entries]]
+rel = "l2.txt"
+status = "Moved"
+moved_to = "r2.txt"
+attrs_differ = false
+
+[entries.32407ac55b4f6b1f.result.entries.left]
+size = 11
+mtime = 1700000000
+mode = 33152
+
+[entries.32407ac55b4f6b1f.result.entries.right]
+size = 11
+mtime = 1700000000
+mode = 33152
+
+[entries.32407ac55b4f6b1f.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 0
+moved = 2
+
+[entries.76a09e2caeaaa759]
+last_used = 1786449628
+
+[entries.76a09e2caeaaa759.left]
+"f.txt" = [
+    4,
+    1600000000,
+]
+
+[entries.76a09e2caeaaa759.right]
+"f.txt" = [
+    4,
+    1700000000,
+]
+
+[entries.76a09e2caeaaa759.result]
+warnings = []
+
+[[entries.76a09e2caeaaa759.result.entries]]
+rel = "f.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.76a09e2caeaaa759.result.entries.left]
+size = 4
+mtime = 1600000000
+mode = 33152
+
+[entries.76a09e2caeaaa759.result.entries.right]
+size = 4
+mtime = 1700000000
+mode = 33152
+
+[entries.76a09e2caeaaa759.result.stats]
+same = 1
+left_only = 0
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.8249e6b1cd7a3e02]
+last_used = 1786449628
+
+[entries.8249e6b1cd7a3e02.left]
+"old.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.8249e6b1cd7a3e02.right]
+"new.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.8249e6b1cd7a3e02.result]
+warnings = []
+
+[[entries.8249e6b1cd7a3e02.result.entries]]
+rel = "new.txt"
 status = "RightOnly"
 attrs_differ = false
 
-[entries.987e5b693d7006e1.result.entries.right]
-size = 1
+[entries.8249e6b1cd7a3e02.result.entries.right]
+size = 12
 mtime = 1700000000
 mode = 33152
 
-[entries.987e5b693d7006e1.result.stats]
+[[entries.8249e6b1cd7a3e02.result.entries]]
+rel = "old.txt"
+status = "LeftOnly"
+attrs_differ = false
+
+[entries.8249e6b1cd7a3e02.result.entries.left]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.8249e6b1cd7a3e02.result.stats]
 same = 0
 left_only = 1
 right_only = 1
 differ = 0
 moved = 0
 
-[entries.c5ecbcac79970015]
-last_used = 1786449452
+[entries.b10c1e1b757832f5]
+last_used = 1786449628
 
-[entries.c5ecbcac79970015.left]
-"drop.txt" = [
-    1,
-    1700000000,
-]
-"keep.txt" = [
-    1,
+[entries.b10c1e1b757832f5.left]
+"f.txt" = [
+    4,
     1700000000,
 ]
 
-[entries.c5ecbcac79970015.right]
-"keep.txt" = [
-    1,
+[entries.b10c1e1b757832f5.right]
+"f.txt" = [
+    8,
+    1786449628,
+]
+"real.txt" = [
+    4,
     1700000000,
 ]
 
-[entries.c5ecbcac79970015.result]
+[entries.b10c1e1b757832f5.result]
 warnings = []
 
-[[entries.c5ecbcac79970015.result.entries]]
-rel = "drop.txt"
-status = "LeftOnly"
+[[entries.b10c1e1b757832f5.result.entries]]
+rel = "f.txt"
+status = "Differ"
+attrs_differ = true
+
+[entries.b10c1e1b757832f5.result.entries.left]
+size = 4
+mtime = 1700000000
+mode = 33152
+
+[entries.b10c1e1b757832f5.result.entries.right]
+size = 8
+mtime = 1786449628
+mode = 41408
+symlink = "real.txt"
+
+[[entries.b10c1e1b757832f5.result.entries]]
+rel = "real.txt"
+status = "RightOnly"
 attrs_differ = false
 
-[entries.c5ecbcac79970015.result.entries.left]
-size = 1
+[entries.b10c1e1b757832f5.result.entries.right]
+size = 4
 mtime = 1700000000
 mode = 33152
 
-[[entries.c5ecbcac79970015.result.entries]]
-rel = "keep.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.c5ecbcac79970015.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.c5ecbcac79970015.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.c5ecbcac79970015.result.stats]
-same = 1
-left_only = 1
-right_only = 0
-differ = 0
-moved = 0
-
-[entries.ceb4544a08641aa0]
-last_used = 1786449567
-
-[entries.ceb4544a08641aa0.left]
-"only_l.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.ceb4544a08641aa0.right]
-"only_r.txt" = [
-    1,
-    1700000000,
-]
-
-[entries.ceb4544a08641aa0.result]
-warnings = []
-
-[[entries.ceb4544a08641aa0.result.entries]]
-rel = "only_l.txt"
-status = "Moved"
-moved_to = "only_r.txt"
-attrs_differ = false
-
-[entries.ceb4544a08641aa0.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.ceb4544a08641aa0.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.ceb4544a08641aa0.result.stats]
+[entries.b10c1e1b757832f5.result.stats]
 same = 0
 left_only = 0
-right_only = 0
-differ = 0
-moved = 1
+right_only = 1
+differ = 1
+moved = 0
 
-[entries.d1a570911faf424b]
-last_used = 1786449452
+[entries.bfff20a930e792c6]
+last_used = 1786449628
 
-[entries.d1a570911faf424b.left]
-"keep.txt" = [
-    1,
+[entries.bfff20a930e792c6.left]
+"f.txt" = [
+    12,
     1700000000,
 ]
 
-[entries.d1a570911faf424b.right]
-"keep.txt" = [
-    1,
+[entries.bfff20a930e792c6.right]
+"f.txt" = [
+    12,
     1700000000,
 ]
 
-[entries.d1a570911faf424b.result]
+[entries.bfff20a930e792c6.result]
 warnings = []
 
-[[entries.d1a570911faf424b.result.entries]]
-rel = "keep.txt"
+[[entries.bfff20a930e792c6.result.entries]]
+rel = "f.txt"
 status = "Same"
 attrs_differ = false
 
-[entries.d1a570911faf424b.result.entries.left]
-size = 1
+[entries.bfff20a930e792c6.result.entries.left]
+size = 12
+mtime = 1700000000
+mode = 33188
+
+[entries.bfff20a930e792c6.result.entries.right]
+size = 12
 mtime = 1700000000
 mode = 33152
 
-[entries.d1a570911faf424b.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.d1a570911faf424b.result.stats]
+[entries.bfff20a930e792c6.result.stats]
 same = 1
 left_only = 0
 right_only = 0
 differ = 0
 moved = 0
 
-[entries.f9beb6f27c81f98a]
-last_used = 1786449452
+[entries.test-key]
+last_used = 1786449628
 
-[entries.f9beb6f27c81f98a.left]
-"diff.txt" = [
-    1,
-    1700000000,
-]
-"only_l.txt" = [
-    6,
-    1700000000,
+[entries.test-key.left]
+"a.txt" = [
+    10,
+    100,
 ]
 
-[entries.f9beb6f27c81f98a.right]
-"diff.txt" = [
-    1,
-    1700000000,
-]
-"only_l.txt" = [
-    6,
-    1700000000,
+[entries.test-key.right]
+"a.txt" = [
+    10,
+    100,
 ]
 
-[entries.f9beb6f27c81f98a.result]
+[entries.test-key.result]
+entries = []
 warnings = []
 
-[[entries.f9beb6f27c81f98a.result.entries]]
-rel = "diff.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.f9beb6f27c81f98a.result.entries.left]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[entries.f9beb6f27c81f98a.result.entries.right]
-size = 1
-mtime = 1700000000
-mode = 33152
-
-[[entries.f9beb6f27c81f98a.result.entries]]
-rel = "only_l.txt"
-status = "Same"
-attrs_differ = false
-
-[entries.f9beb6f27c81f98a.result.entries.left]
-size = 6
-mtime = 1700000000
-mode = 33152
-
-[entries.f9beb6f27c81f98a.result.entries.right]
-size = 6
-mtime = 1700000000
-mode = 33152
-
-[entries.f9beb6f27c81f98a.result.stats]
-same = 2
+[entries.test-key.result.stats]
+same = 3
 left_only = 0
 right_only = 0
 differ = 0

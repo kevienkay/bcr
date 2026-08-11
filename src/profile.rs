@@ -63,6 +63,10 @@ pub enum ProfileCmd {
     Save(SaveProfileArgs),
     /// 列出全部 Profile
     List,
+    /// 导出 Profile 为独立文件（迁移/分享）：bcr profile export <name> <file>
+    Export(ExportProfileArgs),
+    /// 从文件导入 Profile：bcr profile import <file> [--name <name>]
+    Import(ImportProfileArgs),
     /// 删除 Profile
     Delete(DeleteProfileArgs),
 }
@@ -103,6 +107,23 @@ pub struct DeleteProfileArgs {
     pub name: String,
 }
 
+#[derive(Args, Debug)]
+pub struct ExportProfileArgs {
+    /// Profile 名
+    pub name: String,
+    /// 输出文件路径
+    pub file: String,
+}
+
+#[derive(Args, Debug)]
+pub struct ImportProfileArgs {
+    /// 输入文件路径（bcr profile export 生成的 .toml）
+    pub file: String,
+    /// 导入后的名字（缺省用文件内的 name 字段；无则用文件名）
+    #[arg(long)]
+    pub name: Option<String>,
+}
+
 /// Profile 文件路径：`~/.bcr-profiles.toml`
 pub fn profiles_path() -> PathBuf {
     let home = std::env::var("HOME")
@@ -139,6 +160,8 @@ pub fn run(args: &ProfileArgs) -> i32 {
     match &args.cmd {
         ProfileCmd::Save(sa) => run_save(sa),
         ProfileCmd::List => run_list(),
+        ProfileCmd::Export(ea) => run_export(ea),
+        ProfileCmd::Import(ia) => run_import(ia),
         ProfileCmd::Delete(da) => run_delete(da),
     }
 }
@@ -225,6 +248,106 @@ fn run_delete(a: &DeleteProfileArgs) -> i32 {
     match save_all(&all) {
         Ok(()) => {
             println!("{}", fmt(Key::ProfileDeleted, &[&a.name]));
+            0
+        }
+        Err(e) => {
+            eprintln!("bcr: {}", fmt(Key::ProfileWriteFailed, &[&e]));
+            2
+        }
+    }
+}
+
+/// 导出 Profile 为独立 TOML 文件（含 name 字段，便于迁移/分享）
+fn run_export(a: &ExportProfileArgs) -> i32 {
+    let all = load();
+    let Some(p) = all.profiles.get(&a.name) else {
+        eprintln!("bcr: {}", fmt(Key::ProfileNotFound, &[&a.name]));
+        return 2;
+    };
+    let doc = format!(
+        "name = \"{}\"\n\n{}",
+        a.name,
+        toml::to_string_pretty(p).unwrap_or_default()
+    );
+    match std::fs::write(&a.file, &doc) {
+        Ok(()) => {
+            println!("已导出 Profile '{}' → {}", a.name, a.file);
+            0
+        }
+        Err(e) => {
+            eprintln!("bcr: 导出失败: {}", e);
+            2
+        }
+    }
+}
+
+/// 从导出文件导入 Profile（--name 可改名；重名报错）
+fn run_import(a: &ImportProfileArgs) -> i32 {
+    let content = match std::fs::read_to_string(&a.file) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("bcr: 读取 {} 失败: {}", a.file, e);
+            return 2;
+        }
+    };
+    // 兼容两种格式：带 name 字段的导出文件 / 纯 Profile 表
+    let file_name = std::path::Path::new(&a.file)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "imported".to_string());
+    let mut name = a.name.clone().unwrap_or(file_name);
+    let mut profile: Profile = match toml::from_str(&content) {
+        Ok(p) => p,
+        Err(_) => {
+            // 带 name 字段：先解析提取 name，再解析 Profile 主体
+            let name_opt: Option<toml::Value> = toml::from_str(&content).ok();
+            if let Some(toml::Value::String(n)) = name_opt.as_ref().and_then(|v| v.get("name")) {
+                if a.name.is_none() {
+                    name = n.clone();
+                }
+            }
+            match toml::from_str(&content) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("bcr: 解析 {} 失败: {}", a.file, e);
+                    return 2;
+                }
+            }
+        }
+    };
+    // name 字段不应进入 Profile 主体（Profile 无 name 字段，反序列化会忽略未知字段？不——严格模式会报错）
+    // 若解析失败是因为 name 字段，则剥离后重试
+    if profile.includes.is_empty()
+        && !profile.excludes.is_empty()
+        && content.contains("name =")
+        && toml::from_str::<Profile>(&content).is_err()
+    {
+        // 保留主体字段：尝试按 Profile 表解析（忽略顶层 name）
+        let mut stripped = String::new();
+        for line in content.lines() {
+            if line.trim_start().starts_with("name =") {
+                continue;
+            }
+            stripped.push_str(line);
+            stripped.push('\n');
+        }
+        match toml::from_str(&stripped) {
+            Ok(p) => profile = p,
+            Err(e) => {
+                eprintln!("bcr: 解析 {} 失败: {}", a.file, e);
+                return 2;
+            }
+        }
+    }
+    let mut all = load();
+    if all.profiles.contains_key(&name) {
+        eprintln!("bcr: {}", fmt(Key::ProfileExists, &[&name]));
+        return 2;
+    }
+    all.profiles.insert(name.clone(), profile);
+    match save_all(&all) {
+        Ok(()) => {
+            println!("已导入 Profile '{}' ← {}", name, a.file);
             0
         }
         Err(e) => {
