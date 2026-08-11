@@ -198,6 +198,13 @@ impl DiffApp {
         if dropped.is_empty() {
             return;
         }
+        // 拖放排序：按文件名排序，保证多文件/目录拖入行为可预测
+        let mut dropped = dropped;
+        dropped.sort_by_key(|p| {
+            p.file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        });
         // 目录拖入 → 目录对比（两目录）或加载
         let dirs: Vec<String> = dropped
             .iter()

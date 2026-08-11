@@ -40,6 +40,13 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - mirror 模式**空目录清理 `[RMDIR]`**：镜像删除目标侧独有文件后，级联清理空目录（自底向上）
 - 统计行新增 rename/rmdir 计数
 
+### P23 细节增强（WebDAV / 内容过滤 / 报告排序分组 / 拖放排序）
+
+- **WebDAV 后端**：`webdav://` / `webdavs://` 可读写（PROPFIND/GET/PUT/DELETE/MKCOL/MOVE，Basic Auth，HTTP/HTTPS，PROPFIND depth=1 递归扫描）
+- **内容过滤规则**：`bcr diff A B --ignore-lines <regex>` 忽略匹配正则的行（版本号/时间戳行等，可重复；GUI 并排视图共用）
+- **报告排序/分组**：`--report-sort path|status|size` 排序（size = 差异大小降序）+ `--report-group` 状态分组（文本报告）
+- **拖放排序**：GUI 多文件/目录拖入按文件名排序，行为可预测
+
 ### P20 细节增强（右键菜单 / 报告布局 / 缓存 / Profile 迁移）
 
 - **目录对比右键菜单**：选中文件行右键 → 复制左侧/右侧路径、系统应用打开左右侧文件、在对比中打开（Enter）
