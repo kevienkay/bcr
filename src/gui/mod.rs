@@ -1162,6 +1162,81 @@ mod tests {
         });
     }
 
+    #[test]
+    fn imagetab_diff_frame_navigation() {
+        // 构造 3 帧 GIF：帧 0 相同、帧 1 有差异、帧 2 相同
+        let solid = |w: u32, h: u32, rgba: [u8; 4]| -> image::RgbaImage {
+            image::RgbaImage::from_pixel(w, h, image::Rgba(rgba))
+        };
+        let make_gif = |frames: &[image::RgbaImage]| -> Vec<u8> {
+            let mut buf = std::io::Cursor::new(Vec::new());
+            {
+                let mut enc = image::codecs::gif::GifEncoder::new(&mut buf);
+                for f in frames {
+                    enc.encode_frame(image::Frame::new(f.clone())).unwrap();
+                }
+            } // drop enc，释放对 buf 的借用
+            buf.into_inner()
+        };
+        let d = tempdir().unwrap();
+        // 左侧：3 帧 [black, black, black]
+        let black = solid(4, 4, [0, 0, 0, 255]);
+        let white = solid(4, 4, [255, 255, 255, 255]);
+        let lgif = make_gif(&[black.clone(), black.clone(), black.clone()]);
+        // 右侧：3 帧 [black, white, black] → 仅帧 1 有差异
+        let rgif = make_gif(&[black.clone(), white, black]);
+        let lp = d.path().join("l.gif");
+        let rp = d.path().join("r.gif");
+        std::fs::write(&lp, &lgif).unwrap();
+        std::fs::write(&rp, &rgif).unwrap();
+        let mut t = ImageTab::new(lp.to_str().unwrap(), rp.to_str().unwrap());
+        assert_eq!(t.total_frames(), 3);
+        assert_eq!(t.frame_diffs, vec![false, true, false]);
+        // 从帧 0 找下一个差异帧 → 帧 1
+        t.next_diff_frame();
+        assert_eq!(t.frame_idx, 1);
+        // 再下一个 → 循环回帧 1（只有它是差异帧）
+        t.next_diff_frame();
+        assert_eq!(t.frame_idx, 1);
+        // 上一个差异帧从帧 1 出发 → 还是帧 1
+        t.prev_diff_frame();
+        assert_eq!(t.frame_idx, 1);
+    }
+
+    #[test]
+    fn imagetab_locate_diff_zooms_to_bounds() {
+        let d = tempdir().unwrap();
+        // 大图：右下角小块差异 → locate_diff 应放大并设置滚动偏移
+        let mut a = image::RgbaImage::from_pixel(200, 200, image::Rgba([0, 0, 0, 255]));
+        let b = image::RgbaImage::from_pixel(200, 200, image::Rgba([0, 0, 0, 255]));
+        for y in 150..160 {
+            for x in 150..160 {
+                a.put_pixel(x, y, image::Rgba([255, 255, 255, 255]));
+            }
+        }
+        let save = |dir: &std::path::Path, name: &str, img: &image::RgbaImage| -> String {
+            let p = dir.join(name);
+            image::DynamicImage::ImageRgba8(img.clone())
+                .write_to(
+                    &mut std::io::BufWriter::new(std::fs::File::create(&p).unwrap()),
+                    image::ImageFormat::Png,
+                )
+                .unwrap();
+            p.to_str().unwrap().to_string()
+        };
+        let pa = save(d.path(), "a.png", &a);
+        let pb = save(d.path(), "b.png", &b);
+        let mut t = ImageTab::new(&pa, &pb);
+        assert!(t.pair.as_ref().unwrap().stats.bounds.is_some());
+        let before_zoom = t.zoom;
+        t.locate_diff(egui::vec2(800.0, 600.0));
+        // 定位后应放大（包围盒 10x10 → zoom > 1）并滚动到右下区域
+        assert!(t.zoom > before_zoom);
+        assert!(t.zoom > 1.0);
+        assert!(t.scroll.x > 0.0 && t.scroll.y > 0.0);
+        assert!(!t.fit);
+    }
+
     // ---- 设置持久化 ----------------
 
     #[test]

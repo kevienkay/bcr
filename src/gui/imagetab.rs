@@ -31,7 +31,13 @@ pub struct ImageTab {
     /// 右侧全部帧
     frames_r: Vec<RgbaImage>,
     /// 当前帧索引
-    frame_idx: usize,
+    pub(crate) frame_idx: usize,
+    /// 每帧是否有差异（帧号 -> bool，逐帧差异导航用）
+    pub(crate) frame_diffs: Vec<bool>,
+    /// 滚动偏移（定位差异区域用，受控滚动）
+    pub(crate) scroll: egui::Vec2,
+    /// 请求定位差异区域（帧渲染后消费）
+    locate_diff_req: bool,
     textures: Option<ImgTextures>,
 }
 
@@ -56,6 +62,9 @@ impl ImageTab {
             frames_l: Vec::new(),
             frames_r: Vec::new(),
             frame_idx: 0,
+            frame_diffs: Vec::new(),
+            scroll: egui::Vec2::ZERO,
+            locate_diff_req: false,
             textures: None,
         };
         t.load_pair(left, right);
@@ -110,6 +119,7 @@ impl ImageTab {
             (Ok(fl), Ok(fr)) => {
                 self.frames_l = fl;
                 self.frames_r = fr;
+                self.frame_diffs = self.compute_frame_diffs();
                 self.error = None;
                 self.recompute_current();
             }
@@ -118,6 +128,72 @@ impl ImageTab {
                 self.error = Some(e);
             }
         }
+    }
+
+    /// 预计算每帧是否有差异（用于差异帧导航与缩略图标记）
+    fn compute_frame_diffs(&self) -> Vec<bool> {
+        let total = self.frames_l.len().max(self.frames_r.len());
+        (0..total)
+            .map(|i| {
+                let li = i.min(self.frames_l.len().saturating_sub(1));
+                let ri = i.min(self.frames_r.len().saturating_sub(1));
+                if self.frames_l.is_empty() || self.frames_r.is_empty() {
+                    return false;
+                }
+                crate::imgcmp::compare_images(self.frames_l[li].clone(), self.frames_r[ri].clone())
+                    .stats
+                    .has_differences()
+            })
+            .collect()
+    }
+
+    /// 跳到下一个有差异的帧（循环）
+    pub fn next_diff_frame(&mut self) {
+        let total = self.total_frames();
+        if total <= 1 {
+            return;
+        }
+        for step in 1..=total {
+            let idx = (self.frame_idx + step) % total;
+            if self.frame_diffs.get(idx).copied().unwrap_or(false) {
+                self.goto_frame(idx);
+                return;
+            }
+        }
+    }
+
+    /// 跳到上一个有差异的帧（循环）
+    pub fn prev_diff_frame(&mut self) {
+        let total = self.total_frames();
+        if total <= 1 {
+            return;
+        }
+        for step in 1..=total {
+            let idx = (self.frame_idx + total - step) % total;
+            if self.frame_diffs.get(idx).copied().unwrap_or(false) {
+                self.goto_frame(idx);
+                return;
+            }
+        }
+    }
+
+    /// 定位到当前帧的差异区域：按包围盒缩放并滚动到中心（无差异时无操作）
+    pub fn locate_diff(&mut self, avail: egui::Vec2) {
+        let Some(pair) = &self.pair else { return };
+        let Some((bx, by, bw, bh)) = pair.stats.bounds else {
+            return;
+        };
+        self.fit = false;
+        // 缩放目标：让包围盒占据可视区约 70%，同时不放大超过 8x
+        let cols = if self.show_overlay { 3.0 } else { 2.0 };
+        let cell_w = (avail.x / cols - 24.0).max(50.0);
+        let cell_h = (avail.y - 56.0).max(50.0);
+        let zoom = ((cell_w / bw as f32).min(cell_h / bh as f32) * 0.7).clamp(0.05, 8.0);
+        self.zoom = zoom;
+        // 滚动到包围盒中心（考虑标题栏高度 ~18px）
+        let cx = (bx as f32 + bw as f32 / 2.0) * zoom;
+        let cy = (by as f32 + bh as f32 / 2.0) * zoom + 18.0;
+        self.scroll = egui::Vec2::new((cx - cell_w / 2.0).max(0.0), (cy - cell_h / 2.0).max(0.0));
     }
 
     /// 用当前帧重算差异对（纹理缓存失效，下次渲染重建）
@@ -146,7 +222,7 @@ impl ImageTab {
     }
 
     /// 总帧数（两侧取较大值）
-    fn total_frames(&self) -> usize {
+    pub(crate) fn total_frames(&self) -> usize {
         self.frames_l.len().max(self.frames_r.len())
     }
 
@@ -192,7 +268,33 @@ impl ImageTab {
                     if ui.button("⏭").on_hover_text("最后一帧").clicked() {
                         self.goto_frame(total);
                     }
+                    // 差异帧导航：跳到下一个/上一个有差异的帧
+                    let diff_count = self.frame_diffs.iter().filter(|&&d| d).count();
+                    if diff_count > 0 {
+                        ui.separator();
+                        if ui.button("⏮!").on_hover_text("上一个差异帧").clicked() {
+                            self.prev_diff_frame();
+                        }
+                        if ui.button("!▶").on_hover_text("下一个差异帧").clicked() {
+                            self.next_diff_frame();
+                        }
+                        ui.label(format!("差异帧 {}/{}", diff_count, total));
+                    }
                     ui.separator();
+                }
+                // 定位差异区域（当前帧）
+                let has_diff = self
+                    .pair
+                    .as_ref()
+                    .map(|p| p.stats.has_differences())
+                    .unwrap_or(false);
+                if has_diff
+                    && ui
+                        .button("🎯 定位差异")
+                        .on_hover_text("缩放并滚动到差异区域")
+                        .clicked()
+                {
+                    self.locate_diff_req = true;
                 }
                 ui.label("缩放");
                 if ui.button("−").clicked() {
@@ -260,6 +362,12 @@ impl ImageTab {
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
+            // 定位差异请求：按当前可视区计算缩放与滚动（需 &mut self，先于纹理借用处理）
+            if self.locate_diff_req {
+                let avail = ui.available_size();
+                self.locate_diff(avail);
+                self.locate_diff_req = false;
+            }
             let Some(tex) = &self.textures else {
                 ui.label("无图片");
                 return;
@@ -274,7 +382,8 @@ impl ImageTab {
                 let sy = (avail.y - 56.0) / iw.y;
                 eff_zoom = sx.min(sy).clamp(0.01, 8.0);
             }
-            egui::ScrollArea::both()
+            // 受控滚动：定位差异时用 self.scroll 覆盖，否则跟随用户滚动
+            let out = egui::ScrollArea::both()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.horizontal_top(|ui| {
@@ -285,6 +394,10 @@ impl ImageTab {
                         }
                     });
                 });
+            // 用户未主动滚动时保持受控偏移；用户滚动后跟随用户
+            if out.state.offset != self.scroll {
+                self.scroll = out.state.offset;
+            }
             // 缩略图条（多帧动图）：底部横向缩略图导航
             let total = self.total_frames();
             if total > 1 && total <= MAX_THUMB_FRAMES {
@@ -313,16 +426,32 @@ impl ImageTab {
                                     egui::Image::new((tex.id(), egui::vec2(48.0, 48.0)))
                                         .sense(egui::Sense::click()),
                                 )
-                                .on_hover_text(format!("帧 {}", i + 1));
-                            if i == sel {
-                                let rect = resp.rect;
-                                ui.painter().rect_stroke(
-                                    rect,
-                                    2.0,
-                                    egui::Stroke::new(2.0, Color32::from_rgb(80, 160, 255)),
-                                    egui::StrokeKind::Outside,
-                                );
-                            }
+                                .on_hover_text(format!(
+                                    "帧 {}{}",
+                                    i + 1,
+                                    if self.frame_diffs.get(i).copied().unwrap_or(false) {
+                                        "（有差异）"
+                                    } else {
+                                        ""
+                                    }
+                                ));
+                            let rect = resp.rect;
+                            // 差异帧红色边框，当前帧蓝色边框（优先差异色）
+                            let is_diff = self.frame_diffs.get(i).copied().unwrap_or(false);
+                            let stroke_color = if is_diff {
+                                Color32::from_rgb(230, 80, 80)
+                            } else if i == sel {
+                                Color32::from_rgb(80, 160, 255)
+                            } else {
+                                Color32::from_gray(90)
+                            };
+                            let width = if is_diff || i == sel { 2.5 } else { 1.0 };
+                            ui.painter().rect_stroke(
+                                rect,
+                                2.0,
+                                egui::Stroke::new(width, stroke_color),
+                                egui::StrokeKind::Outside,
+                            );
                             if resp.clicked() {
                                 self.goto_frame(i);
                             }

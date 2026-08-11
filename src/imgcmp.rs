@@ -22,6 +22,8 @@ pub struct DiffStats {
     pub total_pixels: u64,
     /// 差异比例 0.0~1.0（total 为 0 时为 0）
     pub diff_ratio: f64,
+    /// 差异像素包围盒（x, y, w, h，原始像素坐标；无差异时 None）
+    pub bounds: Option<(u32, u32, u32, u32)>,
 }
 
 impl DiffStats {
@@ -138,6 +140,11 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
     let mut overlay = left.clone();
     let mut diff_pixels: u64 = 0;
     let mut total: u64 = 0;
+    // 差异包围盒（原始像素坐标，闭区间外扩 1px 保证可见）
+    let mut min_x: u32 = u32::MAX;
+    let mut min_y: u32 = u32::MAX;
+    let mut max_x: u32 = 0;
+    let mut max_y: u32 = 0;
 
     // 公共区域逐像素比较
     for y in 0..h {
@@ -148,6 +155,10 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
             if lp != rp {
                 diff_pixels += 1;
                 overlay.put_pixel(x, y, blend_overlay(lp, HIGHLIGHT_OVERLAY));
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
             }
         }
     }
@@ -159,6 +170,10 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
                 diff_pixels += 1;
                 total += 1;
                 overlay.put_pixel(x, y, HIGHLIGHT);
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
             }
         }
         for y in h..lh {
@@ -166,9 +181,24 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
                 diff_pixels += 1;
                 total += 1;
                 overlay.put_pixel(x, y, HIGHLIGHT);
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
             }
         }
     }
+
+    // 差异包围盒（无差异时 None）
+    let bounds = if diff_pixels > 0 {
+        let bx = min_x.saturating_sub(1);
+        let by = min_y.saturating_sub(1);
+        let bw = (max_x + 2).min(lw.max(rw)) - bx;
+        let bh = (max_y + 2).min(lh.max(rh)) - by;
+        Some((bx, by, bw, bh))
+    } else {
+        None
+    };
 
     let stats = DiffStats {
         left_w: lw,
@@ -183,6 +213,7 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
         } else {
             0.0
         },
+        bounds,
     };
 
     ImgPair {
@@ -410,5 +441,35 @@ mod frame_tests {
     #[test]
     fn invalid_bytes_frame_error() {
         assert!(load_frames(b"not an image", "x").is_err());
+    }
+}
+
+#[cfg(test)]
+mod bounds_tests {
+    use super::*;
+
+    #[test]
+    fn diff_bounds_cover_diff_region() {
+        // 4x4 图,右下角 2x2 区域不同
+        let mut a = RgbaImage::from_pixel(4, 4, Rgba([0, 0, 0, 255]));
+        let b = RgbaImage::from_pixel(4, 4, Rgba([0, 0, 0, 255]));
+        for y in 2..4 {
+            for x in 2..4 {
+                a.put_pixel(x, y, Rgba([255, 255, 255, 255]));
+            }
+        }
+        let p = compare_images(a, b);
+        let (bx, by, bw, bh) = p.stats.bounds.unwrap();
+        // 包围盒应包含 (2,2)-(3,3) 并外扩 1px
+        assert!(bx <= 2 && by <= 2);
+        assert!(bx + bw >= 4 && by + bh >= 4);
+    }
+
+    #[test]
+    fn no_diff_no_bounds() {
+        let a = RgbaImage::from_pixel(3, 3, Rgba([1, 2, 3, 255]));
+        let b = RgbaImage::from_pixel(3, 3, Rgba([1, 2, 3, 255]));
+        let p = compare_images(a, b);
+        assert!(p.stats.bounds.is_none());
     }
 }
