@@ -40,6 +40,13 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - mirror 模式**空目录清理 `[RMDIR]`**：镜像删除目标侧独有文件后，级联清理空目录（自底向上）
 - 统计行新增 rename/rmdir 计数
 
+### P10 比较规则 Profile
+
+- `bcr profile save <name> [--include ...] [--exclude ...] [--ignore-whitespace] [--ignore-trailing] [--ignore-case] [--encoding ...] [--compare-content] [--no-detect-moves]`：把过滤/忽略/编码等规则打包为可复用 Profile（`~/.bcr-profiles.toml`）
+- `bcr profile list` / `bcr profile delete <name>`：列出/删除
+- `bcr compare A B --profile <name>` / `bcr diff A B --profile <name>`：合并规则（命令显式参数优先于 Profile 默认值）
+- GUI 会话中心：工具栏「会话中心」列出已保存会话（`~/.bcr-sessions.toml`），一键打开目录对比或删除
+
 ### P4 HTML 报告与会话保存
 
 - `bcr compare A B --html report.html`：导出自包含 HTML 对比报告（内嵌 CSS，浏览器直接打开），含统计摘要 + 差异条目表 + 移动标记

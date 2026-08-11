@@ -91,14 +91,14 @@ pub struct DeleteArgs {
 }
 
 /// 会话文件路径：`~/.bcr-sessions.toml`
-fn sessions_path() -> PathBuf {
+pub fn sessions_path() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".into());
     PathBuf::from(home).join(".bcr-sessions.toml")
 }
 
-fn load() -> Sessions {
+pub fn load() -> Sessions {
     let path = sessions_path();
     std::fs::read_to_string(&path)
         .ok()
@@ -106,7 +106,7 @@ fn load() -> Sessions {
         .unwrap_or_default()
 }
 
-fn save_all(s: &Sessions) -> Result<(), String> {
+pub fn save_all(s: &Sessions) -> Result<(), String> {
     let path = sessions_path();
     let toml_str = toml::to_string_pretty(s).map_err(|e| e.to_string())?;
     std::fs::write(&path, toml_str).map_err(|e| e.to_string())

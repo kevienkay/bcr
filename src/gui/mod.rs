@@ -133,6 +133,8 @@ struct DiffApp {
     active: usize,
     settings: Settings,
     show_git_help: bool,
+    /// 会话中心窗口开关
+    show_sessions: bool,
 }
 
 impl DiffApp {
@@ -142,6 +144,7 @@ impl DiffApp {
             active: 0,
             settings,
             show_git_help: false,
+            show_sessions: false,
         }
     }
 
@@ -335,6 +338,9 @@ impl eframe::App for DiffApp {
                 {
                     self.show_git_help = !self.show_git_help;
                 }
+                if ui.button("会话中心").clicked() {
+                    self.show_sessions = !self.show_sessions;
+                }
                 ui.separator();
 
                 // 标签栏
@@ -463,6 +469,78 @@ impl eframe::App for DiffApp {
                     ui.monospace("git mergetool --tool=bcr");
                     ui.label(crate::i18n::t(crate::i18n::Key::GitExit));
                 });
+        }
+
+        // 会话中心弹窗：列出已保存会话，点击打开目录对比
+        if self.show_sessions {
+            let sessions = crate::session::load();
+            let mut keep = true;
+            let mut open_req: Option<(String, String)> = None;
+            let mut delete_req: Option<String> = None;
+            egui::Window::new("会话中心")
+                .collapsible(false)
+                .default_size([520.0, 380.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(format!(
+                                "{} 个会话（{}\n保存: bcr session save <name> <left> <right>）",
+                                sessions.sessions.len(),
+                                crate::session::sessions_path().display()
+                            ))
+                            .size(12.0)
+                            .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                    ui.separator();
+                    if sessions.sessions.is_empty() {
+                        ui.label("暂无会话，可在命令行用 bcr session save 保存");
+                    }
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for (name, s) in &sessions.sessions {
+                            ui.horizontal(|ui| {
+                                let opts = format!(
+                                    "{}{}",
+                                    if s.compare_content { " [hash]" } else { "" },
+                                    if s.includes.is_empty() {
+                                        String::new()
+                                    } else {
+                                        format!(" [inc:{}]", s.includes.join(","))
+                                    }
+                                );
+                                if ui
+                                    .button(format!("▶ {}", name))
+                                    .on_hover_text(format!("{} ↔ {}", s.left, s.right))
+                                    .clicked()
+                                {
+                                    open_req = Some((s.left.clone(), s.right.clone()));
+                                }
+                                ui.label(
+                                    RichText::new(format!("{} ↔ {}{}", s.left, s.right, opts))
+                                        .size(12.0),
+                                );
+                                if ui.small_button("✕").on_hover_text("删除会话").clicked() {
+                                    delete_req = Some(name.clone());
+                                }
+                            });
+                        }
+                    });
+                });
+            if let Some((l, r)) = open_req {
+                self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
+            }
+            if let Some(name) = delete_req {
+                let mut all = crate::session::load();
+                all.sessions.remove(&name);
+                let _ = crate::session::save_all(&all);
+                // 关闭重开窗口以刷新
+                self.show_sessions = false;
+                self.show_sessions = true;
+            }
+            if !keep {
+                self.show_sessions = false;
+            }
         }
 
         // 当前标签内容
