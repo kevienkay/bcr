@@ -3,6 +3,7 @@ name = "bcr"
 version = "0.1.0"
 edition = "2021"
 description = "Beyond Compare 风格的文件对比工具（Rust 实现）"
+license = "MIT"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
