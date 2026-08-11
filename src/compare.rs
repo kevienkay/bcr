@@ -60,6 +60,10 @@ pub struct CompareArgs {
     #[arg(long = "csv")]
     pub csv: Option<String>,
 
+    /// 报告字段（逗号分隔：status,path,size,mtime,moved；默认全部，作用于 --txt/--csv）
+    #[arg(long = "report-fields", default_value = "")]
+    pub report_fields: String,
+
     /// 复用已保存的规则 Profile（过滤/忽略/编码等，可叠加本命令显式参数）
     #[arg(long)]
     pub profile: Option<String>,
@@ -538,7 +542,14 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     }
     if let Some(txt_path) = &args.txt {
-        let txt = crate::report::render_txt(&args.left, &args.right, &result);
+        let fields = match crate::report::parse_fields(&args.report_fields) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("bcr: {}", e);
+                return 2;
+            }
+        };
+        let txt = crate::report::render_txt_fields(&args.left, &args.right, &result, &fields);
         if let Err(e) = std::fs::write(txt_path, txt) {
             eprintln!(
                 "bcr: {}",
@@ -548,7 +559,14 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     }
     if let Some(csv_path) = &args.csv {
-        let csv = crate::report::render_csv(&args.left, &args.right, &result);
+        let fields = match crate::report::parse_fields(&args.report_fields) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("bcr: {}", e);
+                return 2;
+            }
+        };
+        let csv = crate::report::render_csv_fields(&args.left, &args.right, &result, &fields);
         if let Err(e) = std::fs::write(csv_path, csv) {
             eprintln!(
                 "bcr: {}",
@@ -610,6 +628,7 @@ mod tests {
             html: None,
             txt: None,
             csv: None,
+            report_fields: String::new(),
             profile: None,
             color: "never".into(),
         }

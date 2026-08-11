@@ -197,6 +197,7 @@ fn run_run(a: &RunArgs) -> i32 {
         html: None,
         txt: None,
         csv: None,
+        report_fields: String::new(),
         profile: None,
         color: "auto".into(),
     };
