@@ -47,7 +47,7 @@ pub struct CsvArgs {
 }
 
 /// 解析后的表格：表头 + 数据行
-struct Table {
+pub(crate) struct Table {
     /// 列名（无表头时用 "col0/col1/..." 代替）
     headers: Vec<String>,
     /// 数据行
@@ -139,17 +139,17 @@ impl Table {
     }
 }
 
-/// 行级对比结果
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RowStatus {
-    Same,
-    LeftOnly,
-    RightOnly,
-    Modified,
+/// 行级统计
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RowStats {
+    pub same: usize,
+    pub left_only: usize,
+    pub right_only: usize,
+    pub modified: usize,
 }
 
 /// 对比两个 CSV，返回渲染行（字符串，便于测试）
-pub fn compare_csv(a: &Table, b: &Table, key: Option<&str>) -> (Vec<String>, RowStats) {
+pub(crate) fn compare_csv(a: &Table, b: &Table, key: Option<&str>) -> (Vec<String>, RowStats) {
     let mut out: Vec<String> = Vec::new();
     let mut stats = RowStats::default();
     let mut shown_headers = false;
@@ -234,6 +234,7 @@ pub fn compare_csv(a: &Table, b: &Table, key: Option<&str>) -> (Vec<String>, Row
 }
 
 /// 对比一对已对齐的行：逐列 diff
+#[allow(clippy::too_many_arguments)]
 fn compare_rows(
     out: &mut Vec<String>,
     stats: &mut RowStats,
@@ -270,15 +271,6 @@ fn compare_rows(
         b_no + 1,
         changes.join("; ")
     ));
-}
-
-/// 行级统计
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RowStats {
-    pub same: usize,
-    pub left_only: usize,
-    pub right_only: usize,
-    pub modified: usize,
 }
 
 /// 运行 csv 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）

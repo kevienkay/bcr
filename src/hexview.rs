@@ -67,7 +67,7 @@ fn hex_text(bytes: &[u8]) -> String {
         }
         s.push_str("   ");
     }
-    if s.len() > 0 && bytes.len() >= 8 {
+    if !s.is_empty() && bytes.len() >= 8 {
         s.push(' ');
     }
     s.trim_end().to_string()
@@ -110,8 +110,7 @@ pub fn render_hex(rows: &[HexRow], color: bool, show_same: bool) {
             ascii_text(&row.left)
         );
         println!(
-            "{}  {:8}  R {}  |{}|",
-            ' ',
+            "   {:8}  R {}  |{}|",
             "",
             colored_hex(&row.right, &diffs, color, false),
             ascii_text(&row.right)

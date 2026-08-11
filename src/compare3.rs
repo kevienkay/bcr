@@ -18,7 +18,6 @@ use crate::fsscan::Filter;
 use crate::i18n::{fmt, Key};
 use crate::vfs::{self, Vfs};
 use clap::Args;
-use std::collections::BTreeMap;
 use std::io::{self, IsTerminal};
 
 /// compare3 子命令参数
@@ -135,6 +134,7 @@ pub struct TriResult {
 }
 
 /// 对比三个目录树，返回结构化结果。
+#[cfg(test)]
 pub fn compare3_dirs(
     base: &std::path::Path,
     left: &std::path::Path,
@@ -204,6 +204,7 @@ pub fn compare3_vfs(
 }
 
 /// 三侧内容比较辅助：都存在的文件对，判断是否一致
+#[allow(clippy::too_many_arguments)]
 fn eq3(
     base: &dyn Vfs,
     left: &dyn Vfs,
@@ -242,6 +243,7 @@ fn eq3(
 }
 
 /// 对单个 key 分类三路状态
+#[allow(clippy::too_many_arguments)]
 fn classify(
     base: &dyn Vfs,
     left: &dyn Vfs,
