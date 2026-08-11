@@ -87,6 +87,7 @@ impl DirTab {
             std::path::Path::new(&self.right),
             &filter,
             self.compare_content,
+            true,
         ) {
             Ok(r) => {
                 for w in &r.warnings {

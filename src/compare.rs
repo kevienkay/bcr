@@ -36,6 +36,10 @@ pub struct CompareArgs {
     #[arg(long)]
     pub show_same: bool,
 
+    /// 检测重命名/移动（默认开启；关闭可避免误判）
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    pub detect_moves: bool,
+
     /// 输出统计信息
     #[arg(long)]
     pub summary: bool,
@@ -52,6 +56,8 @@ pub enum FileStatus {
     LeftOnly,
     RightOnly,
     Differ,
+    /// 检测为移动/重命名（内容相同，仅路径不同）
+    Moved,
 }
 
 impl FileStatus {
@@ -61,6 +67,7 @@ impl FileStatus {
             FileStatus::LeftOnly => 'L',
             FileStatus::RightOnly => 'R',
             FileStatus::Differ => 'C',
+            FileStatus::Moved => 'M',
         }
     }
 }
@@ -72,6 +79,8 @@ pub struct FileEntry {
     pub status: FileStatus,
     pub left: Option<FileMeta>,
     pub right: Option<FileMeta>,
+    /// 移动/重命名的目标相对路径（仅 status == Moved 时有值）
+    pub moved_to: Option<String>,
 }
 
 /// 比较统计
@@ -81,11 +90,13 @@ pub struct CompareStats {
     pub left_only: usize,
     pub right_only: usize,
     pub differ: usize,
+    /// 检测到的移动/重命名对数
+    pub moved: usize,
 }
 
 impl CompareStats {
     pub fn has_differences(self) -> bool {
-        self.left_only + self.right_only + self.differ > 0
+        self.left_only + self.right_only + self.differ + self.moved > 0
     }
 }
 
@@ -108,10 +119,11 @@ pub fn compare_dirs(
     right_dir: &Path,
     filter: &Filter,
     compare_content: bool,
+    enable_moves: bool,
 ) -> io::Result<CompareResult> {
     let left = LocalVfs::new(left_dir)?;
     let right = LocalVfs::new(right_dir)?;
-    compare_vfs(&left, &right, filter, compare_content)
+    compare_vfs(&left, &right, filter, compare_content, enable_moves)
 }
 
 /// 对比两个虚拟文件系统后端，返回结构化结果（CLI/GUI/远程共用）。
@@ -120,6 +132,7 @@ pub fn compare_vfs(
     right: &dyn Vfs,
     filter: &Filter,
     compare_content: bool,
+    enable_moves: bool,
 ) -> io::Result<CompareResult> {
     let left_map = left.scan(filter)?;
     let right_map = right.scan(filter)?;
@@ -160,6 +173,7 @@ pub fn compare_vfs(
                         status: FileStatus::Same,
                         left: Some(l.clone()),
                         right: Some(r.clone()),
+                        moved_to: None,
                     });
                 } else {
                     result.stats.differ += 1;
@@ -168,6 +182,7 @@ pub fn compare_vfs(
                         status: FileStatus::Differ,
                         left: Some(l.clone()),
                         right: Some(r.clone()),
+                        moved_to: None,
                     });
                 }
             }
@@ -178,6 +193,7 @@ pub fn compare_vfs(
                     status: FileStatus::LeftOnly,
                     left: Some(l.clone()),
                     right: None,
+                    moved_to: None,
                 });
             }
             (None, Some(r)) => {
@@ -187,12 +203,113 @@ pub fn compare_vfs(
                     status: FileStatus::RightOnly,
                     left: None,
                     right: Some(r.clone()),
+                    moved_to: None,
                 });
             }
             (None, None) => unreachable!(),
         }
     }
+
+    // 重命名/移动检测：把内容相同的 仅左侧+仅右侧 对合并为 Moved
+    if enable_moves {
+        detect_moves(&mut result, left, right);
+    }
     Ok(result)
+}
+
+/// 重命名/移动检测：仅左侧与仅右侧中，尺寸相同且内容哈希一致的文件对
+/// 判定为移动，合并为 Moved 条目（始终读内容，避免 size+mtime 巧合误判）。
+fn detect_moves(result: &mut CompareResult, left: &dyn Vfs, right: &dyn Vfs) {
+    let left_idx: Vec<usize> = result
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.status == FileStatus::LeftOnly)
+        .map(|(i, _)| i)
+        .collect();
+    let right_idx: Vec<usize> = result
+        .entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.status == FileStatus::RightOnly)
+        .map(|(i, _)| i)
+        .collect();
+    if left_idx.is_empty() || right_idx.is_empty() {
+        return;
+    }
+
+    // 按尺寸分组右侧独有文件，避免全量两两比较
+    let mut by_size: std::collections::BTreeMap<u64, Vec<usize>> = Default::default();
+    for &ri in &right_idx {
+        if let Some(r) = &result.entries[ri].right {
+            by_size.entry(r.size).or_default().push(ri);
+        }
+    }
+
+    let mut used = vec![false; result.entries.len()];
+    let mut matched_left: Vec<usize> = Vec::new();
+    let mut matched_right: Vec<usize> = Vec::new();
+
+    for &li in &left_idx {
+        let l = match &result.entries[li].left {
+            Some(m) => m.clone(),
+            None => continue,
+        };
+        let Some(cands) = by_size.get(&l.size) else {
+            continue;
+        };
+        for &ri in cands {
+            if used[ri] {
+                continue;
+            }
+            // 始终用内容哈希确认移动（与 BC Detect Moves 一致）：
+            // 仅对“仅左侧/仅右侧”候选对读内容，避免 size+mtime 巧合误判
+            let same = match (
+                left.read(&result.entries[li].rel),
+                right.read(&result.entries[ri].rel),
+            ) {
+                (Ok(lb), Ok(rb)) => blake3::hash(&lb) == blake3::hash(&rb),
+                _ => false,
+            };
+            if same {
+                used[ri] = true;
+                matched_left.push(li);
+                matched_right.push(ri);
+                break;
+            }
+        }
+    }
+
+    let n = matched_left.len();
+    if n == 0 {
+        return;
+    }
+    // 目标路径在 retain 前克隆（retain 会改动 entries）
+    let targets: Vec<String> = matched_right
+        .iter()
+        .map(|&ri| result.entries[ri].rel.clone())
+        .collect();
+    let right_meta: Vec<Option<FileMeta>> = matched_right
+        .iter()
+        .map(|&ri| result.entries[ri].right.clone())
+        .collect();
+    for (k, &li) in matched_left.iter().enumerate() {
+        let e = &mut result.entries[li];
+        e.status = FileStatus::Moved;
+        e.moved_to = Some(targets[k].clone());
+        e.right = right_meta[k].clone();
+    }
+    // 移除已匹配的右侧独有条目
+    let remove: std::collections::HashSet<usize> = matched_right.iter().copied().collect();
+    let mut i = 0usize;
+    result.entries.retain(|_| {
+        let keep = !remove.contains(&i);
+        i += 1;
+        keep
+    });
+    result.stats.moved += n;
+    result.stats.left_only -= n;
+    result.stats.right_only -= n;
 }
 
 /// 运行 compare 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
@@ -237,7 +354,13 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     };
 
-    let result = match compare_vfs(left.as_ref(), right.as_ref(), &filter, args.compare_content) {
+    let result = match compare_vfs(
+        left.as_ref(),
+        right.as_ref(),
+        &filter,
+        args.compare_content,
+        args.detect_moves,
+    ) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&e.to_string()]));
@@ -259,6 +382,15 @@ pub fn run(args: &CompareArgs) -> i32 {
         if entry.status == FileStatus::Same && !args.show_same {
             continue;
         }
+        if entry.status == FileStatus::Moved {
+            let target = entry.moved_to.as_deref().unwrap_or("");
+            if color {
+                println!("{BLUE}[M]{RESET} {} -> {}", entry.rel, target);
+            } else {
+                println!("[M] {} -> {}", entry.rel, target);
+            }
+            continue;
+        }
         emit(entry.status.letter(), &entry.rel, color);
     }
 
@@ -276,6 +408,9 @@ pub fn run(args: &CompareArgs) -> i32 {
                 ]
             )
         );
+        if s.moved > 0 {
+            println!("{}", fmt(Key::SummaryMoved, &[&s.moved.to_string()]));
+        }
     }
 
     if result.stats.has_differences() {
@@ -313,6 +448,7 @@ mod tests {
             includes: vec![],
             excludes: vec![],
             show_same: false,
+            detect_moves: true,
             summary: false,
             color: "never".into(),
         }
@@ -455,7 +591,7 @@ mod tests {
             d2.path(),
             &[("same.txt", "x"), ("diff.txt", "v22"), ("only_r.txt", "b")],
         );
-        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false).unwrap();
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
         let by_rel: std::collections::BTreeMap<&str, FileStatus> = r
             .entries
             .iter()
@@ -482,7 +618,7 @@ mod tests {
     fn compare_dirs_identical_dirs_no_differences() {
         let d = tempdir().unwrap();
         make_tree(d.path(), &[("a.txt", "x"), ("sub/b.txt", "y")]);
-        let r = compare_dirs(d.path(), d.path(), &empty_filter(), false).unwrap();
+        let r = compare_dirs(d.path(), d.path(), &empty_filter(), false, true).unwrap();
         assert!(!r.stats.has_differences());
         assert_eq!(r.stats.same, 2);
         assert!(r.warnings.is_empty());
@@ -494,9 +630,124 @@ mod tests {
         let d2 = tempdir().unwrap();
         make_tree(d1.path(), &[("f.txt", "12345")]);
         make_tree(d2.path(), &[("f.txt", "12345")]);
-        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false).unwrap();
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
         let e = &r.entries[0];
         assert_eq!(e.left.as_ref().unwrap().size, 5);
         assert_eq!(e.right.as_ref().unwrap().size, 5);
+    }
+
+    // ---- 移动/重命名检测 ----
+
+    #[test]
+    fn detect_rename_same_content() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("old.txt", "same-content")]);
+        make_tree(d2.path(), &[("new.txt", "same-content")]);
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
+        let by_rel: std::collections::BTreeMap<&str, &FileEntry> = r
+            .entries
+            .iter()
+            .map(|e| (e.rel.as_str(), e))
+            .collect();
+        assert_eq!(by_rel["old.txt"].status, FileStatus::Moved);
+        assert_eq!(by_rel["old.txt"].moved_to.as_deref(), Some("new.txt"));
+        assert_eq!(r.stats.moved, 1);
+        assert_eq!(r.stats.left_only, 0);
+        assert_eq!(r.stats.right_only, 0);
+        assert!(r.stats.has_differences());
+    }
+
+    #[test]
+    fn detect_move_across_subdirs() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("src/a.rs", "fn main() {}")]);
+        make_tree(d2.path(), &[("lib/b.rs", "fn main() {}")]);
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
+        let e = &r.entries[0];
+        assert_eq!(e.status, FileStatus::Moved);
+        assert_eq!(e.moved_to.as_deref(), Some("lib/b.rs"));
+    }
+
+    #[test]
+    fn no_move_when_content_differs_same_size() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("a.txt", "aaaa")]);
+        make_tree(d2.path(), &[("b.txt", "bbbb")]);
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
+        let by_rel: std::collections::BTreeMap<&str, FileStatus> = r
+            .entries
+            .iter()
+            .map(|e| (e.rel.as_str(), e.status))
+            .collect();
+        assert_eq!(by_rel["a.txt"], FileStatus::LeftOnly);
+        assert_eq!(by_rel["b.txt"], FileStatus::RightOnly);
+        assert_eq!(r.stats.moved, 0);
+    }
+
+    #[test]
+    fn no_move_when_disabled() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("old.txt", "same-content")]);
+        make_tree(d2.path(), &[("new.txt", "same-content")]);
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, false).unwrap();
+        let by_rel: std::collections::BTreeMap<&str, FileStatus> = r
+            .entries
+            .iter()
+            .map(|e| (e.rel.as_str(), e.status))
+            .collect();
+        assert_eq!(by_rel["old.txt"], FileStatus::LeftOnly);
+        assert_eq!(by_rel["new.txt"], FileStatus::RightOnly);
+        assert_eq!(r.stats.moved, 0);
+    }
+
+    #[test]
+    fn move_matching_is_pairwise_unique() {
+        // 两个左侧独有、两个右侧独有，内容互不相同 → 不误配
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(
+            d1.path(),
+            &[("l1.txt", "content-one"), ("l2.txt", "content-two")],
+        );
+        make_tree(
+            d2.path(),
+            &[("r1.txt", "content-one"), ("r2.txt", "content-two")],
+        );
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
+        assert_eq!(r.stats.moved, 2);
+        assert_eq!(r.stats.left_only, 0);
+        assert_eq!(r.stats.right_only, 0);
+        // 每个目标只匹配一次
+        let targets: Vec<&str> = r
+            .entries
+            .iter()
+            .filter(|e| e.status == FileStatus::Moved)
+            .filter_map(|e| e.moved_to.as_deref())
+            .collect();
+        let mut sorted = targets.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(targets.len(), sorted.len());
+    }
+
+    #[test]
+    fn move_quick_mode_ignores_mtime() {
+        // 快速模式（compare_content=false）也按内容判定移动，mtime 不同不影响
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("old.txt", "same-content")]);
+        make_tree(d2.path(), &[("new.txt", "same-content")]);
+        let old = filetime::FileTime::from_unix_time(1_600_000_000, 0);
+        filetime::set_file_mtime(d1.path().join("old.txt"), old).unwrap();
+        let new = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        filetime::set_file_mtime(d2.path().join("new.txt"), new).unwrap();
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
+        assert_eq!(r.stats.moved, 1);
+        let e = &r.entries[0];
+        assert_eq!(e.status, FileStatus::Moved);
     }
 }

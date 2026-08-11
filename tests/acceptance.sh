@@ -367,6 +367,34 @@ printf '0123456789abcdef' > hex_len1.bin
 printf '0123456789abcdefg' > hex_len2.bin
 "$BIN" hex hex_len1.bin hex_len2.bin > hex_len.txt; check "HEX7 不同长度退出码=1" 1 "$?"
 
+echo "=============================================="
+echo " MOVE: 重命名/移动检测"
+echo "=============================================="
+mkdir -p mv_l mv_r
+printf 'same-content-abc' > mv_l/old_name.txt
+printf 'same-content-abc' > mv_r/new_name.txt
+# MOVE1 相同内容不同路径 → [M] 标记
+"$BIN" compare mv_l mv_r > mv_out.txt; rc=$?
+grep -q '\[M\] old_name.txt -> new_name.txt' mv_out.txt && pass "MOVE1 重命名检测 [M] 标记" || fail "MOVE1 重命名检测 [M] 标记"
+# MOVE2 移动视为差异（退出码 1）
+check "MOVE2 移动退出码=1" 1 "$rc"
+# MOVE3 内容不同不误判（仍是 L/R）
+mkdir -p mv2_l mv2_r
+printf 'content-aaaa' > mv2_l/a.txt
+printf 'content-bbbb' > mv2_r/b.txt
+"$BIN" compare mv2_l mv2_r > mv2_out.txt
+grep -q '\[L\] a.txt' mv2_out.txt && grep -q '\[R\] b.txt' mv2_out.txt && pass "MOVE3 内容不同不误判" || fail "MOVE3 内容不同不误判"
+# MOVE4 --detect-moves false 关闭检测
+"$BIN" compare mv_l mv_r --detect-moves false > mv_off.txt
+if grep -q '\[M\]' mv_off.txt; then
+  fail "MOVE4 关闭检测后无 [M]"
+else
+  pass "MOVE4 关闭检测后无 [M]"
+fi
+# MOVE5 summary 统计移动对数
+"$BIN" compare mv_l mv_r --summary > mv_sum.txt
+grep -q '移动' mv_sum.txt && pass "MOVE5 summary 含移动统计" || fail "MOVE5 summary 含移动统计"
+
 
 echo "=============================================="
 echo " I18N: 多语言"

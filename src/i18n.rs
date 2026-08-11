@@ -137,6 +137,8 @@ pub enum Key {
     FileTooLarge,
     /// 统计: {} 相同, {} 仅左侧, {} 仅右侧, {} 内容不同
     SummaryCompare,
+    /// 移动/重命名: {} 对
+    SummaryMoved,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}
