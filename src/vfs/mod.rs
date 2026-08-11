@@ -10,7 +10,9 @@
 //! read/write/delete 以相对路径为键，复制跨后端进行（先读后写）。
 
 pub mod archive;
+pub mod dropbox;
 pub mod ftp;
+pub mod onedrive;
 pub mod s3;
 pub mod sftp;
 pub mod webdav;
@@ -201,6 +203,14 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         let s = s3::S3Vfs::connect(rest)?;
         return Ok(Box::new(s));
     }
+    if let Some(rest) = spec.strip_prefix("onedrive://") {
+        let o = onedrive::OneDriveVfs::connect(rest)?;
+        return Ok(Box::new(o));
+    }
+    if let Some(rest) = spec.strip_prefix("dropbox://") {
+        let d = dropbox::DropboxVfs::connect(rest)?;
+        return Ok(Box::new(d));
+    }
     Ok(Box::new(LocalVfs::new(Path::new(spec))?))
 }
 
@@ -214,6 +224,8 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("webdav://")
         || spec.starts_with("webdavs://")
         || spec.starts_with("s3://")
+        || spec.starts_with("onedrive://")
+        || spec.starts_with("dropbox://")
 }
 
 /// 跨后端内容比对：流式计算两侧 blake3 哈希比较（内存 O(64KB)，支持超大文件）

@@ -147,6 +147,312 @@ right_only = 0
 differ = 0
 moved = 0
 
+[entries.384fef1a727b319e]
+last_used = 1786456635
+
+[entries.384fef1a727b319e.left]
+"diff.txt" = [
+    1,
+    1700000000,
+]
+"only_l.txt" = [
+    6,
+    1700000000,
+]
+
+[entries.384fef1a727b319e.right]
+"diff.txt" = [
+    1,
+    1700000000,
+]
+"only_l.txt" = [
+    6,
+    1700000000,
+]
+
+[entries.384fef1a727b319e.result]
+warnings = []
+
+[[entries.384fef1a727b319e.result.entries]]
+rel = "diff.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.384fef1a727b319e.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.384fef1a727b319e.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.384fef1a727b319e.result.entries]]
+rel = "only_l.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.384fef1a727b319e.result.entries.left]
+size = 6
+mtime = 1700000000
+mode = 33152
+
+[entries.384fef1a727b319e.result.entries.right]
+size = 6
+mtime = 1700000000
+mode = 33152
+
+[entries.384fef1a727b319e.result.stats]
+same = 2
+left_only = 0
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.419d2e78372e1a5d]
+last_used = 1786456652
+
+[entries.419d2e78372e1a5d.left]
+"a.txt" = [
+    1,
+    1786456652,
+]
+"sub/b.txt" = [
+    1,
+    1786456652,
+]
+
+[entries.419d2e78372e1a5d.right]
+"a.txt" = [
+    1,
+    1786456652,
+]
+"sub/b.txt" = [
+    1,
+    1786456652,
+]
+
+[entries.419d2e78372e1a5d.result]
+warnings = []
+
+[[entries.419d2e78372e1a5d.result.entries]]
+rel = "a.txt"
+status = "Differ"
+attrs_differ = false
+
+[entries.419d2e78372e1a5d.result.entries.left]
+size = 1
+mtime = 1786456652
+mode = 33152
+
+[entries.419d2e78372e1a5d.result.entries.right]
+size = 1
+mtime = 1786456652
+mode = 33152
+
+[[entries.419d2e78372e1a5d.result.entries]]
+rel = "sub/b.txt"
+status = "Differ"
+attrs_differ = false
+
+[entries.419d2e78372e1a5d.result.entries.left]
+size = 1
+mtime = 1786456652
+mode = 33152
+
+[entries.419d2e78372e1a5d.result.entries.right]
+size = 1
+mtime = 1786456652
+mode = 33152
+
+[entries.419d2e78372e1a5d.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 2
+moved = 0
+
+[entries.58d4d7f63e67072f]
+last_used = 1786456635
+
+[entries.58d4d7f63e67072f.left]
+"f.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.58d4d7f63e67072f.right]
+"f.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.58d4d7f63e67072f.result]
+warnings = []
+
+[[entries.58d4d7f63e67072f.result.entries]]
+rel = "f.txt"
+status = "Differ"
+attrs_differ = true
+
+[entries.58d4d7f63e67072f.result.entries.left]
+size = 12
+mtime = 1700000000
+mode = 33188
+
+[entries.58d4d7f63e67072f.result.entries.right]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.58d4d7f63e67072f.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 1
+moved = 0
+
+[entries.5c2a2c755d517513]
+last_used = 1786456652
+
+[entries.5c2a2c755d517513.left]
+"a.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.5c2a2c755d517513.right]
+"a.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.5c2a2c755d517513.result]
+warnings = []
+
+[[entries.5c2a2c755d517513.result.entries]]
+rel = "a.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.5c2a2c755d517513.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.5c2a2c755d517513.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.5c2a2c755d517513.result.stats]
+same = 1
+left_only = 0
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.5c8addc0b15e5c0f]
+last_used = 1786456635
+
+[entries.5c8addc0b15e5c0f.left]
+"only_l.txt" = [
+    1,
+    1700000000,
+]
+"same.txt" = [
+    1,
+    1700000000,
+]
+"sub/a.txt" = [
+    1,
+    1700000000,
+]
+"sub/deep/b.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.5c8addc0b15e5c0f.right]
+"same.txt" = [
+    1,
+    1700000000,
+]
+"sub/a.txt" = [
+    1,
+    1700000000,
+]
+"sub/deep/b.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.5c8addc0b15e5c0f.result]
+warnings = []
+
+[[entries.5c8addc0b15e5c0f.result.entries]]
+rel = "only_l.txt"
+status = "LeftOnly"
+attrs_differ = false
+
+[entries.5c8addc0b15e5c0f.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.5c8addc0b15e5c0f.result.entries]]
+rel = "same.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.5c8addc0b15e5c0f.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.5c8addc0b15e5c0f.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.5c8addc0b15e5c0f.result.entries]]
+rel = "sub/a.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.5c8addc0b15e5c0f.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.5c8addc0b15e5c0f.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.5c8addc0b15e5c0f.result.entries]]
+rel = "sub/deep/b.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.5c8addc0b15e5c0f.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.5c8addc0b15e5c0f.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.5c8addc0b15e5c0f.result.stats]
+same = 3
+left_only = 1
+right_only = 0
+differ = 0
+moved = 0
+
 [entries.624e62206312c005]
 last_used = 1786456490
 
@@ -247,6 +553,87 @@ right_only = 0
 differ = 0
 moved = 0
 
+[entries.7d2af3fbd2445281]
+last_used = 1786456635
+
+[entries.7d2af3fbd2445281.left]
+"src/a.rs" = [
+    12,
+    1700000000,
+]
+
+[entries.7d2af3fbd2445281.right]
+"lib/b.rs" = [
+    12,
+    1700000000,
+]
+
+[entries.7d2af3fbd2445281.result]
+warnings = []
+
+[[entries.7d2af3fbd2445281.result.entries]]
+rel = "src/a.rs"
+status = "Moved"
+moved_to = "lib/b.rs"
+attrs_differ = false
+
+[entries.7d2af3fbd2445281.result.entries.left]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.7d2af3fbd2445281.result.entries.right]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.7d2af3fbd2445281.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 0
+moved = 1
+
+[entries.90c4124135074c89]
+last_used = 1786456635
+
+[entries.90c4124135074c89.left]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.90c4124135074c89.right]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.90c4124135074c89.result]
+warnings = []
+
+[[entries.90c4124135074c89.result.entries]]
+rel = "keep.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.90c4124135074c89.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.90c4124135074c89.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.90c4124135074c89.result.stats]
+same = 1
+left_only = 0
+right_only = 0
+differ = 0
+moved = 0
+
 [entries.93ed5902115aa9c0]
 last_used = 1786456490
 
@@ -283,6 +670,178 @@ mode = 33152
 [entries.93ed5902115aa9c0.result.stats]
 same = 1
 left_only = 0
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.a628dea16a15015f]
+last_used = 1786456635
+
+[entries.a628dea16a15015f.left]
+"new.txt" = [
+    5,
+    1700000000,
+]
+"same.txt" = [
+    4,
+    1700000000,
+]
+
+[entries.a628dea16a15015f.right]
+"new.txt" = [
+    5,
+    1700000000,
+]
+"only.txt" = [
+    8,
+    1700000000,
+]
+"same.txt" = [
+    4,
+    1700000000,
+]
+
+[entries.a628dea16a15015f.result]
+warnings = []
+
+[[entries.a628dea16a15015f.result.entries]]
+rel = "new.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.a628dea16a15015f.result.entries.left]
+size = 5
+mtime = 1700000000
+mode = 33152
+
+[entries.a628dea16a15015f.result.entries.right]
+size = 5
+mtime = 1700000000
+mode = 33152
+
+[[entries.a628dea16a15015f.result.entries]]
+rel = "only.txt"
+status = "RightOnly"
+attrs_differ = false
+
+[entries.a628dea16a15015f.result.entries.right]
+size = 8
+mtime = 1700000000
+mode = 33152
+
+[[entries.a628dea16a15015f.result.entries]]
+rel = "same.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.a628dea16a15015f.result.entries.left]
+size = 4
+mtime = 1700000000
+mode = 33152
+
+[entries.a628dea16a15015f.result.entries.right]
+size = 4
+mtime = 1700000000
+mode = 33152
+
+[entries.a628dea16a15015f.result.stats]
+same = 2
+left_only = 0
+right_only = 1
+differ = 0
+moved = 0
+
+[entries.c9bda81b9cb9317e]
+last_used = 1786456652
+
+[entries.c9bda81b9cb9317e.left]
+"old.txt" = [
+    12,
+    1600000000,
+]
+
+[entries.c9bda81b9cb9317e.right]
+"new.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.c9bda81b9cb9317e.result]
+warnings = []
+
+[[entries.c9bda81b9cb9317e.result.entries]]
+rel = "old.txt"
+status = "Moved"
+moved_to = "new.txt"
+attrs_differ = false
+
+[entries.c9bda81b9cb9317e.result.entries.left]
+size = 12
+mtime = 1600000000
+mode = 33152
+
+[entries.c9bda81b9cb9317e.result.entries.right]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.c9bda81b9cb9317e.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 0
+moved = 1
+
+[entries.ccc2d25db47c0a0c]
+last_used = 1786456635
+
+[entries.ccc2d25db47c0a0c.left]
+"drop.txt" = [
+    1,
+    1700000000,
+]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.ccc2d25db47c0a0c.right]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.ccc2d25db47c0a0c.result]
+warnings = []
+
+[[entries.ccc2d25db47c0a0c.result.entries]]
+rel = "drop.txt"
+status = "LeftOnly"
+attrs_differ = false
+
+[entries.ccc2d25db47c0a0c.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.ccc2d25db47c0a0c.result.entries]]
+rel = "keep.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.ccc2d25db47c0a0c.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.ccc2d25db47c0a0c.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.ccc2d25db47c0a0c.result.stats]
+same = 1
+left_only = 1
 right_only = 0
 differ = 0
 moved = 0
@@ -362,6 +921,46 @@ same = 2
 left_only = 0
 right_only = 1
 differ = 0
+moved = 0
+
+[entries.cf73f24074f9233d]
+last_used = 1786456652
+
+[entries.cf73f24074f9233d.left]
+"f.txt" = [
+    4,
+    1600000000,
+]
+
+[entries.cf73f24074f9233d.right]
+"f.txt" = [
+    4,
+    1700000000,
+]
+
+[entries.cf73f24074f9233d.result]
+warnings = []
+
+[[entries.cf73f24074f9233d.result.entries]]
+rel = "f.txt"
+status = "Differ"
+attrs_differ = false
+
+[entries.cf73f24074f9233d.result.entries.left]
+size = 4
+mtime = 1600000000
+mode = 33152
+
+[entries.cf73f24074f9233d.result.entries.right]
+size = 4
+mtime = 1700000000
+mode = 33152
+
+[entries.cf73f24074f9233d.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 1
 moved = 0
 
 [entries.ed21aa5510668da1]

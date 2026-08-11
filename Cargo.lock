@@ -616,6 +616,7 @@ dependencies = [
  "russh-sftp",
  "rust-s3",
  "serde",
+ "serde_json",
  "sevenz-rust2",
  "similar",
  "suppaftp",
