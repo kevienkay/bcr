@@ -208,6 +208,8 @@ fn run_run(a: &RunArgs) -> i32 {
         report_fields: String::new(),
         report_title: None,
         report_no_stats: false,
+        report_sort: "path".to_string(),
+        report_group: false,
         profile: None,
         color: "auto".into(),
     };

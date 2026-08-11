@@ -72,6 +72,14 @@ pub struct CompareArgs {
     #[arg(long = "report-no-stats")]
     pub report_no_stats: bool,
 
+    /// 报告排序：path（默认，按路径）| status（按状态字母序）| size（按差异大小降序）
+    #[arg(long = "report-sort", default_value = "path", value_parser = ["path", "status", "size"])]
+    pub report_sort: String,
+
+    /// 按状态分组输出（仅文本报告）
+    #[arg(long = "report-group")]
+    pub report_group: bool,
+
     /// 复用已保存的规则 Profile（过滤/忽略/编码等，可叠加本命令显式参数）
     #[arg(long)]
     pub profile: Option<String>,
@@ -594,6 +602,8 @@ pub fn run(args: &CompareArgs) -> i32 {
         let opts = crate::report::ReportOptions {
             title: args.report_title.clone(),
             include_stats: !args.report_no_stats,
+            sort: args.report_sort.clone(),
+            group_by_status: args.report_group,
         };
         let txt = crate::report::render_txt_opts(&args.left, &args.right, &result, &fields, &opts);
         if let Err(e) = std::fs::write(txt_path, txt) {
@@ -615,6 +625,8 @@ pub fn run(args: &CompareArgs) -> i32 {
         let opts = crate::report::ReportOptions {
             title: args.report_title.clone(),
             include_stats: !args.report_no_stats,
+            sort: args.report_sort.clone(),
+            group_by_status: false,
         };
         let csv = crate::report::render_csv_opts(&args.left, &args.right, &result, &fields, &opts);
         if let Err(e) = std::fs::write(csv_path, csv) {
@@ -681,6 +693,8 @@ mod tests {
             report_fields: String::new(),
             report_title: None,
             report_no_stats: false,
+            report_sort: "path".to_string(),
+            report_group: false,
             profile: None,
             color: "never".into(),
         }

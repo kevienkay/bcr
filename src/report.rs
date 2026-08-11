@@ -68,6 +68,10 @@ pub struct ReportOptions {
     pub title: Option<String>,
     /// 是否输出统计行（默认 true）
     pub include_stats: bool,
+    /// 排序方式：path（默认，按路径）| status（按状态分组）| size（按差异大小）
+    pub sort: String,
+    /// 按状态分组输出（仅文本报告；CSV 保持机器可读）
+    pub group_by_status: bool,
 }
 
 impl Default for ReportOptions {
@@ -75,8 +79,25 @@ impl Default for ReportOptions {
         ReportOptions {
             title: None,
             include_stats: true,
+            sort: "path".to_string(),
+            group_by_status: false,
         }
     }
+}
+
+/// 按选项排序条目（path=字典序；status=状态字母序；size=差异大小降序）
+fn sorted_entries<'a>(result: &'a CompareResult, sort: &str) -> Vec<&'a crate::compare::FileEntry> {
+    let mut entries: Vec<&crate::compare::FileEntry> = result.entries.iter().collect();
+    match sort {
+        "status" => entries.sort_by_key(|e| (e.status.letter(), e.rel.clone())),
+        "size" => entries.sort_by_key(|e| {
+            let l = e.left.as_ref().map(|m| m.size).unwrap_or(0);
+            let r = e.right.as_ref().map(|m| m.size).unwrap_or(0);
+            std::cmp::Reverse(l.abs_diff(r))
+        }),
+        _ => entries.sort_by_key(|e| e.rel.clone()),
+    }
+    entries
 }
 
 /// 渲染文本报告：标题 + 统计 + 条目表（fields 控制每行展示的字段）
@@ -111,47 +132,82 @@ pub fn render_txt_opts(
         out.push_str(&format!("条目总数: {}\n", result.entries.len()));
     }
     out.push_str("----------------------------------------\n");
-    for e in &result.entries {
-        let mut line = String::new();
-        if fields.contains(&ReportField::Status) {
-            line.push_str(&format!("[{}] ", e.status.letter()));
-        }
-        if fields.contains(&ReportField::Path) {
-            let desc = match e.status {
-                FileStatus::Moved => format!("{} → {}", e.rel, e.moved_to.as_deref().unwrap_or("")),
-                _ => e.rel.clone(),
-            };
-            line.push_str(&desc);
-        }
-        if fields.contains(&ReportField::Size) {
-            let sizes = match (&e.left, &e.right) {
-                (Some(l), Some(r)) => format!("  ({}B → {}B)", l.size, r.size),
-                (Some(l), None) => format!("  ({}B → -)", l.size),
-                (None, Some(r)) => format!("  (- → {}B)", r.size),
-                (None, None) => String::new(),
-            };
-            line.push_str(&sizes);
-        }
-        if fields.contains(&ReportField::Mtime) {
-            let m = match (&e.left, &e.right) {
-                (Some(l), Some(r)) => {
-                    format!("  [{} ↔ {}]", fmt_mtime(l.mtime), fmt_mtime(r.mtime))
-                }
-                (Some(l), None) => format!("  [{}]", fmt_mtime(l.mtime)),
-                (None, Some(r)) => format!("  [{}]", fmt_mtime(r.mtime)),
-                (None, None) => String::new(),
-            };
-            line.push_str(&m);
-        }
-        if fields.contains(&ReportField::Moved) {
-            if let Some(to) = &e.moved_to {
-                line.push_str(&format!("  (moved: {})", to));
+    let sorted = sorted_entries(result, &opts.sort);
+    if opts.group_by_status {
+        // 按状态分组输出：C / L / R / M
+        for letter in ['C', 'L', 'R', 'M'] {
+            let group: Vec<_> = sorted
+                .iter()
+                .filter(|e| e.status.letter() == letter)
+                .collect();
+            if group.is_empty() {
+                continue;
+            }
+            out.push_str(&format!("--- {} ---\n", status_group_label(letter)));
+            for e in group {
+                out.push_str(&format_entry_line(e, fields));
+                out.push('\n');
             }
         }
-        out.push_str(line.trim_end());
-        out.push('\n');
+    } else {
+        for e in &sorted {
+            out.push_str(&format_entry_line(e, fields));
+            out.push('\n');
+        }
     }
     out
+}
+
+/// 状态分组标题
+fn status_group_label(letter: char) -> &'static str {
+    match letter {
+        'C' => "内容不同",
+        'L' => "仅左侧",
+        'R' => "仅右侧",
+        'M' => "移动/重命名",
+        _ => "相同",
+    }
+}
+
+/// 渲染单个条目的文本行（按 fields 选择）
+fn format_entry_line(e: &crate::compare::FileEntry, fields: &[ReportField]) -> String {
+    let mut line = String::new();
+    if fields.contains(&ReportField::Status) {
+        line.push_str(&format!("[{}] ", e.status.letter()));
+    }
+    if fields.contains(&ReportField::Path) {
+        let desc = match e.status {
+            FileStatus::Moved => format!("{} → {}", e.rel, e.moved_to.as_deref().unwrap_or("")),
+            _ => e.rel.clone(),
+        };
+        line.push_str(&desc);
+    }
+    if fields.contains(&ReportField::Size) {
+        let sizes = match (&e.left, &e.right) {
+            (Some(l), Some(r)) => format!("  ({}B → {}B)", l.size, r.size),
+            (Some(l), None) => format!("  ({}B → -)", l.size),
+            (None, Some(r)) => format!("  (- → {}B)", r.size),
+            (None, None) => String::new(),
+        };
+        line.push_str(&sizes);
+    }
+    if fields.contains(&ReportField::Mtime) {
+        let m = match (&e.left, &e.right) {
+            (Some(l), Some(r)) => {
+                format!("  [{} ↔ {}]", fmt_mtime(l.mtime), fmt_mtime(r.mtime))
+            }
+            (Some(l), None) => format!("  [{}]", fmt_mtime(l.mtime)),
+            (None, Some(r)) => format!("  [{}]", fmt_mtime(r.mtime)),
+            (None, None) => String::new(),
+        };
+        line.push_str(&m);
+    }
+    if fields.contains(&ReportField::Moved) {
+        if let Some(to) = &e.moved_to {
+            line.push_str(&format!("  (moved: {})", to));
+        }
+    }
+    line.trim_end().to_string()
 }
 
 /// 渲染文本报告（全部字段，向后兼容）
@@ -189,7 +245,9 @@ pub fn render_csv_opts(
     }
     out.push_str(&header.join(","));
     out.push('\n');
-    for e in &result.entries {
+    // 排序（CSV 不分组，保持单表结构）
+    let sorted = sorted_entries(result, &opts.sort);
+    for e in sorted {
         let mut cols: Vec<String> = Vec::new();
         for f in fields {
             match f {
