@@ -160,7 +160,7 @@ impl CompareStats {
 }
 
 /// 目录比较结果（CLI 与 GUI 共用）
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CompareResult {
     /// 排序后的条目（BTreeMap 顺序）
     pub entries: Vec<FileEntry>,

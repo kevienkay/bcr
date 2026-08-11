@@ -23,6 +23,8 @@ pub struct DirTab {
     pub scroll: Vec2,
     /// 请求打开并排 diff（rel 相对路径，由主应用拼完整路径）
     pub open_diff: Option<String>,
+    /// 手动对齐：请求用指定左右相对路径打开并排 diff（不同文件名配对）
+    pub open_pair: Option<(String, String)>,
     /// 折叠的目录路径集合（空字符串表示根）
     pub(crate) collapsed: HashSet<String>,
     /// 选中的展平行索引
@@ -41,6 +43,14 @@ pub struct DirTab {
     pub sync_checked: HashSet<usize>,
     /// 同步执行结果消息
     pub sync_msg: Option<String>,
+    /// 上次自动刷新时间（秒，egui time）
+    last_auto_refresh: f64,
+    /// 手动对齐弹窗：选中的左侧文件相对路径
+    align_left: Option<String>,
+    /// 手动对齐弹窗：选中的右侧文件相对路径
+    align_right: Option<String>,
+    /// 手动对齐弹窗开关
+    show_align: bool,
 }
 
 /// 展平后的树行
@@ -69,6 +79,7 @@ impl DirTab {
             error: None,
             scroll: Vec2::ZERO,
             open_diff: None,
+            open_pair: None,
             collapsed: HashSet::new(),
             selected: None,
             flat: Vec::new(),
@@ -78,6 +89,10 @@ impl DirTab {
             sync_plan: None,
             sync_checked: HashSet::new(),
             sync_msg: None,
+            last_auto_refresh: 0.0,
+            align_left: None,
+            align_right: None,
+            show_align: false,
         }
     }
 
@@ -292,6 +307,73 @@ impl DirTab {
         }
     }
 
+    /// 批量操作：把全部差异/仅左侧文件复制到右侧（跳过仅右侧，避免覆盖）
+    pub fn run_batch_copy_to_right(&mut self) {
+        let Some(r) = self.result.clone() else { return };
+        let rels: Vec<String> = r
+            .entries
+            .iter()
+            .filter(|e| matches!(e.status, FileStatus::Differ | FileStatus::LeftOnly))
+            .map(|e| e.rel.clone())
+            .collect();
+        if rels.is_empty() {
+            self.sync_msg = Some("没有可复制的差异文件".to_string());
+            return;
+        }
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return,
+        };
+        let mut ok = 0usize;
+        let mut err = 0usize;
+        for rel in &rels {
+            let op = SyncOp::Copy {
+                rel: rel.clone(),
+                from_src: true,
+            };
+            if execute_op(&op, l.as_ref(), r.as_ref()).is_some() {
+                err += 1;
+            } else {
+                ok += 1;
+            }
+        }
+        self.sync_msg = Some(format!("批量复制: 成功 {}，失败 {}", ok, err));
+        self.refresh();
+    }
+
+    /// 批量操作：删除右侧全部差异/仅右侧文件（镜像清理）
+    pub fn run_batch_delete_right(&mut self) {
+        let Some(res) = self.result.clone() else {
+            return;
+        };
+        let rels: Vec<String> = res
+            .entries
+            .iter()
+            .filter(|e| matches!(e.status, FileStatus::Differ | FileStatus::RightOnly))
+            .map(|e| e.rel.clone())
+            .collect();
+        if rels.is_empty() {
+            self.sync_msg = Some("没有可删除的差异文件".to_string());
+            return;
+        }
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return,
+        };
+        let mut ok = 0usize;
+        let mut err = 0usize;
+        for rel in &rels {
+            let op = SyncOp::Delete { rel: rel.clone() };
+            if execute_op(&op, l.as_ref(), r.as_ref()).is_some() {
+                err += 1;
+            } else {
+                ok += 1;
+            }
+        }
+        self.sync_msg = Some(format!("批量删除: 成功 {}，失败 {}", ok, err));
+        self.refresh();
+    }
+
     pub(crate) fn toggle_dir(&mut self, path: &str) {
         if self.collapsed.contains(path) {
             self.collapsed.remove(path);
@@ -353,6 +435,12 @@ impl DirTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        // 自动刷新：每 2 秒重扫一次（仅在已加载过结果后生效）
+        let now = ui.input(|i| i.time);
+        if self.result.is_some() && now - self.last_auto_refresh > 2.0 {
+            self.last_auto_refresh = now;
+            self.refresh();
+        }
         egui::Panel::top("dirtab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if ui.button(t(I18nKey::Refresh)).clicked() {
@@ -419,6 +507,41 @@ impl DirTab {
                         self.gen_sync_plan();
                     }
                 }
+                if ui
+                    .button("⇱ 手动对齐")
+                    .on_hover_text("左右各选一个文件配对对比")
+                    .clicked()
+                {
+                    self.show_align = !self.show_align;
+                    if self.show_align {
+                        // 默认选中第一个可对齐项
+                        if self.align_left.is_none() {
+                            self.align_left =
+                                self.flat.iter().find(|r| !r.is_dir).map(|r| r.path.clone());
+                        }
+                    }
+                }
+                // 批量操作：作用于全部差异文件（only_diff 视图）
+                if let Some(r) = &self.result {
+                    let has_diff = r.entries.iter().any(|e| e.status != FileStatus::Same);
+                    if has_diff {
+                        ui.separator();
+                        if ui
+                            .button("批量复制→右")
+                            .on_hover_text("把全部差异/仅左侧文件复制到右侧")
+                            .clicked()
+                        {
+                            self.run_batch_copy_to_right();
+                        }
+                        if ui
+                            .button("批量删除右侧")
+                            .on_hover_text("删除右侧全部差异文件")
+                            .clicked()
+                        {
+                            self.run_batch_delete_right();
+                        }
+                    }
+                }
                 // 选中文件单项操作
                 if let Some(rel) = self.selected_rel() {
                     ui.separator();
@@ -477,6 +600,103 @@ impl DirTab {
         }
 
         self.handle_keys(ui);
+
+        // 手动对齐弹窗：左右各选一个文件，配对打开并排 diff
+        if self.show_align {
+            let mut keep = true;
+            let mut open_req: Option<(String, String)> = None;
+            let mut close_req = false;
+            egui::Window::new("手动对齐")
+                .collapsible(false)
+                .resizable(true)
+                .default_size([520.0, 360.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(
+                        "左侧与右侧各选一个文件，点击「打开对比」配对比较（支持不同文件名）。",
+                    );
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        // 左侧文件列表（仅差异/仅左侧）
+                        ui.group(|ui| {
+                            ui.label("左侧");
+                            egui::ScrollArea::vertical()
+                                .max_height(240.0)
+                                .show(ui, |ui| {
+                                    let entries: Vec<String> = self
+                                        .result
+                                        .as_ref()
+                                        .map(|r| {
+                                            r.entries
+                                                .iter()
+                                                .filter(|e| {
+                                                    !matches!(
+                                                        e.status,
+                                                        FileStatus::Same | FileStatus::RightOnly
+                                                    )
+                                                })
+                                                .map(|e| e.rel.clone())
+                                                .collect()
+                                        })
+                                        .unwrap_or_default();
+                                    for rel in entries {
+                                        let sel = self.align_left.as_deref() == Some(rel.as_str());
+                                        if ui.selectable_label(sel, &rel).clicked() {
+                                            self.align_left = Some(rel);
+                                        }
+                                    }
+                                });
+                        });
+                        ui.group(|ui| {
+                            ui.label("右侧");
+                            egui::ScrollArea::vertical()
+                                .max_height(240.0)
+                                .show(ui, |ui| {
+                                    let entries: Vec<String> = self
+                                        .result
+                                        .as_ref()
+                                        .map(|r| {
+                                            r.entries
+                                                .iter()
+                                                .filter(|e| {
+                                                    !matches!(
+                                                        e.status,
+                                                        FileStatus::Same | FileStatus::LeftOnly
+                                                    )
+                                                })
+                                                .map(|e| e.rel.clone())
+                                                .collect()
+                                        })
+                                        .unwrap_or_default();
+                                    for rel in entries {
+                                        let sel = self.align_right.as_deref() == Some(rel.as_str());
+                                        if ui.selectable_label(sel, &rel).clicked() {
+                                            self.align_right = Some(rel);
+                                        }
+                                    }
+                                });
+                        });
+                    });
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("打开对比").clicked() {
+                            if let (Some(l), Some(r)) = (&self.align_left, &self.align_right) {
+                                open_req = Some((l.clone(), r.clone()));
+                            }
+                        }
+                        if ui.button(t(I18nKey::Close)).clicked() {
+                            close_req = true;
+                        }
+                    });
+                });
+            if let Some((l, r)) = open_req {
+                self.open_pair = Some((l, r));
+                self.show_align = false;
+            }
+            if close_req || !keep {
+                self.show_align = false;
+            }
+        }
 
         // 同步面板（右侧浮窗）
         if self.show_sync {

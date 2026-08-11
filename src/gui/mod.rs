@@ -559,6 +559,7 @@ impl eframe::App for DiffApp {
 
         // 处理各标签可能发出的请求
         let mut open_diff_req: Option<String> = None;
+        let mut open_pair_req: Option<(String, String)> = None;
         {
             let active = self.active;
             match &mut self.tabs[active] {
@@ -566,9 +567,29 @@ impl eframe::App for DiffApp {
                 Tab::Dir(t) => {
                     t.ui(ui);
                     open_diff_req = t.open_diff.take();
+                    open_pair_req = t.open_pair.take();
                 }
                 Tab::Merge(t) => t.ui(ui),
                 Tab::Image(t) => t.ui(ui),
+            }
+        }
+
+        if let Some((l_rel, r_rel)) = open_pair_req {
+            // 手动对齐：左右相对路径配对打开并排 diff（可不同文件名）
+            if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
+                let (l_root, r_root) = (dir_tab.left.clone(), dir_tab.right.clone());
+                let l = std::path::Path::new(&l_root).join(&l_rel);
+                let r = std::path::Path::new(&r_root).join(&r_rel);
+                let ls = l.to_string_lossy();
+                let rs = r.to_string_lossy();
+                if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
+                    self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
+                } else {
+                    let mut t = DiffTab::new();
+                    t.load_pair(&ls, &rs, ViewOptions::default());
+                    self.add_tab(Tab::Diff(t));
+                }
+                return;
             }
         }
 
@@ -1013,6 +1034,39 @@ mod tests {
             rel: "b.txt".to_string(),
         });
         assert!(!d2.path().join("b.txt").exists());
+    }
+
+    #[test]
+    fn dirtab_batch_ops() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        let w = |dir: &std::path::Path, name: &str, content: &str| {
+            let p = dir.join(name);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, content).unwrap();
+            filetime::set_file_mtime(&p, fixed).unwrap();
+        };
+        w(d1.path(), "diff.txt", "L");
+        w(d1.path(), "only_l.txt", "L-only");
+        w(d2.path(), "diff.txt", "R");
+        w(d2.path(), "only_r.txt", "R-only");
+        let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        // 内容级对比：同 size 同 mtime 的 diff.txt 才能被识别为差异
+        t.compare_content = true;
+        t.refresh();
+        // 批量复制 → 右：diff.txt 与 only_l.txt 复制到右侧
+        t.run_batch_copy_to_right();
+        assert_eq!(fs::read_to_string(d2.path().join("diff.txt")).unwrap(), "L");
+        assert_eq!(
+            fs::read_to_string(d2.path().join("only_l.txt")).unwrap(),
+            "L-only"
+        );
+        // 批量删除右侧：diff.txt（已同内容）与 only_r.txt
+        t.run_batch_delete_right();
+        assert!(!d2.path().join("only_r.txt").exists());
+        // diff.txt 此时两侧一致，不再被删除（删除仅作用于差异/仅右侧）
+        assert!(d2.path().join("diff.txt").exists());
     }
 
     // ---- MergeTab：冲突导航/解决/预览 ----------------
