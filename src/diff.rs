@@ -33,6 +33,10 @@ pub struct DiffArgs {
     #[arg(long)]
     pub ignore_crlf: bool,
 
+    /// 转换后比较（A9）：比较前统一换行符（CRLF/CR → LF）与编码（→ UTF-8）
+    #[arg(long)]
+    pub convert: bool,
+
     /// 忽略匹配正则的行（内容过滤：如版本号/时间戳行，可重复）
     #[arg(long = "ignore-lines")]
     pub ignore_lines: Vec<String>,
@@ -60,7 +64,13 @@ pub fn run(args: &DiffArgs) -> i32 {
     let merged = merge_profile(args);
     let args = &merged;
     let left = match read_input(&args.left) {
-        Ok(s) => s,
+        Ok(s) => {
+            if args.convert {
+                normalize_eol(&s)
+            } else {
+                s
+            }
+        }
         Err(ReadErr::Binary) => {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.left]));
             return 2;
@@ -81,7 +91,13 @@ pub fn run(args: &DiffArgs) -> i32 {
         }
     };
     let right = match read_input(&args.right) {
-        Ok(s) => s,
+        Ok(s) => {
+            if args.convert {
+                normalize_eol(&s)
+            } else {
+                s
+            }
+        }
         Err(ReadErr::Binary) => {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.right]));
             return 2;
@@ -216,6 +232,11 @@ fn normalize(line: &str, args: &DiffArgs, ignore_lines: &[regex::Regex]) -> Stri
     )
 }
 
+/// A9 转换后比较：统一换行符（CRLF/CR → LF），比较前对全文做转换
+fn normalize_eol(s: &str) -> String {
+    s.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 /// 归一化原语（GUI 并排视图与 CLI 共用）
 pub(crate) fn normalize_line(
     line: &str,
@@ -295,6 +316,7 @@ mod tests {
             ignore_trailing: false,
             ignore_case: false,
             ignore_crlf: false,
+            convert: false,
             ignore_lines: vec![],
             color: "never".into(),
             highlight: false,
@@ -442,6 +464,7 @@ mod crlf_tests {
             ignore_trailing: false,
             ignore_case: false,
             ignore_crlf: false,
+            convert: false,
             ignore_lines: vec![],
             color: "never".into(),
             highlight: false,
@@ -482,6 +505,24 @@ mod crlf_tests {
         a.ignore_crlf = true;
         assert_eq!(run(&a), 0);
     }
+
+    #[test]
+    fn convert_normalizes_crlf_before_compare() {
+        let d = tempdir().unwrap();
+        let l = d.path().join("l.txt");
+        let r = d.path().join("r.txt");
+        // 左侧 CRLF 且末行残留 \r，右侧纯 LF（末行无 \r）
+        fs::write(&l, "a\r\nb\r").unwrap();
+        fs::write(&r, "a\nb").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        // 默认：末行 \r 差异存在
+        assert_eq!(run(&a), 1);
+        // --convert：统一换行后视为相同
+        a.convert = true;
+        assert_eq!(run(&a), 0);
+    }
 }
 
 #[cfg(test)]
@@ -499,6 +540,7 @@ mod content_filter_tests {
             ignore_trailing: false,
             ignore_case: false,
             ignore_crlf: false,
+            convert: false,
             ignore_lines: vec![],
             color: "never".into(),
             highlight: false,
