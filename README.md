@@ -40,6 +40,13 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - mirror 模式**空目录清理 `[RMDIR]`**：镜像删除目标侧独有文件后，级联清理空目录（自底向上）
 - 统计行新增 rename/rmdir 计数
 
+### P20 细节增强（右键菜单 / 报告布局 / 缓存 / Profile 迁移）
+
+- **目录对比右键菜单**：选中文件行右键 → 复制左侧/右侧路径、系统应用打开左右侧文件、在对比中打开（Enter）
+- **报告布局**：`--report-title <标题>` 自定义报告标题、`--report-no-stats` 关闭统计行（txt/csv 通用）
+- **比较结果缓存**：本地目录对比走 size+mtime 快照缓存（`~/.bcr-cache.toml`，LRU 64 条），目录未变化时秒开复用结果
+- **Profile 迁移**：`bcr profile export <name> <file>` 导出独立 TOML；`bcr profile import <file> [--name <name>]` 导入（重名保护）
+
 ### P16 会话收藏与文本 diff 细节
 
 - **会话收藏**：GUI 会话中心支持 ★ 收藏标记与最近使用时间排序（收藏优先），打开会话自动记录最近使用

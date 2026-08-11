@@ -877,6 +877,36 @@ impl DirTab {
                             if resp.clicked() {
                                 self.selected = Some(idx);
                             }
+                            // 右键菜单：复制路径 / 打开所在位置 / 系统应用打开
+                            if resp.secondary_clicked() {
+                                self.selected = Some(idx);
+                            }
+                            resp.context_menu(|ui| {
+                                let full_l = std::path::Path::new(&self.left).join(&e.rel);
+                                let full_r = std::path::Path::new(&self.right).join(&e.rel);
+                                if ui.button("复制左侧路径").clicked() {
+                                    ui.ctx().copy_text(full_l.to_string_lossy().into_owned());
+                                    ui.close();
+                                }
+                                if ui.button("复制右侧路径").clicked() {
+                                    ui.ctx().copy_text(full_r.to_string_lossy().into_owned());
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button("打开左侧文件").clicked() {
+                                    open_with_system_app(&full_l.to_string_lossy());
+                                    ui.close();
+                                }
+                                if ui.button("打开右侧文件").clicked() {
+                                    open_with_system_app(&full_r.to_string_lossy());
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button("在对比中打开 (Enter)").clicked() {
+                                    pending_open = Some(e.rel.clone());
+                                    ui.close();
+                                }
+                            });
                         }
                     }
                     // 键盘选中后滚动到该行
@@ -902,6 +932,19 @@ fn split_globs(s: &str) -> Vec<String> {
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty())
         .collect()
+}
+
+/// 用系统默认应用打开文件/目录（跨平台：macOS open / Windows explorer / Linux xdg-open）
+fn open_with_system_app(path: &str) {
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(target_os = "windows")]
+    let cmd = "explorer";
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let cmd = "xdg-open";
+    #[cfg(not(any(unix, windows)))]
+    let cmd = "open";
+    let _ = std::process::Command::new(cmd).arg(path).spawn();
 }
 
 fn basename(p: &str) -> String {
