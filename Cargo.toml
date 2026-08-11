@@ -29,6 +29,7 @@ flate2 = "1"
 bzip2-rs = "0.1"
 lzma-rs = "0.3"
 sevenz-rust2 = "0.7"
+suppaftp = "10.0.1"
 
 [dev-dependencies]
 tempfile = "3"

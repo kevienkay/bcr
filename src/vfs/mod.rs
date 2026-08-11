@@ -10,6 +10,7 @@
 //! read/write/delete 以相对路径为键，复制跨后端进行（先读后写）。
 
 pub mod archive;
+pub mod ftp;
 pub mod sftp;
 pub mod zip;
 
@@ -182,6 +183,10 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         let s = sftp::SftpVfs::connect(rest)?;
         return Ok(Box::new(s));
     }
+    if let Some(rest) = spec.strip_prefix("ftp://") {
+        let f = ftp::FtpVfs::connect(rest)?;
+        return Ok(Box::new(f));
+    }
     Ok(Box::new(LocalVfs::new(Path::new(spec))?))
 }
 
@@ -191,6 +196,7 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("tar://")
         || spec.starts_with("7z://")
         || spec.starts_with("sftp://")
+        || spec.starts_with("ftp://")
 }
 
 /// 跨后端内容比对：流式计算两侧 blake3 哈希比较（内存 O(64KB)，支持超大文件）
