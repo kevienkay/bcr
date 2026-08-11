@@ -69,17 +69,21 @@ else
 fi
 
 # XP5 merge 输出换行风格跟随 base（CRLF 源文件 → CRLF 输出）
+# 注意：Git Bash 的 grep 按文本模式读文件会把 CRLF 转成 LF，grep -q '\r' 会误判，
+# 故改用 printf 生成预期文件 + cmp 字节级比较（printf 输出 CRLF 已验证跨平台正确）
 printf 'a\r\nb\r\n' > xp5_base.txt
 printf 'a\r\nB\r\n' > xp5_left.txt
 printf 'a\r\nb\r\nc\r\n' > xp5_right.txt
+printf 'a\r\nB\r\nc\r\n' > xp5_expected.txt
 "$BIN" merge xp5_base.txt xp5_left.txt xp5_right.txt -o xp5_out.txt > xp5_merge.log 2>&1
 merge_rc=$?
-if [ -f xp5_out.txt ] && LC_ALL=C grep -q "$(printf '\r')" xp5_out.txt; then
+if [ "$merge_rc" -le 1 ] && [ -f xp5_out.txt ] && cmp -s xp5_out.txt xp5_expected.txt; then
   pass "XP5 merge 输出保持 CRLF"
 else
   echo "  XP5 诊断: merge_rc=$merge_rc 文件存在=$([ -f xp5_out.txt ] && echo yes || echo no)"
   echo "    base: $(od -An -c xp5_base.txt | head -3 | tr '\n' ' ')"
   [ -f xp5_out.txt ] && echo "    out:  $(od -An -c xp5_out.txt | head -3 | tr '\n' ' ')"
+  echo "    expected: $(od -An -c xp5_expected.txt | head -3 | tr '\n' ' ')"
   echo "    merge log: $(cat xp5_merge.log 2>/dev/null | tr '\n' ' ')"
   fail "XP5 merge 输出应为 CRLF"
 fi
