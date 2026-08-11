@@ -80,6 +80,8 @@ pub struct DiffTab {
     pub hex: Option<HexTabData>,
     /// hex 编辑状态
     pub hex_edit: Option<HexEditState>,
+    /// A8 自动换行（word wrap，BC5 特性）
+    pub wrap: bool,
 }
 
 /// 编辑窗口状态
@@ -108,6 +110,7 @@ impl DiffTab {
             editing: None,
             hex: None,
             hex_edit: None,
+            wrap: false,
         }
     }
 
@@ -417,6 +420,37 @@ impl DiffTab {
                         self.load_right(&p, self.opts.clone());
                     }
                 }
+                // A3 剪贴板对比：读系统剪贴板文本 → 临时文件 → 作为左侧/右侧加载
+                if ui
+                    .button("📋 剪贴板→左")
+                    .on_hover_text("用系统剪贴板文本作为左侧对比（若左侧已打开则替换）")
+                    .clicked()
+                {
+                    if let Some(txt) = read_clipboard_text() {
+                        if let Some(p) = write_clipboard_temp(&txt) {
+                            self.load_left(&p, self.opts.clone());
+                        } else {
+                            self.error = Some("写入剪贴板临时文件失败".to_string());
+                        }
+                    } else {
+                        self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string());
+                    }
+                }
+                if ui
+                    .button("📋 剪贴板→右")
+                    .on_hover_text("用系统剪贴板文本作为右侧对比（若右侧已打开则替换）")
+                    .clicked()
+                {
+                    if let Some(txt) = read_clipboard_text() {
+                        if let Some(p) = write_clipboard_temp(&txt) {
+                            self.load_right(&p, self.opts.clone());
+                        } else {
+                            self.error = Some("写入剪贴板临时文件失败".to_string());
+                        }
+                    } else {
+                        self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string());
+                    }
+                }
                 ui.separator();
                 ui.checkbox(&mut self.show_stats, t(I18nKey::StatsPanel))
                     .changed();
@@ -439,6 +473,10 @@ impl DiffTab {
                 {
                     self.recompute();
                 }
+                ui.separator();
+                // A8 自动换行（BC5 word wrapping，仅影响显示）
+                ui.checkbox(&mut self.wrap, t(I18nKey::WordWrap))
+                    .on_hover_text("长行按窗口宽度折行显示");
                 ui.separator();
                 if ui.button(t(I18nKey::EditLeft)).clicked() {
                     if let Some(l) = &self.left {
@@ -613,7 +651,11 @@ impl DiffTab {
                     }),
                 };
                 let write_res = match bytes {
-                    Some(b) => std::fs::write(&path, b),
+                    Some(b) => {
+                        // A2 保存前自动备份原文件为 <path>.bak（BC 行为，防手滑覆盖）
+                        let _ = std::fs::copy(&path, format!("{path}.bak"));
+                        std::fs::write(&path, b)
+                    }
                     None => Ok(()),
                 };
                 match write_res {
@@ -777,6 +819,8 @@ impl DiffTab {
                                 data.push(*b);
                             }
                         }
+                        // A2 保存前自动备份原文件为 <path>.bak
+                        let _ = std::fs::copy(&path, format!("{path}.bak"));
                         match std::fs::write(&path, &data) {
                             Ok(()) => {
                                 self.hex_edit = None;
@@ -856,24 +900,42 @@ impl DiffTab {
                 .current
                 .and_then(|k| self.search.matches.get(k).copied());
             let rows = &self.rows;
+            // A8 自动换行：展开为视觉行（保留原始行索引映射，供搜索/跳转）
+            let (render_rows, orig_idx): (Vec<crate::sideview::SideRow>, Vec<usize>) = if self.wrap
+            {
+                let wrap_chars = ((half - 24.0) / 8.5).max(8.0) as usize;
+                crate::sideview::wrap_rows(rows, wrap_chars)
+            } else {
+                (Vec::new(), Vec::new())
+            };
+            let display_rows: &[crate::sideview::SideRow] =
+                if self.wrap { &render_rows } else { rows };
+            let orig_of = |vi: usize| -> usize {
+                if self.wrap {
+                    orig_idx.get(vi).copied().unwrap_or(vi)
+                } else {
+                    vi
+                }
+            };
             // 左右语法（按文件路径解析，供行内语法高亮）
             let syn_l = self.left.as_ref().and_then(|f| f.syntax);
             let syn_r = self.right.as_ref().and_then(|f| f.syntax);
 
             // 受控滚动 + 虚拟化渲染（统一走 common::show_rows）
-            let out = super::show_rows(ui, rows.len(), ROW_H, |ui, range| {
+            let out = super::show_rows(ui, display_rows.len(), ROW_H, |ui, range| {
                 ui.set_min_width(total_w);
                 for i in range {
-                    let row = &rows[i];
+                    let row = &display_rows[i];
                     let (bg_l, bg_r) = match row.tag {
                         RowTag::Equal => (None, None),
                         RowTag::Delete => (Some(bg_delete()), None),
                         RowTag::Insert => (None, Some(bg_insert())),
                         RowTag::Replace => (Some(bg_replace_l()), Some(bg_replace_r())),
                     };
-                    // 搜索命中高亮
-                    let (bg_l, bg_r) = if match_set.contains(&i) {
-                        let c = if current_match == Some(i) {
+                    // 搜索命中高亮（按原始行索引映射）
+                    let oi = orig_of(i);
+                    let (bg_l, bg_r) = if match_set.contains(&oi) {
+                        let c = if current_match == Some(oi) {
                             bg_match_current()
                         } else {
                             bg_match()
@@ -1091,4 +1153,19 @@ fn is_binary_file(path: &str) -> bool {
     crate::encoding::read_text(path)
         .map(|tf| tf.is_binary)
         .unwrap_or(false)
+}
+
+/// A3 剪贴板对比：读取系统剪贴板文本（arboard，跨平台）
+fn read_clipboard_text() -> Option<String> {
+    let mut cb = arboard::Clipboard::new().ok()?;
+    cb.get_text().ok()
+}
+
+/// A3 剪贴板对比：把剪贴板文本写入临时文件（供 load_left/load_right 加载）
+fn write_clipboard_temp(text: &str) -> Option<String> {
+    let dir = std::env::temp_dir();
+    let name = format!("bcr-clipboard-{}.txt", std::process::id());
+    let path = dir.join(name);
+    std::fs::write(&path, text).ok()?;
+    Some(path.to_string_lossy().into_owned())
 }

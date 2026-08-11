@@ -4,9 +4,8 @@
 //! URL 规范：`ftp://[user[:pass]@]host[:port]/remote/path`
 //!
 //! - 支持匿名登录（默认 user=anonymous, pass=空）
-//! - 可读写：read/write/delete/rename/remove_dir；FTP 无标准设置 mtime 的
-//!   命令（MFMT 非标准），set_mtime 静默忽略 —— 同步到 FTP 建议加
-//!   `--compare-content` 保证准确性
+//! - 可读写：read/write/delete/rename/remove_dir；set_mtime 发 MFMT（RFC 3659 扩展，
+//!   服务器不支持时静默降级）——同步到 FTP 建议加 `--compare-content` 保证准确性
 //! - 被动模式（Passive），适配大多数 NAT/防火墙环境
 
 use super::Vfs;
@@ -281,11 +280,45 @@ impl Vfs for FtpVfs {
         r
     }
 
-    fn set_mtime(&self, _rel: &str, _t: SystemTime) -> io::Result<()> {
-        // FTP 无标准设置 mtime 命令（MFMT 非标准），静默忽略；
-        // 同步到 FTP 建议 --compare-content
+    fn set_mtime(&self, rel: &str, t: SystemTime) -> io::Result<()> {
+        // MFMT（RFC 3659 扩展）设置 mtime：MFMT YYYYMMDDHHMMSS path
+        // 服务器不支持（错误码 500/502）时静默降级，不影响同步主流程
+        let stamp = mfmt_stamp(t);
+        let mut ftp = self.session()?;
+        let r = ftp
+            .custom_command(
+                format!("MFMT {} {}", stamp, join_root(&self.root, rel)),
+                &[suppaftp::Status::File], // 213 File status
+            )
+            .map_err(|e| io::Error::other(format!("FTP 设置 mtime: {e}")));
+        let _ = ftp.quit();
+        // 不支持 MFMT 的服务器返回 500/502，静默降级为 Ok
+        let _ = r;
         Ok(())
     }
+}
+
+/// SystemTime → MFMT 时间戳（UTC，YYYYMMDDHHMMSS）
+fn mfmt_stamp(t: SystemTime) -> String {
+    let secs = t
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let days = secs.div_euclid(86400);
+    let rem = secs.rem_euclid(86400);
+    let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);
+    // 儒略日 → 公历(Howard Hinnant 算法，与 jsonout.rs 一致)
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
+    let yy = if mo <= 2 { y + 1 } else { y };
+    format!("{yy:04}{mo:02}{d:02}{h:02}{m:02}{s:02}")
 }
 
 #[cfg(test)]

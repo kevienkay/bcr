@@ -8,6 +8,23 @@ use crate::sync::{build_plan, execute_op, SyncOp};
 use eframe::egui::{self, Color32, Key, Pos2, Vec2};
 use std::collections::HashSet;
 
+/// 目录视图状态过滤（B1 显示过滤，对齐 BC 显示过滤器）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewFilter {
+    /// 全部（含相同，受 show_same 控制）
+    All,
+    /// 仅差异（differ/left_only/right_only/moved）
+    Diff,
+    /// 仅左侧存在
+    LeftOnly,
+    /// 仅右侧存在
+    RightOnly,
+    /// 仅移动/重命名
+    Moved,
+    /// 仅相同
+    Same,
+}
+
 /// 目录标签页
 pub struct DirTab {
     pub left: String,
@@ -18,6 +35,8 @@ pub struct DirTab {
     pub show_same: bool,
     /// 仅显示差异文件
     pub only_diff: bool,
+    /// 状态过滤（B1）
+    pub view_filter: ViewFilter,
     pub result: Option<CompareResult>,
     pub error: Option<String>,
     pub scroll: Vec2,
@@ -75,6 +94,7 @@ impl DirTab {
             excludes: String::new(),
             show_same: false,
             only_diff: true,
+            view_filter: ViewFilter::Diff,
             result: None,
             error: None,
             scroll: Vec2::ZERO,
@@ -139,8 +159,28 @@ impl DirTab {
         self.flat.clear();
         let Some(r) = &self.result else { return };
         let mut visible: Vec<&crate::compare::FileEntry> = r.entries.iter().collect();
-        if self.only_diff {
-            visible.retain(|e| e.status != FileStatus::Same);
+        // 状态过滤（B1）：下拉选择覆盖 only_diff 复选框
+        match self.view_filter {
+            ViewFilter::All => {
+                if self.only_diff {
+                    visible.retain(|e| e.status != FileStatus::Same);
+                }
+            }
+            ViewFilter::Diff => {
+                visible.retain(|e| e.status != FileStatus::Same);
+            }
+            ViewFilter::LeftOnly => {
+                visible.retain(|e| e.status == FileStatus::LeftOnly);
+            }
+            ViewFilter::RightOnly => {
+                visible.retain(|e| e.status == FileStatus::RightOnly);
+            }
+            ViewFilter::Moved => {
+                visible.retain(|e| e.status == FileStatus::Moved);
+            }
+            ViewFilter::Same => {
+                visible.retain(|e| e.status == FileStatus::Same);
+            }
         }
         if visible.is_empty() {
             self.selected = None;
@@ -466,6 +506,32 @@ impl DirTab {
                 {
                     self.rebuild_tree();
                 }
+                // B1 状态过滤下拉（BC 显示过滤器）
+                let filter_labels = [
+                    (ViewFilter::All, "全部"),
+                    (ViewFilter::Diff, "仅差异"),
+                    (ViewFilter::LeftOnly, "仅左侧"),
+                    (ViewFilter::RightOnly, "仅右侧"),
+                    (ViewFilter::Moved, "仅移动"),
+                    (ViewFilter::Same, "仅相同"),
+                ];
+                let cur = self.view_filter;
+                egui::ComboBox::from_id_salt("dir_view_filter")
+                    .selected_text(
+                        filter_labels
+                            .iter()
+                            .find(|(v, _)| *v == cur)
+                            .map(|(_, l)| *l)
+                            .unwrap_or("全部"),
+                    )
+                    .show_ui(ui, |ui| {
+                        for (v, l) in filter_labels {
+                            if ui.selectable_label(cur == v, l).clicked() {
+                                self.view_filter = v;
+                                self.rebuild_tree();
+                            }
+                        }
+                    });
                 ui.separator();
                 let mut inc = self.includes.clone();
                 let r1 = ui.add(

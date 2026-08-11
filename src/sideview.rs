@@ -38,6 +38,81 @@ impl Cell {
     }
 }
 
+/// 按最大字符数把单元格拆成多条视觉行（A8 自动换行）。
+/// 拆分段时同步切分高亮 segments，保持行内高亮语义。
+pub fn wrap_cell(cell: &Cell, max_chars: usize) -> Vec<Cell> {
+    if max_chars == 0 || cell.text.chars().count() <= max_chars {
+        return vec![cell.clone()];
+    }
+    // 展平为 (char, changed) 序列
+    let chars: Vec<(char, bool)> = cell
+        .segments
+        .iter()
+        .flat_map(|(s, ch)| s.chars().map(|c| (c, *ch)))
+        .collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let end = (i + max_chars).min(chars.len());
+        let mut segs: Vec<(String, bool)> = Vec::new();
+        let mut cur = String::new();
+        let mut cur_ch = chars[i].1;
+        for (c, ch) in &chars[i..end] {
+            if *ch != cur_ch && !cur.is_empty() {
+                segs.push((std::mem::take(&mut cur), cur_ch));
+                cur_ch = *ch;
+            }
+            cur.push(*c);
+        }
+        if !cur.is_empty() {
+            segs.push((cur, cur_ch));
+        }
+        let text: String = segs.iter().map(|(s, _)| s.as_str()).collect();
+        out.push(Cell {
+            text,
+            segments: segs,
+        });
+        i = end;
+    }
+    out
+}
+
+/// 按最大字符数把并排行展开为视觉行（A8 自动换行）。
+/// 返回 (视觉行列表, 每条视觉行对应的原始行索引)。
+/// 行号只在每段首行显示；短侧用空单元格占位保持对齐。
+pub fn wrap_rows(rows: &[SideRow], max_chars: usize) -> (Vec<SideRow>, Vec<usize>) {
+    let mut out = Vec::new();
+    let mut idx = Vec::new();
+    for (ri, row) in rows.iter().enumerate() {
+        let l = row
+            .left
+            .as_ref()
+            .map(|c| wrap_cell(c, max_chars))
+            .unwrap_or_default();
+        let r = row
+            .right
+            .as_ref()
+            .map(|c| wrap_cell(c, max_chars))
+            .unwrap_or_default();
+        let n = l.len().max(r.len()).max(1);
+        for k in 0..n {
+            let empty = || Cell {
+                text: String::new(),
+                segments: Vec::new(),
+            };
+            out.push(SideRow {
+                left: Some(l.get(k).cloned().unwrap_or_else(empty)),
+                right: Some(r.get(k).cloned().unwrap_or_else(empty)),
+                tag: row.tag,
+                left_no: if k == 0 { row.left_no } else { None },
+                right_no: if k == 0 { row.right_no } else { None },
+            });
+            idx.push(ri);
+        }
+    }
+    (out, idx)
+}
+
 /// 行级状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowTag {
@@ -361,5 +436,57 @@ mod tests {
         assert_eq!(rows[2].right_no, Some(2));
         assert_eq!(rows[3].left_no, Some(4));
         assert_eq!(rows[3].right_no, Some(3));
+    }
+
+    #[test]
+    fn wrap_cell_short_line_unchanged() {
+        let c = Cell::plain("abc");
+        let out = wrap_cell(&c, 80);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].text, "abc");
+    }
+
+    #[test]
+    fn wrap_cell_splits_long_line_keeps_highlight() {
+        let c = Cell {
+            text: "abcdefghij".to_string(),
+            segments: vec![("abcde".to_string(), true), ("fghij".to_string(), false)],
+        };
+        let out = wrap_cell(&c, 4);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0].text, "abcd");
+        assert_eq!(out[0].segments, vec![("abcd".to_string(), true)]);
+        assert_eq!(out[1].text, "efgh");
+        assert_eq!(out[2].text, "ij");
+        assert_eq!(out[2].segments, vec![("ij".to_string(), false)]);
+    }
+
+    #[test]
+    fn wrap_rows_expands_and_maps_origin() {
+        let rows = vec![
+            SideRow {
+                left: Some(Cell::plain("1234567890")),
+                right: Some(Cell::plain("1234567890")),
+                tag: RowTag::Equal,
+                left_no: Some(1),
+                right_no: Some(1),
+            },
+            SideRow {
+                left: Some(Cell::plain("x")),
+                right: Some(Cell::plain("yy")),
+                tag: RowTag::Replace,
+                left_no: Some(2),
+                right_no: Some(2),
+            },
+        ];
+        let (out, idx) = wrap_rows(&rows, 4);
+        // 行0 → 3 段；行1 → 1 段
+        assert_eq!(out.len(), 4);
+        assert_eq!(idx, vec![0, 0, 0, 1]);
+        // 首段保留行号，续段行号为 None
+        assert_eq!(out[0].left_no, Some(1));
+        assert_eq!(out[1].left_no, None);
+        assert_eq!(out[3].left_no, Some(2));
+        assert_eq!(out[3].tag, RowTag::Replace);
     }
 }

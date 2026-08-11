@@ -244,6 +244,8 @@ pub enum Key {
     IgnoreTrailing,
     /// 忽略大小写
     IgnoreCase,
+    /// 自动换行（A8）
+    WordWrap,
     /// ✏️ 编辑左侧
     EditLeft,
     /// ✏️ 编辑右侧
