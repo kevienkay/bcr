@@ -912,6 +912,7 @@ mod tests {
 
 #[cfg(test)]
 mod attrs_tests {
+    #[cfg(unix)]
     use super::*;
     #[cfg(unix)]
     use std::fs;
