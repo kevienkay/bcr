@@ -518,6 +518,34 @@ check_contains "C3.9 summary 统计" "冲突" "$(cat c3_sum.txt)"
 # C3.10 缺失目录退出码=2
 "$BIN" compare3 /nonexistent-c3-a /nonexistent-c3-b c3_r > /dev/null 2>&1; check "C3.10 缺失目录退出码=2" 2 "$?"
 
+echo "=============================================="
+echo " CSV: 表格对比"
+echo "=============================================="
+printf 'id,name,age\n1,alice,30\n2,bob,25\n3,carol,40\n' > csv_a.csv
+printf 'id,name,age\n1,alice,31\n2,bob,25\n4,dave,50\n' > csv_b.csv
+# CSV1 无 key 行号对齐：修改退出码=1
+"$BIN" csv csv_a.csv csv_b.csv > csv_out.txt; check "CSV1 行号对齐退出码=1" 1 "$?"
+check_contains "CSV2 修改行标记" "[M]" "$(cat csv_out.txt)"
+# CSV3 按主键对齐
+"$BIN" csv csv_a.csv csv_b.csv --key id > csv_key.txt; check "CSV3 主键对齐退出码=1" 1 "$?"
+check_contains "CSV4 孤儿行标记" "[L] 行3  id=3" "$(cat csv_key.txt)"
+check_contains "CSV5 右侧孤儿行" "[R] 行3  id=4" "$(cat csv_key.txt)"
+# CSV6 相同文件退出码=0
+"$BIN" csv csv_a.csv csv_a.csv > /dev/null 2>&1; check "CSV6 相同退出码=0" 0 "$?"
+# CSV7 引号字段解析（含逗号）
+printf 'id,note\n1,"a,b"\n' > csv_q1.csv
+printf 'id,note\n1,"a,c"\n' > csv_q2.csv
+"$BIN" csv csv_q1.csv csv_q2.csv > csv_q.txt; check "CSV7 引号字段退出码=1" 1 "$?"
+check_contains "CSV8 引号字段差异" "a,b -> a,c" "$(cat csv_q.txt)"
+# CSV9 summary 统计
+"$BIN" csv csv_a.csv csv_b.csv --key id --summary > csv_sum.txt
+check_contains "CSV9 summary 统计" "CSV 统计" "$(cat csv_sum.txt)"
+# CSV10 制表符分隔
+printf 'a\tb\n1\t2\n' > csv_t1.csv
+printf 'a\tb\n1\t3\n' > csv_t2.csv
+"$BIN" csv csv_t1.csv csv_t2.csv --delimiter '\t' > /dev/null 2>&1; check "CSV10 制表符分隔退出码=1" 1 "$?"
+
+
 
 echo "=============================================="
 echo " I18N: 多语言"

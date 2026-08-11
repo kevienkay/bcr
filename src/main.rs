@@ -1,5 +1,6 @@
 mod compare;
 mod compare3;
+mod csvcmp;
 mod diff;
 mod encoding;
 mod fsscan;
@@ -57,6 +58,9 @@ enum Commands {
     /// 三路文件夹对比（BASE + LEFT + RIGHT）
     Compare3(compare3::Compare3Args),
 
+    /// CSV/表格对比（按主键对齐，逐列 diff）
+    Csv(csvcmp::CsvArgs),
+
     /// 三路合并（Base + Left + Right），冲突输出标记块
     Merge(merge::MergeArgs),
 
@@ -112,6 +116,7 @@ fn main() {
         Commands::Hex(args) => hex::run(&args),
         Commands::Compare(args) => compare::run(&args),
         Commands::Compare3(args) => compare3::run(&args),
+        Commands::Csv(args) => csvcmp::run(&args),
         Commands::Merge(args) => merge::run(&args),
         Commands::Sync(args) => sync::run(&args),
         Commands::Session(args) => session::run(&args),

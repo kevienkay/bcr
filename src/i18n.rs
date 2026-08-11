@@ -165,6 +165,14 @@ pub enum Key {
     SummaryRmDir,
     /// 三路统计: {} 相同, {} 仅BASE, {} 仅LEFT, {} 仅RIGHT, {} 删除, {} 修改, {} 冲突
     SummaryCompare3,
+    /// 表头差异提示
+    CsvHeaderDiff,
+    /// 两个 CSV 完全相同
+    CsvIdentical,
+    /// 非法分隔符: {}
+    CsvBadDelimiter,
+    /// CSV 统计: {} 相同行, {} 仅左侧, {} 仅右侧, {} 修改
+    SummaryCsv,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}
