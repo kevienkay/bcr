@@ -269,7 +269,10 @@ fn detect_moves(result: &mut CompareResult, left: &dyn Vfs, right: &dyn Vfs) {
             // 始终用内容哈希确认移动（与 BC Detect Moves 一致）：
             // 仅对“仅左侧/仅右侧”候选对读内容，避免 size+mtime 巧合误判；
             // 走 Vfs::hash 流式计算，超大文件也不占内存
-            let same = match (left.hash(&result.entries[li].rel), right.hash(&result.entries[ri].rel)) {
+            let same = match (
+                left.hash(&result.entries[li].rel),
+                right.hash(&result.entries[ri].rel),
+            ) {
                 (Ok(lh), Ok(rh)) => lh == rh,
                 _ => false,
             };
@@ -419,7 +422,10 @@ pub fn run(args: &CompareArgs) -> i32 {
         let now = crate::i18n::fmt(Key::ReportGeneratedAt, &[]);
         let html = crate::htmlreport::render_html(&args.left, &args.right, &result, &now);
         if let Err(e) = std::fs::write(html_path, html) {
-            eprintln!("bcr: {}", fmt(Key::WriteFailed, &[html_path, &e.to_string()]));
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::WriteFailed, &[html_path, &e.to_string()])
+            );
             return 2;
         }
     }
@@ -657,11 +663,8 @@ mod tests {
         make_tree(d1.path(), &[("old.txt", "same-content")]);
         make_tree(d2.path(), &[("new.txt", "same-content")]);
         let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
-        let by_rel: std::collections::BTreeMap<&str, &FileEntry> = r
-            .entries
-            .iter()
-            .map(|e| (e.rel.as_str(), e))
-            .collect();
+        let by_rel: std::collections::BTreeMap<&str, &FileEntry> =
+            r.entries.iter().map(|e| (e.rel.as_str(), e)).collect();
         assert_eq!(by_rel["old.txt"].status, FileStatus::Moved);
         assert_eq!(by_rel["old.txt"].moved_to.as_deref(), Some("new.txt"));
         assert_eq!(r.stats.moved, 1);

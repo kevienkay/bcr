@@ -871,7 +871,11 @@ fn paint_hex_row(ui: &mut egui::Ui, row: &crate::hexview::HexRow, fg: Color32) {
         fg,
     );
     // 左侧 ascii
-    let l_ascii: String = row.left.iter().map(|&b| crate::hexview::ascii_byte(b)).collect();
+    let l_ascii: String = row
+        .left
+        .iter()
+        .map(|&b| crate::hexview::ascii_byte(b))
+        .collect();
     ui.painter().text(
         Pos2::new(x + HEX_L_ASCII_X, y + 2.0),
         egui::Align2::LEFT_TOP,
@@ -890,7 +894,11 @@ fn paint_hex_row(ui: &mut egui::Ui, row: &crate::hexview::HexRow, fg: Color32) {
         fg,
     );
     // 右侧 ascii
-    let r_ascii: String = row.right.iter().map(|&b| crate::hexview::ascii_byte(b)).collect();
+    let r_ascii: String = row
+        .right
+        .iter()
+        .map(|&b| crate::hexview::ascii_byte(b))
+        .collect();
     ui.painter().text(
         Pos2::new(x + HEX_R_ASCII_X, y + 2.0),
         egui::Align2::LEFT_TOP,

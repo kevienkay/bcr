@@ -162,7 +162,11 @@ fn run_list() -> i32 {
             "{} ↔ {}{}{}",
             s.left,
             s.right,
-            if s.compare_content { " --compare-content" } else { "" },
+            if s.compare_content {
+                " --compare-content"
+            } else {
+                ""
+            },
             if s.includes.is_empty() {
                 String::new()
             } else {
