@@ -24,6 +24,12 @@ pub struct Session {
     pub includes: Vec<String>,
     #[serde(default)]
     pub excludes: Vec<String>,
+    /// 收藏标记（会话中心优先展示）
+    #[serde(default)]
+    pub favorite: bool,
+    /// 最近使用时间（unix 秒，会话中心排序）
+    #[serde(default)]
+    pub last_used: Option<u64>,
 }
 
 fn default_true() -> bool {
@@ -137,6 +143,8 @@ fn run_save(a: &SaveArgs) -> i32 {
             detect_moves: !a.no_detect_moves,
             includes: a.includes.clone(),
             excludes: a.excludes.clone(),
+            favorite: false,
+            last_used: None,
         },
     );
     match save_all(&all) {
@@ -238,6 +246,8 @@ mod tests {
                 detect_moves: false,
                 includes: vec!["*.rs".into()],
                 excludes: vec!["target/**".into()],
+                favorite: true,
+                last_used: Some(123456),
             },
         );
         let toml_str = toml::to_string_pretty(&s).unwrap();

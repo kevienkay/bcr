@@ -40,6 +40,18 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - mirror 模式**空目录清理 `[RMDIR]`**：镜像删除目标侧独有文件后，级联清理空目录（自底向上）
 - 统计行新增 rename/rmdir 计数
 
+### P16 会话收藏与文本 diff 细节
+
+- **会话收藏**：GUI 会话中心支持 ★ 收藏标记与最近使用时间排序（收藏优先），打开会话自动记录最近使用
+- **编辑撤销/重做**：GUI 行内编辑框内置 Ctrl+Z / Ctrl+Y（egui TextEdit undoer）
+- **No newline 标记**：`bcr diff` 对不以换行结尾的文件输出 `\ No newline at end of file`（GNU diff 兼容）
+- **CRLF 忽略**：`bcr diff --ignore-crlf` 归一化行尾 CR/LF 差异（CLI 与 GUI 共用）
+
+### P15 报告字段定制
+
+- `bcr compare A B --txt r.txt --csv r.csv --report-fields status,path,size,mtime,moved`：选择报告字段（默认全部）
+- 文本报告每行展示所选字段；CSV 表头/列随字段变化（mtime 输出 `YYYY-MM-DD HH:MM:SS`）
+
 ### P14 细节打磨（GUI 目录对比）
 
 - **自动刷新**：目录对比每 2 秒自动重扫（无需手动点刷新）

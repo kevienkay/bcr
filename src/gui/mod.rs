@@ -490,15 +490,23 @@ impl eframe::App for DiffApp {
                 });
         }
 
-        // 会话中心弹窗：列出已保存会话，点击打开目录对比
+        // 会话中心弹窗：列出已保存会话，点击打开目录对比（收藏优先 + 最近使用排序）
         if self.show_sessions {
-            let sessions = crate::session::load();
+            let mut sessions = crate::session::load();
             let mut keep = true;
             let mut open_req: Option<(String, String)> = None;
             let mut delete_req: Option<String> = None;
+            let mut fav_req: Option<String> = None;
+            // 排序：收藏优先，其次最近使用
+            let mut order: Vec<(String, bool, u64)> = sessions
+                .sessions
+                .iter()
+                .map(|(n, s)| (n.clone(), s.favorite, s.last_used.unwrap_or(0)))
+                .collect();
+            order.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)));
             egui::Window::new("会话中心")
                 .collapsible(false)
-                .default_size([520.0, 380.0])
+                .default_size([560.0, 400.0])
                 .open(&mut keep)
                 .show(ui.ctx(), |ui| {
                     ui.horizontal(|ui| {
@@ -517,8 +525,20 @@ impl eframe::App for DiffApp {
                         ui.label("暂无会话，可在命令行用 bcr session save 保存");
                     }
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for (name, s) in &sessions.sessions {
+                        for (name, fav, _last) in &order {
+                            let Some(s) = sessions.sessions.get(name) else {
+                                continue;
+                            };
                             ui.horizontal(|ui| {
+                                // 收藏星标
+                                let star = if *fav { "★" } else { "☆" };
+                                if ui
+                                    .small_button(star)
+                                    .on_hover_text("收藏/取消收藏")
+                                    .clicked()
+                                {
+                                    fav_req = Some(name.clone());
+                                }
                                 let opts = format!(
                                     "{}{}",
                                     if s.compare_content { " [hash]" } else { "" },
@@ -546,7 +566,27 @@ impl eframe::App for DiffApp {
                         }
                     });
                 });
+            // 收藏切换
+            if let Some(name) = fav_req {
+                if let Some(s) = sessions.sessions.get_mut(&name) {
+                    s.favorite = !s.favorite;
+                }
+                let _ = crate::session::save_all(&sessions);
+                self.show_sessions = false;
+                self.show_sessions = true;
+            }
             if let Some((l, r)) = open_req {
+                // 记录最近使用时间
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                for s in sessions.sessions.values_mut() {
+                    if s.left == l && s.right == r {
+                        s.last_used = Some(now);
+                    }
+                }
+                let _ = crate::session::save_all(&sessions);
                 self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
             }
             if let Some(name) = delete_req {
