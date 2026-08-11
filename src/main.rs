@@ -13,6 +13,7 @@ mod i18n;
 mod imgcmp;
 mod merge;
 mod mergeview;
+mod profile;
 mod render;
 mod session;
 mod sideview;
@@ -74,6 +75,9 @@ enum Commands {
     /// 会话管理（save/list/run/delete，持久化比较配置）
     Session(session::SessionArgs),
 
+    /// 比较规则 Profile（save/list/delete，可复用规则集）
+    Profile(profile::ProfileArgs),
+
     /// GUI 并排 Diff 视图（egui）
     Gui(gui::GuiArgs),
 }
@@ -125,6 +129,7 @@ fn main() {
         Commands::Merge(args) => merge::run(&args),
         Commands::Sync(args) => sync::run(&args),
         Commands::Session(args) => session::run(&args),
+        Commands::Profile(args) => profile::run(&args),
         Commands::Gui(args) => gui::run(&args),
     };
     std::process::exit(code);

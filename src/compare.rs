@@ -12,7 +12,7 @@ const BLUE: &str = "\x1b[34m";
 const RESET: &str = "\x1b[0m";
 
 /// compare 子命令参数
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct CompareArgs {
     /// 左侧目录
     pub left: String,
@@ -48,9 +48,50 @@ pub struct CompareArgs {
     #[arg(long = "html")]
     pub html: Option<String>,
 
+    /// 复用已保存的规则 Profile（过滤/忽略/编码等，可叠加本命令显式参数）
+    #[arg(long)]
+    pub profile: Option<String>,
+
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
+}
+
+/// 合并 Profile 到命令参数：Profile 提供默认值，命令显式参数优先。
+fn merge_profile(args: &CompareArgs) -> CompareArgs {
+    let Some(name) = &args.profile else {
+        return args.clone();
+    };
+    let Ok(p) = crate::profile::get(name) else {
+        eprintln!(
+            "bcr: {}",
+            crate::i18n::fmt(crate::i18n::Key::ProfileNotFound, &[name])
+        );
+        std::process::exit(2);
+    };
+    let mut out = args.clone();
+    if out.includes.is_empty() {
+        out.includes = p.includes;
+    }
+    if out.excludes.is_empty() {
+        out.excludes = p.excludes;
+    }
+    if !out.compare_content && p.compare_content {
+        out.compare_content = true;
+    }
+    if out.detect_moves && !p.detect_moves {
+        out.detect_moves = false;
+    }
+    if let Some(enc) = p.encoding {
+        // 仅当用户未显式指定编码时应用（--encoding 是全局参数，已写入 BCR_ENCODING）
+        if std::env::var("BCR_ENCODING")
+            .map(|v| v.is_empty())
+            .unwrap_or(true)
+        {
+            unsafe { std::env::set_var("BCR_ENCODING", enc) };
+        }
+    }
+    out
 }
 
 /// 文件比较状态
@@ -320,6 +361,9 @@ fn detect_moves(result: &mut CompareResult, left: &dyn Vfs, right: &dyn Vfs) {
 /// 运行 compare 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
 /// 运行 compare 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
 pub fn run(args: &CompareArgs) -> i32 {
+    // Profile 规则合并：profile 提供过滤/忽略/编码等默认值，命令显式参数覆盖
+    let merged = merge_profile(args);
+    let args = &merged;
     // 本地路径需要是目录；zip:// 与 sftp:// 交给 vfs::open 处理
     if !crate::vfs::is_remote(&args.left) && !Path::new(&args.left).is_dir() {
         eprintln!("bcr: {}", fmt(Key::NotDir, &[&args.left]));
@@ -468,6 +512,7 @@ mod tests {
             detect_moves: true,
             summary: false,
             html: None,
+            profile: None,
             color: "never".into(),
         }
     }

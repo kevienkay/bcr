@@ -154,6 +154,18 @@ pub enum Key {
     SessionNotFound,
     /// 会话已删除: {}
     SessionDeleted,
+    /// Profile 已存在: {}（P10）
+    ProfileExists,
+    /// Profile 已保存: {}（P10）
+    ProfileSaved,
+    /// Profile 写入失败: {}（P10）
+    ProfileWriteFailed,
+    /// 暂无 Profile（用 bcr profile save <name> 保存）（P10）
+    ProfileEmpty,
+    /// Profile 不存在: {}（P10）
+    ProfileNotFound,
+    /// Profile 已删除: {}（P10）
+    ProfileDeleted,
     /// [MOVE] {} -> {}（同步重命名标签）
     TagRename,
     /// 重命名 {} -> {} 失败: {}

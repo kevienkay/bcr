@@ -194,6 +194,7 @@ fn run_run(a: &RunArgs) -> i32 {
         detect_moves: s.detect_moves,
         summary: false,
         html: None,
+        profile: None,
         color: "auto".into(),
     };
     crate::compare::run(&args)

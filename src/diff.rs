@@ -5,7 +5,7 @@ use similar::{capture_diff_slices, Algorithm};
 use std::io::{self, IsTerminal};
 
 /// diff 子命令参数
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct DiffArgs {
     /// 左侧文件（- 表示从 stdin 读取）
     pub left: String,
@@ -40,10 +40,17 @@ pub struct DiffArgs {
     /// 输出标签，最多两个（对应左右两侧），默认使用文件名
     #[arg(short = 'L', num_args = 1..=2)]
     pub labels: Vec<String>,
+
+    /// 复用已保存的规则 Profile（忽略选项等）
+    #[arg(long)]
+    pub profile: Option<String>,
 }
 
 /// 运行 diff 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
 pub fn run(args: &DiffArgs) -> i32 {
+    // Profile 合并：忽略选项默认值来自 Profile，命令显式参数优先
+    let merged = merge_profile(args);
+    let args = &merged;
     let left = match read_input(&args.left) {
         Ok(s) => s,
         Err(ReadErr::Binary) => {
@@ -131,6 +138,39 @@ pub fn run(args: &DiffArgs) -> i32 {
     1 // 有差异
 }
 
+/// 合并 Profile 到 diff 参数（仅合并忽略选项）
+fn merge_profile(args: &DiffArgs) -> DiffArgs {
+    let Some(name) = &args.profile else {
+        return args.clone();
+    };
+    let Ok(p) = crate::profile::get(name) else {
+        eprintln!(
+            "bcr: {}",
+            crate::i18n::fmt(crate::i18n::Key::ProfileNotFound, &[name])
+        );
+        std::process::exit(2);
+    };
+    let mut out = args.clone();
+    if !out.ignore_whitespace && p.ignore_whitespace {
+        out.ignore_whitespace = true;
+    }
+    if !out.ignore_trailing && p.ignore_trailing {
+        out.ignore_trailing = true;
+    }
+    if !out.ignore_case && p.ignore_case {
+        out.ignore_case = true;
+    }
+    if let Some(enc) = p.encoding {
+        if std::env::var("BCR_ENCODING")
+            .map(|v| v.is_empty())
+            .unwrap_or(true)
+        {
+            unsafe { std::env::set_var("BCR_ENCODING", enc) };
+        }
+    }
+    out
+}
+
 /// 按忽略选项归一化一行，仅用于匹配，不改变输出内容
 fn normalize(line: &str, args: &DiffArgs) -> String {
     normalize_line(
@@ -208,6 +248,7 @@ mod tests {
             color: "never".into(),
             highlight: false,
             labels: vec![],
+            profile: None,
         }
     }
 
