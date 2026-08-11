@@ -14,6 +14,7 @@ mod i18n;
 mod imgcmp;
 mod merge;
 mod mergeview;
+mod mp3tag;
 mod profile;
 mod render;
 mod report;
@@ -59,6 +60,9 @@ enum Commands {
 
     /// 图片对比（逐像素差异 + 统计，PNG/JPEG/GIF/WebP/BMP）
     Imgcmp(imgcmp::ImgcmpArgs),
+
+    /// MP3 标签对比（ID3v1/v2，字段级差异）
+    Mp3tag(mp3tag::Mp3tagArgs),
 
     /// 对比两个目录树（快速元数据比较或深度内容比较）
     Compare(compare::CompareArgs),
@@ -126,6 +130,7 @@ fn main() {
         Commands::Diff(args) => diff::run(&args),
         Commands::Hex(args) => hex::run(&args),
         Commands::Imgcmp(args) => imgcmp::run(&args),
+        Commands::Mp3tag(args) => mp3tag::run(&args),
         Commands::Compare(args) => compare::run(&args),
         Commands::Compare3(args) => compare3::run(&args),
         Commands::Csv(args) => csvcmp::run(&args),
