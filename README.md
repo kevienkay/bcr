@@ -128,7 +128,7 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - 覆盖全部 CLI 输出（错误消息/统计行/同步标签）与 GUI 文案（菜单/工具栏/标签页/Git 弹窗）
 - 翻译表由宏保证穷尽：新增文案若缺少任一语言翻译会编译失败
 
-### M6 虚拟文件系统（`zip://` / `tar://` / `7z://` / `sftp://` / `ftp://`）
+### M6 虚拟文件系统（`zip://` / `tar://` / `7z://` / `sftp://` / `ftp://` / `webdav://`）
 
 - compare/sync 的路径参数支持虚拟后端，可跨后端混合对比：
   - `zip://path/to/archive.zip`：把 ZIP 压缩包当作目录树（可读写：write/delete/set_mtime 全量重写）
@@ -136,6 +136,7 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
   - `7z://path/x.7z`：7-Zip 压缩包（只读，全量解压进内存）
   - `sftp://[user[:pass]@]host[:port]/remote/path`：SFTP 远程目录（可读写，含 mtime 保留）
   - `ftp://[user[:pass]@]host[:port]/remote/path`：FTP 远程目录（可读写；无标准 mtime 设置命令，同步建议 `--compare-content`）
+  - `webdav://[user[:pass]@]host[:port]/remote/path` / `webdavs://...`：WebDAV 远程目录（可读写：PROPFIND/GET/PUT/DELETE/MKCOL/MOVE，Basic Auth）
   - 普通路径仍为本地目录，可任意组合（本地 vs zip、zip vs tar.gz、本地 vs sftp、sftp vs ftp 等）
 - 例：`bcr compare src/ "zip://backup.zip" --compare-content`、`bcr sync local/ "sftp://alice@nas/srv" --mode mirror --dry-run`、`bcr compare src/ "tar://backup.tar.gz"`、`bcr sync pub/ "ftp://mirror@files.example.com:/srv/pub" --mode update`
 - 内部通过 [`Vfs`] trait 统一抽象（scan/read/write/delete/set_mtime），CLI 与 GUI 共用
