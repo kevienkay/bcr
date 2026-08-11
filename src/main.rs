@@ -15,6 +15,7 @@ mod merge;
 mod mergeview;
 mod profile;
 mod render;
+mod report;
 mod session;
 mod sideview;
 mod sync;

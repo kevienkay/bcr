@@ -48,6 +48,14 @@ pub struct CompareArgs {
     #[arg(long = "html")]
     pub html: Option<String>,
 
+    /// 导出文本对比报告到指定文件（统计 + 差异条目表）
+    #[arg(long = "txt")]
+    pub txt: Option<String>,
+
+    /// 导出 CSV 对比报告到指定文件（机器可读，每行一个条目）
+    #[arg(long = "csv")]
+    pub csv: Option<String>,
+
     /// 复用已保存的规则 Profile（过滤/忽略/编码等，可叠加本命令显式参数）
     #[arg(long)]
     pub profile: Option<String>,
@@ -473,6 +481,26 @@ pub fn run(args: &CompareArgs) -> i32 {
             return 2;
         }
     }
+    if let Some(txt_path) = &args.txt {
+        let txt = crate::report::render_txt(&args.left, &args.right, &result);
+        if let Err(e) = std::fs::write(txt_path, txt) {
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::WriteFailed, &[txt_path, &e.to_string()])
+            );
+            return 2;
+        }
+    }
+    if let Some(csv_path) = &args.csv {
+        let csv = crate::report::render_csv(&args.left, &args.right, &result);
+        if let Err(e) = std::fs::write(csv_path, csv) {
+            eprintln!(
+                "bcr: {}",
+                fmt(Key::WriteFailed, &[csv_path, &e.to_string()])
+            );
+            return 2;
+        }
+    }
 
     if result.stats.has_differences() {
         1
@@ -512,6 +540,8 @@ mod tests {
             detect_moves: true,
             summary: false,
             html: None,
+            txt: None,
+            csv: None,
             profile: None,
             color: "never".into(),
         }

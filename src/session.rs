@@ -194,6 +194,8 @@ fn run_run(a: &RunArgs) -> i32 {
         detect_moves: s.detect_moves,
         summary: false,
         html: None,
+        txt: None,
+        csv: None,
         profile: None,
         color: "auto".into(),
     };
