@@ -8,6 +8,7 @@
 mod common;
 mod difftab;
 mod dirtab;
+mod imagetab;
 mod mergetab;
 
 use crate::sideview::ViewOptions;
@@ -15,6 +16,7 @@ use common::*;
 use difftab::DiffTab;
 use dirtab::DirTab;
 use eframe::egui::{self, RichText, ThemePreference};
+use imagetab::ImageTab;
 use mergetab::MergeTab;
 use std::path::PathBuf;
 
@@ -49,6 +51,7 @@ enum Tab {
     Diff(DiffTab),
     Dir(DirTab),
     Merge(MergeTab),
+    Image(ImageTab),
 }
 
 impl Tab {
@@ -57,6 +60,7 @@ impl Tab {
             Tab::Diff(t) => t.title(),
             Tab::Dir(t) => t.title(),
             Tab::Merge(t) => t.title(),
+            Tab::Image(t) => t.title(),
         }
     }
 }
@@ -198,7 +202,7 @@ impl DiffApp {
                 }
             }
             (_, [a]) => {
-                // 单个文件：补到当前 diff 标签或新建
+                // 单个文件：补到当前 diff 标签或新建（图片文件走图片对比）
                 self.drop_single_file(a);
             }
             (d1, []) if d1.len() >= 2 => {
@@ -223,6 +227,24 @@ impl DiffApp {
     }
 
     fn drop_single_file(&mut self, path: &str) {
+        // 图片：若当前是图片标签且有一侧空 → 填充；否则新建图片标签
+        if crate::imgcmp::is_image_file(path) {
+            if let Some(Tab::Image(t)) = self.tabs.get_mut(self.active) {
+                if t.left.is_empty() || !std::path::Path::new(&t.left).exists() {
+                    let r = t.right.clone();
+                    t.load_pair(path, &r);
+                    return;
+                }
+                if t.right.is_empty() || !std::path::Path::new(&t.right).exists() {
+                    let l = t.left.clone();
+                    t.load_pair(&l, path);
+                    return;
+                }
+            }
+            let t = ImageTab::new(path, "");
+            self.add_tab(Tab::Image(t));
+            return;
+        }
         // 若当前是 diff 标签且有一侧空 → 填充；否则新建 diff 标签
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
             if t.left.is_none() {
@@ -242,6 +264,11 @@ impl DiffApp {
     fn open_diff_files(&mut self) {
         let Some(l) = pick_file() else { return };
         let Some(r) = pick_file() else { return };
+        // 两侧均为图片 → 图片对比标签
+        if crate::imgcmp::is_image_file(&l) && crate::imgcmp::is_image_file(&r) {
+            self.add_tab(Tab::Image(ImageTab::new(&l, &r)));
+            return;
+        }
         let mut t = DiffTab::new();
         t.load_pair(&l, &r, ViewOptions::default());
         self.add_tab(Tab::Diff(t));
@@ -463,6 +490,7 @@ impl eframe::App for DiffApp {
                     open_diff_req = t.open_diff.take();
                 }
                 Tab::Merge(t) => t.ui(ui),
+                Tab::Image(t) => t.ui(ui),
             }
         }
 
@@ -470,14 +498,17 @@ impl eframe::App for DiffApp {
             // 目录对比双击 → 打开该文件的并排 diff（用 Path::join 保证跨平台分隔符）
             if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
                 let (l, r) = (dir_tab.left.clone(), dir_tab.right.clone());
-                let mut t = DiffTab::new();
                 let l = std::path::Path::new(&l).join(&rel);
                 let r = std::path::Path::new(&r).join(&rel);
-                t.load_pair(
-                    &l.to_string_lossy(),
-                    &r.to_string_lossy(),
-                    ViewOptions::default(),
-                );
+                // 图片文件 → 图片对比标签
+                let ls = l.to_string_lossy();
+                let rs = r.to_string_lossy();
+                if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
+                    self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
+                    return;
+                }
+                let mut t = DiffTab::new();
+                t.load_pair(&ls, &rs, ViewOptions::default());
                 self.add_tab(Tab::Diff(t));
             }
         }
@@ -578,6 +609,8 @@ pub fn run(args: &GuiArgs) -> i32 {
                 let rp = std::path::Path::new(r);
                 if lp.is_dir() && rp.is_dir() {
                     app.add_tab(Tab::Dir(DirTab::new(l, r)));
+                } else if crate::imgcmp::is_image_file(l) && crate::imgcmp::is_image_file(r) {
+                    app.add_tab(Tab::Image(ImageTab::new(l, r)));
                 } else {
                     let mut t = DiffTab::new();
                     t.show_stats = show_stats;
@@ -862,6 +895,57 @@ mod tests {
         let mut t = MergeTab::new(&b, &l, &r);
         egui::__run_test_ui(|ui| {
             t.ui(ui);
+        });
+    }
+
+    // ---- ImageTab：图片对比标签 ----------------
+
+    /// 生成纯色 PNG 并写入临时目录，返回路径
+    fn write_png(dir: &std::path::Path, name: &str, rgba: [u8; 4]) -> String {
+        let img = image::RgbaImage::from_pixel(4, 4, image::Rgba(rgba));
+        let p = dir.join(name);
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(
+                &mut std::io::BufWriter::new(std::fs::File::create(&p).unwrap()),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        p.to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn imagetab_load_and_stats() {
+        let d = tempdir().unwrap();
+        let a = write_png(d.path(), "a.png", [10, 20, 30, 255]);
+        let b = write_png(d.path(), "b.png", [10, 20, 30, 255]);
+        let c = write_png(d.path(), "c.png", [10, 20, 99, 255]);
+        // 相同图 → 无差异
+        let mut t = ImageTab::new(&a, &b);
+        assert!(t.error.is_none());
+        assert!(!t.pair.as_ref().unwrap().stats.has_differences());
+        // 不同图 → 有差异
+        t.load_pair(&a, &c);
+        assert!(t.pair.as_ref().unwrap().stats.has_differences());
+        // 空右侧 → 不加载不报错
+        t.load_pair(&a, "");
+        assert!(t.pair.is_none());
+        assert!(t.error.is_none());
+    }
+
+    #[test]
+    fn imagetab_renders_headless() {
+        let d = tempdir().unwrap();
+        let a = write_png(d.path(), "a.png", [1, 2, 3, 255]);
+        let b = write_png(d.path(), "b.png", [1, 2, 4, 255]);
+        let mut t = ImageTab::new(&a, &b);
+        t.show_overlay = true;
+        egui::__run_test_ui(|ui| {
+            t.ui(ui);
+        });
+        // 空标签页也不 panic
+        let mut t2 = ImageTab::new("", "");
+        egui::__run_test_ui(|ui| {
+            t2.ui(ui);
         });
     }
 

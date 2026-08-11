@@ -10,6 +10,7 @@ mod hexview;
 mod highlight;
 mod htmlreport;
 mod i18n;
+mod imgcmp;
 mod merge;
 mod mergeview;
 mod render;
@@ -51,6 +52,9 @@ enum Commands {
 
     /// 十六进制对比两个文件（二进制友好，按字节输出差异）
     Hex(hex::HexArgs),
+
+    /// 图片对比（逐像素差异 + 统计，PNG/JPEG/GIF/WebP/BMP）
+    Imgcmp(imgcmp::ImgcmpArgs),
 
     /// 对比两个目录树（快速元数据比较或深度内容比较）
     Compare(compare::CompareArgs),
@@ -114,6 +118,7 @@ fn main() {
     let code = match cli.command {
         Commands::Diff(args) => diff::run(&args),
         Commands::Hex(args) => hex::run(&args),
+        Commands::Imgcmp(args) => imgcmp::run(&args),
         Commands::Compare(args) => compare::run(&args),
         Commands::Compare3(args) => compare3::run(&args),
         Commands::Csv(args) => csvcmp::run(&args),
