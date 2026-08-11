@@ -8,17 +8,18 @@ use super::Vfs;
 use crate::fsscan::{FileMeta, Filter};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
 pub struct ZipVfs {
     /// 压缩包路径（仅用于描述）
     path: String,
-    /// by_name 需要 &mut，用 RefCell 提供内部可变性
-    archive: RefCell<ZipArchive<std::fs::File>>,
+    /// by_name 需要 &mut，用 RefCell 提供内部可变性；
+    /// 写入/删除时 take 出来释放文件句柄，重写完成后再装回（Windows 上替换文件需要先关闭）
+    archive: RefCell<Option<ZipArchive<std::fs::File>>>,
     /// 条目名 -> (大小, mtime)
-    index: BTreeMap<String, (u64, Option<SystemTime>)>,
+    index: RefCell<BTreeMap<String, (u64, Option<SystemTime>)>>,
 }
 
 impl ZipVfs {
@@ -47,9 +48,89 @@ impl ZipVfs {
 
         Ok(ZipVfs {
             path: path.to_string(),
-            archive: RefCell::new(archive),
-            index,
+            archive: RefCell::new(Some(archive)),
+            index: RefCell::new(index),
         })
+    }
+
+    /// 重写整个 zip：复制旧条目（跳过 skip），再执行 write_fn 写新条目，原子替换原文件并重建索引。
+    /// 通过 take 释放旧文件句柄，保证 Windows 上可以替换被占用的文件。
+    fn rewrite(
+        &self,
+        skip: Option<&str>,
+        write_fn: impl FnOnce(&mut zip::ZipWriter<std::fs::File>) -> io::Result<()>,
+    ) -> io::Result<()> {
+        // 1. 释放旧句柄并取出旧条目列表
+        let mut old = self
+            .archive
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| io::Error::other("zip 后端未初始化"))?;
+        let mut old_entries: Vec<(String, bool)> = Vec::new(); // (name, is_dir)
+        for i in 0..old.len() {
+            let e = old.by_index(i).map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidData, format!("ZIP 条目失败: {e}"))
+            })?;
+            old_entries.push((e.name().to_string(), e.is_dir()));
+        }
+
+        // 2. 写临时文件
+        let tmp_path = format!("{}.bcr-tmp{}", self.path, std::process::id());
+        let result = (|| -> io::Result<()> {
+            let out = std::fs::File::create(&tmp_path)?;
+            let mut writer = zip::ZipWriter::new(out);
+            // 复制旧条目（跳过目标条目）
+            for (name, is_dir) in &old_entries {
+                if skip.is_some() && skip == Some(name.as_str()) {
+                    continue;
+                }
+                if *is_dir {
+                    // 目录条目：仅当无同名文件时重建
+                    if !old_entries.iter().any(|(n, d)| !d && n == name) {
+                        let idx = old_entries.iter().position(|(n, _)| n == name).unwrap();
+                        if let Ok(e) = old.by_index(idx) {
+                            let _ = writer.raw_copy_file(e);
+                        }
+                    }
+                    continue;
+                }
+                let idx = old_entries.iter().position(|(n, _)| n == name).unwrap();
+                let e = old.by_index(idx).map_err(|e| {
+                    io::Error::new(io::ErrorKind::InvalidData, format!("ZIP 条目失败: {e}"))
+                })?;
+                writer
+                    .raw_copy_file(e)
+                    .map_err(|e| io::Error::other(format!("ZIP 复制失败: {e}")))?;
+            }
+            // 写新条目
+            write_fn(&mut writer)?;
+            writer
+                .finish()
+                .map_err(|e| io::Error::other(format!("ZIP 写入失败: {e}")))?;
+            // 3. 原子替换
+            std::fs::rename(&tmp_path, &self.path)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&tmp_path);
+        }
+        // 4. 重建（无论成功失败都重新打开，失败时恢复原状）
+        let reopened = Self::open(&self.path);
+        match reopened {
+            Ok(v) => {
+                *self.archive.borrow_mut() = Some(v.archive.borrow_mut().take().unwrap());
+                *self.index.borrow_mut() = std::mem::take(&mut *v.index.borrow_mut());
+                result
+            }
+            Err(e) => {
+                // 重写失败且重建也失败：保持空态，返回原始错误
+                if result.is_err() {
+                    result
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 }
 
@@ -77,14 +158,43 @@ fn zip_dt_to_systemtime(dt: zip::DateTime) -> SystemTime {
     }
 }
 
+/// 把 SystemTime 转回 zip DateTime（zip 8 无公共转换，手动按字段构造，精度秒）
+fn systemtime_to_zip_dt(t: SystemTime) -> zip::DateTime {
+    let secs = t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let days = secs / 86400;
+    let rem = secs % 86400;
+    let (hour, minute, second) = (rem / 3600, (rem % 3600) / 60, rem % 60);
+    // days-from-civil 逆运算（Howard Hinnant）
+    let z = days as i64 + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = if m <= 2 { y + 1 } else { y };
+    zip::DateTime::from_date_and_time(
+        year as u16,
+        m as u8,
+        d as u8,
+        hour as u8,
+        minute as u8,
+        second as u8,
+    )
+    .unwrap_or_default()
+}
+
 impl Vfs for ZipVfs {
     fn describe(&self) -> String {
         format!("zip://{}", self.path)
     }
 
     fn scan(&self, filter: &Filter) -> io::Result<BTreeMap<String, FileMeta>> {
+        let index = self.index.borrow();
         let mut map = BTreeMap::new();
-        for (rel, (size, mtime)) in &self.index {
+        for (rel, (size, mtime)) in index.iter() {
             if !filter.accept(rel) {
                 continue;
             }
@@ -100,7 +210,10 @@ impl Vfs for ZipVfs {
     }
 
     fn read(&self, rel: &str) -> io::Result<Vec<u8>> {
-        let mut archive = self.archive.borrow_mut();
+        let mut guard = self.archive.borrow_mut();
+        let archive = guard
+            .as_mut()
+            .ok_or_else(|| io::Error::other("zip 后端未初始化"))?;
         let mut entry = archive.by_name(rel).map_err(|e| {
             io::Error::new(io::ErrorKind::NotFound, format!("ZIP 读取 {rel} 失败: {e}"))
         })?;
@@ -110,7 +223,10 @@ impl Vfs for ZipVfs {
     }
 
     fn hash(&self, rel: &str) -> io::Result<blake3::Hash> {
-        let mut archive = self.archive.borrow_mut();
+        let mut guard = self.archive.borrow_mut();
+        let archive = guard
+            .as_mut()
+            .ok_or_else(|| io::Error::other("zip 后端未初始化"))?;
         let mut entry = archive.by_name(rel).map_err(|e| {
             io::Error::new(io::ErrorKind::NotFound, format!("ZIP 读取 {rel} 失败: {e}"))
         })?;
@@ -127,42 +243,68 @@ impl Vfs for ZipVfs {
     }
 
     fn exists(&self, rel: &str) -> io::Result<bool> {
-        Ok(self.index.contains_key(rel))
+        Ok(self.index.borrow().contains_key(rel))
     }
 
-    fn write(&self, _rel: &str, _data: &[u8]) -> io::Result<()> {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "ZIP 为只读后端，不支持写入",
-        ))
+    fn write(&self, rel: &str, data: &[u8]) -> io::Result<()> {
+        let rel = rel.to_string();
+        let data = data.to_vec();
+        self.rewrite(Some(&rel), |writer| {
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated)
+                .last_modified_time(zip::DateTime::default());
+            writer
+                .start_file(&rel, opts)
+                .map_err(|e| io::Error::other(format!("ZIP 写入 {rel} 失败: {e}")))?;
+            writer
+                .write_all(&data)
+                .map_err(|e| io::Error::other(format!("ZIP 写入 {rel} 失败: {e}")))?;
+            Ok(())
+        })
     }
 
-    fn delete(&self, _rel: &str) -> io::Result<()> {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "ZIP 为只读后端，不支持删除",
-        ))
+    fn delete(&self, rel: &str) -> io::Result<()> {
+        if !self.exists(rel)? {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("ZIP 删除 {rel}: 不存在"),
+            ));
+        }
+        let rel = rel.to_string();
+        self.rewrite(Some(&rel), |_| Ok(()))
     }
 
     fn remove_dir(&self, _rel: &str) -> io::Result<()> {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "ZIP 为只读后端，不支持删除目录",
-        ))
+        // ZIP 没有显式目录树，目录是隐式的；无需清理
+        Ok(())
     }
 
-    fn rename(&self, _from: &str, _to: &str) -> io::Result<()> {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "ZIP 为只读后端，不支持重命名",
-        ))
+    fn rename(&self, from: &str, to: &str) -> io::Result<()> {
+        if from == to {
+            return Ok(());
+        }
+        let data = self.read(from)?;
+        self.write(to, &data)?;
+        self.delete(from)
     }
 
-    fn set_mtime(&self, _rel: &str, _t: SystemTime) -> io::Result<()> {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "ZIP 为只读后端，不支持修改时间",
-        ))
+    fn set_mtime(&self, rel: &str, t: SystemTime) -> io::Result<()> {
+        let rel = rel.to_string();
+        // 读取原内容，重写该条目并设置新时间
+        let data = self.read(&rel)?;
+        let dt = systemtime_to_zip_dt(t);
+        self.rewrite(Some(&rel), |writer| {
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated)
+                .last_modified_time(dt);
+            writer
+                .start_file(&rel, opts)
+                .map_err(|e| io::Error::other(format!("ZIP 写时间 {rel} 失败: {e}")))?;
+            writer
+                .write_all(&data)
+                .map_err(|e| io::Error::other(format!("ZIP 写时间 {rel} 失败: {e}")))?;
+            Ok(())
+        })
     }
 }
 
@@ -239,14 +381,62 @@ mod tests {
     }
 
     #[test]
-    fn write_delete_rejected_readonly() {
+    fn write_delete_mtime_roundtrip() {
         let d = tempdir().unwrap();
         let zp = d.path().join("t.zip");
         make_zip(&zp);
         let v = ZipVfs::open(zp.to_str().unwrap()).unwrap();
-        assert!(v.write("x.txt", b"x").is_err());
-        assert!(v.delete("a.txt").is_err());
-        assert!(v.set_mtime("a.txt", UNIX_EPOCH).is_err());
+        // 新增条目
+        v.write("new.txt", b"new-content").unwrap();
+        assert_eq!(v.read("new.txt").unwrap(), b"new-content");
+        // 覆盖已有条目
+        v.write("a.txt", b"updated").unwrap();
+        assert_eq!(v.read("a.txt").unwrap(), b"updated");
+        // 删除条目
+        v.delete("sub/b.txt").unwrap();
+        assert!(!v.exists("sub/b.txt").unwrap());
+        assert!(v.exists("sub/deep/c.txt").unwrap());
+        assert!(v.exists("a.txt").unwrap());
+        // 设置 mtime
+        let t = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        v.set_mtime("a.txt", t).unwrap();
+        let f = Filter::new(&[], &[]).unwrap();
+        let map = v.scan(&f).unwrap();
+        let a_mtime = map["a.txt"].mtime;
+        // zip 秒级精度，误差 < 2s
+        let diff = a_mtime
+            .duration_since(t)
+            .unwrap_or_else(|_| t.duration_since(a_mtime).unwrap())
+            .as_secs();
+        assert!(diff <= 2, "mtime 偏差 {diff}s");
+    }
+
+    #[test]
+    fn write_delete_rejected_readonly() {
+        // 旧用例：写/删现在支持，改为验证行为
+        let d = tempdir().unwrap();
+        let zp = d.path().join("t.zip");
+        make_zip(&zp);
+        let v = ZipVfs::open(zp.to_str().unwrap()).unwrap();
+        v.write("x.txt", b"x").unwrap();
+        v.delete("a.txt").unwrap();
+        v.set_mtime("x.txt", UNIX_EPOCH).unwrap();
+    }
+
+    #[test]
+    fn zip_cross_backend_copy_to() {
+        let d = tempdir().unwrap();
+        let zp = d.path().join("t.zip");
+        make_zip(&zp);
+        let v = ZipVfs::open(zp.to_str().unwrap()).unwrap();
+        // 复制到本地目录
+        let out = tempdir().unwrap();
+        let local = crate::vfs::LocalVfs::new(out.path()).unwrap();
+        v.copy_to("a.txt", &local).unwrap();
+        assert_eq!(
+            fs::read_to_string(out.path().join("a.txt")).unwrap(),
+            "hello"
+        );
     }
 
     #[test]
