@@ -142,6 +142,8 @@ mod tests {
         FileMeta {
             size,
             mtime: UNIX_EPOCH,
+            mode: None,
+            symlink: None,
         }
     }
 
@@ -154,6 +156,7 @@ mod tests {
                     left: Some(meta(1234)),
                     right: None,
                     moved_to: None,
+                    attrs_differ: false,
                 },
                 FileEntry {
                     rel: "old.txt".into(),
@@ -161,6 +164,7 @@ mod tests {
                     left: Some(meta(100)),
                     right: Some(meta(100)),
                     moved_to: Some("new.txt".into()),
+                    attrs_differ: false,
                 },
             ],
             stats: CompareStats {

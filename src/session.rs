@@ -192,6 +192,7 @@ fn run_run(a: &RunArgs) -> i32 {
         excludes: s.excludes.clone(),
         show_same: false,
         detect_moves: s.detect_moves,
+        compare_attrs: false,
         summary: false,
         html: None,
         txt: None,

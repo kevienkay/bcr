@@ -15,6 +15,10 @@ use std::io::Read;
 pub struct FileMeta {
     pub size: u64,
     pub mtime: SystemTime,
+    /// Unix 权限位（r/w/x + 文件类型位；非 Unix 平台或后端不支持时为 None）
+    pub mode: Option<u32>,
+    /// 符号链接目标（普通文件为 None）
+    pub symlink: Option<String>,
 }
 
 /// 统一相对路径分隔符：Windows 的 `\` 转为 `/`。
@@ -101,7 +105,9 @@ pub fn scan(root: &Path, filter: &Filter) -> io::Result<BTreeMap<String, FileMet
                 continue;
             }
         };
-        if !entry.file_type().is_file() {
+        let ft = entry.file_type();
+        let is_symlink = ft.is_symlink();
+        if !ft.is_file() && !is_symlink {
             continue;
         }
         let rel = match entry.path().strip_prefix(root) {
@@ -112,22 +118,53 @@ pub fn scan(root: &Path, filter: &Filter) -> io::Result<BTreeMap<String, FileMet
         if !filter.accept(&rel_str) {
             continue;
         }
-        let meta = match entry.metadata() {
-            Ok(m) => m,
-            Err(err) => {
-                eprintln!("bcr: 元数据读取失败 {rel_str}: {err}");
-                continue;
+        // 符号链接：读取链接自身元数据（symlink_metadata，不跟随目标），记录目标路径
+        let meta = if is_symlink {
+            match std::fs::symlink_metadata(entry.path()) {
+                Ok(m) => m,
+                Err(err) => {
+                    eprintln!("bcr: 元数据读取失败 {rel_str}: {err}");
+                    continue;
+                }
             }
+        } else {
+            match entry.metadata() {
+                Ok(m) => m,
+                Err(err) => {
+                    eprintln!("bcr: 元数据读取失败 {rel_str}: {err}");
+                    continue;
+                }
+            }
+        };
+        let symlink = if is_symlink {
+            std::fs::read_link(entry.path()).ok().map(|p| norm_rel(&p))
+        } else {
+            None
         };
         map.insert(
             rel_str,
             FileMeta {
                 size: meta.len(),
                 mtime: meta.modified().unwrap_or(UNIX_EPOCH),
+                mode: unix_mode(&meta),
+                symlink,
             },
         );
     }
     Ok(map)
+}
+
+/// Unix 权限位（非 Unix 平台返回 None）
+#[cfg(unix)]
+fn unix_mode(meta: &std::fs::Metadata) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    Some(meta.permissions().mode())
+}
+
+/// Unix 权限位（Windows 无此概念）
+#[cfg(not(unix))]
+fn unix_mode(_meta: &std::fs::Metadata) -> Option<u32> {
+    None
 }
 
 /// 扫描目录树中的子目录相对路径集合（不含根目录本身），供 mirror 空目录清理使用。

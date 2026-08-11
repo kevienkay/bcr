@@ -203,6 +203,8 @@ impl Vfs for ZipVfs {
                 FileMeta {
                     size: *size,
                     mtime: mtime.unwrap_or(UNIX_EPOCH),
+                    mode: None,
+                    symlink: None,
                 },
             );
         }

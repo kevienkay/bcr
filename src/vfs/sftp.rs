@@ -185,6 +185,8 @@ impl SftpVfs {
                     FileMeta {
                         size: meta.len(),
                         mtime: meta.modified().unwrap_or(UNIX_EPOCH),
+                        mode: None,
+                        symlink: None,
                     },
                 );
             }

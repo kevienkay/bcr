@@ -96,6 +96,8 @@ mod tests {
         Some(FileMeta {
             size,
             mtime: UNIX_EPOCH,
+            mode: None,
+            symlink: None,
         })
     }
 
@@ -108,6 +110,7 @@ mod tests {
                     left: meta(10),
                     right: meta(12),
                     moved_to: None,
+                    attrs_differ: false,
                 },
                 FileEntry {
                     rel: "old.rs".into(),
@@ -115,6 +118,7 @@ mod tests {
                     left: meta(5),
                     right: meta(5),
                     moved_to: Some("new.rs".into()),
+                    attrs_differ: false,
                 },
                 FileEntry {
                     rel: "only_l.log".into(),
@@ -122,6 +126,7 @@ mod tests {
                     left: meta(3),
                     right: None,
                     moved_to: None,
+                    attrs_differ: false,
                 },
             ],
             stats: CompareStats {

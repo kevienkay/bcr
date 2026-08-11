@@ -40,6 +40,10 @@ pub struct CompareArgs {
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     pub detect_moves: bool,
 
+    /// 比较文件属性（Unix 权限位/符号链接目标；默认仅比较大小+时间+内容）
+    #[arg(long)]
+    pub compare_attrs: bool,
+
     /// 输出统计信息
     #[arg(long)]
     pub summary: bool,
@@ -134,6 +138,8 @@ pub struct FileEntry {
     pub right: Option<FileMeta>,
     /// 移动/重命名的目标相对路径（仅 status == Moved 时有值）
     pub moved_to: Option<String>,
+    /// 内容一致但属性不同（权限/符号链接，仅 --compare-attrs 时可能为 true）
+    pub attrs_differ: bool,
 }
 
 /// 比较统计
@@ -174,18 +180,57 @@ pub fn compare_dirs(
     compare_content: bool,
     enable_moves: bool,
 ) -> io::Result<CompareResult> {
+    compare_dirs_attrs(
+        left_dir,
+        right_dir,
+        filter,
+        compare_content,
+        enable_moves,
+        false,
+    )
+}
+
+/// 带属性比较的目录对比（compare_attrs=true 时权限/符号链接差异计入 Differ）
+pub fn compare_dirs_attrs(
+    left_dir: &Path,
+    right_dir: &Path,
+    filter: &Filter,
+    compare_content: bool,
+    enable_moves: bool,
+    compare_attrs: bool,
+) -> io::Result<CompareResult> {
     let left = LocalVfs::new(left_dir)?;
     let right = LocalVfs::new(right_dir)?;
-    compare_vfs(&left, &right, filter, compare_content, enable_moves)
+    compare_vfs_attrs(
+        &left,
+        &right,
+        filter,
+        compare_content,
+        enable_moves,
+        compare_attrs,
+    )
 }
 
 /// 对比两个虚拟文件系统后端，返回结构化结果（CLI/GUI/远程共用）。
+#[allow(dead_code)] // 保留为公共 API，供外部以默认属性比较复用
 pub fn compare_vfs(
     left: &dyn Vfs,
     right: &dyn Vfs,
     filter: &Filter,
     compare_content: bool,
     enable_moves: bool,
+) -> io::Result<CompareResult> {
+    compare_vfs_attrs(left, right, filter, compare_content, enable_moves, false)
+}
+
+/// 带属性比较的虚拟后端对比
+pub fn compare_vfs_attrs(
+    left: &dyn Vfs,
+    right: &dyn Vfs,
+    filter: &Filter,
+    compare_content: bool,
+    enable_moves: bool,
+    compare_attrs: bool,
 ) -> io::Result<CompareResult> {
     let left_map = left.scan(filter)?;
     let right_map = right.scan(filter)?;
@@ -206,7 +251,7 @@ pub fn compare_vfs(
     for key in keys {
         match (left_map.get(key), right_map.get(key)) {
             (Some(l), Some(r)) => {
-                let same = if l.size != r.size {
+                let content_same = if l.size != r.size {
                     false
                 } else if compare_content {
                     match crate::vfs::content_equal_vfs(left, right, key) {
@@ -219,6 +264,9 @@ pub fn compare_vfs(
                 } else {
                     l.mtime == r.mtime
                 };
+                // 属性比较：内容一致但权限/符号链接不同 → 计为 Differ（--compare-attrs）
+                let attrs_differ = compare_attrs && attrs_diff(l, r);
+                let same = content_same && !attrs_differ;
                 if same {
                     result.stats.same += 1;
                     result.entries.push(FileEntry {
@@ -227,6 +275,7 @@ pub fn compare_vfs(
                         left: Some(l.clone()),
                         right: Some(r.clone()),
                         moved_to: None,
+                        attrs_differ: false,
                     });
                 } else {
                     result.stats.differ += 1;
@@ -236,6 +285,7 @@ pub fn compare_vfs(
                         left: Some(l.clone()),
                         right: Some(r.clone()),
                         moved_to: None,
+                        attrs_differ,
                     });
                 }
             }
@@ -247,6 +297,7 @@ pub fn compare_vfs(
                     left: Some(l.clone()),
                     right: None,
                     moved_to: None,
+                    attrs_differ: false,
                 });
             }
             (None, Some(r)) => {
@@ -257,6 +308,7 @@ pub fn compare_vfs(
                     left: None,
                     right: Some(r.clone()),
                     moved_to: None,
+                    attrs_differ: false,
                 });
             }
             (None, None) => unreachable!(),
@@ -411,12 +463,13 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     };
 
-    let result = match compare_vfs(
+    let result = match compare_vfs_attrs(
         left.as_ref(),
         right.as_ref(),
         &filter,
         args.compare_content,
         args.detect_moves,
+        args.compare_attrs,
     ) {
         Ok(r) => r,
         Err(e) => {
@@ -449,6 +502,9 @@ pub fn run(args: &CompareArgs) -> i32 {
             continue;
         }
         emit(entry.status.letter(), &entry.rel, color);
+        if entry.attrs_differ {
+            eprintln!("  ↳ 属性不同（权限/符号链接）");
+        }
     }
 
     if args.summary {
@@ -509,6 +565,17 @@ pub fn run(args: &CompareArgs) -> i32 {
     }
 }
 
+/// 属性差异判定：权限位（仅 Unix 有）或符号链接目标不同即视为属性差异。
+/// 任一侧缺失属性信息（后端不支持）视为相同，避免远程/压缩包误报。
+fn attrs_diff(l: &FileMeta, r: &FileMeta) -> bool {
+    let mode_diff = match (l.mode, r.mode) {
+        (Some(a), Some(b)) => a != b,
+        _ => false,
+    };
+    let link_diff = l.symlink != r.symlink;
+    mode_diff || link_diff
+}
+
 fn emit(status: char, rel: &str, color: bool) {
     if color {
         let c = match status {
@@ -538,6 +605,7 @@ mod tests {
             excludes: vec![],
             show_same: false,
             detect_moves: true,
+            compare_attrs: false,
             summary: false,
             html: None,
             txt: None,
@@ -839,5 +907,69 @@ mod tests {
         assert_eq!(r.stats.moved, 1);
         let e = &r.entries[0];
         assert_eq!(e.status, FileStatus::Moved);
+    }
+}
+
+#[cfg(test)]
+mod attrs_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn empty_filter() -> Filter {
+        Filter::new(&[], &[]).unwrap()
+    }
+
+    #[test]
+    fn compare_attrs_detects_mode_diff() {
+        // Unix 下验证权限差异；非 Unix 平台跳过
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let d1 = tempdir().unwrap();
+            let d2 = tempdir().unwrap();
+            let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+            for (dir, mode) in [(d1.path(), 0o644), (d2.path(), 0o600)] {
+                let p = dir.join("f.txt");
+                fs::write(&p, "same-content").unwrap();
+                fs::set_permissions(&p, fs::Permissions::from_mode(mode)).unwrap();
+                filetime::set_file_mtime(&p, fixed).unwrap();
+            }
+            // 内容相同但权限不同：不开 --compare-attrs 判 Same
+            let r1 = compare_dirs(d1.path(), d2.path(), &empty_filter(), true, true).unwrap();
+            let e1 = r1.entries.iter().find(|e| e.rel == "f.txt").unwrap();
+            assert_eq!(e1.status, FileStatus::Same);
+            // 开 --compare-attrs 判 Differ + attrs_differ
+            let r2 = compare_dirs_attrs(d1.path(), d2.path(), &empty_filter(), true, true, true)
+                .unwrap();
+            let e2 = r2.entries.iter().find(|e| e.rel == "f.txt").unwrap();
+            assert_eq!(e2.status, FileStatus::Differ);
+            assert!(e2.attrs_differ);
+        }
+    }
+
+    #[test]
+    fn compare_attrs_detects_symlink() {
+        #[cfg(unix)]
+        {
+            let d1 = tempdir().unwrap();
+            let d2 = tempdir().unwrap();
+            let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+            // 左侧: 普通文件; 右侧: 符号链接 f.txt -> real.txt（real.txt 内容与左侧相同）
+            let lp = d1.path().join("f.txt");
+            fs::write(&lp, "data").unwrap();
+            filetime::set_file_mtime(&lp, fixed).unwrap();
+            fs::write(d2.path().join("real.txt"), "data").unwrap();
+            filetime::set_file_mtime(d2.path().join("real.txt"), fixed).unwrap();
+            let rp = d2.path().join("f.txt");
+            std::os::unix::fs::symlink("real.txt", &rp).unwrap();
+            filetime::set_file_mtime(&rp, fixed).unwrap();
+            // 内容一致(符号链接读目标)但链接属性不同 → attrs_differ
+            let r = compare_dirs_attrs(d1.path(), d2.path(), &empty_filter(), true, true, true)
+                .unwrap();
+            let e = r.entries.iter().find(|e| e.rel == "f.txt").unwrap();
+            assert_eq!(e.status, FileStatus::Differ);
+            assert!(e.attrs_differ);
+        }
     }
 }

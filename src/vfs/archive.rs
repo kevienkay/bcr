@@ -197,6 +197,8 @@ impl Vfs for ArchiveVfs {
                 FileMeta {
                     size: *size,
                     mtime: *mtime,
+                    mode: None,
+                    symlink: None,
                 },
             );
         }
