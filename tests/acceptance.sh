@@ -452,6 +452,43 @@ check_contains "SESSION2 列表含会话名" "ses_cmp" "$(cat ses_list.txt)"
 "$BIN" session delete ses_cmp > /dev/null 2>&1; check "SESSION6 删除退出码=0" 0 "$?"
 "$BIN" session run ses_cmp > /dev/null 2>&1; check "SESSION7 删除后运行退出码=2" 2 "$?"
 
+echo "=============================================="
+echo " SYNC2: 移动同步 + 空目录清理"
+echo "=============================================="
+mkdir -p sy2_src sy2_dst
+# SYNC2.1 mirror 识别重命名（内容相同）
+printf 'same-content-xyz' > sy2_src/new.txt
+printf 'same-content-xyz' > sy2_dst/old.txt
+"$BIN" sync sy2_src sy2_dst --mode mirror --dry-run > sy2_plan.txt
+check_contains "SYNC2.1 mirror 识别重命名" "[MOVE] old.txt -> new.txt" "$(cat sy2_plan.txt)"
+# 实际执行后新路径存在、旧路径消失
+"$BIN" sync sy2_src sy2_dst --mode mirror > /dev/null 2>&1
+if [ -f sy2_dst/new.txt ] && [ ! -f sy2_dst/old.txt ]; then
+  pass "SYNC2.2 重命名执行正确"
+else
+  fail "SYNC2.2 重命名执行正确"
+fi
+# SYNC2.3 mirror 清理独有空目录
+mkdir -p sy2_dst/orphan/deep
+printf 'x' > sy2_src/keep.txt
+printf 'x' > sy2_dst/keep.txt
+"$BIN" sync sy2_src sy2_dst --mode mirror --summary > sy2_sum.txt
+if [ ! -d sy2_dst/orphan ]; then
+  pass "SYNC2.3 空目录已清理"
+else
+  fail "SYNC2.3 空目录已清理"
+fi
+check_contains "SYNC2.4 summary 含目录清理统计" "清理空目录" "$(cat sy2_sum.txt)"
+# SYNC2.5 内容不同不误判为移动
+mkdir -p sy2b_src sy2b_dst
+printf 'content-aaaa' > sy2b_src/a.txt
+printf 'content-bbbb' > sy2b_dst/b.txt
+"$BIN" sync sy2b_src sy2b_dst --mode mirror --dry-run > sy2b_plan.txt
+if grep -q '\[MOVE\]' sy2b_plan.txt; then
+  fail "SYNC2.5 内容不同不误判移动"
+else
+  pass "SYNC2.5 内容不同不误判移动"
+fi
 
 echo "=============================================="
 echo " I18N: 多语言"

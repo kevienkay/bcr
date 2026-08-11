@@ -13,7 +13,7 @@ pub mod sftp;
 pub mod zip;
 
 use crate::fsscan::{FileMeta, Filter};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::Path;
 use std::time::SystemTime;
@@ -25,6 +25,12 @@ pub trait Vfs {
 
     /// 扫描根目录树，返回 (相对路径 -> 元数据)，BTreeMap 保证有序
     fn scan(&self, filter: &Filter) -> io::Result<BTreeMap<String, FileMeta>>;
+
+    /// 扫描根目录树中的子目录相对路径集合（不含根），供 mirror 空目录清理。
+    /// 默认返回空集（后端不支持时跳过目录清理）。
+    fn scan_dirs(&self, _filter: &Filter) -> io::Result<BTreeSet<String>> {
+        Ok(Default::default())
+    }
 
     /// 读取文件全部内容
     fn read(&self, rel: &str) -> io::Result<Vec<u8>>;
@@ -45,6 +51,17 @@ pub trait Vfs {
 
     /// 删除文件
     fn delete(&self, rel: &str) -> io::Result<()>;
+
+    /// 删除空目录（mirror 清理用；非空目录应返回错误）
+    fn remove_dir(&self, rel: &str) -> io::Result<()>;
+
+    /// 移动/重命名：优先后端原生实现（本地 rename 零拷贝）；
+    /// 默认回退为 读→写→删（跨后端仍可用）。
+    fn rename(&self, from: &str, to: &str) -> io::Result<()> {
+        let data = self.read(from)?;
+        self.write(to, &data)?;
+        self.delete(from)
+    }
 
     /// 把本后端的 rel 文件复制到目标后端（跨 FS）
     fn copy_to(&self, rel: &str, dst: &dyn Vfs) -> io::Result<()> {
@@ -82,6 +99,10 @@ impl Vfs for LocalVfs {
 
     fn scan(&self, filter: &Filter) -> io::Result<BTreeMap<String, FileMeta>> {
         crate::fsscan::scan(&self.root, filter)
+    }
+
+    fn scan_dirs(&self, filter: &Filter) -> io::Result<BTreeSet<String>> {
+        crate::fsscan::scan_dirs(&self.root, filter)
     }
 
     fn hash(&self, rel: &str) -> io::Result<blake3::Hash> {
@@ -122,6 +143,19 @@ impl Vfs for LocalVfs {
 
     fn delete(&self, rel: &str) -> io::Result<()> {
         std::fs::remove_file(self.root.join(rel))
+    }
+
+    fn remove_dir(&self, rel: &str) -> io::Result<()> {
+        std::fs::remove_dir(self.root.join(rel))
+    }
+
+    fn rename(&self, from: &str, to: &str) -> io::Result<()> {
+        let src = self.root.join(from);
+        let dst = self.root.join(to);
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::rename(&src, &dst)
     }
 
     fn set_mtime(&self, rel: &str, t: SystemTime) -> io::Result<()> {

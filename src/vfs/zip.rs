@@ -144,6 +144,20 @@ impl Vfs for ZipVfs {
         ))
     }
 
+    fn remove_dir(&self, _rel: &str) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "ZIP 为只读后端，不支持删除目录",
+        ))
+    }
+
+    fn rename(&self, _from: &str, _to: &str) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "ZIP 为只读后端，不支持重命名",
+        ))
+    }
+
     fn set_mtime(&self, _rel: &str, _t: SystemTime) -> io::Result<()> {
         Err(io::Error::new(
             io::ErrorKind::PermissionDenied,

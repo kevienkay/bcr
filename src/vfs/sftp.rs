@@ -245,6 +245,35 @@ impl Vfs for SftpVfs {
             .map_err(|e| io::Error::other(format!("删除 {rel}: {e}")))
     }
 
+    fn remove_dir(&self, rel: &str) -> io::Result<()> {
+        self.rt
+            .block_on(self.session.remove_dir(self.abs(rel)))
+            .map_err(|e| io::Error::other(format!("删除目录 {rel}: {e}")))
+    }
+
+    fn rename(&self, from: &str, to: &str) -> io::Result<()> {
+        // 确保目标父目录存在（与 write 一致的逐级建目录逻辑）
+        let dst_abs = self.abs(to);
+        let parent = dst_abs
+            .rsplit_once('/')
+            .map(|(p, _)| p.to_string())
+            .unwrap_or_default();
+        if !parent.is_empty() {
+            let mut cur = String::new();
+            for seg in parent.split('/') {
+                if seg.is_empty() {
+                    continue;
+                }
+                cur.push('/');
+                cur.push_str(seg);
+                let _ = self.rt.block_on(self.session.create_dir(cur.clone()));
+            }
+        }
+        self.rt
+            .block_on(self.session.rename(self.abs(from), dst_abs))
+            .map_err(|e| io::Error::other(format!("重命名 {from} -> {to}: {e}")))
+    }
+
     fn set_mtime(&self, rel: &str, t: SystemTime) -> io::Result<()> {
         // 用 unix 秒构造 FileAttributes（SFTP mtime 为 u32 秒）
         let mut attrs = russh_sftp::protocol::FileAttributes::empty();

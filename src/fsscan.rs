@@ -1,5 +1,5 @@
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -128,6 +128,50 @@ pub fn scan(root: &Path, filter: &Filter) -> io::Result<BTreeMap<String, FileMet
         );
     }
     Ok(map)
+}
+
+/// 扫描目录树中的子目录相对路径集合（不含根目录本身），供 mirror 空目录清理使用。
+pub fn scan_dirs(root: &Path, filter: &Filter) -> io::Result<BTreeSet<String>> {
+    let mut dirs = std::collections::BTreeSet::new();
+    for entry in WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| {
+            let rel = match e.path().strip_prefix(root) {
+                Ok(r) => r,
+                Err(_) => return true,
+            };
+            if rel.as_os_str().is_empty() {
+                return true;
+            }
+            if e.file_type().is_dir() {
+                let s = norm_rel(rel);
+                return !(filter.is_excluded(&s) || filter.is_excluded(&format!("{s}/")));
+            }
+            true
+        })
+    {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(err) => {
+                eprintln!("bcr: 扫描警告: {err}");
+                continue;
+            }
+        };
+        if !entry.file_type().is_dir() {
+            continue;
+        }
+        let rel = match entry.path().strip_prefix(root) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let rel_str = norm_rel(rel);
+        if rel_str.is_empty() {
+            continue;
+        }
+        dirs.insert(rel_str);
+    }
+    Ok(dirs)
 }
 
 /// 对两侧同路径文件做 blake3 哈希比对

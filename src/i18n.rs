@@ -153,6 +153,16 @@ pub enum Key {
     SessionNotFound,
     /// 会话已删除: {}
     SessionDeleted,
+    /// [MOVE] {} -> {}（同步重命名标签）
+    TagRename,
+    /// 重命名 {} -> {} 失败: {}
+    RenameFailed,
+    /// [RMDIR] {}（删除空目录标签）
+    TagRmDir,
+    /// 删除目录 {} 失败: {}
+    RmDirFailed,
+    /// 清理空目录: {} 个
+    SummaryRmDir,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}

@@ -45,10 +45,29 @@ pub struct SyncArgs {
 
 /// 同步计划项。from_src=true 表示从 src 复制到 dst，false 反之（仅 two-way 会出现）
 enum Plan {
-    Copy { rel: String, from_src: bool },
-    Delete { rel: String },
-    Skip { rel: String, reason: &'static str },
-    Conflict { rel: String },
+    Copy {
+        rel: String,
+        from_src: bool,
+    },
+    Delete {
+        rel: String,
+    },
+    /// 目标侧内部重命名/移动（内容相同文件对，避免跨端复制）
+    Rename {
+        from: String,
+        to: String,
+    },
+    /// 删除空目录（mirror 清理）
+    RmDir {
+        rel: String,
+    },
+    Skip {
+        rel: String,
+        reason: &'static str,
+    },
+    Conflict {
+        rel: String,
+    },
 }
 
 /// 运行 sync 子命令，返回进程退出码（0=成功，1=有冲突/有计划(dry-run)，2=错误）
@@ -106,6 +125,54 @@ pub fn run(args: &SyncArgs) -> i32 {
 
     let mode = args.mode.as_str();
     let mut plan: Vec<Plan> = Vec::new();
+
+    // 移动/重命名检测：src 独有与 dst 独有中内容一致的文件对，
+    // 在 dst 内部执行 rename（保留元数据，避免跨端复制 + 删除）。
+    // 匹配到的文件从后续 Copy/Delete 流程中剔除。
+    let mut rename_pairs: std::collections::BTreeMap<String, String> = Default::default(); // dst_rel -> src_rel
+    if mode != "two-way" {
+        let src_only: Vec<&String> = src_map
+            .keys()
+            .filter(|k| !dst_map.contains_key(*k))
+            .collect();
+        let dst_only: Vec<&String> = dst_map
+            .keys()
+            .filter(|k| !src_map.contains_key(*k))
+            .collect();
+        if !src_only.is_empty() && !dst_only.is_empty() {
+            // 按大小分组 dst 独有，避免全量两两比较
+            let mut by_size: std::collections::BTreeMap<u64, Vec<&String>> = Default::default();
+            for k in &dst_only {
+                if let Some(m) = dst_map.get(*k) {
+                    by_size.entry(m.size).or_default().push(*k);
+                }
+            }
+            let mut used_dst: std::collections::BTreeSet<&String> = Default::default();
+            for src_k in &src_only {
+                let Some(sm) = src_map.get(*src_k) else {
+                    continue;
+                };
+                let Some(cands) = by_size.get(&sm.size) else {
+                    continue;
+                };
+                for dst_k in cands {
+                    if used_dst.contains(dst_k) {
+                        continue;
+                    }
+                    // 分别读取两侧哈希比较（路径不同，不能直接复用 content_equal_vfs）
+                    let eq = match (src_vfs.hash(src_k), dst_vfs.hash(dst_k)) {
+                        (Ok(a), Ok(b)) => a == b,
+                        _ => false,
+                    };
+                    if eq {
+                        used_dst.insert(dst_k);
+                        rename_pairs.insert((*dst_k).clone(), (*src_k).clone());
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     // 合并 key 集合（已排序，保证输出顺序稳定）
     let mut keys: Vec<&String> = Vec::with_capacity(src_map.len() + dst_map.len());
@@ -179,28 +246,60 @@ pub fn run(args: &SyncArgs) -> i32 {
                     }
                 }
             }
-            (Some(_), None) => plan.push(Plan::Copy {
-                rel: key.clone(),
-                from_src: true,
-            }),
-            (None, Some(_)) => match mode {
-                "mirror" => plan.push(Plan::Delete { rel: key.clone() }),
-                "update" => plan.push(Plan::Skip {
+            (Some(_), None) => {
+                // 已匹配为移动对（dst 内部 rename），不再从 src 复制
+                if rename_pairs.values().any(|v| v == key) {
+                    continue;
+                }
+                plan.push(Plan::Copy {
                     rel: key.clone(),
-                    reason: t(Key::ReasonDstOnly),
-                }),
-                _ => plan.push(Plan::Copy {
-                    rel: key.clone(),
-                    from_src: false, // two-way：目标独有 → 复制回源
-                }),
-            },
+                    from_src: true,
+                })
+            }
+            (None, Some(_)) => {
+                // 已匹配为移动对：dst 内部 rename（旧路径 -> src 新路径）
+                if let Some(to) = rename_pairs.get(key) {
+                    plan.push(Plan::Rename {
+                        from: key.clone(),
+                        to: to.clone(),
+                    });
+                    continue;
+                }
+                match mode {
+                    "mirror" => plan.push(Plan::Delete { rel: key.clone() }),
+                    "update" => plan.push(Plan::Skip {
+                        rel: key.clone(),
+                        reason: t(Key::ReasonDstOnly),
+                    }),
+                    _ => plan.push(Plan::Copy {
+                        rel: key.clone(),
+                        from_src: false, // two-way：目标独有 → 复制回源
+                    }),
+                }
+            }
             (None, None) => unreachable!(),
+        }
+    }
+
+    // mirror 空目录清理：删除 dst 独有目录（不在 src 中），自深向浅删除空目录
+    if mode == "mirror" {
+        if let (Ok(src_dirs), Ok(dst_dirs)) =
+            (src_vfs.scan_dirs(&filter), dst_vfs.scan_dirs(&filter))
+        {
+            let mut orphan: Vec<&String> = dst_dirs.difference(&src_dirs).collect();
+            // 子目录在前（深度优先），保证先删深层空目录
+            orphan.sort_by_key(|d| std::cmp::Reverse(d.matches('/').count()));
+            for d in orphan {
+                plan.push(Plan::RmDir { rel: d.clone() });
+            }
         }
     }
 
     // 输出并执行
     let mut n_copy = 0usize;
     let mut n_delete = 0usize;
+    let mut n_rename = 0usize;
+    let mut n_rmdir = 0usize;
     let mut n_skip = 0usize;
     let mut n_conflict = 0usize;
     let mut n_error = 0usize;
@@ -232,6 +331,30 @@ pub fn run(args: &SyncArgs) -> i32 {
                     }
                 }
             }
+            Plan::Rename { from, to } => {
+                n_rename += 1;
+                println!("{}", fmt(Key::TagRename, &[from, to]));
+                if !args.dry_run {
+                    if let Err(e) = dst_vfs.rename(from, to) {
+                        eprintln!(
+                            "bcr: {}",
+                            fmt(Key::RenameFailed, &[from, to, &e.to_string()])
+                        );
+                        n_error += 1;
+                    }
+                }
+            }
+            Plan::RmDir { rel } => {
+                n_rmdir += 1;
+                println!("{}", fmt(Key::TagRmDir, &[rel]));
+                if !args.dry_run {
+                    if let Err(e) = dst_vfs.remove_dir(rel) {
+                        // 非空目录删除失败可忽略（残留文件已被单独处理）
+                        eprintln!("bcr: {}", fmt(Key::RmDirFailed, &[rel, &e.to_string()]));
+                        n_error += 1;
+                    }
+                }
+            }
             Plan::Skip { rel, reason } => {
                 n_skip += 1;
                 println!("{}", fmt(Key::TagSkip, &[rel, reason]));
@@ -257,11 +380,19 @@ pub fn run(args: &SyncArgs) -> i32 {
                 ]
             )
         );
+        if n_rename > 0 {
+            println!("{}", fmt(Key::SummaryMoved, &[&n_rename.to_string()]));
+        }
+        if n_rmdir > 0 {
+            println!("{}", fmt(Key::SummaryRmDir, &[&n_rmdir.to_string()]));
+        }
     }
 
     if n_error > 0 {
         2
-    } else if n_conflict > 0 || (args.dry_run && n_copy + n_delete + n_conflict > 0) {
+    } else if n_conflict > 0
+        || (args.dry_run && n_copy + n_delete + n_rename + n_rmdir + n_conflict > 0)
+    {
         1
     } else {
         0
@@ -330,6 +461,71 @@ mod tests {
             fs::read_to_string(dst.path().join("new.txt")).unwrap(),
             "hello"
         );
+    }
+
+    #[test]
+    fn mirror_detects_rename_instead_of_copy_delete() {
+        // src 把 old.txt 重命名为 new.txt（内容相同），mirror 应识别为 [MOVE] 而非 复制+删除
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("new.txt", "same-content", 1_700_000_000)]);
+        write_tree(dst.path(), &[("old.txt", "same-content", 1_600_000_000)]);
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "mirror",
+        );
+        assert_eq!(run(&a), 0);
+        // 新路径存在且内容一致
+        assert_eq!(
+            fs::read_to_string(dst.path().join("new.txt")).unwrap(),
+            "same-content"
+        );
+        // 旧路径已被 rename 移除
+        assert!(!dst.path().join("old.txt").exists());
+    }
+
+    #[test]
+    fn mirror_removes_orphan_empty_dirs() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("keep.txt", "x", 1_700_000_000)]);
+        // dst 有独有目录（空）与独有文件
+        fs::create_dir_all(dst.path().join("orphan/deep")).unwrap();
+        write_tree(
+            dst.path(),
+            &[
+                ("keep.txt", "x", 1_700_000_000),
+                ("gone.txt", "y", 1_600_000_000),
+            ],
+        );
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "mirror",
+        );
+        assert_eq!(run(&a), 0);
+        // 独有文件被删除
+        assert!(!dst.path().join("gone.txt").exists());
+        // 独有目录被清理（含深层空目录）
+        assert!(!dst.path().join("orphan").exists());
+        // 公共文件保留
+        assert!(dst.path().join("keep.txt").exists());
+    }
+
+    #[test]
+    fn update_mode_does_not_delete_dst_only() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("a.txt", "x", 1_700_000_000)]);
+        write_tree(dst.path(), &[("b.txt", "y", 1_700_000_000)]);
+        let a = args(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "update",
+        );
+        assert_eq!(run(&a), 0);
+        assert!(dst.path().join("b.txt").exists()); // update 不删除
     }
 
     #[test]
