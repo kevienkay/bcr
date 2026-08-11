@@ -12,6 +12,21 @@ pub fn render_html(
     result: &CompareResult,
     generated_at: &str,
 ) -> String {
+    render_html_opts(left_label, right_label, result, generated_at, None, false)
+}
+
+/// B3：支持自定义模板与文件级链接的 HTML 渲染。
+/// - template：自定义 HTML 模板路径（占位符 {{TITLE}}/{{SUBTITLE}}/{{SUMMARY}}/{{ROWS}}/{{GENERATED}}/{{VERSION}}）；
+///   None = 内置默认模板
+/// - link_files：为每个差异条目生成文件级 HTML 报告，行内加链接（BC 文件夹报告 → 文件报告）
+pub fn render_html_opts(
+    left_label: &str,
+    right_label: &str,
+    result: &CompareResult,
+    generated_at: &str,
+    template: Option<&str>,
+    link_files: bool,
+) -> String {
     let st = result.stats;
     let rows: String = result
         .entries
@@ -28,6 +43,22 @@ pub fn render_html(
                 ),
                 _ => rel.clone(),
             };
+            // B3 文件级链接：差异条目链接到同目录下的 <basename>.html 文件报告
+            let desc = if link_files && e.status != FileStatus::Same {
+                let base = e
+                    .rel
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&e.rel);
+                let file_report = format!("{base}.html");
+                format!(
+                    "<a href=\"{}\" title=\"打开文件级报告\">{}</a>",
+                    escape(&file_report),
+                    desc
+                )
+            } else {
+                desc
+            };
             let size = match (&e.left, &e.right) {
                 (Some(l), Some(r)) => format!("{} → {}", fmt_size(l.size), fmt_size(r.size)),
                 (Some(l), None) => format!("{} → -", fmt_size(l.size)),
@@ -39,6 +70,36 @@ pub fn render_html(
             )
         })
         .collect();
+    let summary = format!(
+        "<div class=\"summary\">
+  <div class=\"item\"><span class=\"num\" style=\"color:#3aa35a\">{same}</span><span>相同</span></div>
+  <div class=\"item\"><span class=\"num\" style=\"color:#e05555\">{lo}</span><span>仅左侧</span></div>
+  <div class=\"item\"><span class=\"num\" style=\"color:#4a7ad0\">{ro}</span><span>仅右侧</span></div>
+  <div class=\"item\"><span class=\"num\" style=\"color:#c9a227\">{diff}</span><span>内容不同</span></div>
+  <div class=\"item\"><span class=\"num\" style=\"color:#a060c9\">{moved}</span><span>移动/重命名</span></div>
+</div>",
+        same = st.same,
+        lo = st.left_only,
+        ro = st.right_only,
+        diff = st.differ,
+        moved = st.moved,
+    );
+
+    if let Some(tpl_path) = template {
+        // 自定义模板：读取文件并按占位符替换
+        if let Ok(tpl) = std::fs::read_to_string(tpl_path) {
+            return tpl
+                .replace("{{TITLE}}", "📊 bcr 对比报告")
+                .replace(
+                    "{{SUBTITLE}}",
+                    &format!("{} ↔ {}", escape(left_label), escape(right_label)),
+                )
+                .replace("{{SUMMARY}}", &summary)
+                .replace("{{ROWS}}", &rows)
+                .replace("{{GENERATED}}", &escape(generated_at))
+                .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"));
+        }
+    }
 
     format!(
         r#"<!DOCTYPE html>
@@ -57,6 +118,8 @@ table {{ border-collapse: collapse; width: 100%; max-width: 900px; }}
 th, td {{ text-align: left; padding: 6px 12px; border-bottom: 1px solid #eee; }}
 th {{ background: #fafafa; font-size: 13px; color: #666; }}
 td.path {{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }}
+td.path a {{ color: inherit; text-decoration: none; }}
+td.path a:hover {{ text-decoration: underline; }}
 td.size {{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #888; text-align: right; }}
 .tag {{ font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }}
 .tag.L {{ color: #e05555; }}
@@ -70,13 +133,7 @@ td.size {{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12p
 <body>
 <h1>📊 bcr 对比报告</h1>
 <h2>{left} ↔ {right}</h2>
-<div class="summary">
-  <div class="item"><span class="num" style="color:#3aa35a">{same}</span><span>相同</span></div>
-  <div class="item"><span class="num" style="color:#e05555">{lo}</span><span>仅左侧</span></div>
-  <div class="item"><span class="num" style="color:#4a7ad0">{ro}</span><span>仅右侧</span></div>
-  <div class="item"><span class="num" style="color:#c9a227">{diff}</span><span>内容不同</span></div>
-  <div class="item"><span class="num" style="color:#a060c9">{moved}</span><span>移动/重命名</span></div>
-</div>
+{summary}
 <table>
 <thead><tr><th>状态</th><th>路径</th><th>大小</th></tr></thead>
 <tbody>{rows}</tbody>
@@ -86,11 +143,7 @@ td.size {{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12p
 </html>"#,
         left = escape(left_label),
         right = escape(right_label),
-        same = st.same,
-        lo = st.left_only,
-        ro = st.right_only,
-        diff = st.differ,
-        moved = st.moved,
+        summary = summary,
         rows = rows,
         generated_at = escape(generated_at),
         version = env!("CARGO_PKG_VERSION"),
@@ -206,5 +259,47 @@ mod tests {
         assert_eq!(fmt_size(2048), "2.0 KB");
         assert_eq!(fmt_size(3 * 1024 * 1024), "3.0 MB");
         assert_eq!(fmt_size(2 * 1024 * 1024 * 1024), "2.0 GB");
+    }
+
+    // ---- B3 模板与文件级链接 ----
+
+    #[test]
+    fn custom_template_replaces_placeholders() {
+        let d = tempfile::tempdir().unwrap();
+        let tpl = d.path().join("tpl.html");
+        std::fs::write(
+            &tpl,
+            "<html><body>{{TITLE}}|{{SUBTITLE}}|{{SUMMARY}}|{{ROWS}}|{{VERSION}}</body></html>",
+        )
+        .unwrap();
+        let html = render_html_opts(
+            "/a",
+            "/b",
+            &result(),
+            "t",
+            Some(tpl.to_str().unwrap()),
+            false,
+        );
+        assert!(html.contains("📊 bcr 对比报告"));
+        assert!(html.contains("/a ↔ /b"));
+        assert!(html.contains("class=\"summary\""));
+        assert!(html.contains("only_l.txt"));
+        assert!(html.contains(env!("CARGO_PKG_VERSION")));
+        assert!(!html.contains("{{ROWS}}"));
+    }
+
+    #[test]
+    fn link_files_anchors_diff_rows() {
+        let html = render_html_opts("/a", "/b", &result(), "t", None, true);
+        // 差异条目（LeftOnly/Moved）应有文件级链接
+        assert!(html.contains("<a href=\"only_l.txt.html\""));
+        assert!(html.contains("<a href=\"old.txt.html\""));
+    }
+
+    #[test]
+    fn link_files_off_keeps_plain() {
+        let html = render_html_opts("/a", "/b", &result(), "t", None, false);
+        assert!(!html.contains(".html\""));
+        assert!(html.contains("only_l.txt"));
     }
 }

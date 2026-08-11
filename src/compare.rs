@@ -88,6 +88,14 @@ pub struct CompareArgs {
     #[arg(long)]
     pub print: bool,
 
+    /// 自定义 HTML 报告模板（B3）：占位符 {{TITLE}}/{{SUBTITLE}}/{{SUMMARY}}/{{ROWS}}/{{GENERATED}}/{{VERSION}}
+    #[arg(long = "report-template")]
+    pub report_template: Option<String>,
+
+    /// HTML 报告为差异条目生成文件级报告链接（B3，--html 时生效）
+    #[arg(long = "report-link-files")]
+    pub report_link_files: bool,
+
     /// 报告排序：path（默认，按路径）| status（按状态字母序）| size（按差异大小降序）
     #[arg(long = "report-sort", default_value = "path", value_parser = ["path", "status", "size"])]
     pub report_sort: String,
@@ -775,7 +783,14 @@ pub fn run(args: &CompareArgs) -> i32 {
 
     if let Some(html_path) = &args.html {
         let now = crate::i18n::fmt(Key::ReportGeneratedAt, &[]);
-        let html = crate::htmlreport::render_html(&args.left, &args.right, &result, &now);
+        let html = crate::htmlreport::render_html_opts(
+            &args.left,
+            &args.right,
+            &result,
+            &now,
+            args.report_template.as_deref(),
+            args.report_link_files,
+        );
         if let Err(e) = std::fs::write(html_path, html) {
             eprintln!(
                 "bcr: {}",
@@ -966,6 +981,8 @@ mod tests {
             ignore_structure: false,
             follow_symlinks: false,
             print: false,
+            report_template: None,
+            report_link_files: false,
             json: false,
             summary: false,
             html: None,

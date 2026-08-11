@@ -400,6 +400,8 @@ fn execute_step(
                 ignore_structure: bool_param(step, "ignore_structure"),
                 follow_symlinks: bool_param(step, "follow_symlinks"),
                 print: bool_param(step, "print"),
+                report_template: str_param(step, "report_template"),
+                report_link_files: bool_param(step, "report_link_files"),
                 summary: false,
                 html: None,
                 txt: None,
