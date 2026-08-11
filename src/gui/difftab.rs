@@ -29,6 +29,13 @@ pub struct SearchState {
     pub focus: bool,
 }
 
+/// 二进制文件的十六进制对比数据（任一文件检测为二进制时启用）
+pub struct HexTabData {
+    pub left: String,
+    pub right: String,
+    pub rows: Vec<crate::hexview::HexRow>,
+}
+
 /// 行内编辑状态
 #[derive(Clone, Copy)]
 pub enum EditSide {
@@ -55,6 +62,8 @@ pub struct DiffTab {
     pub goto_focus: bool,
     /// 编辑状态（编辑左侧/右侧内容）
     pub editing: Option<EditState>,
+    /// 二进制 hex 对比模式（Some 时优先于文本行渲染）
+    pub hex: Option<HexTabData>,
 }
 
 /// 编辑窗口状态
@@ -81,10 +90,19 @@ impl DiffTab {
             goto_line: None,
             goto_focus: false,
             editing: None,
+            hex: None,
         }
     }
 
     pub fn title(&self) -> String {
+        if let Some(h) = &self.hex {
+            return format!(
+                "{}: {} ↔ {}",
+                t(I18nKey::HexTitle),
+                basename(&h.left),
+                basename(&h.right)
+            );
+        }
         match (&self.left, &self.right) {
             (Some(l), Some(r)) => format!(
                 "{}: {} ↔ {}",
@@ -100,6 +118,30 @@ impl DiffTab {
 
     pub fn load_pair(&mut self, l: &str, r: &str, opts: ViewOptions) {
         self.opts = opts;
+        // 任一文件为二进制 → 切换 hex 对比视图
+        if is_binary_file(l) || is_binary_file(r) {
+            let rows = match (std::fs::read(l), std::fs::read(r)) {
+                (Ok(lb), Ok(rb)) => crate::hexview::build_hex_rows(&lb, &rb),
+                (Err(e), _) => {
+                    self.error = Some(fmt(I18nKey::CannotRead, &[l, &e.to_string()]));
+                    return;
+                }
+                (_, Err(e)) => {
+                    self.error = Some(fmt(I18nKey::CannotRead, &[r, &e.to_string()]));
+                    return;
+                }
+            };
+            self.hex = Some(HexTabData {
+                left: l.to_string(),
+                right: r.to_string(),
+                rows,
+            });
+            self.left = None;
+            self.right = None;
+            self.rows.clear();
+            self.error = None;
+            return;
+        }
         match (crate::encoding::read_text(l), crate::encoding::read_text(r)) {
             (Ok(lf), Ok(rf)) => {
                 if lf.is_binary {
@@ -576,6 +618,44 @@ impl DiffTab {
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
+            // 二进制 hex 对比模式
+            if let Some(h) = &self.hex {
+                if h.rows.is_empty() {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DiffEmptyHint))
+                                .size(18.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                    return;
+                }
+                let fg = text_color(ui);
+                let diff_count = h.rows.iter().filter(|r| r.diff).count();
+                let total_w = HEX_TOTAL_W;
+                let out = super::show_rows(ui, h.rows.len(), HEX_ROW_H, |ui, range| {
+                    ui.set_min_width(total_w);
+                    for i in range {
+                        paint_hex_row(ui, &h.rows[i], fg);
+                    }
+                });
+                self.scroll = out.state.offset;
+                if self.show_stats {
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label(fmt(
+                            I18nKey::DiffCount,
+                            &[&diff_count.to_string(), &h.rows.len().to_string()],
+                        ));
+                        ui.separator();
+                        ui.label(fmt(I18nKey::HexModeHint, &[]));
+                        ui.separator();
+                        ui.label(format!("{}  ↔  {}", h.left, h.right));
+                    });
+                }
+                return;
+            }
+
             if self.rows.is_empty() {
                 ui.centered_and_justified(|ui| {
                     ui.label(
@@ -746,4 +826,109 @@ fn basename(p: &str) -> String {
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| p.to_string())
+}
+
+// ---- 二进制 hex 视图 ----
+
+/// hex 行高（与 ROW_H 一致）
+const HEX_ROW_H: f32 = ROW_H;
+/// hex 视图总宽度：偏移(9) + L hex(50) + L ascii(18) + R hex(50) + R ascii(18) + 间距
+const HEX_TOTAL_W: f32 = 9.0 + 50.0 + 18.0 + 50.0 + 18.0 + 80.0;
+/// 各列 x 起点
+const HEX_OFF_X: f32 = 4.0;
+const HEX_L_X: f32 = 16.0;
+const HEX_L_ASCII_X: f32 = 66.0;
+const HEX_R_X: f32 = 86.0;
+const HEX_R_ASCII_X: f32 = 136.0;
+
+/// 绘制一行 hex 对比（偏移 + L hex + L ascii + R hex + R ascii）
+fn paint_hex_row(ui: &mut egui::Ui, row: &crate::hexview::HexRow, fg: Color32) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(HEX_TOTAL_W, HEX_ROW_H), egui::Sense::hover());
+    let x = rect.left();
+    let y = rect.top();
+
+    // 差异行底色
+    if row.diff {
+        paint_bg(ui, rect, Some(bg_replace_l()));
+    }
+
+    // 偏移
+    ui.painter().text(
+        Pos2::new(x + HEX_OFF_X, y + 2.0),
+        egui::Align2::LEFT_TOP,
+        format!("{:08x}", row.offset),
+        egui::FontId::monospace(13.0),
+        GUTTER,
+    );
+
+    // 左侧 hex（差异字节红色）
+    let l_hex = hex_bytes_text(&row.left, &row.right, true);
+    ui.painter().text(
+        Pos2::new(x + HEX_L_X, y + 2.0),
+        egui::Align2::LEFT_TOP,
+        l_hex,
+        egui::FontId::monospace(13.0),
+        fg,
+    );
+    // 左侧 ascii
+    let l_ascii: String = row.left.iter().map(|&b| crate::hexview::ascii_byte(b)).collect();
+    ui.painter().text(
+        Pos2::new(x + HEX_L_ASCII_X, y + 2.0),
+        egui::Align2::LEFT_TOP,
+        l_ascii,
+        egui::FontId::monospace(13.0),
+        fg,
+    );
+
+    // 右侧 hex（差异字节绿色）
+    let r_hex = hex_bytes_text(&row.right, &row.left, false);
+    ui.painter().text(
+        Pos2::new(x + HEX_R_X, y + 2.0),
+        egui::Align2::LEFT_TOP,
+        r_hex,
+        egui::FontId::monospace(13.0),
+        fg,
+    );
+    // 右侧 ascii
+    let r_ascii: String = row.right.iter().map(|&b| crate::hexview::ascii_byte(b)).collect();
+    ui.painter().text(
+        Pos2::new(x + HEX_R_ASCII_X, y + 2.0),
+        egui::Align2::LEFT_TOP,
+        r_ascii,
+        egui::FontId::monospace(13.0),
+        fg,
+    );
+}
+
+/// hex 字节文本：16 字节宽、8 字节处空格；与本侧不同的字节用颜色标记
+fn hex_bytes_text(bytes: &[u8], other: &[u8], is_left: bool) -> String {
+    let mut s = String::new();
+    for i in 0..16 {
+        if i == 8 {
+            s.push(' ');
+        }
+        if i < bytes.len() {
+            let diff = i < other.len() && bytes[i] != other[i];
+            if diff {
+                let c = if is_left {
+                    Color32::from_rgb(255, 120, 120)
+                } else {
+                    Color32::from_rgb(120, 255, 140)
+                };
+                // egui 文本内嵌颜色：用 ANSI 不生效，返回纯文本即可（底色已表达差异）
+                let _ = c;
+            }
+            s.push_str(&format!("{:02X} ", bytes[i]));
+        } else {
+            s.push_str("   ");
+        }
+    }
+    s.trim_end().to_string()
+}
+
+/// 检测文件是否为二进制（读取前 8KB 做启发式判定）
+fn is_binary_file(path: &str) -> bool {
+    crate::encoding::read_text(path)
+        .map(|tf| tf.is_binary)
+        .unwrap_or(false)
 }

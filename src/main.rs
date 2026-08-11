@@ -3,6 +3,8 @@ mod diff;
 mod encoding;
 mod fsscan;
 mod gui;
+mod hex;
+mod hexview;
 mod highlight;
 mod i18n;
 mod merge;
@@ -42,6 +44,9 @@ struct Cli {
 enum Commands {
     /// 对比两个文本文件（unified 格式输出，支持行内高亮）
     Diff(diff::DiffArgs),
+
+    /// 十六进制对比两个文件（二进制友好，按字节输出差异）
+    Hex(hex::HexArgs),
 
     /// 对比两个目录树（快速元数据比较或深度内容比较）
     Compare(compare::CompareArgs),
@@ -95,6 +100,7 @@ fn main() {
     }
     let code = match cli.command {
         Commands::Diff(args) => diff::run(&args),
+        Commands::Hex(args) => hex::run(&args),
         Commands::Compare(args) => compare::run(&args),
         Commands::Merge(args) => merge::run(&args),
         Commands::Sync(args) => sync::run(&args),

@@ -341,6 +341,34 @@ printf 'not-a-zip' > m6_bad.zip
 "$BIN" compare m6_dir "zip://$ZIP_WORK/m6_bad.zip" > /dev/null 2>&1; check "M6.9 非法 zip 退出码=2" 2 "$?"
 
 echo "=============================================="
+echo " HEX: 十六进制对比（二进制文件）"
+echo "=============================================="
+# HEX1 相同文件退出码=0
+printf 'hello world\n' > hex_a.bin
+cp hex_a.bin hex_b.bin
+"$BIN" hex hex_a.bin hex_b.bin > hex_out.txt; check "HEX1 相同文件退出码=0" 0 "$?"
+# HEX2 内容不同退出码=1
+printf 'hello world\n' > hex_c.bin
+printf 'hello Borld\n' > hex_d.bin
+"$BIN" hex hex_c.bin hex_d.bin > hex_diff.txt; check "HEX2 内容不同退出码=1" 1 "$?"
+# HEX3 差异行带 ! 标记
+check_contains "HEX3 差异行 ! 标记" "!" "$(head -1 hex_diff.txt)"
+# HEX4 输出含偏移
+check_contains "HEX4 输出含偏移" "00000000" "$(head -1 hex_diff.txt)"
+# HEX5 含 NUL 二进制文件可对比（不报错）
+printf 'A\0B\0C' > hex_nul1.bin
+printf 'A\0X\0C' > hex_nul2.bin
+"$BIN" hex hex_nul1.bin hex_nul2.bin > hex_nul.txt; check "HEX5 含NUL二进制对比退出码=1" 1 "$?"
+# HEX6 --show-same 显示全部行（两行：L 与 R）
+"$BIN" hex hex_a.bin hex_b.bin --show-same > hex_all.txt
+check_contains "HEX6 --show-same 显示行" "L " "$(cat hex_all.txt)"
+# HEX7 不同长度文件
+printf '0123456789abcdef' > hex_len1.bin
+printf '0123456789abcdefg' > hex_len2.bin
+"$BIN" hex hex_len1.bin hex_len2.bin > hex_len.txt; check "HEX7 不同长度退出码=1" 1 "$?"
+
+
+echo "=============================================="
 echo " I18N: 多语言"
 echo "=============================================="
 # --lang en：错误消息与统计行应为英文

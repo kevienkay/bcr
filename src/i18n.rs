@@ -179,6 +179,10 @@ pub enum Key {
     // ---- DiffTab ----
     /// Diff: {} ↔ {}（标签标题）
     DiffTitle,
+    /// Hex: {} ↔ {}（二进制对比标签标题）
+    HexTitle,
+    /// 二进制文件，已切换十六进制对比视图
+    HexModeHint,
     /// 打开左侧…
     OpenLeft,
     /// 打开右侧…
