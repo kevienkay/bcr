@@ -69,15 +69,17 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - 覆盖全部 CLI 输出（错误消息/统计行/同步标签）与 GUI 文案（菜单/工具栏/标签页/Git 弹窗）
 - 翻译表由宏保证穷尽：新增文案若缺少任一语言翻译会编译失败
 
-### M6 虚拟文件系统（`zip://` / `sftp://`）
+### M6 虚拟文件系统（`zip://` / `tar://` / `7z://` / `sftp://`）
 
 - compare/sync 的路径参数支持虚拟后端，可跨后端混合对比：
   - `zip://path/to/archive.zip`：把 ZIP 压缩包当作目录树（只读：scan/read/元数据）
+  - `tar://path/x.tar` / `tar://x.tar.gz` / `tar://x.tar.bz2` / `tar://x.tar.xz`：tar 及压缩变体（只读，全量解压进内存）
+  - `7z://path/x.7z`：7-Zip 压缩包（只读，全量解压进内存）
   - `sftp://[user[:pass]@]host[:port]/remote/path`：SFTP 远程目录（可读写，含 mtime 保留）
-  - 普通路径仍为本地目录，三者可任意组合（本地 vs zip、zip vs zip、本地 vs sftp 等）
-- 例：`bcr compare src/ "zip://backup.zip" --compare-content`、`bcr sync local/ "sftp://alice@nas/srv" --mode mirror --dry-run`
+  - 普通路径仍为本地目录，可任意组合（本地 vs zip、zip vs tar.gz、本地 vs sftp 等）
+- 例：`bcr compare src/ "zip://backup.zip" --compare-content`、`bcr sync local/ "sftp://alice@nas/srv" --mode mirror --dry-run`、`bcr compare src/ "tar://backup.tar.gz"`
 - 内部通过 [`Vfs`] trait 统一抽象（scan/read/write/delete/set_mtime），CLI 与 GUI 共用
-- 注意：SFTP 首次连接不校验 host key（适用于受信环境）；ZIP 后端只读，写入会报错
+- 注意：SFTP 首次连接不校验 host key（适用于受信环境）；ZIP/tar/7z 后端只读，写入会报错；tar/7z 全量解压进内存，超大归档建议用 zip 或本地目录
 
 ### M5 GUI（`bcr gui`）— 完整版
 
@@ -251,7 +253,7 @@ src/session.rs  P4 会话持久化（~/.bcr-sessions.toml）
 src/gui/         M5 egui 窗口：mod.rs（多标签/主题/持久化）、difftab（并排+搜索+跳转+hex）、
                  dirtab（目录导航）、mergetab（三路合并）、common（虚拟化渲染/着色）
 src/vfs/        M6 虚拟文件系统：mod.rs（Vfs trait + LocalVfs + 路径解析）、zip.rs（ZIP 只读）、
-                sftp.rs（russh 纯 Rust SFTP）
+                archive.rs（tar/gz/bz2/xz/7z 只读，全量解压）、sftp.rs（russh 纯 Rust SFTP）
 src/i18n.rs     I18N：Lang 枚举 + Key 枚举 + 全局语言 + t()/fmt()
 src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 ```
@@ -271,6 +273,7 @@ src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 - [x] M4 同步引擎（镜像/双向/更新 + dry-run 预览）
 - [x] M5 GUI（egui 并排 Diff 视图）
 - [x] M6 远程/压缩包适配层（SFTP / ZIP 虚拟 FS）
+- [x] M6b 归档后端扩展（tar/tar.gz/tar.bz2/tar.xz/7z 只读）
 - [x] P0 编码检测 + 二进制检测
 - [x] P1 语法高亮
 - [x] P1 二进制 hex 对比
@@ -287,7 +290,7 @@ src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 - 不处理 "No newline at end of file" 标记
 - 二进制文件已做检测：CLI diff/merge 报错 exit 2；GUI 自动切 hex 视图
 - M5 目录对比的 glob 过滤在 GUI 中以逗号分隔输入；拖放仅支持本地文件
-- M6 ZIP 后端只读（写入/删除会报错）；SFTP 首次连接不校验 host key，且依赖网络可达性
+- M6 ZIP/tar/7z 后端只读（写入/删除会报错）；tar/7z 全量解压进内存，超大归档建议 zip 或本地；SFTP 首次连接不校验 host key，且依赖网络可达性
 - 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确
 - M3 三处 stdin 不能同时用（`-` 只能出现一次）
 - 与 git 的行为差异：两侧对**相邻行**的独立修改，bcr 按经典 diff3 语义无冲突合并，git 保守判冲突

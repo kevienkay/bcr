@@ -76,7 +76,9 @@ impl SyncOp {
     pub fn tag(&self) -> &'static str {
         match self {
             SyncOp::Copy { from_src: true, .. } => "->",
-            SyncOp::Copy { from_src: false, .. } => "<-",
+            SyncOp::Copy {
+                from_src: false, ..
+            } => "<-",
             SyncOp::Delete { .. } => "-",
             SyncOp::Rename { .. } => "↻",
             SyncOp::RmDir { .. } => "⌫",
@@ -101,8 +103,14 @@ impl SyncOp {
     /// 人类可读描述
     pub fn describe(&self) -> String {
         match self {
-            SyncOp::Copy { rel, from_src: true } => format!("复制 {} → 目标", rel),
-            SyncOp::Copy { rel, from_src: false } => format!("复制 {} ← 目标", rel),
+            SyncOp::Copy {
+                rel,
+                from_src: true,
+            } => format!("复制 {} → 目标", rel),
+            SyncOp::Copy {
+                rel,
+                from_src: false,
+            } => format!("复制 {} ← 目标", rel),
             SyncOp::Delete { rel } => format!("删除 {}", rel),
             SyncOp::Rename { from, to } => format!("重命名 {} → {}", from, to),
             SyncOp::RmDir { rel } => format!("删除空目录 {}", rel),
@@ -299,8 +307,7 @@ pub fn build_plan(
 
     // mirror 空目录清理：删除 dst 独有目录（不在 src 中），自深向浅删除空目录
     if mode == "mirror" {
-        if let (Ok(src_dirs), Ok(dst_dirs)) =
-            (src_vfs.scan_dirs(filter), dst_vfs.scan_dirs(filter))
+        if let (Ok(src_dirs), Ok(dst_dirs)) = (src_vfs.scan_dirs(filter), dst_vfs.scan_dirs(filter))
         {
             let mut orphan: Vec<&String> = dst_dirs.difference(&src_dirs).collect();
             // 子目录在前（深度优先），保证先删深层空目录
@@ -331,7 +338,6 @@ pub fn execute_op(op: &SyncOp, src_vfs: &dyn Vfs, dst_vfs: &dyn Vfs) -> Option<S
         SyncOp::Skip { .. } | SyncOp::Conflict { .. } => None,
     }
 }
-
 
 /// 运行 sync 子命令，返回进程退出码（0=成功，1=有冲突/有计划(dry-run)，2=错误）
 pub fn run(args: &SyncArgs) -> i32 {

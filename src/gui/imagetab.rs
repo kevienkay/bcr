@@ -175,27 +175,23 @@ impl ImageTab {
                 ui.label("无图片");
                 return;
             };
-            egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| {
-                ui.horizontal_top(|ui| {
-                    img_block(ui, &tex.left, &self.left, self.zoom, "左");
-                    img_block(ui, &tex.right, &self.right, self.zoom, "右");
-                    if self.show_overlay {
-                        img_block(ui, &tex.overlay, "差异叠加", self.zoom, "叠加");
-                    }
+            egui::ScrollArea::both()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.horizontal_top(|ui| {
+                        img_block(ui, &tex.left, &self.left, self.zoom, "左");
+                        img_block(ui, &tex.right, &self.right, self.zoom, "右");
+                        if self.show_overlay {
+                            img_block(ui, &tex.overlay, "差异叠加", self.zoom, "叠加");
+                        }
+                    });
                 });
-            });
         });
     }
 }
 
 /// 单图渲染块（标题 + 图片，按 zoom 缩放）
-fn img_block(
-    ui: &mut egui::Ui,
-    tex: &egui::TextureHandle,
-    label: &str,
-    zoom: f32,
-    side: &str,
-) {
+fn img_block(ui: &mut egui::Ui, tex: &egui::TextureHandle, label: &str, zoom: f32, side: &str) {
     let size = tex.size_vec2() * zoom;
     ui.vertical(|ui| {
         ui.label(
@@ -224,13 +220,7 @@ fn to_texture(ctx: &egui::Context, img: &RgbaImage, name: &str) -> egui::Texture
         (w, h)
     };
     let rgba = if (dw, dh) != (w, h) {
-        image::imageops::resize(
-            img,
-            dw,
-            dh,
-            image::imageops::FilterType::Lanczos3,
-        )
-        .into_raw()
+        image::imageops::resize(img, dw, dh, image::imageops::FilterType::Lanczos3).into_raw()
     } else {
         img.as_raw().clone()
     };

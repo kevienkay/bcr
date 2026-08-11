@@ -880,8 +880,12 @@ mod tests {
         // update 模式：复制 new.txt 到右侧，保留 only.txt
         t.gen_sync_plan();
         let plan = t.sync_plan.as_ref().unwrap();
-        assert!(plan.iter().any(|op| matches!(op, SyncOp::Copy { rel, from_src: true } if rel == "new.txt")));
-        assert!(plan.iter().any(|op| matches!(op, SyncOp::Skip { rel, .. } if rel == "only.txt")));
+        assert!(plan
+            .iter()
+            .any(|op| matches!(op, SyncOp::Copy { rel, from_src: true } if rel == "new.txt")));
+        assert!(plan
+            .iter()
+            .any(|op| matches!(op, SyncOp::Skip { rel, .. } if rel == "only.txt")));
         // 执行勾选
         t.run_sync_checked();
         assert_eq!(
@@ -895,7 +899,10 @@ mod tests {
         assert!(!plan2.iter().any(|op| {
             matches!(
                 op,
-                SyncOp::Copy { .. } | SyncOp::Delete { .. } | SyncOp::Rename { .. } | SyncOp::RmDir { .. }
+                SyncOp::Copy { .. }
+                    | SyncOp::Delete { .. }
+                    | SyncOp::Rename { .. }
+                    | SyncOp::RmDir { .. }
             )
         }));
         // 勾选集合为空（无可执行项）

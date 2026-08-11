@@ -226,7 +226,13 @@ impl DirTab {
                 return;
             }
         };
-        match build_plan(&self.sync_mode, self.compare_content, l.as_ref(), r.as_ref(), &filter) {
+        match build_plan(
+            &self.sync_mode,
+            self.compare_content,
+            l.as_ref(),
+            r.as_ref(),
+            &filter,
+        ) {
             Ok(plan) => {
                 self.sync_checked.clear();
                 for (i, op) in plan.iter().enumerate() {
@@ -407,8 +413,7 @@ impl DirTab {
                     ));
                 }
                 ui.separator();
-                let sync_btn = if self.show_sync { "⇄ 同步" } else { "⇄ 同步" };
-                if ui.button(sync_btn).clicked() {
+                if ui.button("⇄ 同步").clicked() {
                     self.show_sync = !self.show_sync;
                     if self.show_sync && self.sync_plan.is_none() {
                         self.gen_sync_plan();
@@ -443,7 +448,11 @@ impl DirTab {
                                 (Ok(r), Ok(l)) => (l, r),
                                 _ => return,
                             };
-                        match execute_op(&SyncOp::Delete { rel: rel.clone() }, l.as_ref(), r.as_ref()) {
+                        match execute_op(
+                            &SyncOp::Delete { rel: rel.clone() },
+                            l.as_ref(),
+                            r.as_ref(),
+                        ) {
                             Some(e) => self.sync_msg = Some(format!("操作失败: {}", e)),
                             None => {
                                 self.sync_msg = Some(format!("完成: 删除 {}", rel));
@@ -487,7 +496,10 @@ impl DirTab {
                         }
                     });
                     ui.horizontal(|ui| {
-                        if ui.checkbox(&mut self.compare_content, t(I18nKey::ContentHash)).changed() {
+                        if ui
+                            .checkbox(&mut self.compare_content, t(I18nKey::ContentHash))
+                            .changed()
+                        {
                             // 内容哈希变化只影响下一次生成计划
                         }
                         if ui.button("生成计划").clicked() {
@@ -497,7 +509,8 @@ impl DirTab {
                             if let Some(plan) = &self.sync_plan {
                                 self.sync_checked.clear();
                                 for (i, op) in plan.iter().enumerate() {
-                                    if !matches!(op, SyncOp::Skip { .. } | SyncOp::Conflict { .. }) {
+                                    if !matches!(op, SyncOp::Skip { .. } | SyncOp::Conflict { .. })
+                                    {
                                         self.sync_checked.insert(i);
                                     }
                                 }

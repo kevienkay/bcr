@@ -76,8 +76,8 @@ pub fn is_image_file(path: &str) -> bool {
 
 /// 解码字节为 RGBA 图（PNG/JPEG/GIF/WebP/BMP）
 fn decode(data: &[u8], label: &str) -> Result<RgbaImage, String> {
-    let img = image::load_from_memory(data)
-        .map_err(|e| format!("{}: 图片解码失败: {}", label, e))?;
+    let img =
+        image::load_from_memory(data).map_err(|e| format!("{}: 图片解码失败: {}", label, e))?;
     Ok(img.to_rgba8())
 }
 
@@ -211,7 +211,11 @@ pub fn run(args: &ImgcmpArgs) -> i32 {
         ("", "", "", "")
     };
     // 差异行
-    let status = if s.has_differences() { "[DIFF]" } else { "[SAME]" };
+    let status = if s.has_differences() {
+        "[DIFF]"
+    } else {
+        "[SAME]"
+    };
     let status = if use_color {
         if s.has_differences() {
             format!("{}{}{}", w1, status, w2)
@@ -221,7 +225,15 @@ pub fn run(args: &ImgcmpArgs) -> i32 {
     } else {
         status.to_string()
     };
-    println!("{} {} {}x{} -> {}x{}", status, if s.size_differs { "(size differs)" } else { "" }, s.left_w, s.left_h, s.right_w, s.right_h);
+    println!(
+        "{} {} {}x{} -> {}x{}",
+        status,
+        if s.size_differs { "(size differs)" } else { "" },
+        s.left_w,
+        s.left_h,
+        s.right_w,
+        s.right_h
+    );
     if args.show_same || s.has_differences() || args.summary {
         println!(
             "差异像素: {} / {} ({:.2}%)",
