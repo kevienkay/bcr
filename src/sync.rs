@@ -44,7 +44,8 @@ pub struct SyncArgs {
 }
 
 /// 同步计划项。from_src=true 表示从 src 复制到 dst，false 反之（仅 two-way 会出现）
-enum Plan {
+#[derive(Debug, Clone, PartialEq)]
+pub enum SyncOp {
     Copy {
         rel: String,
         from_src: bool,
@@ -70,61 +71,77 @@ enum Plan {
     },
 }
 
-/// 运行 sync 子命令，返回进程退出码（0=成功，1=有冲突/有计划(dry-run)，2=错误）
-pub fn run(args: &SyncArgs) -> i32 {
-    // src/dst 已按 --reverse 归一：单向模式下所有写入都发生在 dst
-    let (src, dst) = if args.reverse {
-        (&args.right, &args.left)
-    } else {
-        (&args.left, &args.right)
-    };
+impl SyncOp {
+    /// 方向标记（GUI 列表/CLI 输出用）：`->` src→dst / `<-` dst→src / `-` 删除 / `↻` 重命名 / `⌫` 删目录 / `=` 跳过 / `!` 冲突
+    pub fn tag(&self) -> &'static str {
+        match self {
+            SyncOp::Copy { from_src: true, .. } => "->",
+            SyncOp::Copy { from_src: false, .. } => "<-",
+            SyncOp::Delete { .. } => "-",
+            SyncOp::Rename { .. } => "↻",
+            SyncOp::RmDir { .. } => "⌫",
+            SyncOp::Skip { .. } => "=",
+            SyncOp::Conflict { .. } => "!",
+        }
+    }
 
-    let src_vfs = match vfs::open(src) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[src, &e.to_string()]));
-            return 2;
+    /// 涉及的文件相对路径（GUI 排序/选中用）
+    #[allow(dead_code)]
+    pub fn rel(&self) -> &str {
+        match self {
+            SyncOp::Copy { rel, .. }
+            | SyncOp::Delete { rel }
+            | SyncOp::RmDir { rel }
+            | SyncOp::Skip { rel, .. }
+            | SyncOp::Conflict { rel } => rel,
+            SyncOp::Rename { from, .. } => from,
         }
-    };
-    let dst_vfs = match vfs::open(dst) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[dst, &e.to_string()]));
-            return 2;
-        }
-    };
+    }
 
-    let filter = match Filter::new(&args.includes, &args.excludes) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("bcr: {}", fmt(Key::FilterError, &[&e.to_string()]));
-            return 2;
+    /// 人类可读描述
+    pub fn describe(&self) -> String {
+        match self {
+            SyncOp::Copy { rel, from_src: true } => format!("复制 {} → 目标", rel),
+            SyncOp::Copy { rel, from_src: false } => format!("复制 {} ← 目标", rel),
+            SyncOp::Delete { rel } => format!("删除 {}", rel),
+            SyncOp::Rename { from, to } => format!("重命名 {} → {}", from, to),
+            SyncOp::RmDir { rel } => format!("删除空目录 {}", rel),
+            SyncOp::Skip { rel, reason } => format!("跳过 {} ({})", rel, reason),
+            SyncOp::Conflict { rel } => format!("冲突 {}", rel),
         }
-    };
+    }
+}
 
-    let src_map = match src_vfs.scan(&filter) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "bcr: {}",
-                fmt(Key::ScanFailed, &[&format!("{}: {}", src, e)])
-            );
-            return 2;
-        }
-    };
-    let dst_map = match dst_vfs.scan(&filter) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "bcr: {}",
-                fmt(Key::ScanFailed, &[&format!("{}: {}", dst, e)])
-            );
-            return 2;
-        }
-    };
+/// 同步结果统计
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[allow(dead_code)] // 公共 API，供外部批量执行统计使用
+pub struct SyncStats {
+    pub copy: usize,
+    pub delete: usize,
+    pub rename: usize,
+    pub rmdir: usize,
+    pub skip: usize,
+    pub conflict: usize,
+    pub error: usize,
+}
 
-    let mode = args.mode.as_str();
-    let mut plan: Vec<Plan> = Vec::new();
+/// 生成同步计划（纯逻辑，不执行、不输出）。
+/// `mode`: "update" | "mirror" | "two-way"。返回可执行的操作列表（含 Skip/Conflict 标记）。
+pub fn build_plan(
+    mode: &str,
+    compare_content: bool,
+    src_vfs: &dyn Vfs,
+    dst_vfs: &dyn Vfs,
+    filter: &Filter,
+) -> Result<Vec<SyncOp>, String> {
+    let src_map = src_vfs
+        .scan(filter)
+        .map_err(|e| format!("扫描源目录失败: {}", e))?;
+    let dst_map = dst_vfs
+        .scan(filter)
+        .map_err(|e| format!("扫描目标目录失败: {}", e))?;
+
+    let mut plan: Vec<SyncOp> = Vec::new();
 
     // 移动/重命名检测：src 独有与 dst 独有中内容一致的文件对，
     // 在 dst 内部执行 rename（保留元数据，避免跨端复制 + 删除）。
@@ -194,12 +211,11 @@ pub fn run(args: &SyncArgs) -> i32 {
                 // 同 size 同 mtime 的文件内容可能不同，快速判断会漏覆盖。
                 let same = if s.size != d.size {
                     false
-                } else if args.compare_content || (mode == "mirror" && s.mtime == d.mtime) {
-                    match vfs::content_equal_vfs(src_vfs.as_ref(), dst_vfs.as_ref(), key) {
+                } else if compare_content || (mode == "mirror" && s.mtime == d.mtime) {
+                    match crate::vfs::content_equal_vfs(src_vfs, dst_vfs, key) {
                         Ok(eq) => eq,
                         Err(e) => {
-                            eprintln!("bcr: {}", fmt(Key::ReadFailed, &[key, &e.to_string()]));
-                            return 2;
+                            return Err(format!("读取 {} 失败: {}", key, e));
                         }
                     }
                 } else {
@@ -210,19 +226,19 @@ pub fn run(args: &SyncArgs) -> i32 {
                 }
                 match mode {
                     // 镜像：以源为准，无条件覆盖
-                    "mirror" => plan.push(Plan::Copy {
+                    "mirror" => plan.push(SyncOp::Copy {
                         rel: key.clone(),
                         from_src: true,
                     }),
                     // 更新：源新才覆盖，目标新则跳过
                     "update" => {
                         if s.mtime >= d.mtime {
-                            plan.push(Plan::Copy {
+                            plan.push(SyncOp::Copy {
                                 rel: key.clone(),
                                 from_src: true,
                             });
                         } else {
-                            plan.push(Plan::Skip {
+                            plan.push(SyncOp::Skip {
                                 rel: key.clone(),
                                 reason: t(Key::ReasonDstNewer),
                             });
@@ -231,17 +247,17 @@ pub fn run(args: &SyncArgs) -> i32 {
                     // 双向：mtime 新者胜，无法判定则冲突
                     _ => {
                         if s.mtime > d.mtime {
-                            plan.push(Plan::Copy {
+                            plan.push(SyncOp::Copy {
                                 rel: key.clone(),
                                 from_src: true,
                             });
                         } else if d.mtime > s.mtime {
-                            plan.push(Plan::Copy {
+                            plan.push(SyncOp::Copy {
                                 rel: key.clone(),
                                 from_src: false,
                             });
                         } else {
-                            plan.push(Plan::Conflict { rel: key.clone() });
+                            plan.push(SyncOp::Conflict { rel: key.clone() });
                         }
                     }
                 }
@@ -251,7 +267,7 @@ pub fn run(args: &SyncArgs) -> i32 {
                 if rename_pairs.values().any(|v| v == key) {
                     continue;
                 }
-                plan.push(Plan::Copy {
+                plan.push(SyncOp::Copy {
                     rel: key.clone(),
                     from_src: true,
                 })
@@ -259,19 +275,19 @@ pub fn run(args: &SyncArgs) -> i32 {
             (None, Some(_)) => {
                 // 已匹配为移动对：dst 内部 rename（旧路径 -> src 新路径）
                 if let Some(to) = rename_pairs.get(key) {
-                    plan.push(Plan::Rename {
+                    plan.push(SyncOp::Rename {
                         from: key.clone(),
                         to: to.clone(),
                     });
                     continue;
                 }
                 match mode {
-                    "mirror" => plan.push(Plan::Delete { rel: key.clone() }),
-                    "update" => plan.push(Plan::Skip {
+                    "mirror" => plan.push(SyncOp::Delete { rel: key.clone() }),
+                    "update" => plan.push(SyncOp::Skip {
                         rel: key.clone(),
                         reason: t(Key::ReasonDstOnly),
                     }),
-                    _ => plan.push(Plan::Copy {
+                    _ => plan.push(SyncOp::Copy {
                         rel: key.clone(),
                         from_src: false, // two-way：目标独有 → 复制回源
                     }),
@@ -284,16 +300,85 @@ pub fn run(args: &SyncArgs) -> i32 {
     // mirror 空目录清理：删除 dst 独有目录（不在 src 中），自深向浅删除空目录
     if mode == "mirror" {
         if let (Ok(src_dirs), Ok(dst_dirs)) =
-            (src_vfs.scan_dirs(&filter), dst_vfs.scan_dirs(&filter))
+            (src_vfs.scan_dirs(filter), dst_vfs.scan_dirs(filter))
         {
             let mut orphan: Vec<&String> = dst_dirs.difference(&src_dirs).collect();
             // 子目录在前（深度优先），保证先删深层空目录
             orphan.sort_by_key(|d| std::cmp::Reverse(d.matches('/').count()));
             for d in orphan {
-                plan.push(Plan::RmDir { rel: d.clone() });
+                plan.push(SyncOp::RmDir { rel: d.clone() });
             }
         }
     }
+
+    Ok(plan)
+}
+
+/// 执行单个同步操作，返回错误描述（成功返回 None）
+pub fn execute_op(op: &SyncOp, src_vfs: &dyn Vfs, dst_vfs: &dyn Vfs) -> Option<String> {
+    match op {
+        SyncOp::Copy { rel, from_src } => {
+            let (from, to) = if *from_src {
+                (src_vfs, dst_vfs)
+            } else {
+                (dst_vfs, src_vfs)
+            };
+            do_copy_vfs(from, to, rel).err().map(|e| e.to_string())
+        }
+        SyncOp::Delete { rel } => dst_vfs.delete(rel).err().map(|e| e.to_string()),
+        SyncOp::Rename { from, to } => dst_vfs.rename(from, to).err().map(|e| e.to_string()),
+        SyncOp::RmDir { rel } => dst_vfs.remove_dir(rel).err().map(|e| e.to_string()),
+        SyncOp::Skip { .. } | SyncOp::Conflict { .. } => None,
+    }
+}
+
+
+/// 运行 sync 子命令，返回进程退出码（0=成功，1=有冲突/有计划(dry-run)，2=错误）
+pub fn run(args: &SyncArgs) -> i32 {
+    // src/dst 已按 --reverse 归一：单向模式下所有写入都发生在 dst
+    let (src, dst) = if args.reverse {
+        (&args.right, &args.left)
+    } else {
+        (&args.left, &args.right)
+    };
+
+    let src_vfs = match vfs::open(src) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[src, &e.to_string()]));
+            return 2;
+        }
+    };
+    let dst_vfs = match vfs::open(dst) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("bcr: {}", fmt(Key::OpenFailed, &[dst, &e.to_string()]));
+            return 2;
+        }
+    };
+
+    let filter = match Filter::new(&args.includes, &args.excludes) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("bcr: {}", fmt(Key::FilterError, &[&e.to_string()]));
+            return 2;
+        }
+    };
+
+    let mode = args.mode.as_str();
+    let plan = match build_plan(
+        mode,
+        args.compare_content,
+        src_vfs.as_ref(),
+        dst_vfs.as_ref(),
+        &filter,
+    ) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("bcr: {}", e);
+            return 2;
+        }
+    };
 
     // 输出并执行
     let mut n_copy = 0usize;
@@ -306,60 +391,57 @@ pub fn run(args: &SyncArgs) -> i32 {
 
     for p in &plan {
         match p {
-            Plan::Copy { rel, from_src } => {
+            SyncOp::Copy { rel, from_src } => {
                 n_copy += 1;
-                let (from, to) = if *from_src {
+                let (_, to) = if *from_src {
                     (src_vfs.as_ref(), dst_vfs.as_ref())
                 } else {
                     (dst_vfs.as_ref(), src_vfs.as_ref())
                 };
                 println!("{}", fmt(Key::TagCopy, &[rel, &to.describe()]));
                 if !args.dry_run {
-                    if let Err(e) = do_copy_vfs(from, to, rel) {
-                        eprintln!("bcr: {}", fmt(Key::CopyFailed, &[rel, &e.to_string()]));
+                    if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
+                        eprintln!("bcr: {}", fmt(Key::CopyFailed, &[rel, &e]));
                         n_error += 1;
                     }
                 }
             }
-            Plan::Delete { rel } => {
+            SyncOp::Delete { rel } => {
                 n_delete += 1;
                 println!("{}", fmt(Key::TagDelete, &[rel]));
                 if !args.dry_run {
-                    if let Err(e) = dst_vfs.delete(rel) {
-                        eprintln!("bcr: {}", fmt(Key::DeleteFailed, &[rel, &e.to_string()]));
+                    if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
+                        eprintln!("bcr: {}", fmt(Key::DeleteFailed, &[rel, &e]));
                         n_error += 1;
                     }
                 }
             }
-            Plan::Rename { from, to } => {
+            SyncOp::Rename { from, to } => {
                 n_rename += 1;
                 println!("{}", fmt(Key::TagRename, &[from, to]));
                 if !args.dry_run {
-                    if let Err(e) = dst_vfs.rename(from, to) {
-                        eprintln!(
-                            "bcr: {}",
-                            fmt(Key::RenameFailed, &[from, to, &e.to_string()])
-                        );
+                    if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
+                        eprintln!("bcr: {}", fmt(Key::RenameFailed, &[from, to, &e]));
                         n_error += 1;
                     }
                 }
             }
-            Plan::RmDir { rel } => {
+            SyncOp::RmDir { rel } => {
                 n_rmdir += 1;
                 println!("{}", fmt(Key::TagRmDir, &[rel]));
                 if !args.dry_run {
-                    if let Err(e) = dst_vfs.remove_dir(rel) {
-                        // 非空目录删除失败可忽略（残留文件已被单独处理）
-                        eprintln!("bcr: {}", fmt(Key::RmDirFailed, &[rel, &e.to_string()]));
+                    // 非空目录删除失败可忽略（残留文件已被单独处理）
+                    if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
+                        eprintln!("bcr: {}", fmt(Key::RmDirFailed, &[rel, &e]));
                         n_error += 1;
                     }
                 }
             }
-            Plan::Skip { rel, reason } => {
+            SyncOp::Skip { rel, reason } => {
                 n_skip += 1;
                 println!("{}", fmt(Key::TagSkip, &[rel, reason]));
             }
-            Plan::Conflict { rel } => {
+            SyncOp::Conflict { rel } => {
                 n_conflict += 1;
                 println!("{}", fmt(Key::TagConflict, &[rel]));
             }

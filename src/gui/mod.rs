@@ -668,6 +668,7 @@ mod tests {
     use crate::gui::difftab::{EditSide, EditState};
     use crate::mergeview::{render_merged, Resolution};
     use crate::sideview::RowTag;
+    use crate::sync::SyncOp;
     use std::fs;
     use tempfile::tempdir;
 
@@ -854,6 +855,79 @@ mod tests {
             t.ui(ui);
         });
         assert!(t.result.is_some());
+    }
+
+    // ---- DirTab：同步面板 ----------------
+
+    #[test]
+    fn dirtab_sync_plan_and_execute() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        // 统一 mtime 避免快速模式误判
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        let w = |dir: &std::path::Path, name: &str, content: &str| {
+            let p = dir.join(name);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, content).unwrap();
+            filetime::set_file_mtime(&p, fixed).unwrap();
+        };
+        w(d1.path(), "new.txt", "hello");
+        w(d1.path(), "same.txt", "same");
+        w(d2.path(), "same.txt", "same");
+        w(d2.path(), "only.txt", "dst-only");
+        let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        t.refresh();
+        // update 模式：复制 new.txt 到右侧，保留 only.txt
+        t.gen_sync_plan();
+        let plan = t.sync_plan.as_ref().unwrap();
+        assert!(plan.iter().any(|op| matches!(op, SyncOp::Copy { rel, from_src: true } if rel == "new.txt")));
+        assert!(plan.iter().any(|op| matches!(op, SyncOp::Skip { rel, .. } if rel == "only.txt")));
+        // 执行勾选
+        t.run_sync_checked();
+        assert_eq!(
+            fs::read_to_string(d2.path().join("new.txt")).unwrap(),
+            "hello"
+        );
+        assert!(d2.path().join("only.txt").exists());
+        // 再生成计划：new.txt 已一致，无可执行项（only.txt 仍为 Skip 标记）
+        t.gen_sync_plan();
+        let plan2 = t.sync_plan.as_ref().unwrap();
+        assert!(!plan2.iter().any(|op| {
+            matches!(
+                op,
+                SyncOp::Copy { .. } | SyncOp::Delete { .. } | SyncOp::Rename { .. } | SyncOp::RmDir { .. }
+            )
+        }));
+        // 勾选集合为空（无可执行项）
+        assert!(t.sync_checked.is_empty());
+    }
+
+    #[test]
+    fn dirtab_single_op_copy_and_delete() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        let w = |dir: &std::path::Path, name: &str, content: &str| {
+            let p = dir.join(name);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, content).unwrap();
+            filetime::set_file_mtime(&p, fixed).unwrap();
+        };
+        w(d1.path(), "a.txt", "A");
+        w(d2.path(), "b.txt", "B");
+        let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
+        t.refresh();
+        // 复制左侧 a.txt → 右侧
+        t.run_single_op(SyncOp::Copy {
+            rel: "a.txt".to_string(),
+            from_src: true,
+        });
+        assert_eq!(fs::read_to_string(d2.path().join("a.txt")).unwrap(), "A");
+        // 删除右侧 b.txt
+        t.run_single_op(SyncOp::Delete {
+            rel: "b.txt".to_string(),
+        });
+        assert!(!d2.path().join("b.txt").exists());
     }
 
     // ---- MergeTab：冲突导航/解决/预览 ----------------

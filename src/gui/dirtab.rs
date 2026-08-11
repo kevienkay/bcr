@@ -4,6 +4,7 @@ use super::common::*;
 use crate::compare::{compare_dirs, CompareResult, FileStatus};
 use crate::fsscan::Filter;
 use crate::i18n::{fmt, t, Key as I18nKey};
+use crate::sync::{build_plan, execute_op, SyncOp};
 use eframe::egui::{self, Color32, Key, Pos2, Vec2};
 use std::collections::HashSet;
 
@@ -30,6 +31,16 @@ pub struct DirTab {
     pub(crate) flat: Vec<FlatRow>,
     /// 需要滚动到选中行的标记
     scroll_to_selected: bool,
+    /// 同步面板是否展开
+    pub show_sync: bool,
+    /// 同步模式：update | mirror | two-way
+    pub sync_mode: String,
+    /// 同步计划（生成后缓存，供勾选/执行）
+    pub sync_plan: Option<Vec<SyncOp>>,
+    /// 勾选的计划项索引
+    pub sync_checked: HashSet<usize>,
+    /// 同步执行结果消息
+    pub sync_msg: Option<String>,
 }
 
 /// 展平后的树行
@@ -62,6 +73,11 @@ impl DirTab {
             selected: None,
             flat: Vec::new(),
             scroll_to_selected: false,
+            show_sync: false,
+            sync_mode: "update".to_string(),
+            sync_plan: None,
+            sync_checked: HashSet::new(),
+            sync_msg: None,
         }
     }
 
@@ -178,6 +194,95 @@ impl DirTab {
         self.flat = out;
         if self.selected.is_none() && !self.flat.is_empty() {
             self.selected = Some(0);
+        }
+    }
+
+    /// 当前选中文件的相对路径（选中目录或未选中时返回 None）
+    pub(crate) fn selected_rel(&self) -> Option<String> {
+        let idx = self.selected?;
+        let row = self.flat.get(idx)?;
+        let ei = row.entry?;
+        let r = self.result.as_ref()?;
+        r.entries.get(ei).map(|e| e.rel.clone())
+    }
+
+    /// 生成同步计划（基于当前 left/right/过滤/模式），勾选默认全部可执行项
+    pub fn gen_sync_plan(&mut self) {
+        let filter = match Filter::new(&split_globs(&self.includes), &split_globs(&self.excludes)) {
+            Ok(f) => f,
+            Err(e) => {
+                self.sync_msg = Some(fmt(I18nKey::FilterError, &[&e.to_string()]));
+                return;
+            }
+        };
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            (Err(e), _) => {
+                self.sync_msg = Some(format!("打开 {} 失败: {}", self.left, e));
+                return;
+            }
+            (_, Err(e)) => {
+                self.sync_msg = Some(format!("打开 {} 失败: {}", self.right, e));
+                return;
+            }
+        };
+        match build_plan(&self.sync_mode, self.compare_content, l.as_ref(), r.as_ref(), &filter) {
+            Ok(plan) => {
+                self.sync_checked.clear();
+                for (i, op) in plan.iter().enumerate() {
+                    // 跳过/冲突不可执行，默认不勾选
+                    if !matches!(op, SyncOp::Skip { .. } | SyncOp::Conflict { .. }) {
+                        self.sync_checked.insert(i);
+                    }
+                }
+                self.sync_plan = Some(plan);
+                self.sync_msg = None;
+            }
+            Err(e) => {
+                self.sync_msg = Some(e);
+            }
+        }
+    }
+
+    /// 执行勾选的同步操作，完成后重新对比
+    pub fn run_sync_checked(&mut self) {
+        let Some(plan) = self.sync_plan.clone() else {
+            self.sync_msg = Some("请先生成计划".to_string());
+            return;
+        };
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return,
+        };
+        let mut n_ok = 0usize;
+        let mut n_err = 0usize;
+        for (i, op) in plan.iter().enumerate() {
+            if !self.sync_checked.contains(&i) {
+                continue;
+            }
+            match execute_op(op, l.as_ref(), r.as_ref()) {
+                Some(_) => n_err += 1,
+                None => n_ok += 1,
+            }
+        }
+        self.sync_msg = Some(format!("同步完成: 成功 {} 项，失败 {} 项", n_ok, n_err));
+        self.sync_plan = None;
+        self.sync_checked.clear();
+        self.refresh();
+    }
+
+    /// 对选中文件执行单项操作（复制/删除等），成功则重新对比
+    pub fn run_single_op(&mut self, op: SyncOp) {
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return,
+        };
+        match execute_op(&op, l.as_ref(), r.as_ref()) {
+            Some(e) => self.sync_msg = Some(format!("操作失败: {}", e)),
+            None => {
+                self.sync_msg = Some(format!("完成: {}", op.describe()));
+                self.refresh();
+            }
         }
     }
 
@@ -301,6 +406,52 @@ impl DirTab {
                         ],
                     ));
                 }
+                ui.separator();
+                let sync_btn = if self.show_sync { "⇄ 同步" } else { "⇄ 同步" };
+                if ui.button(sync_btn).clicked() {
+                    self.show_sync = !self.show_sync;
+                    if self.show_sync && self.sync_plan.is_none() {
+                        self.gen_sync_plan();
+                    }
+                }
+                // 选中文件单项操作
+                if let Some(rel) = self.selected_rel() {
+                    ui.separator();
+                    ui.label(format!("选中: {}", rel));
+                    if ui.button("→ 复制到右").clicked() {
+                        let op = SyncOp::Copy {
+                            rel: rel.clone(),
+                            from_src: true,
+                        };
+                        self.run_single_op(op);
+                    }
+                    if ui.button("← 复制到左").clicked() {
+                        let op = SyncOp::Copy {
+                            rel: rel.clone(),
+                            from_src: false,
+                        };
+                        self.run_single_op(op);
+                    }
+                    if ui.button("删除右侧").clicked() {
+                        let op = SyncOp::Delete { rel: rel.clone() };
+                        self.run_single_op(op);
+                    }
+                    if ui.button("删除左侧").clicked() {
+                        // 删除左侧 = 把右侧当源、左侧当目标执行 Delete
+                        let (l, r) =
+                            match (crate::vfs::open(&self.right), crate::vfs::open(&self.left)) {
+                                (Ok(r), Ok(l)) => (l, r),
+                                _ => return,
+                            };
+                        match execute_op(&SyncOp::Delete { rel: rel.clone() }, l.as_ref(), r.as_ref()) {
+                            Some(e) => self.sync_msg = Some(format!("操作失败: {}", e)),
+                            None => {
+                                self.sync_msg = Some(format!("完成: 删除 {}", rel));
+                                self.refresh();
+                            }
+                        }
+                    }
+                }
             });
         });
 
@@ -317,6 +468,81 @@ impl DirTab {
         }
 
         self.handle_keys(ui);
+
+        // 同步面板（右侧浮窗）
+        if self.show_sync {
+            let mut keep = true;
+            egui::Window::new("同步")
+                .collapsible(false)
+                .resizable(true)
+                .default_size([420.0, 420.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("模式");
+                        for m in ["update", "mirror", "two-way"] {
+                            if ui.selectable_label(self.sync_mode == m, m).clicked() {
+                                self.sync_mode = m.to_string();
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut self.compare_content, t(I18nKey::ContentHash)).changed() {
+                            // 内容哈希变化只影响下一次生成计划
+                        }
+                        if ui.button("生成计划").clicked() {
+                            self.gen_sync_plan();
+                        }
+                        if ui.button("全选").clicked() {
+                            if let Some(plan) = &self.sync_plan {
+                                self.sync_checked.clear();
+                                for (i, op) in plan.iter().enumerate() {
+                                    if !matches!(op, SyncOp::Skip { .. } | SyncOp::Conflict { .. }) {
+                                        self.sync_checked.insert(i);
+                                    }
+                                }
+                            }
+                        }
+                        if ui.button("执行勾选").clicked() {
+                            self.run_sync_checked();
+                        }
+                    });
+                    if let Some(msg) = &self.sync_msg {
+                        ui.colored_label(Color32::from_rgb(230, 180, 80), msg);
+                    }
+                    ui.separator();
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        if let Some(plan) = &self.sync_plan {
+                            if plan.is_empty() {
+                                ui.label("两侧已一致，无需同步");
+                            }
+                            for (i, op) in plan.iter().enumerate() {
+                                ui.horizontal(|ui| {
+                                    let mut checked = self.sync_checked.contains(&i);
+                                    if ui
+                                        .checkbox(&mut checked, "")
+                                        .on_disabled_hover_text("跳过/冲突项不可执行")
+                                        .changed()
+                                    {
+                                        if checked {
+                                            self.sync_checked.insert(i);
+                                        } else {
+                                            self.sync_checked.remove(&i);
+                                        }
+                                    }
+                                    ui.label(op.tag());
+                                    ui.label(op.describe());
+                                });
+                            }
+                        } else {
+                            ui.label("点击「生成计划」预览同步操作");
+                        }
+                    });
+                });
+            if !keep {
+                self.show_sync = false;
+            }
+        }
 
         egui::CentralPanel::default().show(ui, |ui| {
             if self.result.is_none() && self.error.is_none() {

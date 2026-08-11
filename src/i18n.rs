@@ -129,7 +129,8 @@ pub enum Key {
     CopyFailed,
     /// 删除 {} 失败: {}
     DeleteFailed,
-    /// 读取 {} 失败: {}
+    /// 读取 {} 失败: {}（保留：部分路径仍可能使用）
+    #[allow(dead_code)]
     ReadFailed,
     /// 二进制文件: {}（不支持文本处理）
     BinaryFile,
