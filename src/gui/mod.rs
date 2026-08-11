@@ -135,6 +135,8 @@ struct DiffApp {
     show_git_help: bool,
     /// 会话中心窗口开关
     show_sessions: bool,
+    /// 规则(Profile)管理窗口开关
+    show_profiles: bool,
 }
 
 impl DiffApp {
@@ -145,6 +147,7 @@ impl DiffApp {
             settings,
             show_git_help: false,
             show_sessions: false,
+            show_profiles: false,
         }
     }
 
@@ -291,6 +294,14 @@ impl DiffApp {
     }
 }
 
+/// 逗号分隔的 glob 输入 → Vec（与 DirTab 的过滤输入一致）
+fn split_globs_ui(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
 fn pick_file() -> Option<String> {
     let p = rfd::FileDialog::new().pick_file()?;
     Some(p.to_string_lossy().into_owned())
@@ -340,6 +351,9 @@ impl eframe::App for DiffApp {
                 }
                 if ui.button("会话中心").clicked() {
                     self.show_sessions = !self.show_sessions;
+                }
+                if ui.button("规则").clicked() {
+                    self.show_profiles = !self.show_profiles;
                 }
                 ui.separator();
 
@@ -540,6 +554,175 @@ impl eframe::App for DiffApp {
             }
             if !keep {
                 self.show_sessions = false;
+            }
+        }
+
+        // 规则(Profile)管理弹窗：列出/编辑/保存/应用/删除命名规则集
+        if self.show_profiles {
+            let mut keep = true;
+            let mut apply_req: Option<(String, String, String)> = None; // (name, includes, excludes)
+            let mut delete_req: Option<String> = None;
+            let mut selected_name: Option<String> = None;
+            let profiles = crate::profile::load();
+            egui::Window::new("比较规则 (Profile)")
+                .collapsible(false)
+                .resizable(true)
+                .default_size([560.0, 440.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} 个规则集（{}）",
+                            profiles.profiles.len(),
+                            crate::profile::profiles_path().display()
+                        ))
+                        .size(12.0)
+                        .color(ui.visuals().weak_text_color()),
+                    );
+                    ui.separator();
+                    // 左侧：规则列表；右侧：选中规则的编辑表单
+                    ui.horizontal_top(|ui| {
+                        // 列表
+                        ui.group(|ui| {
+                            ui.set_width(190.0);
+                            ui.label("规则集");
+                            egui::ScrollArea::vertical()
+                                .max_height(300.0)
+                                .show(ui, |ui| {
+                                    for (name, p) in &profiles.profiles {
+                                        let mut parts: Vec<&str> = Vec::new();
+                                        if !p.includes.is_empty() {
+                                            parts.push("inc");
+                                        }
+                                        if !p.excludes.is_empty() {
+                                            parts.push("exc");
+                                        }
+                                        if p.ignore_whitespace {
+                                            parts.push("ws");
+                                        }
+                                        if p.ignore_trailing {
+                                            parts.push("trail");
+                                        }
+                                        if p.ignore_case {
+                                            parts.push("case");
+                                        }
+                                        if p.compare_content {
+                                            parts.push("hash");
+                                        }
+                                        let flags = if parts.is_empty() {
+                                            String::new()
+                                        } else {
+                                            format!("  [{:?}]", parts)
+                                        };
+                                        if ui
+                                            .selectable_label(
+                                                selected_name.as_deref() == Some(name.as_str()),
+                                                format!("{}{}", name, flags),
+                                            )
+                                            .clicked()
+                                        {
+                                            selected_name = Some(name.clone());
+                                        }
+                                    }
+                                });
+                        });
+                        // 编辑表单（选中规则）
+                        ui.group(|ui| {
+                            ui.label("编辑");
+                            if let Some(name) = &selected_name {
+                                if let Some(p) = profiles.profiles.get(name) {
+                                    let mut inc = p.includes.join(",");
+                                    let mut exc = p.excludes.join(",");
+                                    let mut iw = p.ignore_whitespace;
+                                    let mut it = p.ignore_trailing;
+                                    let mut ic = p.ignore_case;
+                                    let mut cc = p.compare_content;
+                                    let mut dm = p.detect_moves;
+                                    let mut enc = p.encoding.clone().unwrap_or_default();
+                                    ui.horizontal(|ui| {
+                                        ui.label("include");
+                                        ui.add(
+                                            egui::TextEdit::singleline(&mut inc)
+                                                .desired_width(180.0),
+                                        );
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("exclude");
+                                        ui.add(
+                                            egui::TextEdit::singleline(&mut exc)
+                                                .desired_width(180.0),
+                                        );
+                                    });
+                                    ui.checkbox(&mut iw, "忽略空白");
+                                    ui.checkbox(&mut it, "忽略行尾空白");
+                                    ui.checkbox(&mut ic, "忽略大小写");
+                                    ui.checkbox(&mut cc, "内容哈希");
+                                    ui.checkbox(&mut dm, "移动检测");
+                                    ui.horizontal(|ui| {
+                                        ui.label("编码");
+                                        ui.add(
+                                            egui::TextEdit::singleline(&mut enc)
+                                                .desired_width(120.0)
+                                                .hint_text("auto"),
+                                        );
+                                    });
+                                    ui.separator();
+                                    ui.horizontal(|ui| {
+                                        if ui.button("保存修改").clicked() {
+                                            let mut all = crate::profile::load();
+                                            if let Some(slot) = all.profiles.get_mut(name) {
+                                                slot.includes = split_globs_ui(&inc);
+                                                slot.excludes = split_globs_ui(&exc);
+                                                slot.ignore_whitespace = iw;
+                                                slot.ignore_trailing = it;
+                                                slot.ignore_case = ic;
+                                                slot.compare_content = cc;
+                                                slot.detect_moves = dm;
+                                                slot.encoding = if enc.trim().is_empty() {
+                                                    None
+                                                } else {
+                                                    Some(enc.trim().to_string())
+                                                };
+                                            }
+                                            let _ = crate::profile::save_all(&all);
+                                        }
+                                        if ui.button("应用").clicked() {
+                                            apply_req = Some((name.clone(), inc, exc));
+                                        }
+                                        if ui.button("删除").clicked() {
+                                            delete_req = Some(name.clone());
+                                        }
+                                    });
+                                }
+                            } else {
+                                ui.label("左侧选择一个规则集，或用命令行 bcr profile save 新建");
+                            }
+                        });
+                    });
+                });
+            if let Some(name) = delete_req {
+                let mut all = crate::profile::load();
+                all.profiles.remove(&name);
+                let _ = crate::profile::save_all(&all);
+                self.show_profiles = false;
+                self.show_profiles = true;
+            }
+            if let Some((name, inc, exc)) = apply_req {
+                // 应用规则到当前目录对比标签（若有）
+                let mut applied = false;
+                if let Some(Tab::Dir(t)) = self.tabs.get_mut(self.active) {
+                    t.includes = inc;
+                    t.excludes = exc;
+                    t.refresh();
+                    applied = true;
+                }
+                if !applied {
+                    // 无活动目录对比：提示
+                    let _ = name;
+                }
+            }
+            if !keep {
+                self.show_profiles = false;
             }
         }
 

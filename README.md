@@ -70,6 +70,7 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - `bcr profile list` / `bcr profile delete <name>`：列出/删除
 - `bcr compare A B --profile <name>` / `bcr diff A B --profile <name>`：合并规则（命令显式参数优先于 Profile 默认值）
 - GUI 会话中心：工具栏「会话中心」列出已保存会话（`~/.bcr-sessions.toml`），一键打开目录对比或删除
+- **GUI 规则面板**：工具栏「规则」打开管理窗口——左侧列出全部规则集，右侧可视化编辑（include/exclude/忽略选项/编码/哈希/移动检测），支持**保存修改**、**应用**到当前目录对比、**删除**
 
 ### P4 HTML 报告与会话保存
 

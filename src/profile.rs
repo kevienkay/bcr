@@ -104,14 +104,14 @@ pub struct DeleteProfileArgs {
 }
 
 /// Profile 文件路径：`~/.bcr-profiles.toml`
-fn profiles_path() -> PathBuf {
+pub fn profiles_path() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".into());
     PathBuf::from(home).join(".bcr-profiles.toml")
 }
 
-fn load() -> Profiles {
+pub fn load() -> Profiles {
     let path = profiles_path();
     std::fs::read_to_string(&path)
         .ok()
@@ -119,7 +119,7 @@ fn load() -> Profiles {
         .unwrap_or_default()
 }
 
-fn save_all(p: &Profiles) -> Result<(), String> {
+pub fn save_all(p: &Profiles) -> Result<(), String> {
     let path = profiles_path();
     let toml_str = toml::to_string_pretty(p).map_err(|e| e.to_string())?;
     std::fs::write(&path, toml_str).map_err(|e| e.to_string())
