@@ -23,6 +23,7 @@ mod session;
 mod sideview;
 mod sync;
 mod systemtime_secs;
+mod task;
 mod version;
 mod vfs;
 
@@ -89,6 +90,9 @@ enum Commands {
 
     /// GUI 并排 Diff 视图（egui）
     Gui(gui::GuiArgs),
+
+    /// 执行/校验任务清单（纯数据 JSON/TOML 步骤列表）
+    Task(task::TaskArgs),
 }
 
 /// 平台初始化：Windows 控制台切换到 UTF-8 代码页，保证中文输出不乱码。
@@ -141,6 +145,7 @@ fn main() {
         Commands::Session(args) => session::run(&args),
         Commands::Profile(args) => profile::run(&args),
         Commands::Gui(args) => gui::run(&args),
+        Commands::Task(args) => task::run(&args),
     };
     std::process::exit(code);
 }
