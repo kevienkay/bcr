@@ -399,6 +399,7 @@ fn execute_step(
                 compare_version: bool_param(step, "version"),
                 ignore_structure: bool_param(step, "ignore_structure"),
                 follow_symlinks: bool_param(step, "follow_symlinks"),
+                print: bool_param(step, "print"),
                 summary: false,
                 html: None,
                 txt: None,

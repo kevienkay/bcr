@@ -204,6 +204,7 @@ fn run_run(a: &RunArgs) -> i32 {
         compare_version: false,
         ignore_structure: false,
         follow_symlinks: false,
+        print: false,
         json: false,
         summary: false,
         html: None,

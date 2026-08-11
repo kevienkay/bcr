@@ -84,6 +84,10 @@ pub struct CompareArgs {
     #[arg(long = "report-no-stats")]
     pub report_no_stats: bool,
 
+    /// 打印报告（A10）：生成文本报告并调用系统打印命令（macOS lp / Linux lpr / Windows）
+    #[arg(long)]
+    pub print: bool,
+
     /// 报告排序：path（默认，按路径）| status（按状态字母序）| size（按差异大小降序）
     #[arg(long = "report-sort", default_value = "path", value_parser = ["path", "status", "size"])]
     pub report_sort: String,
@@ -827,10 +831,80 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     }
 
+    // A10 打印报告：生成文本报告并调用系统打印命令
+    if args.print {
+        let fields = match crate::report::parse_fields(&args.report_fields) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("bcr: {}", e);
+                return 2;
+            }
+        };
+        let opts = crate::report::ReportOptions {
+            title: args.report_title.clone(),
+            include_stats: !args.report_no_stats,
+            sort: args.report_sort.clone(),
+            group_by_status: args.report_group,
+        };
+        let txt = crate::report::render_txt_opts(&args.left, &args.right, &result, &fields, &opts);
+        if let Err(e) = print_text(&txt) {
+            eprintln!("bcr: 打印失败: {e}（可改用 --txt 导出后手动打印）");
+            return 2;
+        }
+    }
+
     if result.stats.has_differences() {
         1
     } else {
         0
+    }
+}
+
+/// A10：把文本内容送到系统打印机（macOS/Linux: lp 优先、lpr 回退；Windows: PowerShell Out-Printer）
+fn print_text(text: &str) -> io::Result<()> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    #[cfg(windows)]
+    {
+        let mut child = Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Out-Printer"])
+            .stdin(Stdio::piped())
+            .spawn()
+            .map_err(|e| io::Error::other(format!("无法启动打印命令: {e}")))?;
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin.write_all(text.as_bytes())?;
+        }
+        let status = child.wait()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(io::Error::other("打印命令退出码非零"))
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        for cmd in ["lp", "lpr"] {
+            match Command::new(cmd).stdin(Stdio::piped()).spawn() {
+                Ok(mut child) => {
+                    if let Some(stdin) = child.stdin.as_mut() {
+                        stdin.write_all(text.as_bytes())?;
+                    }
+                    let status = child.wait()?;
+                    if status.success() {
+                        return Ok(());
+                    }
+                    return Err(io::Error::other(format!(
+                        "{cmd} 打印失败（退出码 {:?}）",
+                        status.code()
+                    )));
+                }
+                Err(_) => continue,
+            }
+        }
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "未找到 lp/lpr 打印命令（macOS/Linux 需安装 CUPS）",
+        ))
     }
 }
 
@@ -891,6 +965,7 @@ mod tests {
             compare_version: false,
             ignore_structure: false,
             follow_symlinks: false,
+            print: false,
             json: false,
             summary: false,
             html: None,
