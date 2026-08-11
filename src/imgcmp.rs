@@ -74,6 +74,38 @@ pub fn is_image_file(path: &str) -> bool {
     false
 }
 
+/// 解码全部帧（GIF/WebP 动图返回多帧；静态图返回单帧）
+pub fn load_frames(data: &[u8], label: &str) -> Result<Vec<RgbaImage>, String> {
+    use image::AnimationDecoder;
+    let format =
+        image::guess_format(data).map_err(|e| format!("{}: 图片格式识别失败: {}", label, e))?;
+    match format {
+        image::ImageFormat::Gif => {
+            let dec = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(data))
+                .map_err(|e| format!("{}: GIF 解码失败: {}", label, e))?;
+            let frames = dec
+                .into_frames()
+                .collect_frames()
+                .map_err(|e| format!("{}: GIF 帧解码失败: {}", label, e))?;
+            Ok(frames.into_iter().map(|f| f.into_buffer()).collect())
+        }
+        image::ImageFormat::WebP => {
+            let dec = image::codecs::webp::WebPDecoder::new(std::io::Cursor::new(data))
+                .map_err(|e| format!("{}: WebP 解码失败: {}", label, e))?;
+            let frames = dec
+                .into_frames()
+                .collect_frames()
+                .map_err(|e| format!("{}: WebP 帧解码失败: {}", label, e))?;
+            Ok(frames.into_iter().map(|f| f.into_buffer()).collect())
+        }
+        _ => {
+            let img = image::load_from_memory(data)
+                .map_err(|e| format!("{}: 图片解码失败: {}", label, e))?;
+            Ok(vec![img.to_rgba8()])
+        }
+    }
+}
+
 /// 解码字节为 RGBA 图（PNG/JPEG/GIF/WebP/BMP）
 fn decode(data: &[u8], label: &str) -> Result<RgbaImage, String> {
     let img =
@@ -335,5 +367,48 @@ mod tests {
     #[test]
     fn invalid_bytes_error() {
         assert!(compare_bytes(b"not an image", b"also not").is_err());
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+
+    /// 生成 2 帧 GIF（用 image crate 编码）
+    fn make_2frame_gif() -> Vec<u8> {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        {
+            let mut encoder = image::codecs::gif::GifEncoder::new(&mut buf);
+            let f1 = RgbaImage::from_pixel(2, 2, Rgba([10, 20, 30, 255]));
+            let f2 = RgbaImage::from_pixel(2, 2, Rgba([40, 50, 60, 255]));
+            encoder.encode_frame(image::Frame::new(f1)).unwrap();
+            encoder.encode_frame(image::Frame::new(f2)).unwrap();
+        }
+        buf.into_inner()
+    }
+
+    #[test]
+    fn gif_multiple_frames_loaded() {
+        let gif = make_2frame_gif();
+        let frames = load_frames(&gif, "gif").unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].dimensions(), (2, 2));
+        assert_ne!(frames[0].as_raw(), frames[1].as_raw());
+    }
+
+    #[test]
+    fn static_png_single_frame() {
+        let img = RgbaImage::from_pixel(2, 2, Rgba([1, 2, 3, 255]));
+        let mut buf = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(&mut buf, image::ImageFormat::Png)
+            .unwrap();
+        let frames = load_frames(buf.get_ref(), "png").unwrap();
+        assert_eq!(frames.len(), 1);
+    }
+
+    #[test]
+    fn invalid_bytes_frame_error() {
+        assert!(load_frames(b"not an image", "x").is_err());
     }
 }

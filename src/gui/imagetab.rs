@@ -1,4 +1,4 @@
-//! 图片对比标签页：并排渲染左右图 + 差异叠加图，缩放控制，差异统计。
+//! 图片对比标签页：并排渲染左右图 + 差异叠加图，缩放/fit-to-window，GIF/WebP 多帧导航 + 缩略图条。
 //!
 //! 打开流程：`open_diff_files` / 目录双击 / 拖放时检测两侧文件魔数，
 //! 若均为图片则创建 `ImageTab` 而非 `DiffTab`。
@@ -9,6 +9,8 @@ use image::RgbaImage;
 
 /// GPU 纹理最大边长（超限先缩小再转纹理，统计仍基于原始像素）
 const MAX_TEX: u32 = 4096;
+/// 缩略图条最大帧数（超出只显示窗口附近帧，防 UI 卡顿）
+const MAX_THUMB_FRAMES: usize = 100;
 
 /// 图片标签页
 pub struct ImageTab {
@@ -16,12 +18,20 @@ pub struct ImageTab {
     pub right: String,
     pub pair: Option<ImgPair>,
     pub error: Option<String>,
-    /// 显示缩放（0.05 ~ 4.0，1.0 = 原始尺寸）
+    /// 显示缩放（0.05 ~ 8.0，1.0 = 原始尺寸）
     pub zoom: f32,
     /// 是否显示差异叠加图
     pub show_overlay: bool,
     /// 是否显示统计
     pub show_stats: bool,
+    /// 自适应窗口（fit-to-window）
+    pub fit: bool,
+    /// 左侧全部帧（多帧动图；静态图为单帧）
+    frames_l: Vec<RgbaImage>,
+    /// 右侧全部帧
+    frames_r: Vec<RgbaImage>,
+    /// 当前帧索引
+    frame_idx: usize,
     textures: Option<ImgTextures>,
 }
 
@@ -42,6 +52,10 @@ impl ImageTab {
             zoom: 1.0,
             show_overlay: false,
             show_stats: true,
+            fit: false,
+            frames_l: Vec::new(),
+            frames_r: Vec::new(),
+            frame_idx: 0,
             textures: None,
         };
         t.load_pair(left, right);
@@ -62,27 +76,78 @@ impl ImageTab {
         )
     }
 
-    /// 加载两侧图片并计算差异（失败时 error 置位，pair 清空）
+    /// 加载两侧图片全部帧并计算差异（失败时 error 置位，pair 清空）
     /// 任一侧为空串时仅更新路径、不加载（等待另一侧填充）
     pub fn load_pair(&mut self, l: &str, r: &str) {
         self.left = l.to_string();
         self.right = r.to_string();
         self.textures = None;
+        self.frame_idx = 0;
         if l.is_empty() || r.is_empty() {
             self.error = None;
             self.pair = None;
+            self.frames_l.clear();
+            self.frames_r.clear();
             return;
         }
-        match crate::imgcmp::compare_paths(l, r) {
-            Ok(p) => {
-                self.pair = Some(p);
-                self.error = None;
+        let (lb, rb) = match (std::fs::read(l), std::fs::read(r)) {
+            (Ok(lb), Ok(rb)) => (lb, rb),
+            (Err(e), _) => {
+                self.error = Some(format!("读取 {} 失败: {}", l, e));
+                self.pair = None;
+                return;
             }
-            Err(e) => {
+            (_, Err(e)) => {
+                self.error = Some(format!("读取 {} 失败: {}", r, e));
+                self.pair = None;
+                return;
+            }
+        };
+        match (
+            crate::imgcmp::load_frames(&lb, "left"),
+            crate::imgcmp::load_frames(&rb, "right"),
+        ) {
+            (Ok(fl), Ok(fr)) => {
+                self.frames_l = fl;
+                self.frames_r = fr;
+                self.error = None;
+                self.recompute_current();
+            }
+            (Err(e), _) | (_, Err(e)) => {
                 self.pair = None;
                 self.error = Some(e);
             }
         }
+    }
+
+    /// 用当前帧重算差异对（纹理缓存失效，下次渲染重建）
+    fn recompute_current(&mut self) {
+        let li = self.frame_idx.min(self.frames_l.len().saturating_sub(1));
+        let ri = self.frame_idx.min(self.frames_r.len().saturating_sub(1));
+        if self.frames_l.is_empty() || self.frames_r.is_empty() {
+            self.pair = None;
+            return;
+        }
+        self.pair = Some(crate::imgcmp::compare_images(
+            self.frames_l[li].clone(),
+            self.frames_r[ri].clone(),
+        ));
+        self.textures = None;
+    }
+
+    /// 跳转到指定帧（越界截断）
+    pub fn goto_frame(&mut self, idx: usize) {
+        let total = self.total_frames();
+        let idx = idx.min(total.saturating_sub(1));
+        if idx != self.frame_idx {
+            self.frame_idx = idx;
+            self.recompute_current();
+        }
+    }
+
+    /// 总帧数（两侧取较大值）
+    fn total_frames(&self) -> usize {
+        self.frames_l.len().max(self.frames_r.len())
     }
 
     /// 懒加载纹理（需要 ctx）
@@ -111,20 +176,44 @@ impl ImageTab {
                     self.load_pair(&l, &r);
                 }
                 ui.separator();
+                // 多帧导航
+                let total = self.total_frames();
+                if total > 1 {
+                    if ui.button("⏮").on_hover_text("第一帧").clicked() {
+                        self.goto_frame(0);
+                    }
+                    if ui.button("◀").on_hover_text("上一帧").clicked() {
+                        self.goto_frame(self.frame_idx.saturating_sub(1));
+                    }
+                    ui.label(format!("{}/{}", self.frame_idx + 1, total));
+                    if ui.button("▶").on_hover_text("下一帧").clicked() {
+                        self.goto_frame(self.frame_idx + 1);
+                    }
+                    if ui.button("⏭").on_hover_text("最后一帧").clicked() {
+                        self.goto_frame(total);
+                    }
+                    ui.separator();
+                }
                 ui.label("缩放");
                 if ui.button("−").clicked() {
+                    self.fit = false;
                     self.zoom = (self.zoom * 0.8).max(0.05);
                 }
                 ui.add(
-                    egui::Slider::new(&mut self.zoom, 0.05..=4.0)
+                    egui::Slider::new(&mut self.zoom, 0.05..=8.0)
                         .logarithmic(true)
                         .show_value(true),
                 );
                 if ui.button("+").clicked() {
-                    self.zoom = (self.zoom * 1.25).min(4.0);
+                    self.fit = false;
+                    self.zoom = (self.zoom * 1.25).min(8.0);
                 }
                 if ui.button("100%").clicked() {
+                    self.fit = false;
                     self.zoom = 1.0;
+                }
+                if ui.selectable_label(self.fit, "适应窗口").clicked() {
+                    self.fit = !self.fit;
                 }
                 ui.separator();
                 ui.checkbox(&mut self.show_overlay, "差异叠加");
@@ -175,17 +264,72 @@ impl ImageTab {
                 ui.label("无图片");
                 return;
             };
+            // fit-to-window：按可用区与列数计算缩放（不落盘到 self.zoom，切回手动时恢复）
+            let mut eff_zoom = self.zoom;
+            if self.fit {
+                let avail = ui.available_size();
+                let cols = if self.show_overlay { 3.0 } else { 2.0 };
+                let iw = tex.left.size_vec2();
+                let sx = (avail.x / cols - 24.0) / iw.x;
+                let sy = (avail.y - 56.0) / iw.y;
+                eff_zoom = sx.min(sy).clamp(0.01, 8.0);
+            }
             egui::ScrollArea::both()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.horizontal_top(|ui| {
-                        img_block(ui, &tex.left, &self.left, self.zoom, "左");
-                        img_block(ui, &tex.right, &self.right, self.zoom, "右");
+                        img_block(ui, &tex.left, &self.left, eff_zoom, "左");
+                        img_block(ui, &tex.right, &self.right, eff_zoom, "右");
                         if self.show_overlay {
-                            img_block(ui, &tex.overlay, "差异叠加", self.zoom, "叠加");
+                            img_block(ui, &tex.overlay, "差异叠加", eff_zoom, "叠加");
                         }
                     });
                 });
+            // 缩略图条（多帧动图）：底部横向缩略图导航
+            let total = self.total_frames();
+            if total > 1 && total <= MAX_THUMB_FRAMES {
+                ui.separator();
+                ui.label(
+                    RichText::new("帧导航（点击跳转）")
+                        .size(11.0)
+                        .color(ui.visuals().weak_text_color()),
+                );
+                egui::ScrollArea::horizontal().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        let sel = self.frame_idx;
+                        for i in 0..total {
+                            // 取该帧缩略图（左帧优先，缺帧用右帧）
+                            let frame = self.frames_l.get(i).or_else(|| self.frames_r.get(i));
+                            let Some(frame) = frame else { continue };
+                            let thumb = image::imageops::resize(
+                                frame,
+                                48,
+                                48,
+                                image::imageops::FilterType::Triangle,
+                            );
+                            let tex = to_texture(ui.ctx(), &thumb, &format!("thumb-{i}"));
+                            let resp = ui
+                                .add(
+                                    egui::Image::new((tex.id(), egui::vec2(48.0, 48.0)))
+                                        .sense(egui::Sense::click()),
+                                )
+                                .on_hover_text(format!("帧 {}", i + 1));
+                            if i == sel {
+                                let rect = resp.rect;
+                                ui.painter().rect_stroke(
+                                    rect,
+                                    2.0,
+                                    egui::Stroke::new(2.0, Color32::from_rgb(80, 160, 255)),
+                                    egui::StrokeKind::Outside,
+                                );
+                            }
+                            if resp.clicked() {
+                                self.goto_frame(i);
+                            }
+                        }
+                    });
+                });
+            }
         });
     }
 }

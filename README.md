@@ -68,6 +68,13 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - `bcr hex LEFT RIGHT`：逐字节对比，差异行 `!` 标记 + 偏移 + 两侧 hex/ASCII，退出码 0/1/2
 - GUI 检测到二进制文件自动切换 hex 视图（DiffTab 内渲染，差异行高亮）
 
+### P8 图片对比（多帧版）
+
+- `bcr imgcmp a.png b.png`：逐像素差异统计（差异像素数/百分比），退出码 0/1/2
+- GUI ImageTab：并排渲染 + 差异叠加图 + 缩放（0.05x~8x）+ **适应窗口**（fit-to-window，按可用区自动计算缩放）
+- **GIF/WebP 动图多帧对比**：帧导航（⏮◀▶⏭）+ 帧计数 + 底部**缩略图条**（点击跳转，每帧缩略图）
+- 静态图（PNG/JPEG/BMP）为单帧，行为不变
+
 ### I18N 多语言支持
 
 - 支持 10 种语言：中文、English、Deutsch、日本語、한국어、Español、Português、العربية、Русский、Français
