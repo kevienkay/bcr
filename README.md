@@ -113,14 +113,14 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 
 - compare/sync 的路径参数支持虚拟后端，可跨后端混合对比：
   - `zip://path/to/archive.zip`：把 ZIP 压缩包当作目录树（可读写：write/delete/set_mtime 全量重写）
-  - `tar://path/x.tar` / `tar://x.tar.gz` / `tar://x.tar.bz2` / `tar://x.tar.xz`：tar 及压缩变体（只读，全量解压进内存）
+  - `tar://path/x.tar` / `tar://x.tar.gz` / `tar://x.tar.xz`：tar 及压缩变体（**可读写**：write/delete/rename/set_mtime 全量重写；tar.bz2 无纯 Rust 编码器保持只读）
   - `7z://path/x.7z`：7-Zip 压缩包（只读，全量解压进内存）
   - `sftp://[user[:pass]@]host[:port]/remote/path`：SFTP 远程目录（可读写，含 mtime 保留）
   - `ftp://[user[:pass]@]host[:port]/remote/path`：FTP 远程目录（可读写；无标准 mtime 设置命令，同步建议 `--compare-content`）
   - 普通路径仍为本地目录，可任意组合（本地 vs zip、zip vs tar.gz、本地 vs sftp、sftp vs ftp 等）
 - 例：`bcr compare src/ "zip://backup.zip" --compare-content`、`bcr sync local/ "sftp://alice@nas/srv" --mode mirror --dry-run`、`bcr compare src/ "tar://backup.tar.gz"`、`bcr sync pub/ "ftp://mirror@files.example.com:/srv/pub" --mode update`
 - 内部通过 [`Vfs`] trait 统一抽象（scan/read/write/delete/set_mtime），CLI 与 GUI 共用
-- 注意：SFTP 首次连接不校验 host key（适用于受信环境）；tar/7z 后端只读，写入会报错；tar/7z 全量解压进内存，超大归档建议用 zip 或本地目录；FTP 被动模式，支持匿名登录（user=anonymous）
+- 注意：SFTP 首次连接不校验 host key（适用于受信环境）；7z 与 tar.bz2 后端只读，写入会报错；tar/7z 全量解压进内存，超大归档建议用 zip 或本地目录；FTP 被动模式，支持匿名登录（user=anonymous）
 
 ### M5 GUI（`bcr gui`）— 完整版
 
@@ -331,7 +331,7 @@ src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 - 不处理 "No newline at end of file" 标记
 - 二进制文件已做检测：CLI diff/merge 报错 exit 2；GUI 自动切 hex 视图
 - M5 目录对比的 glob 过滤在 GUI 中以逗号分隔输入；拖放仅支持本地文件
-- M6 tar/7z 后端只读（写入/删除会报错）；tar/7z 全量解压进内存，超大归档建议 zip 或本地；SFTP 首次连接不校验 host key，且依赖网络可达性；FTP 无标准 mtime 设置命令（同步建议 `--compare-content`）
+- M6 7z 与 tar.bz2 后端只读（写入/删除会报错）；tar/7z 全量解压进内存，超大归档建议 zip 或本地；SFTP 首次连接不校验 host key，且依赖网络可达性；FTP 无标准 mtime 设置命令（同步建议 `--compare-content`）
 - 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确
 - M3 三处 stdin 不能同时用（`-` 只能出现一次）
 - 与 git 的行为差异：两侧对**相邻行**的独立修改，bcr 按经典 diff3 语义无冲突合并，git 保守判冲突
