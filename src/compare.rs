@@ -44,6 +44,10 @@ pub struct CompareArgs {
     #[arg(long)]
     pub summary: bool,
 
+    /// 导出 HTML 对比报告到指定文件（自包含，浏览器可直接打开）
+    #[arg(long = "html")]
+    pub html: Option<String>,
+
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
@@ -411,6 +415,15 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     }
 
+    if let Some(html_path) = &args.html {
+        let now = crate::i18n::fmt(Key::ReportGeneratedAt, &[]);
+        let html = crate::htmlreport::render_html(&args.left, &args.right, &result, &now);
+        if let Err(e) = std::fs::write(html_path, html) {
+            eprintln!("bcr: {}", fmt(Key::WriteFailed, &[html_path, &e.to_string()]));
+            return 2;
+        }
+    }
+
     if result.stats.has_differences() {
         1
     } else {
@@ -448,6 +461,7 @@ mod tests {
             show_same: false,
             detect_moves: true,
             summary: false,
+            html: None,
             color: "never".into(),
         }
     }

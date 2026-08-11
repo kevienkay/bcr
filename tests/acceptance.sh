@@ -395,6 +395,63 @@ fi
 "$BIN" compare mv_l mv_r --summary > mv_sum.txt
 grep -q '移动' mv_sum.txt && pass "MOVE5 summary 含移动统计" || fail "MOVE5 summary 含移动统计"
 
+echo "=============================================="
+echo " HTML: 对比报告导出"
+echo "=============================================="
+mkdir -p html_d1 html_d2
+printf 'x' > html_d1/same.txt; printf 'x' > html_d2/same.txt
+printf 'v1' > html_d1/diff.txt; printf 'v22' > html_d2/diff.txt
+printf 'a' > html_d1/only_l.txt
+# HTML1 导出文件生成
+"$BIN" compare html_d1 html_d2 --html html_report.html > /dev/null 2>&1; check "HTML1 导出退出码=1(有差异)" 1 "$?"
+[ -f html_report.html ] && pass "HTML2 报告文件已生成" || fail "HTML2 报告文件已生成"
+# HTML3 报告含差异条目（HTML 中 [L] 与路径间有标签，分开断言）
+if grep -q '\[L\]' html_report.html && grep -q 'only_l.txt' html_report.html; then
+  pass "HTML3 报告含 [L] 条目"
+else
+  fail "HTML3 报告含 [L] 条目"
+fi
+if grep -q '\[C\]' html_report.html && grep -q 'diff.txt' html_report.html; then
+  pass "HTML4 报告含 [C] 条目"
+else
+  fail "HTML4 报告含 [C] 条目"
+fi
+# HTML5 报告含统计
+check_contains "HTML5 报告含统计" "仅左侧" "$(cat html_report.html)"
+# HTML6 报告含对比路径
+check_contains "HTML6 报告含路径" "html_d1 ↔ html_d2" "$(cat html_report.html)"
+
+# 移动检测在 HTML 报告中体现
+mkdir -p html_mv_l html_mv_r
+printf 'moved-content-xyz' > html_mv_l/old.txt
+printf 'moved-content-xyz' > html_mv_r/new.txt
+"$BIN" compare html_mv_l html_mv_r --html html_mv.html > /dev/null 2>&1
+check_contains "HTML7 报告含移动标记" "old.txt → new.txt" "$(cat html_mv.html)"
+
+echo "=============================================="
+echo " SESSION: 会话保存/恢复"
+echo "=============================================="
+# 用临时 HOME 隔离会话文件
+export HOME="$WORK/session-home"
+mkdir -p "$HOME"
+mkdir -p ses_d1 ses_d2
+printf 'a' > ses_d1/only.txt
+printf 'b' > ses_d2/only2.txt
+# SESSION1 保存
+"$BIN" session save ses_cmp ses_d1 ses_d2 --compare-content > /dev/null 2>&1; check "SESSION1 保存退出码=0" 0 "$?"
+# SESSION2 列出包含会话名
+"$BIN" session list > ses_list.txt
+check_contains "SESSION2 列表含会话名" "ses_cmp" "$(cat ses_list.txt)"
+# SESSION3 运行会话（有差异 rc=1）
+"$BIN" session run ses_cmp > /dev/null 2>&1; check "SESSION3 运行会话退出码=1" 1 "$?"
+# SESSION4 重复保存报错 rc=2
+"$BIN" session save ses_cmp ses_d1 ses_d2 > /dev/null 2>&1; check "SESSION4 重复保存退出码=2" 2 "$?"
+# SESSION5 运行不存在会话 rc=2
+"$BIN" session run not_exist > /dev/null 2>&1; check "SESSION5 不存在会话退出码=2" 2 "$?"
+# SESSION6 删除
+"$BIN" session delete ses_cmp > /dev/null 2>&1; check "SESSION6 删除退出码=0" 0 "$?"
+"$BIN" session run ses_cmp > /dev/null 2>&1; check "SESSION7 删除后运行退出码=2" 2 "$?"
+
 
 echo "=============================================="
 echo " I18N: 多语言"

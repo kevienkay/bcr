@@ -6,10 +6,12 @@ mod gui;
 mod hex;
 mod hexview;
 mod highlight;
+mod htmlreport;
 mod i18n;
 mod merge;
 mod mergeview;
 mod render;
+mod session;
 mod sideview;
 mod sync;
 mod vfs;
@@ -56,6 +58,9 @@ enum Commands {
 
     /// 目录同步（update/mirror/two-way，支持 dry-run 预览）
     Sync(sync::SyncArgs),
+
+    /// 会话管理（save/list/run/delete，持久化比较配置）
+    Session(session::SessionArgs),
 
     /// GUI 并排 Diff 视图（egui）
     Gui(gui::GuiArgs),
@@ -104,6 +109,7 @@ fn main() {
         Commands::Compare(args) => compare::run(&args),
         Commands::Merge(args) => merge::run(&args),
         Commands::Sync(args) => sync::run(&args),
+        Commands::Session(args) => session::run(&args),
         Commands::Gui(args) => gui::run(&args),
     };
     std::process::exit(code);

@@ -139,6 +139,20 @@ pub enum Key {
     SummaryCompare,
     /// 移动/重命名: {} 对
     SummaryMoved,
+    /// 报告生成时间（HTML 页脚）
+    ReportGeneratedAt,
+    /// 会话已存在: {}
+    SessionExists,
+    /// 会话已保存: {}
+    SessionSaved,
+    /// 会话写入失败: {}
+    SessionWriteFailed,
+    /// 暂无会话（用 bcr session save <name> <left> <right> 保存）
+    SessionEmpty,
+    /// 会话不存在: {}
+    SessionNotFound,
+    /// 会话已删除: {}
+    SessionDeleted,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}
