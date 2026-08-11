@@ -1,8 +1,44 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统** + **I18N：多语言** + **P1：二进制 hex 对比** + **P2：移动/重命名检测** + **P3：流式读取** + **P4：HTML 报告与会话**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统** + **I18N：多语言** + **编码检测/二进制检测** + **语法高亮** + **P1：二进制 hex 对比** + **P2：移动/重命名检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5：同步增强** + **P6：三路文件夹对比** + **P7：CSV/表格对比**。
 
 ## 功能
+
+### 编码检测与二进制检测（P0）
+
+- 所有文本入口（diff/merge/GUI）统一走 `encoding::decode`：**BOM 嗅探 → 严格 UTF-8 验证 → UTF-16 无 BOM 判定 → 二进制判定 → chardetng 多字节编码（GBK/Big5/Shift_JIS…）→ Latin-1 保底**，确定性检测、永不 panic
+- 支持 UTF-8/UTF-16LE/BE/UTF-32LE/BE/GBK/Big5/Shift_JIS/Windows-1252 等（encoding_rs 全覆盖）
+- 二进制判定：前 8192 字节 NUL 占比 ≥ 1% 或存在非文本控制字符 → `is_binary=true`；CLI diff/merge 对二进制文件报错 exit 2，GUI 自动切 hex 视图
+- 强制指定：`--encoding <name>` 全局参数或 `BCR_ENCODING` 环境变量（跳过自动检测）
+- 大小上限：`--max-size <MB>` 或 `BCR_MAX_SIZE`（默认 64MB，超限按文本加载报错，防 OOM）
+- GUI 编辑保存**按原编码回写**（GBK 文件编辑后仍是 GBK，`encode_back` round-trip）
+
+### 语法高亮（P1）
+
+- syntect（Sublime 语法集，60+ 语言），按文件扩展名识别
+- GUI 并排 Diff / 三路合并视图：**语法色管前景，diff 高亮管背景**，与 BC 一致分层
+- CLI：`bcr diff --highlight` 输出 ANSI 语法色（需彩色输出）
+
+### P7 CSV/表格对比
+
+- `bcr csv LEFT RIGHT [--key id] [--delimiter ,] [--no-header]`：CSV/TSV 表格对比
+- 对齐方式：`--key` 指定主键列（列名或列号）按主键对齐；缺省按行号对齐
+- 列级 diff：每行内逐列比较，输出各列差异；RFC 4180 子集解析（双引号引用、`""` 转义、引号内可含分隔符与换行）
+- `--delimiter` 支持自定义分隔符（`\t` 表示制表符）、`--no-header`、`--show-same`、`--summary`
+- 退出码：0=无差异，1=有差异，2=错误
+
+### P6 三路文件夹对比（compare3）
+
+- `bcr compare3 BASE LEFT RIGHT`：三路目录树对比，10 种状态标记（仅一侧/两侧/三侧差异/冲突等）
+- `--compare-content` 对大小相同的文件对做 blake3 哈希兜底（快速模式仅大小+修改时间）
+- `--include/--exclude` glob 过滤（目录级剪枝）、`--show-same`、`--summary`
+- 退出码：0=无差异，1=有差异，2=错误
+
+### P5 同步引擎增强
+
+- mirror/update 模式**移动检测**：源侧重命名/移动的文件识别为 `[MOVE] old -> new`（内容哈希一致），避免"复制+删除"误报
+- mirror 模式**空目录清理 `[RMDIR]`**：镜像删除目标侧独有文件后，级联清理空目录（自底向上）
+- 统计行新增 rename/rmdir 计数
 
 ### P4 HTML 报告与会话保存
 
@@ -90,6 +126,7 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - 行内差异高亮（intra-line diff，字符级二次比对）
 - 双算法：`--algo myers` / `--algo patience`（默认 patience，更适合代码）
 - 忽略选项：`--ignore-whitespace` / `--ignore-trailing` / `--ignore-case`
+- 语法高亮：`--highlight`（ANSI 语法色，需彩色输出）
 - `--color auto|always|never`（默认按 TTY 自动）
 - `-L` 自定义标签、`-` 从 stdin 读取
 - git 兼容退出码：**0=无差异，1=有差异，2=错误**
@@ -104,7 +141,14 @@ bcr --lang en diff old.rs new.rs
 BCR_LANG=de bcr compare src/ backup/ --summary
 bcr gui --lang ja old.rs new.rs
 
-# GUI 并排 Diff 视图
+# 编码：--encoding 或 BCR_ENCODING（utf-8/utf-16le/gbk/big5/shift_jis 等，默认自动检测）
+bcr --encoding gbk diff 中文旧文件.txt 中文新文件.txt
+BCR_ENCODING=utf-16le bcr diff a.txt b.txt
+
+# 文本大小上限（默认 64MB，防 OOM）
+bcr --max-size 128 diff big1.log big2.log
+
+# GUI 并排 Diff 视图（语法高亮 + 行内编辑）
 bcr gui old.rs new.rs
 bcr gui --ignore-whitespace old.rs new.rs
 
@@ -142,6 +186,9 @@ bcr diff old.rs new.rs
 # 忽略空白 + 强制颜色
 bcr diff --ignore-whitespace --color=always old.rs new.rs
 
+# 语法高亮
+bcr diff --highlight old.rs new.rs
+
 # stdin 对比
 printf 'a\nb\n' | bcr diff - new.txt -L stdin -L file
 
@@ -152,6 +199,15 @@ bcr hex old.bin new.bin --show-same
 # 目录对比 + 移动/重命名检测（P2，默认开启）
 bcr compare old-dir new-dir
 bcr compare old-dir new-dir --detect-moves false
+
+# 三路文件夹对比（P6）
+bcr compare3 base/ left/ right/
+bcr compare3 base/ left/ right/ --compare-content --summary
+
+# CSV/表格对比（P7）
+bcr csv a.csv b.csv
+bcr csv a.csv b.csv --key id --summary
+bcr csv a.tsv b.tsv --delimiter '\t' --no-header
 
 # 导出 HTML 对比报告（P4）
 bcr compare old-dir new-dir --html report.html
@@ -176,16 +232,23 @@ git 配置：
 ## 架构
 
 ```
-src/main.rs     CLI 入口（clap 子命令分发）
+src/main.rs     CLI 入口（clap 子命令分发，全局 --lang/--encoding/--max-size）
 src/diff.rs     M1 参数解析、输入读取、diff 引擎（similar::capture_diff_slices）
 src/render.rs   M1 unified 渲染：hunk 分组、行内高亮、ANSI 着色
+src/encoding.rs P0 编码检测与二进制检测：decode 检测链、TextFile、按原编码回写
+src/highlight.rs P1 语法高亮：syntect 主题/语法识别/行高亮
 src/compare.rs  M2 目录扫描（walkdir）、双模式比较、glob 过滤、状态输出
+src/compare3.rs P6 三路文件夹对比：BASE/LEFT/RIGHT、10 状态标记
+src/csvcmp.rs   P7 CSV/表格对比：主键对齐、列级 diff、引号字段解析
 src/merge.rs    M3 三路合并：diff3 归并（collect_block + apply_regions）、冲突标记
 src/fsscan.rs   共享扫描/过滤/哈希模块（本地实现，compare 与 sync 共用）
-src/sync.rs     M4 同步引擎：三模式计划生成、dry-run、mtime 保留复制
+src/sync.rs     M4 同步引擎：三模式计划生成、dry-run、mtime 保留复制、移动检测、空目录清理
 src/sideview.rs M5 并排 diff 数据模型：行级 ops 展开为并排行（行号+行内高亮），纯逻辑可单测
 src/mergeview.rs M5 三路合并视图模型：块级对齐 + 冲突标记 + 解决选择
-src/gui/         M5 egui 窗口：mod.rs（多标签/主题/持久化）、difftab（并排+搜索+跳转）、
+src/hexview.rs  P1 hex 对比数据模型：行构建/渲染（分块，支持超大文件）
+src/htmlreport.rs P4 HTML 报告渲染
+src/session.rs  P4 会话持久化（~/.bcr-sessions.toml）
+src/gui/         M5 egui 窗口：mod.rs（多标签/主题/持久化）、difftab（并排+搜索+跳转+hex）、
                  dirtab（目录导航）、mergetab（三路合并）、common（虚拟化渲染/着色）
 src/vfs/        M6 虚拟文件系统：mod.rs（Vfs trait + LocalVfs + 路径解析）、zip.rs（ZIP 只读）、
                 sftp.rs（russh 纯 Rust SFTP）
@@ -198,6 +261,7 @@ src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 - **比较键与输出分离**：忽略选项作用于归一化后的"比较键"，输出始终保留原始行，不会因忽略空白而丢内容
 - **两级 diff**：行级 diff 定位变更行，变更行对再跑字符级 diff 得到行内高亮区间
 - **hunk 分组**：仅按变更 op 之间的间隔决定是否断开（间隔 > 2×3 行上下文则新开 hunk）
+- **编码/二进制统一入口**：所有文本入口共用 `encoding::decode` 检测链，CLI 与 GUI 行为一致，编辑保存按原编码回写
 
 ## Roadmap
 
@@ -207,16 +271,25 @@ src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 - [x] M4 同步引擎（镜像/双向/更新 + dry-run 预览）
 - [x] M5 GUI（egui 并排 Diff 视图）
 - [x] M6 远程/压缩包适配层（SFTP / ZIP 虚拟 FS）
+- [x] P0 编码检测 + 二进制检测
+- [x] P1 语法高亮
+- [x] P1 二进制 hex 对比
+- [x] P2 移动/重命名检测
+- [x] P3 分块流式读取
+- [x] P4 HTML 报告 + 会话保存
+- [x] P5 同步增强（移动检测 + 空目录清理）
+- [x] P6 三路文件夹对比（compare3）
+- [x] P7 CSV/表格对比
 
-## 已知限制（M1-M6）
+## 已知限制
 
-- 整文件读入内存，超大文件（> 数百 MB）需后续引入分块比较
+- 文本 diff 整文件读入内存，超过 `--max-size` 上限（默认 64MB）报错；超大文件内容比较走 P3 流式哈希
 - 不处理 "No newline at end of file" 标记
-- 二进制文件未做检测（M1/M3/M5 仅文本）
+- 二进制文件已做检测：CLI diff/merge 报错 exit 2；GUI 自动切 hex 视图
 - M5 目录对比的 glob 过滤在 GUI 中以逗号分隔输入；拖放仅支持本地文件
 - M6 ZIP 后端只读（写入/删除会报错）；SFTP 首次连接不校验 host key，且依赖网络可达性
 - 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确
 - M3 三处 stdin 不能同时用（`-` 只能出现一次）
 - 与 git 的行为差异：两侧对**相邻行**的独立修改，bcr 按经典 diff3 语义无冲突合并，git 保守判冲突
 - sync 快速模式下无法检测“mtime 相同但内容不同”，two-way 冲突检测需 `--compare-content`
-- sync 的 mirror 删除只删文件，不清理空目录
+- 语法高亮仅在 GUI 与 `diff --highlight` 生效；CLI compare/sync 输出无语法色
