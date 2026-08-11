@@ -22,6 +22,7 @@ mod session;
 mod sideview;
 mod sync;
 mod systemtime_secs;
+mod version;
 mod vfs;
 
 use clap::{Parser, Subcommand};

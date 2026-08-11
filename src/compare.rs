@@ -44,6 +44,10 @@ pub struct CompareArgs {
     #[arg(long)]
     pub compare_attrs: bool,
 
+    /// 比较文件版本号（从 FileVersion/ProductVersion 字段提取；含版本号的文件对按版本比较，否则回退快速模式）
+    #[arg(long)]
+    pub compare_version: bool,
+
     /// 输出统计信息
     #[arg(long)]
     pub summary: bool,
@@ -228,6 +232,7 @@ pub fn compare_dirs_attrs(
         compare_content,
         enable_moves,
         compare_attrs,
+        false,
     )
 }
 
@@ -240,7 +245,15 @@ pub fn compare_vfs(
     compare_content: bool,
     enable_moves: bool,
 ) -> io::Result<CompareResult> {
-    compare_vfs_attrs(left, right, filter, compare_content, enable_moves, false)
+    compare_vfs_attrs(
+        left,
+        right,
+        filter,
+        compare_content,
+        enable_moves,
+        false,
+        false,
+    )
 }
 
 /// 带属性比较的虚拟后端对比
@@ -251,6 +264,7 @@ pub fn compare_vfs_attrs(
     compare_content: bool,
     enable_moves: bool,
     compare_attrs: bool,
+    compare_version: bool,
 ) -> io::Result<CompareResult> {
     let left_map = left.scan(filter)?;
     let right_map = right.scan(filter)?;
@@ -259,8 +273,8 @@ pub fn compare_vfs_attrs(
     let cache_key =
         if !crate::vfs::is_remote(&left.describe()) && !crate::vfs::is_remote(&right.describe()) {
             let opts = format!(
-                "cc={} moves={} attrs={}",
-                compare_content, enable_moves, compare_attrs
+                "cc={} moves={} attrs={} cv={}",
+                compare_content, enable_moves, compare_attrs, compare_version
             );
             Some(crate::cache::key_for(
                 &left.describe(),
@@ -300,7 +314,17 @@ pub fn compare_vfs_attrs(
     for key in keys {
         match (left_map.get(key), right_map.get(key)) {
             (Some(l), Some(r)) => {
-                let content_same = if l.size != r.size {
+                let content_same = if compare_version {
+                    // 版本模式优先：提取两侧版本号；任一侧无版本号 → 回退快速模式(size+mtime)
+                    match version_equal_vfs(left, right, key) {
+                        Ok(Some(eq)) => eq,
+                        Ok(None) => l.size == r.size && l.mtime == r.mtime,
+                        Err(e) => {
+                            result.warnings.push(format!("读取 {key} 失败: {e}"));
+                            continue;
+                        }
+                    }
+                } else if l.size != r.size {
                     false
                 } else if compare_content {
                     match crate::vfs::content_equal_vfs(left, right, key) {
@@ -524,6 +548,7 @@ pub fn run(args: &CompareArgs) -> i32 {
         args.compare_content,
         args.detect_moves,
         args.compare_attrs,
+        args.compare_version,
     ) {
         Ok(r) => r,
         Err(e) => {
@@ -645,6 +670,19 @@ pub fn run(args: &CompareArgs) -> i32 {
     }
 }
 
+/// 版本比较：提取两侧文件版本号并比较。
+/// Ok(Some(true)) = 两侧版本相同；Ok(Some(false)) = 不同；Ok(None) = 任一侧无版本号。
+fn version_equal_vfs(left: &dyn Vfs, right: &dyn Vfs, rel: &str) -> io::Result<Option<bool>> {
+    let lv = crate::version::extract_version(&left.read(rel)?);
+    let rv = crate::version::extract_version(&right.read(rel)?);
+    match (lv, rv) {
+        (Some(a), Some(b)) => Ok(Some(
+            crate::version::compare_versions(&a, &b) == std::cmp::Ordering::Equal,
+        )),
+        _ => Ok(None),
+    }
+}
+
 /// 属性差异判定：权限位（仅 Unix 有）或符号链接目标不同即视为属性差异。
 /// 任一侧缺失属性信息（后端不支持）视为相同，避免远程/压缩包误报。
 fn attrs_diff(l: &FileMeta, r: &FileMeta) -> bool {
@@ -686,6 +724,7 @@ mod tests {
             show_same: false,
             detect_moves: true,
             compare_attrs: false,
+            compare_version: false,
             summary: false,
             html: None,
             txt: None,
@@ -945,6 +984,93 @@ mod tests {
         assert_eq!(by_rel["old.txt"], FileStatus::LeftOnly);
         assert_eq!(by_rel["new.txt"], FileStatus::RightOnly);
         assert_eq!(r.stats.moved, 0);
+    }
+
+    #[test]
+    fn compare_version_same_version_same_file() {
+        // 内容不同但版本号相同（mtime 也不同）→ --compare-version 视为相同
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        let v = b"FileVersion\x00, 1.2.3.4\x00";
+        let mut a = v.to_vec();
+        let mut b = v.to_vec();
+        a.extend_from_slice(b"AAA");
+        b.extend_from_slice(b"BBBB"); // 长度不同 → 快速模式 Differ，但版本号相同
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        let set = |d: &tempfile::TempDir, data: &[u8]| {
+            let p = d.path().join("app.dll");
+            std::fs::write(&p, data).unwrap();
+            filetime::set_file_mtime(&p, fixed).unwrap();
+        };
+        set(&d1, &a);
+        set(&d2, &b);
+        // 快速模式：大小不同 → Differ
+        let r = compare_dirs(d1.path(), d2.path(), &empty_filter(), false, true).unwrap();
+        assert_eq!(r.stats.differ, 1);
+        // 版本模式：版本号相同 → Same
+        let r = compare_vfs_attrs(
+            &LocalVfs::new(d1.path()).unwrap(),
+            &LocalVfs::new(d2.path()).unwrap(),
+            &empty_filter(),
+            false,
+            true,
+            false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(r.stats.same, 1);
+        assert_eq!(r.stats.differ, 0);
+    }
+
+    #[test]
+    fn compare_version_different_version_diffs() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        let set = |d: &tempfile::TempDir, ver: &str| {
+            let p = d.path().join("app.dll");
+            std::fs::write(&p, format!("FileVersion\x00, {ver}\x00")).unwrap();
+            filetime::set_file_mtime(&p, fixed).unwrap();
+        };
+        set(&d1, "1.2.3.4");
+        set(&d2, "1.2.4.0");
+        let r = compare_vfs_attrs(
+            &LocalVfs::new(d1.path()).unwrap(),
+            &LocalVfs::new(d2.path()).unwrap(),
+            &empty_filter(),
+            false,
+            true,
+            false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(r.stats.differ, 1);
+        assert_eq!(r.stats.same, 0);
+    }
+
+    #[test]
+    fn compare_version_no_version_falls_back_mtime() {
+        // 无版本号的文件对：回退 mtime 比较
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+        let p1 = d1.path().join("x.bin");
+        let p2 = d2.path().join("x.bin");
+        std::fs::write(&p1, b"data").unwrap();
+        std::fs::write(&p2, b"data").unwrap();
+        filetime::set_file_mtime(&p1, fixed).unwrap();
+        filetime::set_file_mtime(&p2, fixed).unwrap();
+        let r = compare_vfs_attrs(
+            &LocalVfs::new(d1.path()).unwrap(),
+            &LocalVfs::new(d2.path()).unwrap(),
+            &empty_filter(),
+            false,
+            true,
+            false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(r.stats.same, 1);
     }
 
     #[test]
