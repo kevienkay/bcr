@@ -84,6 +84,8 @@ pub struct DiffTab {
     pub hex_edit: Option<HexEditState>,
     /// A8 自动换行（word wrap，BC5 特性）
     pub wrap: bool,
+    /// A11 缩略图总览（右侧迷你差异地图，点击跳转）
+    pub show_overview: bool,
 }
 
 /// 编辑窗口状态
@@ -113,6 +115,7 @@ impl DiffTab {
             hex: None,
             hex_edit: None,
             wrap: false,
+            show_overview: true,
         }
     }
 
@@ -582,6 +585,9 @@ impl DiffTab {
                 // A8 自动换行（BC5 word wrapping，仅影响显示）
                 ui.checkbox(&mut self.wrap, t(I18nKey::WordWrap))
                     .on_hover_text("长行按窗口宽度折行显示");
+                // A11 缩略图总览开关
+                ui.checkbox(&mut self.show_overview, "缩略图")
+                    .on_hover_text("右侧迷你差异地图，点击跳转");
                 ui.separator();
                 if ui.button(t(I18nKey::EditLeft)).clicked() {
                     if let Some(l) = &self.left {
@@ -1082,6 +1088,50 @@ impl DiffTab {
                 }
             });
             self.scroll = out.state.offset;
+
+            // A11 缩略图总览：右侧迷你差异地图（点击跳转到对应行）
+            if self.show_overview && !display_rows.is_empty() {
+                let panel_rect = ui.max_rect();
+                let ov_w = 10.0;
+                let ov_rect = Rect::from_min_size(
+                    Pos2::new(panel_rect.right() - ov_w - 3.0, panel_rect.top()),
+                    vec2(ov_w, panel_rect.height()),
+                );
+                let n = display_rows.len();
+                let row_h = ov_rect.height() / n as f32;
+                for (i, row) in display_rows.iter().enumerate() {
+                    let color = match row.tag {
+                        RowTag::Equal => Color32::TRANSPARENT,
+                        RowTag::Delete => Color32::from_rgb(220, 90, 90),
+                        RowTag::Insert => Color32::from_rgb(90, 200, 110),
+                        RowTag::Replace => Color32::from_rgb(235, 200, 90),
+                    };
+                    if color != Color32::TRANSPARENT {
+                        let y = ov_rect.top() + i as f32 * row_h;
+                        ui.painter().rect_filled(
+                            Rect::from_min_size(
+                                Pos2::new(ov_rect.left(), y),
+                                vec2(ov_w, row_h.max(1.0)),
+                            ),
+                            0.0,
+                            color,
+                        );
+                    }
+                }
+                let resp = ui.interact(ov_rect, ui.id().with("overview"), egui::Sense::click());
+                if resp.clicked() {
+                    if let Some(pos) = resp.interact_pointer_pos() {
+                        let t = ((pos.y - ov_rect.top()) / ov_rect.height()).clamp(0.0, 1.0);
+                        let row_idx = (t * n as f32) as usize;
+                        let orig = if self.wrap {
+                            orig_idx.get(row_idx).copied().unwrap_or(row_idx)
+                        } else {
+                            row_idx
+                        };
+                        self.jump_to_row(orig);
+                    }
+                }
+            }
 
             // 底部统计栏
             if self.show_stats {
