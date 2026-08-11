@@ -30,10 +30,24 @@ pub struct SearchState {
 }
 
 /// 二进制文件的十六进制对比数据（任一文件检测为二进制时启用）
+#[derive(Clone)]
 pub struct HexTabData {
     pub left: String,
     pub right: String,
     pub rows: Vec<crate::hexview::HexRow>,
+    /// 左侧原始字节（编辑保存用）
+    pub left_bytes: Vec<u8>,
+    /// 右侧原始字节（编辑保存用）
+    pub right_bytes: Vec<u8>,
+}
+
+/// hex 编辑状态：编辑某侧某行的字节
+pub struct HexEditState {
+    pub side: EditSide,
+    /// 行索引
+    pub row: usize,
+    /// 编辑缓冲区（十六进制字符串，如 "01 0a ff"）
+    pub buf: String,
 }
 
 /// 行内编辑状态
@@ -64,6 +78,8 @@ pub struct DiffTab {
     pub editing: Option<EditState>,
     /// 二进制 hex 对比模式（Some 时优先于文本行渲染）
     pub hex: Option<HexTabData>,
+    /// hex 编辑状态
+    pub hex_edit: Option<HexEditState>,
 }
 
 /// 编辑窗口状态
@@ -91,6 +107,7 @@ impl DiffTab {
             goto_focus: false,
             editing: None,
             hex: None,
+            hex_edit: None,
         }
     }
 
@@ -135,6 +152,8 @@ impl DiffTab {
                 left: l.to_string(),
                 right: r.to_string(),
                 rows,
+                left_bytes: std::fs::read(l).unwrap_or_default(),
+                right_bytes: std::fs::read(r).unwrap_or_default(),
             });
             self.left = None;
             self.right = None;
@@ -618,8 +637,9 @@ impl DiffTab {
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
-            // 二进制 hex 对比模式
-            if let Some(h) = &self.hex {
+            // 二进制 hex 对比模式（克隆到局部，渲染基于局部副本，保存时可自由 &mut self）
+            let hex_owned = self.hex.clone();
+            if let Some(h) = &hex_owned {
                 if h.rows.is_empty() {
                     ui.centered_and_justified(|ui| {
                         ui.label(
@@ -633,12 +653,144 @@ impl DiffTab {
                 let fg = text_color(ui);
                 let diff_count = h.rows.iter().filter(|r| r.diff).count();
                 let total_w = HEX_TOTAL_W;
+                let mut edit_click: Option<usize> = None;
+                let mut save_req = false;
+                // 编辑状态下 Ctrl+S 保存
+                if self.hex_edit.is_some()
+                    && ui.input(|i| i.modifiers.command && i.key_pressed(Key::S))
+                {
+                    save_req = true;
+                }
                 let out = super::show_rows(ui, h.rows.len(), HEX_ROW_H, |ui, range| {
                     ui.set_min_width(total_w);
                     for i in range {
-                        paint_hex_row(ui, &h.rows[i], fg);
+                        let row = &h.rows[i];
+                        // 正在编辑的行：显示输入框
+                        if let Some(he) = &self.hex_edit {
+                            if he.row == i {
+                                let (rect, resp) = ui.allocate_exact_size(
+                                    Vec2::new(total_w, HEX_ROW_H),
+                                    egui::Sense::click(),
+                                );
+                                if row.diff {
+                                    paint_bg(ui, rect, Some(bg_replace_l()));
+                                }
+                                ui.painter().text(
+                                    Pos2::new(rect.left() + HEX_OFF_X, rect.top() + 2.0),
+                                    egui::Align2::LEFT_TOP,
+                                    format!("{:08x}", row.offset),
+                                    egui::FontId::monospace(13.0),
+                                    GUTTER,
+                                );
+                                let mut buf = self
+                                    .hex_edit
+                                    .as_ref()
+                                    .map(|e| e.buf.clone())
+                                    .unwrap_or_default();
+                                let te = ui.add(
+                                    egui::TextEdit::singleline(&mut buf)
+                                        .font(egui::TextStyle::Monospace)
+                                        .desired_width(240.0)
+                                        .hint_text("hex bytes, e.g. 01 0a ff"),
+                                );
+                                if let Some(he) = self.hex_edit.as_mut() {
+                                    he.buf = buf;
+                                }
+                                if resp.double_clicked() {
+                                    edit_click = Some(i);
+                                }
+                                let _ = te;
+                                continue;
+                            }
+                        }
+                        paint_hex_row(ui, row, fg);
+                        // 双击进入编辑（编辑该行左/右侧字节）
+                        let (rect, resp) = ui.allocate_exact_size(
+                            Vec2::new(total_w, HEX_ROW_H),
+                            egui::Sense::click(),
+                        );
+                        if resp.double_clicked() {
+                            edit_click = Some(i);
+                        }
+                        let _ = rect;
                     }
                 });
+                // 双击 → 打开编辑（默认编辑差异行左侧）
+                if let Some(i) = edit_click {
+                    if let Some(h) = &self.hex {
+                        let row = &h.rows[i];
+                        let bytes = if row.left.len() >= row.right.len() {
+                            &h.left_bytes
+                        } else {
+                            &h.right_bytes
+                        };
+                        // 取该行字节作为初始缓冲区
+                        let start = row.offset;
+                        let end = (start + 16).min(bytes.len());
+                        let chunk = bytes.get(start..end).unwrap_or_default();
+                        let hex_str: Vec<String> =
+                            chunk.iter().map(|b| format!("{:02x}", b)).collect();
+                        self.hex_edit = Some(HexEditState {
+                            side: EditSide::Left,
+                            row: i,
+                            buf: hex_str.join(" "),
+                        });
+                    }
+                }
+                // 保存编辑
+                if save_req {
+                    let (side, row_idx, buf) = self
+                        .hex_edit
+                        .as_ref()
+                        .map(|e| (e.side, e.row, e.buf.clone()))
+                        .unwrap();
+                    // 解析十六进制输入
+                    let mut new_bytes: Vec<u8> = Vec::new();
+                    let mut ok = true;
+                    for tok in buf.split_whitespace() {
+                        match u8::from_str_radix(tok, 16) {
+                            Ok(b) => new_bytes.push(b),
+                            Err(_) => {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    if ok && !new_bytes.is_empty() {
+                        // 写回文件对应偏移（先克隆路径避免借用冲突）
+                        let (l_path, r_path) = self
+                            .hex
+                            .as_ref()
+                            .map(|h| (h.left.clone(), h.right.clone()))
+                            .unwrap();
+                        let path = match side {
+                            EditSide::Left => l_path.clone(),
+                            EditSide::Right => r_path.clone(),
+                        };
+                        let start = self.hex.as_ref().unwrap().rows[row_idx].offset;
+                        let mut data = std::fs::read(&path).unwrap_or_default();
+                        for (k, b) in new_bytes.iter().enumerate() {
+                            let pos = start + k;
+                            if pos < data.len() {
+                                data[pos] = *b;
+                            } else {
+                                data.push(*b);
+                            }
+                        }
+                        match std::fs::write(&path, &data) {
+                            Ok(()) => {
+                                self.hex_edit = None;
+                                // 重新加载并重建
+                                self.load_pair(&l_path, &r_path, self.opts);
+                            }
+                            Err(e) => {
+                                self.error = Some(format!("保存失败: {}", e));
+                            }
+                        }
+                    } else {
+                        self.error = Some("十六进制输入无效".to_string());
+                    }
+                }
                 self.scroll = out.state.offset;
                 if self.show_stats {
                     ui.separator();
