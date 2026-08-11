@@ -1,4 +1,5 @@
 mod compare;
+mod compare3;
 mod diff;
 mod encoding;
 mod fsscan;
@@ -52,6 +53,9 @@ enum Commands {
 
     /// 对比两个目录树（快速元数据比较或深度内容比较）
     Compare(compare::CompareArgs),
+
+    /// 三路文件夹对比（BASE + LEFT + RIGHT）
+    Compare3(compare3::Compare3Args),
 
     /// 三路合并（Base + Left + Right），冲突输出标记块
     Merge(merge::MergeArgs),
@@ -107,6 +111,7 @@ fn main() {
         Commands::Diff(args) => diff::run(&args),
         Commands::Hex(args) => hex::run(&args),
         Commands::Compare(args) => compare::run(&args),
+        Commands::Compare3(args) => compare3::run(&args),
         Commands::Merge(args) => merge::run(&args),
         Commands::Sync(args) => sync::run(&args),
         Commands::Session(args) => session::run(&args),

@@ -163,6 +163,8 @@ pub enum Key {
     RmDirFailed,
     /// 清理空目录: {} 个
     SummaryRmDir,
+    /// 三路统计: {} 相同, {} 仅BASE, {} 仅LEFT, {} 仅RIGHT, {} 删除, {} 修改, {} 冲突
+    SummaryCompare3,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}

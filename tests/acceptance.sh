@@ -491,6 +491,35 @@ else
 fi
 
 echo "=============================================="
+echo " C3: 三路文件夹对比"
+echo "=============================================="
+mkdir -p c3_b c3_l c3_r
+# 场景：a.txt 左侧修改；s.txt 三处相同；gone.txt 仅BASE；only_l 仅LEFT；only_r 仅RIGHT；
+# 冲突文件：三处内容都不同
+printf 'v1' > c3_b/a.txt; printf 'v2' > c3_l/a.txt; printf 'v1' > c3_r/a.txt
+printf 'same' > c3_b/s.txt; printf 'same' > c3_l/s.txt; printf 'same' > c3_r/s.txt
+printf 'x' > c3_b/gone.txt
+printf 'new' > c3_l/only_l.txt
+printf 'other' > c3_r/only_r.txt
+printf 'b1' > c3_b/conf.txt; printf 'l1' > c3_l/conf.txt; printf 'r1' > c3_r/conf.txt
+# C3.1 左侧修改标记
+"$BIN" compare3 c3_b c3_l c3_r --show-same > c3_out.txt; check "C3.1 退出码=1(有差异)" 1 "$?"
+check_contains "C3.2 左侧修改标记" "[LM] a.txt" "$(cat c3_out.txt)"
+check_contains "C3.3 三处相同标记" "[S] s.txt" "$(cat c3_out.txt)"
+check_contains "C3.4 仅BASE标记" "[B] gone.txt" "$(cat c3_out.txt)"
+check_contains "C3.5 仅LEFT标记" "[L] only_l.txt" "$(cat c3_out.txt)"
+check_contains "C3.6 仅RIGHT标记" "[R] only_r.txt" "$(cat c3_out.txt)"
+check_contains "C3.7 冲突标记" "[C] conf.txt" "$(cat c3_out.txt)"
+# C3.8 三路完全相同 → 退出码 0
+"$BIN" compare3 c3_b c3_b c3_b > /dev/null 2>&1; check "C3.8 三路相同退出码=0" 0 "$?"
+# C3.9 summary 统计
+"$BIN" compare3 c3_b c3_l c3_r --summary > c3_sum.txt
+check_contains "C3.9 summary 统计" "冲突" "$(cat c3_sum.txt)"
+# C3.10 缺失目录退出码=2
+"$BIN" compare3 /nonexistent-c3-a /nonexistent-c3-b c3_r > /dev/null 2>&1; check "C3.10 缺失目录退出码=2" 2 "$?"
+
+
+echo "=============================================="
 echo " I18N: 多语言"
 echo "=============================================="
 # --lang en：错误消息与统计行应为英文
