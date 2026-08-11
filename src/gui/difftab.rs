@@ -21,6 +21,8 @@ pub struct LoadedFile {
 #[derive(Default)]
 pub struct SearchState {
     pub query: String,
+    /// 替换为文本（A4）
+    pub replace: String,
     /// 匹配行索引
     pub matches: Vec<usize>,
     /// 当前匹配在 matches 中的位置
@@ -262,6 +264,109 @@ impl DiffTab {
         self.rows = rows;
         self.stats = stats;
         self.update_search();
+    }
+
+    // ---- A4 文本替换 ----
+
+    /// 替换当前匹配（左侧与右侧各一次），按原编码回写文件。
+    /// 返回是否发生了替换。
+    pub fn replace_current(&mut self) -> bool {
+        let Some(k) = self.search.current else {
+            return false;
+        };
+        let Some(&row_idx) = self.search.matches.get(k) else {
+            return false;
+        };
+        let q = self.search.query.clone();
+        let rep = self.search.replace.clone();
+        if q.is_empty() {
+            return false;
+        }
+        let row = &self.rows[row_idx];
+        let mut changed = false;
+        if let Some(no) = row.left_no {
+            if let Some(l) = &mut self.left {
+                if replace_line(&mut l.content, no, &q, &rep) {
+                    changed = true;
+                }
+            }
+        }
+        if let Some(no) = row.right_no {
+            if let Some(r) = &mut self.right {
+                if replace_line(&mut r.content, no, &q, &rep) {
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            self.finish_replace();
+        }
+        changed
+    }
+
+    /// 全部替换（两侧全文），按原编码回写文件。返回是否发生了替换。
+    pub fn replace_all(&mut self) -> bool {
+        let q = self.search.query.clone();
+        let rep = self.search.replace.clone();
+        if q.is_empty() {
+            return false;
+        }
+        let mut changed = false;
+        if let Some(l) = &mut self.left {
+            if l.content.contains(&q) {
+                l.content = l.content.replace(&q, &rep);
+                changed = true;
+            }
+        }
+        if let Some(r) = &mut self.right {
+            if r.content.contains(&q) {
+                r.content = r.content.replace(&q, &rep);
+                changed = true;
+            }
+        }
+        if changed {
+            self.finish_replace();
+        }
+        changed
+    }
+
+    /// 替换后统一收尾：按原编码回写两侧文件 → 重算 diff → 提示
+    fn finish_replace(&mut self) {
+        let mut errs: Vec<String> = Vec::new();
+        for side in [EditSide::Left, EditSide::Right] {
+            let opt = match side {
+                EditSide::Left => self
+                    .left
+                    .as_ref()
+                    .map(|f| (f.path.clone(), f.encoding, f.had_bom, f.content.clone())),
+                EditSide::Right => self
+                    .right
+                    .as_ref()
+                    .map(|f| (f.path.clone(), f.encoding, f.had_bom, f.content.clone())),
+            };
+            let Some((path, enc, bom, content)) = opt else {
+                continue;
+            };
+            // 保存前自动备份（A2）
+            let _ = std::fs::copy(&path, format!("{path}.bak"));
+            let bytes = crate::encoding::encode_back(
+                &crate::encoding::TextFile {
+                    text: String::new(),
+                    encoding: enc,
+                    had_bom: bom,
+                    is_binary: false,
+                },
+                &content,
+            );
+            if let Err(e) = std::fs::write(&path, bytes) {
+                errs.push(format!("{path}: {e}"));
+            }
+        }
+        if !errs.is_empty() {
+            self.error = Some(format!("替换写回失败: {}", errs.join("; ")));
+        }
+        self.recompute();
+        self.error = Some(fmt(I18nKey::Saved, &["替换已写回"]));
     }
 
     pub fn reload(&mut self) {
@@ -529,6 +634,26 @@ impl DiffTab {
                 }
                 if let Some(k) = self.search.current {
                     ui.label(format!("{}/{}", k + 1, self.search.matches.len()));
+                }
+                // A4 文本替换
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.search.replace)
+                        .hint_text("替换为")
+                        .desired_width(100.0),
+                );
+                if ui
+                    .button("替换")
+                    .on_hover_text("替换当前匹配（写回文件并自动备份）")
+                    .clicked()
+                {
+                    self.replace_current();
+                }
+                if ui
+                    .button("全部替换")
+                    .on_hover_text("替换所有匹配（写回文件并自动备份）")
+                    .clicked()
+                {
+                    self.replace_all();
                 }
                 ui.separator();
                 let mut goto_text = self.goto_line.map(|l| l.to_string()).unwrap_or_default();
@@ -1040,6 +1165,28 @@ fn basename(p: &str) -> String {
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| p.to_string())
+}
+
+/// A4：替换 content 中指定行（1-based）里的第一个匹配。返回是否替换。
+fn replace_line(content: &mut String, line_no: usize, from: &str, to: &str) -> bool {
+    if from.is_empty() {
+        return false;
+    }
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+    if line_no < 1 || line_no > lines.len() {
+        return false;
+    }
+    let idx = line_no - 1;
+    if !lines[idx].contains(from) {
+        return false;
+    }
+    lines[idx] = lines[idx].replacen(from, to, 1);
+    let had_trailing_nl = content.ends_with('\n');
+    *content = lines.join("\n");
+    if had_trailing_nl {
+        content.push('\n');
+    }
+    true
 }
 
 // ---- 二进制 hex 视图 ----
