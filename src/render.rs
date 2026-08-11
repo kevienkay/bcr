@@ -12,6 +12,8 @@ const RESET: &str = "\x1b[0m";
 
 /// 渲染 unified diff（带行内高亮）
 /// syntax 非空且 color 时，上下文行使用语法着色；-/+ 行保持 diff 语义色（语法让位）
+/// no_newline_l/no_newline_r：对应侧文件是否不以换行结尾（末尾行输出 \ No newline 标记）
+#[allow(clippy::too_many_arguments)]
 pub fn render_unified(
     ops: &[DiffOp],
     lines_l: &[&str],
@@ -20,6 +22,8 @@ pub fn render_unified(
     label_r: &str,
     color: bool,
     syntax: Option<&'static syntect::parsing::SyntaxReference>,
+    no_newline_l: bool,
+    no_newline_r: bool,
 ) {
     println!("--- {label_l}");
     println!("+++ {label_r}");
@@ -62,6 +66,8 @@ pub fn render_unified(
                 &mut new_idx,
                 color,
                 syntax,
+                no_newline_l,
+                no_newline_r,
             );
         }
         while old_idx < old_end {
@@ -72,6 +78,7 @@ pub fn render_unified(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_op(
     op: &DiffOp,
     lines_l: &[&str],
@@ -80,6 +87,8 @@ fn emit_op(
     new_idx: &mut usize,
     color: bool,
     syntax: Option<&'static syntect::parsing::SyntaxReference>,
+    no_newline_l: bool,
+    no_newline_r: bool,
 ) {
     use similar::DiffTag::*;
     match op.tag() {
@@ -95,11 +104,19 @@ fn emit_op(
                 emit_plain('-', line, color, syntax);
                 *old_idx += 1;
             }
+            // 左侧最后一行无换行 → 标记
+            if no_newline_l && *old_idx == lines_l.len() {
+                println!("\\ No newline at end of file");
+            }
         }
         Insert => {
             for line in &lines_r[op.new_range()] {
                 emit_plain('+', line, color, syntax);
                 *new_idx += 1;
+            }
+            // 右侧最后一行无换行 → 标记
+            if no_newline_r && *new_idx == lines_r.len() {
+                println!("\\ No newline at end of file");
             }
         }
         Replace => {
@@ -124,6 +141,12 @@ fn emit_op(
             for k in paired..i {
                 emit_plain('+', lines_r[op.new_range().start + k], color, syntax);
                 *new_idx += 1;
+            }
+            if no_newline_l && *old_idx == lines_l.len() {
+                println!("\\ No newline at end of file");
+            }
+            if no_newline_r && *new_idx == lines_r.len() {
+                println!("\\ No newline at end of file");
             }
         }
     }

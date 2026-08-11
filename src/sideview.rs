@@ -62,6 +62,8 @@ pub struct ViewOptions {
     pub ignore_whitespace: bool,
     pub ignore_trailing: bool,
     pub ignore_case: bool,
+    /// 忽略行尾 CR/LF 差异（CRLF vs LF）
+    pub ignore_crlf: bool,
 }
 
 /// 将两个文件内容展开为并排行序列。
@@ -80,6 +82,7 @@ pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, 
                 opts.ignore_whitespace,
                 opts.ignore_trailing,
                 opts.ignore_case,
+                opts.ignore_crlf,
             )
         })
         .collect();
@@ -91,6 +94,7 @@ pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, 
                 opts.ignore_whitespace,
                 opts.ignore_trailing,
                 opts.ignore_case,
+                opts.ignore_crlf,
             )
         })
         .collect();

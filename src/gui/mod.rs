@@ -44,6 +44,10 @@ pub struct GuiArgs {
     /// 忽略大小写差异
     #[arg(long)]
     pub ignore_case: bool,
+
+    /// 忽略行尾 CR/LF 差异（CRLF vs LF）
+    #[arg(long)]
+    pub ignore_crlf: bool,
 }
 
 /// 标签页
@@ -172,6 +176,7 @@ impl DiffApp {
             ignore_whitespace: self.settings.ignore_whitespace,
             ignore_trailing: self.settings.ignore_trailing,
             ignore_case: self.settings.ignore_case,
+            ignore_crlf: false,
         };
         t.show_stats = self.settings.show_stats;
         self.add_tab(Tab::Diff(t));
@@ -866,6 +871,7 @@ pub fn run(args: &GuiArgs) -> i32 {
         ignore_whitespace: args.ignore_whitespace || app.settings.ignore_whitespace,
         ignore_trailing: args.ignore_trailing || app.settings.ignore_trailing,
         ignore_case: args.ignore_case || app.settings.ignore_case,
+        ignore_crlf: args.ignore_crlf,
     };
     // CLI 显式参数优先于持久化值
     if args.ignore_whitespace {

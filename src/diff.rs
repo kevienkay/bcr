@@ -29,6 +29,10 @@ pub struct DiffArgs {
     #[arg(long)]
     pub ignore_case: bool,
 
+    /// 忽略行尾 CR/LF 差异（CRLF vs LF）
+    #[arg(long)]
+    pub ignore_crlf: bool,
+
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
@@ -134,7 +138,20 @@ pub fn run(args: &DiffArgs) -> i32 {
         return 0; // 无差异
     }
 
-    render::render_unified(&ops, &lines_l, &lines_r, &label_l, &label_r, color, syntax);
+    // 文件是否不以换行结尾（GNU diff 的 No newline 标记）
+    let no_newline_l = !left.ends_with('\n') && !left.is_empty();
+    let no_newline_r = !right.ends_with('\n') && !right.is_empty();
+    render::render_unified(
+        &ops,
+        &lines_l,
+        &lines_r,
+        &label_l,
+        &label_r,
+        color,
+        syntax,
+        no_newline_l,
+        no_newline_r,
+    );
     1 // 有差异
 }
 
@@ -178,6 +195,7 @@ fn normalize(line: &str, args: &DiffArgs) -> String {
         args.ignore_whitespace,
         args.ignore_trailing,
         args.ignore_case,
+        args.ignore_crlf,
     )
 }
 
@@ -187,7 +205,14 @@ pub(crate) fn normalize_line(
     ignore_whitespace: bool,
     ignore_trailing: bool,
     ignore_case: bool,
+    ignore_crlf: bool,
 ) -> String {
+    // 先剥离行尾 CR（CRLF vs LF 归一），再走其他忽略选项
+    let line = if ignore_crlf {
+        line.strip_suffix('\r').unwrap_or(line)
+    } else {
+        line
+    };
     let s = if ignore_whitespace {
         line.chars().filter(|c| !c.is_whitespace()).collect()
     } else if ignore_trailing {
@@ -245,6 +270,7 @@ mod tests {
             ignore_whitespace: false,
             ignore_trailing: false,
             ignore_case: false,
+            ignore_crlf: false,
             color: "never".into(),
             highlight: false,
             labels: vec![],
@@ -373,5 +399,55 @@ mod tests {
         let p = dir.path().join("in.txt");
         fs::write(&p, "line1\nline2\n").unwrap();
         assert_eq!(read_input(p.to_str().unwrap()).unwrap(), "line1\nline2\n");
+    }
+}
+
+#[cfg(test)]
+mod crlf_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn args() -> DiffArgs {
+        DiffArgs {
+            left: String::new(),
+            right: String::new(),
+            algo: "patience".into(),
+            ignore_whitespace: false,
+            ignore_trailing: false,
+            ignore_case: false,
+            ignore_crlf: false,
+            color: "never".into(),
+            highlight: false,
+            labels: vec![],
+            profile: None,
+        }
+    }
+
+    #[test]
+    fn ignore_crlf_normalizes_cr() {
+        // lines() 已剥离 \r\n 的 \n；单独 \r 行尾会残留（如末行 "b\r"）
+        assert_eq!(normalize_line("abc\r", false, false, false, true), "abc");
+        assert_eq!(normalize_line("abc", false, false, false, true), "abc");
+        // 不忽略时保留 CR
+        assert_eq!(normalize_line("abc\r", false, false, false, false), "abc\r");
+    }
+
+    #[test]
+    fn crlf_diff_ignored_matches() {
+        let d = tempdir().unwrap();
+        let l = d.path().join("l.txt");
+        let r = d.path().join("r.txt");
+        // 左侧末行残留 \r（CRLF 文件），右侧纯 LF
+        fs::write(&l, "a\r\nb\r").unwrap();
+        fs::write(&r, "a\nb").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        // 默认：末行 \r 差异
+        assert_eq!(run(&a), 1);
+        // --ignore-crlf：视为相同
+        a.ignore_crlf = true;
+        assert_eq!(run(&a), 0);
     }
 }
