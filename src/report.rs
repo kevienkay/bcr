@@ -61,6 +61,24 @@ fn csv_escape(s: &str) -> String {
     }
 }
 
+/// 报告布局选项
+#[derive(Debug, Clone)]
+pub struct ReportOptions {
+    /// 自定义标题（None = 默认 "bcr compare: L ↔ R"）
+    pub title: Option<String>,
+    /// 是否输出统计行（默认 true）
+    pub include_stats: bool,
+}
+
+impl Default for ReportOptions {
+    fn default() -> Self {
+        ReportOptions {
+            title: None,
+            include_stats: true,
+        }
+    }
+}
+
 /// 渲染文本报告：标题 + 统计 + 条目表（fields 控制每行展示的字段）
 pub fn render_txt_fields(
     left: &str,
@@ -68,14 +86,30 @@ pub fn render_txt_fields(
     result: &CompareResult,
     fields: &[ReportField],
 ) -> String {
+    render_txt_opts(left, right, result, fields, &ReportOptions::default())
+}
+
+/// 渲染文本报告（带布局选项：自定义标题/统计开关）
+pub fn render_txt_opts(
+    left: &str,
+    right: &str,
+    result: &CompareResult,
+    fields: &[ReportField],
+    opts: &ReportOptions,
+) -> String {
     let mut out = String::new();
     let st = result.stats;
-    out.push_str(&format!("bcr compare: {}  ↔  {}\n", left, right));
-    out.push_str(&format!(
-        "统计: {} 相同, {} 仅左侧, {} 仅右侧, {} 内容不同, {} 移动/重命名\n",
-        st.same, st.left_only, st.right_only, st.differ, st.moved
-    ));
-    out.push_str(&format!("条目总数: {}\n", result.entries.len()));
+    match &opts.title {
+        Some(t) => out.push_str(&format!("{}\n", t)),
+        None => out.push_str(&format!("bcr compare: {}  ↔  {}\n", left, right)),
+    }
+    if opts.include_stats {
+        out.push_str(&format!(
+            "统计: {} 相同, {} 仅左侧, {} 仅右侧, {} 内容不同, {} 移动/重命名\n",
+            st.same, st.left_only, st.right_only, st.differ, st.moved
+        ));
+        out.push_str(&format!("条目总数: {}\n", result.entries.len()));
+    }
     out.push_str("----------------------------------------\n");
     for e in &result.entries {
         let mut line = String::new();
@@ -127,11 +161,13 @@ pub fn render_txt(left: &str, right: &str, result: &CompareResult) -> String {
 }
 
 /// 渲染 CSV 报告：表头 + 每行一个条目（fields 控制列）
-pub fn render_csv_fields(
+/// 渲染 CSV 报告（带布局选项：自定义标题/统计开关）
+pub fn render_csv_opts(
     left: &str,
     right: &str,
     result: &CompareResult,
     fields: &[ReportField],
+    opts: &ReportOptions,
 ) -> String {
     let mut header: Vec<String> = Vec::new();
     for f in fields {
@@ -147,6 +183,10 @@ pub fn render_csv_fields(
         }
     }
     let mut out = String::new();
+    // 自定义标题作为 # 注释行（保持机器可读）
+    if let Some(t) = &opts.title {
+        out.push_str(&format!("# {}\n", t));
+    }
     out.push_str(&header.join(","));
     out.push('\n');
     for e in &result.entries {
@@ -190,12 +230,24 @@ pub fn render_csv_fields(
         out.push('\n');
     }
     // 统计追加为注释行（不破坏机器可读性，Excel 忽略 # 开头的行）
-    let st = result.stats;
-    out.push_str(&format!(
-        "# left={}, right={}, same={}, left_only={}, right_only={}, differ={}, moved={}\n",
-        left, right, st.same, st.left_only, st.right_only, st.differ, st.moved
-    ));
+    if opts.include_stats {
+        let st = result.stats;
+        out.push_str(&format!(
+            "# left={}, right={}, same={}, left_only={}, right_only={}, differ={}, moved={}\n",
+            left, right, st.same, st.left_only, st.right_only, st.differ, st.moved
+        ));
+    }
     out
+}
+
+/// 渲染 CSV 报告：表头 + 每行一个条目（fields 控制列）
+pub fn render_csv_fields(
+    left: &str,
+    right: &str,
+    result: &CompareResult,
+    fields: &[ReportField],
+) -> String {
+    render_csv_opts(left, right, result, fields, &ReportOptions::default())
 }
 
 /// 渲染 CSV 报告（全部字段，向后兼容）

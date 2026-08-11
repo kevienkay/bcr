@@ -64,6 +64,14 @@ pub struct CompareArgs {
     #[arg(long = "report-fields", default_value = "")]
     pub report_fields: String,
 
+    /// 报告自定义标题（默认 "bcr compare: L ↔ R"）
+    #[arg(long = "report-title")]
+    pub report_title: Option<String>,
+
+    /// 报告不含统计行（默认包含，作用于 --txt/--csv）
+    #[arg(long = "report-no-stats")]
+    pub report_no_stats: bool,
+
     /// 复用已保存的规则 Profile（过滤/忽略/编码等，可叠加本命令显式参数）
     #[arg(long)]
     pub profile: Option<String>,
@@ -583,7 +591,11 @@ pub fn run(args: &CompareArgs) -> i32 {
                 return 2;
             }
         };
-        let txt = crate::report::render_txt_fields(&args.left, &args.right, &result, &fields);
+        let opts = crate::report::ReportOptions {
+            title: args.report_title.clone(),
+            include_stats: !args.report_no_stats,
+        };
+        let txt = crate::report::render_txt_opts(&args.left, &args.right, &result, &fields, &opts);
         if let Err(e) = std::fs::write(txt_path, txt) {
             eprintln!(
                 "bcr: {}",
@@ -600,7 +612,11 @@ pub fn run(args: &CompareArgs) -> i32 {
                 return 2;
             }
         };
-        let csv = crate::report::render_csv_fields(&args.left, &args.right, &result, &fields);
+        let opts = crate::report::ReportOptions {
+            title: args.report_title.clone(),
+            include_stats: !args.report_no_stats,
+        };
+        let csv = crate::report::render_csv_opts(&args.left, &args.right, &result, &fields, &opts);
         if let Err(e) = std::fs::write(csv_path, csv) {
             eprintln!(
                 "bcr: {}",
@@ -663,6 +679,8 @@ mod tests {
             txt: None,
             csv: None,
             report_fields: String::new(),
+            report_title: None,
+            report_no_stats: false,
             profile: None,
             color: "never".into(),
         }
