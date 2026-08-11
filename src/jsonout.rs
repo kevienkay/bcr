@@ -135,9 +135,14 @@ pub fn compare_json(left: &str, right: &str, result: &CompareResult, include_sam
 /// SyncOp → JSON(仅计划/执行列表项)
 fn op_json(op: &SyncOp) -> Value {
     match op {
-        SyncOp::Copy { rel, from_src } => json!({
+        SyncOp::Copy {
+            rel,
+            src_rel,
+            from_src,
+        } => json!({
             "op": "copy",
             "rel": rel,
+            "src_rel": src_rel,
             "from": if *from_src { "left" } else { "right" },
         }),
         SyncOp::Delete { rel } => json!({ "op": "delete", "rel": rel }),
@@ -428,6 +433,7 @@ mod tests {
     fn op_json_forms() {
         let op = SyncOp::Copy {
             rel: "a.rs".into(),
+            src_rel: None,
             from_src: true,
         };
         assert_eq!(op_json(&op)["op"], "copy");

@@ -30,6 +30,10 @@ pub struct SyncArgs {
     #[arg(long)]
     pub compare_content: bool,
 
+    /// 忽略文件夹结构（A7）：跨目录层级按文件名对齐同步
+    #[arg(long)]
+    pub ignore_structure: bool,
+
     /// 包含过滤（glob，可重复）
     #[arg(long = "include")]
     pub includes: Vec<String>,
@@ -51,7 +55,11 @@ pub struct SyncArgs {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SyncOp {
     Copy {
+        /// 目标侧相对路径（写入目标时用）
         rel: String,
+        /// 源侧相对路径（读取源时用；None = 与 rel 相同）。
+        /// 忽略文件夹结构（A7）时两侧路径不同，需分别指定。
+        src_rel: Option<String>,
         from_src: bool,
     },
     Delete {
@@ -109,11 +117,23 @@ impl SyncOp {
         match self {
             SyncOp::Copy {
                 rel,
+                src_rel: Some(s),
                 from_src: true,
+            } => format!("复制 {s} → {rel}"),
+            SyncOp::Copy {
+                rel,
+                src_rel: Some(s),
+                from_src: false,
+            } => format!("复制 {rel} → {s}"),
+            SyncOp::Copy {
+                rel,
+                from_src: true,
+                ..
             } => format!("复制 {} → 目标", rel),
             SyncOp::Copy {
                 rel,
                 from_src: false,
+                ..
             } => format!("复制 {} ← 目标", rel),
             SyncOp::Delete { rel } => format!("删除 {}", rel),
             SyncOp::Rename { from, to } => format!("重命名 {} → {}", from, to),
@@ -145,13 +165,47 @@ pub fn build_plan(
     src_vfs: &dyn Vfs,
     dst_vfs: &dyn Vfs,
     filter: &Filter,
+    ignore_structure: bool,
 ) -> Result<Vec<SyncOp>, String> {
-    let src_map = src_vfs
+    let mut src_map = src_vfs
         .scan(filter)
         .map_err(|e| format!("扫描源目录失败: {}", e))?;
-    let dst_map = dst_vfs
+    let mut dst_map = dst_vfs
         .scan(filter)
         .map_err(|e| format!("扫描目标目录失败: {}", e))?;
+
+    // A7 忽略文件夹结构：按 basename 对齐（同名文件跨目录配对），
+    // 并把两侧 map 重建为 basename → (真实 rel, meta)
+    let mut src_alias: std::collections::BTreeMap<String, String> = Default::default(); // basename -> 真实 rel
+    let mut dst_alias: std::collections::BTreeMap<String, String> = Default::default();
+    if ignore_structure {
+        let remap = |m: &std::collections::BTreeMap<String, crate::fsscan::FileMeta>| {
+            let mut out: std::collections::BTreeMap<String, (String, crate::fsscan::FileMeta)> =
+                Default::default();
+            for (rel, meta) in m {
+                let name = rel.rsplit('/').next().unwrap_or(rel);
+                out.insert(name.to_string(), (rel.clone(), meta.clone()));
+            }
+            out
+        };
+        let src_by_name = remap(&src_map);
+        let dst_by_name = remap(&dst_map);
+        // 重建：key 用 basename，value 保留真实 rel（通过 alias 表）
+        for (name, (rel, _)) in &src_by_name {
+            src_alias.insert(name.clone(), rel.clone());
+        }
+        for (name, (rel, _)) in &dst_by_name {
+            dst_alias.insert(name.clone(), rel.clone());
+        }
+        src_map = src_by_name
+            .into_iter()
+            .map(|(name, (_, meta))| (name, meta))
+            .collect();
+        dst_map = dst_by_name
+            .into_iter()
+            .map(|(name, (_, meta))| (name, meta))
+            .collect();
+    }
 
     let mut plan: Vec<SyncOp> = Vec::new();
 
@@ -238,38 +292,37 @@ pub fn build_plan(
                 }
                 match mode {
                     // 镜像：以源为准，无条件覆盖
-                    "mirror" => plan.push(SyncOp::Copy {
-                        rel: key.clone(),
-                        from_src: true,
-                    }),
+                    "mirror" => {
+                        plan.push(copy_op(ignore_structure, &src_alias, &dst_alias, key, true))
+                    }
                     // 更新：源新才覆盖，目标新则跳过
                     "update" => {
                         if s.mtime >= d.mtime {
-                            plan.push(SyncOp::Copy {
-                                rel: key.clone(),
-                                from_src: true,
-                            });
+                            plan.push(copy_op(ignore_structure, &src_alias, &dst_alias, key, true));
                         } else {
-                            plan.push(SyncOp::Skip {
-                                rel: key.clone(),
-                                reason: t(Key::ReasonDstNewer),
-                            });
+                            plan.push(path_op(
+                                "skip",
+                                ignore_structure,
+                                &dst_alias,
+                                key,
+                                t(Key::ReasonDstNewer),
+                            ));
                         }
                     }
                     // 双向：mtime 新者胜，无法判定则冲突
                     _ => {
                         if s.mtime > d.mtime {
-                            plan.push(SyncOp::Copy {
-                                rel: key.clone(),
-                                from_src: true,
-                            });
+                            plan.push(copy_op(ignore_structure, &src_alias, &dst_alias, key, true));
                         } else if d.mtime > s.mtime {
-                            plan.push(SyncOp::Copy {
-                                rel: key.clone(),
-                                from_src: false,
-                            });
+                            plan.push(copy_op(
+                                ignore_structure,
+                                &src_alias,
+                                &dst_alias,
+                                key,
+                                false,
+                            ));
                         } else {
-                            plan.push(SyncOp::Conflict { rel: key.clone() });
+                            plan.push(path_op("conflict", ignore_structure, &dst_alias, key, ""));
                         }
                     }
                 }
@@ -279,30 +332,40 @@ pub fn build_plan(
                 if rename_pairs.values().any(|v| v == key) {
                     continue;
                 }
-                plan.push(SyncOp::Copy {
-                    rel: key.clone(),
-                    from_src: true,
-                })
+                plan.push(copy_op(ignore_structure, &src_alias, &dst_alias, key, true));
             }
             (None, Some(_)) => {
                 // 已匹配为移动对：dst 内部 rename（旧路径 -> src 新路径）
                 if let Some(to) = rename_pairs.get(key) {
                     plan.push(SyncOp::Rename {
-                        from: key.clone(),
+                        from: if ignore_structure {
+                            dst_alias
+                                .get(key)
+                                .cloned()
+                                .unwrap_or_else(|| key.to_string())
+                        } else {
+                            key.clone()
+                        },
                         to: to.clone(),
                     });
                     continue;
                 }
                 match mode {
-                    "mirror" => plan.push(SyncOp::Delete { rel: key.clone() }),
-                    "update" => plan.push(SyncOp::Skip {
-                        rel: key.clone(),
-                        reason: t(Key::ReasonDstOnly),
-                    }),
-                    _ => plan.push(SyncOp::Copy {
-                        rel: key.clone(),
-                        from_src: false, // two-way：目标独有 → 复制回源
-                    }),
+                    "mirror" => plan.push(delete_op(ignore_structure, &dst_alias, key)),
+                    "update" => plan.push(path_op(
+                        "skip",
+                        ignore_structure,
+                        &dst_alias,
+                        key,
+                        t(Key::ReasonDstOnly),
+                    )),
+                    _ => plan.push(copy_op(
+                        ignore_structure,
+                        &src_alias,
+                        &dst_alias,
+                        key,
+                        false, // two-way：目标独有 → 复制回源
+                    )),
                 }
             }
             (None, None) => unreachable!(),
@@ -325,16 +388,101 @@ pub fn build_plan(
     Ok(plan)
 }
 
+/// 生成 Copy 计划项。忽略文件夹结构（A7）时源/目标路径不同，用 alias 表映射；
+/// 普通模式 src_rel=None（源=目标路径）。
+fn copy_op(
+    ignore_structure: bool,
+    src_alias: &std::collections::BTreeMap<String, String>,
+    dst_alias: &std::collections::BTreeMap<String, String>,
+    key: &str,
+    from_src: bool,
+) -> SyncOp {
+    if !ignore_structure {
+        return SyncOp::Copy {
+            rel: key.to_string(),
+            src_rel: None,
+            from_src,
+        };
+    }
+    let (read_alias, write_alias) = if from_src {
+        (src_alias, dst_alias)
+    } else {
+        (dst_alias, src_alias)
+    };
+    let src_rel = read_alias
+        .get(key)
+        .cloned()
+        .unwrap_or_else(|| key.to_string());
+    let dst_rel = write_alias
+        .get(key)
+        .cloned()
+        .unwrap_or_else(|| key.to_string());
+    SyncOp::Copy {
+        rel: dst_rel,
+        src_rel: Some(src_rel),
+        from_src,
+    }
+}
+
+/// 生成 Delete 计划项。忽略文件夹结构时用目标侧真实路径。
+fn delete_op(
+    ignore_structure: bool,
+    dst_alias: &std::collections::BTreeMap<String, String>,
+    key: &str,
+) -> SyncOp {
+    let rel = if ignore_structure {
+        dst_alias
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| key.to_string())
+    } else {
+        key.to_string()
+    };
+    SyncOp::Delete { rel }
+}
+
+/// 生成 Skip/Conflict 计划项（仅路径展示；忽略结构时用目标侧真实路径）。
+fn path_op(
+    op: &str,
+    ignore_structure: bool,
+    dst_alias: &std::collections::BTreeMap<String, String>,
+    key: &str,
+    reason: &'static str,
+) -> SyncOp {
+    let rel = if ignore_structure {
+        dst_alias
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| key.to_string())
+    } else {
+        key.to_string()
+    };
+    if op == "conflict" {
+        SyncOp::Conflict { rel }
+    } else {
+        SyncOp::Skip { rel, reason }
+    }
+}
+
+/// 生成 Copy 计划项。忽略文件夹结构（A7）时源/目标路径不同，用 alias 表映射；
+/// 普通模式 src_rel=None（源=目标路径）。
 /// 执行单个同步操作，返回错误描述（成功返回 None）
 pub fn execute_op(op: &SyncOp, src_vfs: &dyn Vfs, dst_vfs: &dyn Vfs) -> Option<String> {
     match op {
-        SyncOp::Copy { rel, from_src } => {
+        SyncOp::Copy {
+            rel,
+            src_rel,
+            from_src,
+        } => {
             let (from, to) = if *from_src {
                 (src_vfs, dst_vfs)
             } else {
                 (dst_vfs, src_vfs)
             };
-            do_copy_vfs(from, to, rel).err().map(|e| e.to_string())
+            let src_rel = src_rel.as_deref().unwrap_or(rel);
+            do_copy_vfs(from, to, src_rel, rel)
+                .err()
+                .map(|e| e.to_string())
         }
         SyncOp::Delete { rel } => dst_vfs.delete(rel).err().map(|e| e.to_string()),
         SyncOp::Rename { from, to } => dst_vfs.rename(from, to).err().map(|e| e.to_string()),
@@ -382,6 +530,7 @@ pub fn run(args: &SyncArgs) -> i32 {
         src_vfs.as_ref(),
         dst_vfs.as_ref(),
         &filter,
+        args.ignore_structure,
     ) {
         Ok(p) => p,
         Err(e) => {
@@ -426,7 +575,7 @@ pub fn run(args: &SyncArgs) -> i32 {
 
     for p in &plan {
         match p {
-            SyncOp::Copy { rel, from_src } => {
+            SyncOp::Copy { rel, from_src, .. } => {
                 n_copy += 1;
                 let (_, to) = if *from_src {
                     (src_vfs.as_ref(), dst_vfs.as_ref())
@@ -539,17 +688,24 @@ pub fn run(args: &SyncArgs) -> i32 {
 }
 
 /// 跨后端复制并保留源 mtime（避免下次同步误判为过时）
-fn do_copy_vfs(from: &dyn Vfs, to: &dyn Vfs, rel: &str) -> io::Result<()> {
+fn do_copy_vfs(from: &dyn Vfs, to: &dyn Vfs, src_rel: &str, dst_rel: &str) -> io::Result<()> {
     // 先读源 mtime
     let mtime = {
         let filter = Filter::new(&[], &[]).unwrap();
         let map = from.scan(&filter)?;
-        map.get(rel)
+        map.get(src_rel)
             .map(|m| m.mtime)
             .unwrap_or(SystemTime::UNIX_EPOCH)
     };
-    from.copy_to(rel, to)?;
-    to.set_mtime(rel, mtime)?;
+    if src_rel == dst_rel {
+        from.copy_to(src_rel, to)?;
+        to.set_mtime(dst_rel, mtime)?;
+    } else {
+        // A7 忽略文件夹结构：源/目标路径不同，读源写目标
+        let data = from.read(src_rel)?;
+        to.write(dst_rel, &data)?;
+        to.set_mtime(dst_rel, mtime)?;
+    }
     Ok(())
 }
 
@@ -567,6 +723,7 @@ mod tests {
             reverse: false,
             dry_run: false,
             compare_content: false,
+            ignore_structure: false,
             includes: vec![],
             excludes: vec![],
             summary: false,
@@ -885,7 +1042,7 @@ mod tests {
         let src = crate::vfs::LocalVfs::new(dir.path()).unwrap();
         let dst_dir = tempdir().unwrap();
         let dst = crate::vfs::LocalVfs::new(dst_dir.path()).unwrap();
-        do_copy_vfs(&src, &dst, "from.txt").unwrap();
+        do_copy_vfs(&src, &dst, "from.txt", "from.txt").unwrap();
         let to = dst_dir.path().join("from.txt");
         assert_eq!(fs::read_to_string(&to).unwrap(), "data");
         let mtime = fs::metadata(&to).unwrap().modified().unwrap();
@@ -899,7 +1056,7 @@ mod tests {
         let src = crate::vfs::LocalVfs::new(dir.path()).unwrap();
         let dst_dir = tempdir().unwrap();
         let dst = crate::vfs::LocalVfs::new(dst_dir.path()).unwrap();
-        assert!(do_copy_vfs(&src, &dst, "missing.txt").is_err());
+        assert!(do_copy_vfs(&src, &dst, "missing.txt", "missing.txt").is_err());
     }
 
     #[test]
@@ -912,7 +1069,7 @@ mod tests {
         let sv = crate::vfs::LocalVfs::new(src.path()).unwrap();
         let dv = crate::vfs::LocalVfs::new(dst.path()).unwrap();
         let filter = Filter::new(&[], &[]).unwrap();
-        let plan = build_plan("mirror", false, &sv, &dv, &filter).unwrap();
+        let plan = build_plan("mirror", false, &sv, &dv, &filter, false).unwrap();
         let v = crate::jsonout::sync_plan_json(
             src.path().to_str().unwrap(),
             dst.path().to_str().unwrap(),
@@ -945,5 +1102,70 @@ mod tests {
         assert_eq!(v2["result"]["dry_run"], false);
         assert_eq!(v2["result"]["stats"]["copy"], 1);
         assert_eq!(v2["result"]["stats"]["errors"], 0);
+    }
+
+    // ---- A7 忽略文件夹结构 ----
+
+    #[test]
+    fn build_plan_ignore_structure_matches_across_dirs() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        // src: a/readme.md(新) ; dst: b/readme.md(旧) + b/other.txt
+        write_tree(src.path(), &[("a/readme.md", "new content", 1_700_000_100)]);
+        write_tree(
+            dst.path(),
+            &[
+                ("b/readme.md", "old", 1_700_000_000),
+                ("b/other.txt", "x", 1_700_000_000),
+            ],
+        );
+        let sv = crate::vfs::LocalVfs::new(src.path()).unwrap();
+        let dv = crate::vfs::LocalVfs::new(dst.path()).unwrap();
+        let filter = Filter::new(&[], &[]).unwrap();
+
+        // 普通模式：readme.md 两侧路径不同 → 视为两侧独有（复制+删除）
+        let plain = build_plan("mirror", false, &sv, &dv, &filter, false).unwrap();
+        assert!(plain
+            .iter()
+            .any(|p| matches!(p, SyncOp::Copy { rel, .. } if rel == "a/readme.md")));
+
+        // 忽略结构：按 basename 对齐 → 复制 src 的 readme.md 到 dst 的 b/readme.md
+        let is = build_plan("mirror", true, &sv, &dv, &filter, true).unwrap();
+        let copy = is
+            .iter()
+            .find(|p| matches!(p, SyncOp::Copy { rel, .. } if rel == "b/readme.md"))
+            .expect("忽略结构后应复制到目标同名文件");
+        match copy {
+            SyncOp::Copy {
+                rel,
+                src_rel,
+                from_src: true,
+            } => {
+                assert_eq!(rel, "b/readme.md");
+                assert_eq!(src_rel.as_deref(), Some("a/readme.md"));
+            }
+            _ => panic!("期望 Copy op"),
+        }
+    }
+
+    #[test]
+    fn execute_copy_with_src_rel_writes_dst_path() {
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        fs::create_dir_all(src.path().join("a")).unwrap();
+        fs::write(src.path().join("a/readme.md"), "data").unwrap();
+        fs::create_dir_all(dst.path().join("b")).unwrap();
+        let sv = crate::vfs::LocalVfs::new(src.path()).unwrap();
+        let dv = crate::vfs::LocalVfs::new(dst.path()).unwrap();
+        let op = SyncOp::Copy {
+            rel: "b/readme.md".into(),
+            src_rel: Some("a/readme.md".into()),
+            from_src: true,
+        };
+        assert!(execute_op(&op, &sv, &dv).is_none());
+        assert_eq!(
+            fs::read_to_string(dst.path().join("b/readme.md")).unwrap(),
+            "data"
+        );
     }
 }

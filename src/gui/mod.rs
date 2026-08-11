@@ -1384,7 +1384,7 @@ mod tests {
         let plan = t.sync_plan.as_ref().unwrap();
         assert!(plan
             .iter()
-            .any(|op| matches!(op, SyncOp::Copy { rel, from_src: true } if rel == "new.txt")));
+            .any(|op| matches!(op, SyncOp::Copy { rel, from_src: true, .. } if rel == "new.txt")));
         assert!(plan
             .iter()
             .any(|op| matches!(op, SyncOp::Skip { rel, .. } if rel == "only.txt")));
@@ -1429,6 +1429,7 @@ mod tests {
         // 复制左侧 a.txt → 右侧
         t.run_single_op(SyncOp::Copy {
             rel: "a.txt".to_string(),
+            src_rel: None,
             from_src: true,
         });
         assert_eq!(fs::read_to_string(d2.path().join("a.txt")).unwrap(), "A");

@@ -40,6 +40,10 @@ pub struct CompareArgs {
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     pub detect_moves: bool,
 
+    /// 忽略文件夹结构（A7）：跨目录层级按文件名对齐比较（BC 的 Ignore folder structure）
+    #[arg(long)]
+    pub ignore_structure: bool,
+
     /// 比较文件属性（Unix 权限位/符号链接目标；默认仅比较大小+时间+内容）
     #[arg(long)]
     pub compare_attrs: bool,
@@ -261,6 +265,7 @@ pub fn compare_vfs(
 }
 
 /// 带属性比较的虚拟后端对比
+#[allow(clippy::too_many_arguments)]
 pub fn compare_vfs_attrs(
     left: &dyn Vfs,
     right: &dyn Vfs,
@@ -270,6 +275,30 @@ pub fn compare_vfs_attrs(
     compare_attrs: bool,
     compare_version: bool,
 ) -> io::Result<CompareResult> {
+    compare_vfs_attrs_is(
+        left,
+        right,
+        filter,
+        compare_content,
+        enable_moves,
+        compare_attrs,
+        compare_version,
+        false,
+    )
+}
+
+/// 带属性比较 + 忽略文件夹结构（A7）
+#[allow(clippy::too_many_arguments)]
+pub fn compare_vfs_attrs_is(
+    left: &dyn Vfs,
+    right: &dyn Vfs,
+    filter: &Filter,
+    compare_content: bool,
+    enable_moves: bool,
+    compare_attrs: bool,
+    compare_version: bool,
+    ignore_structure: bool,
+) -> io::Result<CompareResult> {
     let left_map = left.scan(filter)?;
     let right_map = right.scan(filter)?;
 
@@ -277,8 +306,8 @@ pub fn compare_vfs_attrs(
     let cache_key =
         if !crate::vfs::is_remote(&left.describe()) && !crate::vfs::is_remote(&right.describe()) {
             let opts = format!(
-                "cc={} moves={} attrs={} cv={}",
-                compare_content, enable_moves, compare_attrs, compare_version
+                "cc={} moves={} attrs={} cv={} is={}",
+                compare_content, enable_moves, compare_attrs, compare_version, ignore_structure
             );
             Some(crate::cache::key_for(
                 &left.describe(),
@@ -314,27 +343,59 @@ pub fn compare_vfs_attrs(
     }
     keys.sort();
 
+    // A7 忽略文件夹结构：按文件名（basename）对齐配对
+    let alignment: Vec<(Option<String>, Option<String>)> = if ignore_structure {
+        align_by_basename(&left_map, &right_map)
+    } else {
+        keys.iter()
+            .map(|k| {
+                (
+                    left_map.contains_key(*k).then(|| (*k).clone()),
+                    right_map.contains_key(*k).then(|| (*k).clone()),
+                )
+            })
+            .collect()
+    };
+
     let mut result = CompareResult::default();
-    for key in keys {
-        match (left_map.get(key), right_map.get(key)) {
-            (Some(l), Some(r)) => {
-                let content_same = if compare_version {
+    for (l_rel, r_rel) in alignment {
+        match (l_rel, r_rel) {
+            (Some(l_rel), Some(r_rel)) => {
+                let l = &left_map[&l_rel];
+                let r = &right_map[&r_rel];
+                let content_same = if ignore_structure {
+                    // A7 忽略结构：两侧路径不同，内容/版本比较必须按各自 rel 读取
+                    if l.size != r.size {
+                        false
+                    } else if compare_content || compare_version {
+                        // 内容哈希（版本模式在忽略结构时退化到内容比较，路径不同无法复用 version_equal_vfs）
+                        match (left.hash(&l_rel), right.hash(&r_rel)) {
+                            (Ok(lh), Ok(rh)) => lh == rh,
+                            _ => {
+                                result.warnings.push(format!("读取 {l_rel}/{r_rel} 失败"));
+                                continue;
+                            }
+                        }
+                    } else {
+                        l.mtime == r.mtime
+                    }
+                } else if compare_version {
                     // 版本模式优先：提取两侧版本号；任一侧无版本号 → 回退快速模式(size+mtime)
-                    match version_equal_vfs(left, right, key) {
+                    match version_equal_vfs(left, right, &l_rel) {
                         Ok(Some(eq)) => eq,
                         Ok(None) => l.size == r.size && l.mtime == r.mtime,
                         Err(e) => {
-                            result.warnings.push(format!("读取 {key} 失败: {e}"));
+                            result.warnings.push(format!("读取 {l_rel} 失败: {e}"));
                             continue;
                         }
                     }
                 } else if l.size != r.size {
                     false
                 } else if compare_content {
-                    match crate::vfs::content_equal_vfs(left, right, key) {
+                    match crate::vfs::content_equal_vfs(left, right, &l_rel) {
                         Ok(eq) => eq,
                         Err(e) => {
-                            result.warnings.push(format!("读取 {key} 失败: {e}"));
+                            result.warnings.push(format!("读取 {l_rel} 失败: {e}"));
                             continue;
                         }
                     }
@@ -344,10 +405,20 @@ pub fn compare_vfs_attrs(
                 // 属性比较：内容一致但权限/符号链接不同 → 计为 Differ（--compare-attrs）
                 let attrs_differ = compare_attrs && attrs_diff(l, r);
                 let same = content_same && !attrs_differ;
+                let rel = if ignore_structure {
+                    // 忽略结构时条目用左侧真实路径；同名但路径不同时右侧并入
+                    if l_rel == r_rel {
+                        l_rel.clone()
+                    } else {
+                        format!("{l_rel} ⇄ {r_rel}")
+                    }
+                } else {
+                    l_rel.clone()
+                };
                 if same {
                     result.stats.same += 1;
                     result.entries.push(FileEntry {
-                        rel: key.clone(),
+                        rel,
                         status: FileStatus::Same,
                         left: Some(l.clone()),
                         right: Some(r.clone()),
@@ -357,7 +428,7 @@ pub fn compare_vfs_attrs(
                 } else {
                     result.stats.differ += 1;
                     result.entries.push(FileEntry {
-                        rel: key.clone(),
+                        rel,
                         status: FileStatus::Differ,
                         left: Some(l.clone()),
                         right: Some(r.clone()),
@@ -366,10 +437,11 @@ pub fn compare_vfs_attrs(
                     });
                 }
             }
-            (Some(l), None) => {
+            (Some(l_rel), None) => {
+                let l = &left_map[&l_rel];
                 result.stats.left_only += 1;
                 result.entries.push(FileEntry {
-                    rel: key.clone(),
+                    rel: l_rel.clone(),
                     status: FileStatus::LeftOnly,
                     left: Some(l.clone()),
                     right: None,
@@ -377,10 +449,11 @@ pub fn compare_vfs_attrs(
                     attrs_differ: false,
                 });
             }
-            (None, Some(r)) => {
+            (None, Some(r_rel)) => {
+                let r = &right_map[&r_rel];
                 result.stats.right_only += 1;
                 result.entries.push(FileEntry {
-                    rel: key.clone(),
+                    rel: r_rel.clone(),
                     status: FileStatus::RightOnly,
                     left: None,
                     right: Some(r.clone()),
@@ -402,6 +475,65 @@ pub fn compare_vfs_attrs(
         crate::cache::insert(k, ls, rs, result.clone());
     }
     Ok(result)
+}
+
+/// 忽略文件夹结构（A7）：两侧文件按 basename（文件名）对齐配对。
+/// 同名文件跨目录层级配对比较；两侧各自独有（无同名）的文件单独列出一侧。
+/// 返回 (左侧真实 rel 或 None, 右侧真实 rel 或 None) 列表，按左侧路径排序。
+fn align_by_basename(
+    left_map: &std::collections::BTreeMap<String, FileMeta>,
+    right_map: &std::collections::BTreeMap<String, FileMeta>,
+) -> Vec<(Option<String>, Option<String>)> {
+    use std::collections::BTreeMap as Map;
+
+    // basename -> rel 列表（一个 basename 可能在多级目录出现多次）
+    let mut l_names: Map<String, Vec<&String>> = Map::new();
+    for k in left_map.keys() {
+        let name = k.rsplit('/').next().unwrap_or(k);
+        l_names.entry(name.to_string()).or_default().push(k);
+    }
+    let mut r_names: Map<String, Vec<&String>> = Map::new();
+    for k in right_map.keys() {
+        let name = k.rsplit('/').next().unwrap_or(k);
+        r_names.entry(name.to_string()).or_default().push(k);
+    }
+
+    let mut names: Vec<&String> = l_names.keys().chain(r_names.keys()).collect();
+    names.sort();
+    names.dedup();
+
+    let mut out: Vec<(Option<String>, Option<String>)> = Vec::new();
+    for name in names {
+        let ls = l_names.get(name);
+        let rs = r_names.get(name);
+        match (ls, rs) {
+            (Some(l), Some(r)) => {
+                // 同名多实例：逐个配对（左侧第 i 个 ↔ 右侧第 i 个），多余归单侧
+                let n = l.len().min(r.len());
+                for i in 0..n {
+                    out.push((Some((*l[i]).clone()), Some((*r[i]).clone())));
+                }
+                for k in &l[n..] {
+                    out.push((Some((*k).clone()), None));
+                }
+                for k in &r[n..] {
+                    out.push((None, Some((*k).clone())));
+                }
+            }
+            (Some(l), None) => {
+                for k in l {
+                    out.push((Some((*k).clone()), None));
+                }
+            }
+            (None, Some(r)) => {
+                for k in r {
+                    out.push((None, Some((*k).clone())));
+                }
+            }
+            (None, None) => {}
+        }
+    }
+    out
 }
 
 /// 重命名/移动检测：仅左侧与仅右侧中，尺寸相同且内容哈希一致的文件对
@@ -545,15 +677,29 @@ pub fn run(args: &CompareArgs) -> i32 {
         }
     };
 
-    let result = match compare_vfs_attrs(
-        left.as_ref(),
-        right.as_ref(),
-        &filter,
-        args.compare_content,
-        args.detect_moves,
-        args.compare_attrs,
-        args.compare_version,
-    ) {
+    let result = if args.ignore_structure {
+        compare_vfs_attrs_is(
+            left.as_ref(),
+            right.as_ref(),
+            &filter,
+            args.compare_content,
+            args.detect_moves,
+            args.compare_attrs,
+            args.compare_version,
+            true,
+        )
+    } else {
+        compare_vfs_attrs(
+            left.as_ref(),
+            right.as_ref(),
+            &filter,
+            args.compare_content,
+            args.detect_moves,
+            args.compare_attrs,
+            args.compare_version,
+        )
+    };
+    let result = match result {
         Ok(r) => r,
         Err(e) => {
             eprintln!("bcr: {}", fmt(Key::ScanFailed, &[&e.to_string()]));
@@ -739,6 +885,7 @@ mod tests {
             detect_moves: true,
             compare_attrs: false,
             compare_version: false,
+            ignore_structure: false,
             json: false,
             summary: false,
             html: None,
@@ -1234,5 +1381,88 @@ mod attrs_tests {
             assert_eq!(e.status, FileStatus::Differ);
             assert!(e.attrs_differ);
         }
+    }
+
+    // ---- A7 忽略文件夹结构 ----
+
+    #[test]
+    fn align_by_basename_pairs_across_dirs() {
+        let mut l: std::collections::BTreeMap<String, FileMeta> = Default::default();
+        let mut r: std::collections::BTreeMap<String, FileMeta> = Default::default();
+        l.insert(
+            "a/x.txt".into(),
+            FileMeta {
+                size: 1,
+                mtime: std::time::UNIX_EPOCH,
+                mode: None,
+                symlink: None,
+            },
+        );
+        l.insert(
+            "only.txt".into(),
+            FileMeta {
+                size: 1,
+                mtime: std::time::UNIX_EPOCH,
+                mode: None,
+                symlink: None,
+            },
+        );
+        r.insert(
+            "sub/x.txt".into(),
+            FileMeta {
+                size: 1,
+                mtime: std::time::UNIX_EPOCH,
+                mode: None,
+                symlink: None,
+            },
+        );
+        r.insert(
+            "sub/only2.txt".into(),
+            FileMeta {
+                size: 1,
+                mtime: std::time::UNIX_EPOCH,
+                mode: None,
+                symlink: None,
+            },
+        );
+        let pairs = align_by_basename(&l, &r);
+        // x.txt 配对；only.txt 仅左侧；only2.txt 仅右侧
+        assert!(pairs.contains(&(Some("a/x.txt".into()), Some("sub/x.txt".into()))));
+        assert!(pairs.contains(&(Some("only.txt".into()), None)));
+        assert!(pairs.contains(&(None, Some("sub/only2.txt".into()))));
+    }
+
+    #[test]
+    fn ignore_structure_matches_same_basename() {
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        fs::create_dir_all(d1.path().join("a")).unwrap();
+        fs::create_dir_all(d2.path().join("b")).unwrap();
+        fs::write(d1.path().join("a/readme.md"), "same").unwrap();
+        fs::write(d2.path().join("b/readme.md"), "same").unwrap();
+        fs::write(d1.path().join("a/extra.txt"), "L").unwrap();
+        let f = Filter::new(&[], &[]).unwrap();
+        let r = compare_vfs_attrs_is(
+            &LocalVfs::new(d1.path()).unwrap(),
+            &LocalVfs::new(d2.path()).unwrap(),
+            &f,
+            true,
+            true,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        // 忽略结构后 readme.md 应配对为 Same；extra.txt 仅左侧
+        assert!(r
+            .entries
+            .iter()
+            .any(|e| e.status == FileStatus::Same && e.rel.contains("readme")));
+        assert!(r
+            .entries
+            .iter()
+            .any(|e| e.status == FileStatus::LeftOnly && e.rel.contains("extra")));
+        assert_eq!(r.stats.same, 1);
+        assert_eq!(r.stats.left_only, 1);
     }
 }

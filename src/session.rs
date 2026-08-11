@@ -202,6 +202,7 @@ fn run_run(a: &RunArgs) -> i32 {
         detect_moves: s.detect_moves,
         compare_attrs: false,
         compare_version: false,
+        ignore_structure: false,
         json: false,
         summary: false,
         html: None,

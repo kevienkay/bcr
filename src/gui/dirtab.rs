@@ -287,6 +287,7 @@ impl DirTab {
             l.as_ref(),
             r.as_ref(),
             &filter,
+            false, // GUI 目录同步暂不支持忽略结构（跨目录配对在 CLI 层）
         ) {
             Ok(plan) => {
                 self.sync_checked.clear();
@@ -369,6 +370,7 @@ impl DirTab {
         for rel in &rels {
             let op = SyncOp::Copy {
                 rel: rel.clone(),
+                src_rel: None,
                 from_src: true,
             };
             if execute_op(&op, l.as_ref(), r.as_ref()).is_some() {
@@ -615,6 +617,7 @@ impl DirTab {
                     if ui.button("→ 复制到右").clicked() {
                         let op = SyncOp::Copy {
                             rel: rel.clone(),
+                            src_rel: None,
                             from_src: true,
                         };
                         self.run_single_op(op);
@@ -622,6 +625,7 @@ impl DirTab {
                     if ui.button("← 复制到左").clicked() {
                         let op = SyncOp::Copy {
                             rel: rel.clone(),
+                            src_rel: None,
                             from_src: false,
                         };
                         self.run_single_op(op);
