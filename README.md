@@ -135,7 +135,7 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - 覆盖全部 CLI 输出（错误消息/统计行/同步标签）与 GUI 文案（菜单/工具栏/标签页/Git 弹窗）
 - 翻译表由宏保证穷尽：新增文案若缺少任一语言翻译会编译失败
 
-### M6 虚拟文件系统（`zip://` / `tar://` / `7z://` / `sftp://` / `ftp://` / `webdav://`）
+### M6 虚拟文件系统（`zip://` / `tar://` / `7z://` / `sftp://` / `ftp://` / `webdav://` / `s3://` / `onedrive://` / `dropbox://`）
 
 - compare/sync 的路径参数支持虚拟后端，可跨后端混合对比：
   - `zip://path/to/archive.zip`：把 ZIP 压缩包当作目录树（可读写：write/delete/set_mtime 全量重写）
@@ -144,9 +144,21 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
   - `sftp://[user[:pass]@]host[:port]/remote/path`：SFTP 远程目录（可读写，含 mtime 保留）
   - `ftp://[user[:pass]@]host[:port]/remote/path`：FTP 远程目录（可读写；无标准 mtime 设置命令，同步建议 `--compare-content`）
   - `webdav://[user[:pass]@]host[:port]/remote/path` / `webdavs://...`：WebDAV 远程目录（可读写：PROPFIND/GET/PUT/DELETE/MKCOL/MOVE，Basic Auth）
-  - 普通路径仍为本地目录，可任意组合（本地 vs zip、zip vs tar.gz、本地 vs sftp、sftp vs ftp 等）
-- 例：`bcr compare src/ "zip://backup.zip" --compare-content`、`bcr sync local/ "sftp://alice@nas/srv" --mode mirror --dry-run`、`bcr compare src/ "tar://backup.tar.gz"`、`bcr sync pub/ "ftp://mirror@files.example.com:/srv/pub" --mode update`
+  - `s3://bucket[/prefix]`：Amazon S3 对象存储（可读写；凭证 AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY，区域 AWS_REGION，MinIO 用 AWS_ENDPOINT）
+  - `onedrive://path`：OneDrive（可读写；token 用 BCR_ONEDRIVE_TOKEN 或 ~/.bcr-cloud.toml）
+  - `dropbox://path`：Dropbox（可读写；token 用 BCR_DROPBOX_TOKEN 或 ~/.bcr-cloud.toml）
+  - 普通路径仍为本地目录，可任意组合（本地 vs zip、本地 vs sftp、本地 vs s3、onedrive vs dropbox 等）
+- 例：`bcr compare src/ "zip://backup.zip" --compare-content`、`bcr sync local/ "sftp://alice@nas/srv" --mode mirror --dry-run`、`bcr compare src/ "tar://backup.tar.gz"`、`bcr sync pub/ "ftp://mirror@files.example.com:/srv/pub" --mode update`、`bcr compare local/ "s3://my-bucket/backups" --compare-content`、`bcr sync docs/ "onedrive://backup" --mode update`
 - 内部通过 [`Vfs`] trait 统一抽象（scan/read/write/delete/set_mtime），CLI 与 GUI 共用
+- **云凭证配置**（OneDrive/Dropbox 需 OAuth access token）：环境变量 `BCR_ONEDRIVE_TOKEN` / `BCR_DROPBOX_TOKEN`，或 `~/.bcr-cloud.toml`：
+
+```toml
+[onedrive]
+token = "eyJ0eXAiOiJKV1Qi..."
+
+[dropbox]
+token = "sl.B2i5..."
+```
 - 注意：SFTP 首次连接不校验 host key（适用于受信环境）；7z 与 tar.bz2 后端只读，写入会报错；tar/7z 全量解压进内存，超大归档建议用 zip 或本地目录；FTP 被动模式，支持匿名登录（user=anonymous）
 
 ### M5 GUI（`bcr gui`）— 完整版
