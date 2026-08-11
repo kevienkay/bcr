@@ -34,6 +34,10 @@ pub struct SyncArgs {
     #[arg(long)]
     pub ignore_structure: bool,
 
+    /// 符号链接跟随（B4）：扫描时跟随链接读取目标元数据（默认记录链接自身）
+    #[arg(long)]
+    pub follow_symlinks: bool,
+
     /// 包含过滤（glob，可重复）
     #[arg(long = "include")]
     pub includes: Vec<String>,
@@ -516,7 +520,7 @@ pub fn run(args: &SyncArgs) -> i32 {
     };
 
     let filter = match Filter::new(&args.includes, &args.excludes) {
-        Ok(f) => f,
+        Ok(f) => f.set_follow_symlinks(args.follow_symlinks),
         Err(e) => {
             eprintln!("bcr: {}", fmt(Key::FilterError, &[&e.to_string()]));
             return 2;
@@ -724,6 +728,7 @@ mod tests {
             dry_run: false,
             compare_content: false,
             ignore_structure: false,
+            follow_symlinks: false,
             includes: vec![],
             excludes: vec![],
             summary: false,

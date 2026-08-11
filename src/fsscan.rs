@@ -41,6 +41,8 @@ pub struct Filter {
     pub(crate) includes: Vec<String>,
     /// 原始 exclude 模式（缓存键用）
     pub(crate) excludes: Vec<String>,
+    /// B4 符号链接跟随：true 时扫描跟随链接（防死循环由 walkdir 保证）；默认不跟随
+    pub(crate) follow_symlinks: bool,
 }
 
 impl Filter {
@@ -50,7 +52,14 @@ impl Filter {
             exclude: build_set(excludes)?,
             includes: includes.to_vec(),
             excludes: excludes.to_vec(),
+            follow_symlinks: false,
         })
+    }
+
+    /// B4：开启符号链接跟随（CLI --follow-symlinks）
+    pub fn set_follow_symlinks(mut self, on: bool) -> Self {
+        self.follow_symlinks = on;
+        self
     }
 
     /// 文件级过滤：include 白名单 + exclude 黑名单
@@ -87,7 +96,7 @@ fn build_set(patterns: &[String]) -> Result<Option<GlobSet>, globset::Error> {
 pub fn scan(root: &Path, filter: &Filter) -> io::Result<BTreeMap<String, FileMeta>> {
     let mut map = BTreeMap::new();
     for entry in WalkDir::new(root)
-        .follow_links(false)
+        .follow_links(filter.follow_symlinks)
         .into_iter()
         .filter_entry(|e| {
             let rel = match e.path().strip_prefix(root) {
@@ -375,5 +384,29 @@ mod tests {
         let d1 = tempdir().unwrap();
         let d2 = tempdir().unwrap();
         assert!(content_equal(d1.path(), d2.path(), "nope.txt").is_err());
+    }
+
+    // ---- B4 符号链接跟随 ----
+
+    #[cfg(unix)]
+    #[test]
+    fn scan_follow_symlinks_reads_target() {
+        use std::os::unix::fs::symlink;
+        let d = tempdir().unwrap();
+        fs::write(d.path().join("real.txt"), "target-content").unwrap();
+        symlink(d.path().join("real.txt"), d.path().join("link.txt")).unwrap();
+
+        // 默认不跟随：链接记录为 symlink 条目（大小=链接自身长度）
+        let f = Filter::new(&[], &[]).unwrap();
+        let m = scan(d.path(), &f).unwrap();
+        assert!(m.contains_key("link.txt"));
+        assert!(m["link.txt"].symlink.is_some());
+
+        // 跟随：链接按目标文件处理（symlink=None，size=目标大小）
+        let f2 = Filter::new(&[], &[]).unwrap().set_follow_symlinks(true);
+        let m2 = scan(d.path(), &f2).unwrap();
+        assert!(m2.contains_key("link.txt"));
+        assert_eq!(m2["link.txt"].symlink, None);
+        assert_eq!(m2["link.txt"].size, "target-content".len() as u64);
     }
 }

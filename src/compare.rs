@@ -44,6 +44,10 @@ pub struct CompareArgs {
     #[arg(long)]
     pub ignore_structure: bool,
 
+    /// 符号链接跟随（B4）：扫描时跟随链接读取目标元数据（默认记录链接自身）
+    #[arg(long)]
+    pub follow_symlinks: bool,
+
     /// 比较文件属性（Unix 权限位/符号链接目标；默认仅比较大小+时间+内容）
     #[arg(long)]
     pub compare_attrs: bool,
@@ -649,7 +653,7 @@ pub fn run(args: &CompareArgs) -> i32 {
     }
 
     let filter = match Filter::new(&args.includes, &args.excludes) {
-        Ok(f) => f,
+        Ok(f) => f.set_follow_symlinks(args.follow_symlinks),
         Err(e) => {
             eprintln!("bcr: {}", fmt(Key::FilterError, &[&e.to_string()]));
             return 2;
@@ -886,6 +890,7 @@ mod tests {
             compare_attrs: false,
             compare_version: false,
             ignore_structure: false,
+            follow_symlinks: false,
             json: false,
             summary: false,
             html: None,
