@@ -15,7 +15,7 @@ use crate::sideview::ViewOptions;
 use common::*;
 use difftab::DiffTab;
 use dirtab::DirTab;
-use eframe::egui::{self, RichText, ThemePreference};
+use eframe::egui::{self, Color32, RichText, ThemePreference};
 use imagetab::ImageTab;
 use mergetab::MergeTab;
 use std::path::PathBuf;
@@ -145,6 +145,16 @@ struct DiffApp {
     show_sessions: bool,
     /// 规则(Profile)管理窗口开关
     show_profiles: bool,
+    /// 云盘/远程浏览窗口开关
+    show_cloud: bool,
+    /// 云盘浏览：左右 URL 输入
+    cloud_left: String,
+    cloud_right: String,
+    /// 云盘浏览：左右根目录条目（子目录/文件相对路径）
+    cloud_left_entries: Option<Vec<String>>,
+    cloud_right_entries: Option<Vec<String>>,
+    /// 云盘浏览错误消息
+    cloud_err: Option<String>,
 }
 
 impl DiffApp {
@@ -156,6 +166,12 @@ impl DiffApp {
             show_git_help: false,
             show_sessions: false,
             show_profiles: false,
+            show_cloud: false,
+            cloud_left: String::new(),
+            cloud_right: String::new(),
+            cloud_left_entries: None,
+            cloud_right_entries: None,
+            cloud_err: None,
         }
     }
 
@@ -319,6 +335,41 @@ fn split_globs_ui(s: &str) -> Vec<String> {
         .collect()
 }
 
+/// 扫描云盘/远程根目录，返回顶层条目（目录/文件相对路径），失败时返回 None
+fn scan_cloud_root(url: &str) -> Option<Vec<String>> {
+    let v = match crate::vfs::open(url.trim()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("bcr: 打开 {url} 失败: {e}");
+            return None;
+        }
+    };
+    let filter = crate::fsscan::Filter::new(&[], &[]).expect("empty filter cannot fail");
+    let map = match v.scan(&filter) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("bcr: 扫描 {url} 失败: {e}");
+            return None;
+        }
+    };
+    // 顶层条目：取每个 key 的第一段，去重排序
+    let mut top: Vec<String> = map
+        .keys()
+        .filter_map(|k| k.split('/').next())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    top.sort();
+    top.dedup();
+    Some(top)
+}
+
+/// 拼接云 URL 与相对路径：URL 以 / 结尾则直接拼接，否则补一个 /
+fn join_cloud_url(base: &str, rel: &str) -> String {
+    let base = base.trim().trim_end_matches('/');
+    format!("{base}/{rel}")
+}
+
 fn pick_file() -> Option<String> {
     let p = rfd::FileDialog::new().pick_file()?;
     Some(p.to_string_lossy().into_owned())
@@ -352,6 +403,13 @@ impl eframe::App for DiffApp {
                     .clicked()
                 {
                     self.open_dir_compare();
+                }
+                if ui
+                    .button("☁ 云盘")
+                    .on_hover_text("打开远程/云存储目录（webdav:// s3:// onedrive:// dropbox:// sftp:// ftp://）")
+                    .clicked()
+                {
+                    self.show_cloud = !self.show_cloud;
                 }
                 if ui
                     .button(crate::i18n::t(crate::i18n::Key::MenuOpenMerge))
@@ -780,6 +838,109 @@ impl eframe::App for DiffApp {
             }
             if !keep {
                 self.show_profiles = false;
+            }
+        }
+
+        // 云盘/远程浏览弹窗：输入 webdav:// s3:// onedrive:// dropbox:// sftp:// ftp:// 等 URL，
+        // 扫描根目录列出条目，选择后打开目录对比
+        if self.show_cloud {
+            let mut keep = true;
+            let mut open_req: Option<(String, String)> = None;
+            let mut close_req = false;
+            let mut scan_left = false;
+            let mut scan_right = false;
+            egui::Window::new("☁ 云盘/远程目录")
+                .collapsible(false)
+                .resizable(true)
+                .default_size([620.0, 460.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(
+                        RichText::new(
+                            "支持 webdav:// webdavs:// s3:// onedrive:// dropbox:// sftp:// ftp:// 前缀；\n本地路径也可直接输入",
+                        )
+                        .size(12.0)
+                        .color(ui.visuals().weak_text_color()),
+                    );
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label("左侧");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.cloud_left)
+                                .hint_text("webdav://... 或 /本地/路径")
+                                .desired_width(340.0),
+                        );
+                        if ui.button("扫描").clicked() {
+                            scan_left = true;
+                        }
+                    });
+                    if let Some(entries) = &self.cloud_left_entries {
+                        egui::ScrollArea::vertical()
+                            .max_height(140.0)
+                            .show(ui, |ui| {
+                                for rel in entries {
+                                    if ui.selectable_label(false, rel).clicked() {
+                                        self.cloud_left = join_cloud_url(&self.cloud_left, rel);
+                                        scan_left = true;
+                                    }
+                                }
+                            });
+                    }
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label("右侧");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.cloud_right)
+                                .hint_text("webdav://... 或 /本地/路径")
+                                .desired_width(340.0),
+                        );
+                        if ui.button("扫描").clicked() {
+                            scan_right = true;
+                        }
+                    });
+                    if let Some(entries) = &self.cloud_right_entries {
+                        egui::ScrollArea::vertical()
+                            .max_height(140.0)
+                            .show(ui, |ui| {
+                                for rel in entries {
+                                    if ui.selectable_label(false, rel).clicked() {
+                                        self.cloud_right = join_cloud_url(&self.cloud_right, rel);
+                                        scan_right = true;
+                                    }
+                                }
+                            });
+                    }
+                    if let Some(err) = &self.cloud_err {
+                        ui.colored_label(Color32::from_rgb(230, 100, 100), err);
+                    }
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("打开目录对比").clicked() {
+                            let l = self.cloud_left.trim().to_string();
+                            let r = self.cloud_right.trim().to_string();
+                            if !l.is_empty() && !r.is_empty() {
+                                open_req = Some((l, r));
+                            }
+                        }
+                        if ui.button(crate::i18n::t(crate::i18n::Key::Close)).clicked() {
+                            close_req = true;
+                        }
+                    });
+                });
+            if scan_left {
+                self.cloud_left_entries = scan_cloud_root(&self.cloud_left);
+                self.cloud_err = None;
+            }
+            if scan_right {
+                self.cloud_right_entries = scan_cloud_root(&self.cloud_right);
+                self.cloud_err = None;
+            }
+            if let Some((l, r)) = open_req {
+                self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
+                self.show_cloud = false;
+            }
+            if close_req || !keep {
+                self.show_cloud = false;
             }
         }
 
@@ -1513,5 +1674,34 @@ mod tests {
         app.close_tab(0);
         assert!(app.tabs.is_empty());
         assert_eq!(app.active, 0);
+    }
+
+    #[test]
+    fn join_cloud_url_keeps_single_slash() {
+        assert_eq!(join_cloud_url("webdav://host/share", "docs"), "webdav://host/share/docs");
+        assert_eq!(
+            join_cloud_url("webdav://host/share/", "docs"),
+            "webdav://host/share/docs"
+        );
+        assert_eq!(join_cloud_url("/tmp/base", "sub"), "/tmp/base/sub");
+        assert_eq!(join_cloud_url("  s3://bucket  ", "key"), "s3://bucket/key");
+    }
+
+    #[test]
+    fn scan_cloud_root_lists_top_level_entries() {
+        let dir = tempdir().unwrap();
+        let d = dir.path();
+        fs::create_dir_all(d.join("docs")).unwrap();
+        fs::create_dir_all(d.join("src/sub")).unwrap();
+        fs::write(d.join("readme.md"), "hi").unwrap();
+        fs::write(d.join("docs/a.md"), "a").unwrap();
+        fs::write(d.join("src/main.rs"), "fn").unwrap();
+        let entries = scan_cloud_root(d.to_str().unwrap()).unwrap();
+        assert_eq!(entries, vec!["docs", "readme.md", "src"]);
+    }
+
+    #[test]
+    fn scan_cloud_root_nonexistent_returns_none() {
+        assert!(scan_cloud_root("/nonexistent/definitely/not/here").is_none());
     }
 }
