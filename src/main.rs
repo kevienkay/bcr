@@ -1,3 +1,4 @@
+mod cache;
 mod compare;
 mod compare3;
 mod csvcmp;
@@ -19,6 +20,7 @@ mod report;
 mod session;
 mod sideview;
 mod sync;
+mod systemtime_secs;
 mod vfs;
 
 use clap::{Parser, Subcommand};

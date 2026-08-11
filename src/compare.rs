@@ -111,7 +111,7 @@ fn merge_profile(args: &CompareArgs) -> CompareArgs {
 }
 
 /// 文件比较状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FileStatus {
     Same,
     LeftOnly,
@@ -134,7 +134,7 @@ impl FileStatus {
 }
 
 /// 单个文件的比较条目
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FileEntry {
     pub rel: String,
     pub status: FileStatus,
@@ -147,7 +147,7 @@ pub struct FileEntry {
 }
 
 /// 比较统计
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CompareStats {
     pub same: usize,
     pub left_only: usize,
@@ -164,7 +164,7 @@ impl CompareStats {
 }
 
 /// 目录比较结果（CLI 与 GUI 共用）
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CompareResult {
     /// 排序后的条目（BTreeMap 顺序）
     pub entries: Vec<FileEntry>,
@@ -238,6 +238,35 @@ pub fn compare_vfs_attrs(
 ) -> io::Result<CompareResult> {
     let left_map = left.scan(filter)?;
     let right_map = right.scan(filter)?;
+
+    // 快照缓存：仅本地目录启用（远程/压缩包每次全量扫描）
+    let cache_key =
+        if !crate::vfs::is_remote(&left.describe()) && !crate::vfs::is_remote(&right.describe()) {
+            let opts = format!(
+                "cc={} moves={} attrs={}",
+                compare_content, enable_moves, compare_attrs
+            );
+            Some(crate::cache::key_for(
+                &left.describe(),
+                &right.describe(),
+                &filter.includes,
+                &filter.excludes,
+                &opts,
+            ))
+        } else {
+            None
+        };
+    let left_snap = cache_key
+        .as_ref()
+        .map(|_| crate::cache::snapshot_of(&left_map));
+    let right_snap = cache_key
+        .as_ref()
+        .map(|_| crate::cache::snapshot_of(&right_map));
+    if let (Some(k), Some(ls), Some(rs)) = (&cache_key, &left_snap, &right_snap) {
+        if let Some(cached) = crate::cache::lookup(k, ls, rs) {
+            return Ok(cached);
+        }
+    }
 
     // 合并 key 集合（已排序，保证输出顺序稳定）
     let mut keys: Vec<&String> = Vec::with_capacity(left_map.len() + right_map.len());
@@ -322,6 +351,11 @@ pub fn compare_vfs_attrs(
     // 重命名/移动检测：把内容相同的 仅左侧+仅右侧 对合并为 Moved
     if enable_moves {
         detect_moves(&mut result, left, right);
+    }
+
+    // 写缓存（本地目录）
+    if let (Some(k), Some(ls), Some(rs)) = (&cache_key, left_snap, right_snap) {
+        crate::cache::insert(k, ls, rs, result.clone());
     }
     Ok(result)
 }

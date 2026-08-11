@@ -11,9 +11,10 @@ use std::fs::File;
 use std::io::Read;
 
 /// 文件元数据（快速比较用）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FileMeta {
     pub size: u64,
+    #[serde(with = "crate::systemtime_secs")]
     pub mtime: SystemTime,
     /// Unix 权限位（r/w/x + 文件类型位；非 Unix 平台或后端不支持时为 None）
     pub mode: Option<u32>,
@@ -36,6 +37,10 @@ fn norm_rel(rel: &std::path::Path) -> String {
 pub struct Filter {
     include: Option<GlobSet>,
     exclude: Option<GlobSet>,
+    /// 原始 include 模式（缓存键用）
+    pub(crate) includes: Vec<String>,
+    /// 原始 exclude 模式（缓存键用）
+    pub(crate) excludes: Vec<String>,
 }
 
 impl Filter {
@@ -43,6 +48,8 @@ impl Filter {
         Ok(Filter {
             include: build_set(includes)?,
             exclude: build_set(excludes)?,
+            includes: includes.to_vec(),
+            excludes: excludes.to_vec(),
         })
     }
 

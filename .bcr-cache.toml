@@ -1,0 +1,546 @@
+[entries.19bfe7373dd6e347]
+last_used = 1786449452
+
+[entries.19bfe7373dd6e347.left]
+"only_l.txt" = [
+    1,
+    1700000000,
+]
+"same.txt" = [
+    1,
+    1700000000,
+]
+"sub/a.txt" = [
+    1,
+    1700000000,
+]
+"sub/deep/b.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.19bfe7373dd6e347.right]
+"same.txt" = [
+    1,
+    1700000000,
+]
+"sub/a.txt" = [
+    1,
+    1700000000,
+]
+"sub/deep/b.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.19bfe7373dd6e347.result]
+warnings = []
+
+[[entries.19bfe7373dd6e347.result.entries]]
+rel = "only_l.txt"
+status = "LeftOnly"
+attrs_differ = false
+
+[entries.19bfe7373dd6e347.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.19bfe7373dd6e347.result.entries]]
+rel = "same.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.19bfe7373dd6e347.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.19bfe7373dd6e347.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.19bfe7373dd6e347.result.entries]]
+rel = "sub/a.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.19bfe7373dd6e347.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.19bfe7373dd6e347.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.19bfe7373dd6e347.result.entries]]
+rel = "sub/deep/b.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.19bfe7373dd6e347.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.19bfe7373dd6e347.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.19bfe7373dd6e347.result.stats]
+same = 3
+left_only = 1
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.2c93689a735d6ad2]
+last_used = 1786449452
+
+[entries.2c93689a735d6ad2.left]
+"only_l.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.2c93689a735d6ad2.right]
+"only_r.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.2c93689a735d6ad2.result]
+warnings = []
+
+[[entries.2c93689a735d6ad2.result.entries]]
+rel = "only_l.txt"
+status = "Moved"
+moved_to = "only_r.txt"
+attrs_differ = false
+
+[entries.2c93689a735d6ad2.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.2c93689a735d6ad2.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.2c93689a735d6ad2.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 0
+moved = 1
+
+[entries.633bed74b9603ff0]
+last_used = 1786449452
+
+[entries.633bed74b9603ff0.left]
+"old.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.633bed74b9603ff0.right]
+"new.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.633bed74b9603ff0.result]
+warnings = []
+
+[[entries.633bed74b9603ff0.result.entries]]
+rel = "old.txt"
+status = "Moved"
+moved_to = "new.txt"
+attrs_differ = false
+
+[entries.633bed74b9603ff0.result.entries.left]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.633bed74b9603ff0.result.entries.right]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.633bed74b9603ff0.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 0
+moved = 1
+
+[entries.751bb6207a9cab93]
+last_used = 1786449452
+
+[entries.751bb6207a9cab93.left]
+"old.txt" = [
+    12,
+    1600000000,
+]
+
+[entries.751bb6207a9cab93.right]
+"new.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.751bb6207a9cab93.result]
+warnings = []
+
+[[entries.751bb6207a9cab93.result.entries]]
+rel = "old.txt"
+status = "Moved"
+moved_to = "new.txt"
+attrs_differ = false
+
+[entries.751bb6207a9cab93.result.entries.left]
+size = 12
+mtime = 1600000000
+mode = 33152
+
+[entries.751bb6207a9cab93.result.entries.right]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.751bb6207a9cab93.result.stats]
+same = 0
+left_only = 0
+right_only = 0
+differ = 0
+moved = 1
+
+[entries.77d8c74c7304f8f4]
+last_used = 1786449452
+
+[entries.77d8c74c7304f8f4.left]
+"old.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.77d8c74c7304f8f4.right]
+"new.txt" = [
+    12,
+    1700000000,
+]
+
+[entries.77d8c74c7304f8f4.result]
+warnings = []
+
+[[entries.77d8c74c7304f8f4.result.entries]]
+rel = "new.txt"
+status = "RightOnly"
+attrs_differ = false
+
+[entries.77d8c74c7304f8f4.result.entries.right]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[[entries.77d8c74c7304f8f4.result.entries]]
+rel = "old.txt"
+status = "LeftOnly"
+attrs_differ = false
+
+[entries.77d8c74c7304f8f4.result.entries.left]
+size = 12
+mtime = 1700000000
+mode = 33152
+
+[entries.77d8c74c7304f8f4.result.stats]
+same = 0
+left_only = 1
+right_only = 1
+differ = 0
+moved = 0
+
+[entries.8c2356b414a64c82]
+last_used = 1786449452
+
+[entries.8c2356b414a64c82.left]
+"new.txt" = [
+    5,
+    1700000000,
+]
+"same.txt" = [
+    4,
+    1700000000,
+]
+
+[entries.8c2356b414a64c82.right]
+"new.txt" = [
+    5,
+    1700000000,
+]
+"only.txt" = [
+    8,
+    1700000000,
+]
+"same.txt" = [
+    4,
+    1700000000,
+]
+
+[entries.8c2356b414a64c82.result]
+warnings = []
+
+[[entries.8c2356b414a64c82.result.entries]]
+rel = "new.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.8c2356b414a64c82.result.entries.left]
+size = 5
+mtime = 1700000000
+mode = 33152
+
+[entries.8c2356b414a64c82.result.entries.right]
+size = 5
+mtime = 1700000000
+mode = 33152
+
+[[entries.8c2356b414a64c82.result.entries]]
+rel = "only.txt"
+status = "RightOnly"
+attrs_differ = false
+
+[entries.8c2356b414a64c82.result.entries.right]
+size = 8
+mtime = 1700000000
+mode = 33152
+
+[[entries.8c2356b414a64c82.result.entries]]
+rel = "same.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.8c2356b414a64c82.result.entries.left]
+size = 4
+mtime = 1700000000
+mode = 33152
+
+[entries.8c2356b414a64c82.result.entries.right]
+size = 4
+mtime = 1700000000
+mode = 33152
+
+[entries.8c2356b414a64c82.result.stats]
+same = 2
+left_only = 0
+right_only = 1
+differ = 0
+moved = 0
+
+[entries.987e5b693d7006e1]
+last_used = 1786449452
+
+[entries.987e5b693d7006e1.left]
+"a.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.987e5b693d7006e1.right]
+"b.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.987e5b693d7006e1.result]
+warnings = []
+
+[[entries.987e5b693d7006e1.result.entries]]
+rel = "a.txt"
+status = "LeftOnly"
+attrs_differ = false
+
+[entries.987e5b693d7006e1.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.987e5b693d7006e1.result.entries]]
+rel = "b.txt"
+status = "RightOnly"
+attrs_differ = false
+
+[entries.987e5b693d7006e1.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.987e5b693d7006e1.result.stats]
+same = 0
+left_only = 1
+right_only = 1
+differ = 0
+moved = 0
+
+[entries.c5ecbcac79970015]
+last_used = 1786449452
+
+[entries.c5ecbcac79970015.left]
+"drop.txt" = [
+    1,
+    1700000000,
+]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.c5ecbcac79970015.right]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.c5ecbcac79970015.result]
+warnings = []
+
+[[entries.c5ecbcac79970015.result.entries]]
+rel = "drop.txt"
+status = "LeftOnly"
+attrs_differ = false
+
+[entries.c5ecbcac79970015.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.c5ecbcac79970015.result.entries]]
+rel = "keep.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.c5ecbcac79970015.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.c5ecbcac79970015.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.c5ecbcac79970015.result.stats]
+same = 1
+left_only = 1
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.d1a570911faf424b]
+last_used = 1786449452
+
+[entries.d1a570911faf424b.left]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.d1a570911faf424b.right]
+"keep.txt" = [
+    1,
+    1700000000,
+]
+
+[entries.d1a570911faf424b.result]
+warnings = []
+
+[[entries.d1a570911faf424b.result.entries]]
+rel = "keep.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.d1a570911faf424b.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.d1a570911faf424b.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.d1a570911faf424b.result.stats]
+same = 1
+left_only = 0
+right_only = 0
+differ = 0
+moved = 0
+
+[entries.f9beb6f27c81f98a]
+last_used = 1786449452
+
+[entries.f9beb6f27c81f98a.left]
+"diff.txt" = [
+    1,
+    1700000000,
+]
+"only_l.txt" = [
+    6,
+    1700000000,
+]
+
+[entries.f9beb6f27c81f98a.right]
+"diff.txt" = [
+    1,
+    1700000000,
+]
+"only_l.txt" = [
+    6,
+    1700000000,
+]
+
+[entries.f9beb6f27c81f98a.result]
+warnings = []
+
+[[entries.f9beb6f27c81f98a.result.entries]]
+rel = "diff.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.f9beb6f27c81f98a.result.entries.left]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[entries.f9beb6f27c81f98a.result.entries.right]
+size = 1
+mtime = 1700000000
+mode = 33152
+
+[[entries.f9beb6f27c81f98a.result.entries]]
+rel = "only_l.txt"
+status = "Same"
+attrs_differ = false
+
+[entries.f9beb6f27c81f98a.result.entries.left]
+size = 6
+mtime = 1700000000
+mode = 33152
+
+[entries.f9beb6f27c81f98a.result.entries.right]
+size = 6
+mtime = 1700000000
+mode = 33152
+
+[entries.f9beb6f27c81f98a.result.stats]
+same = 2
+left_only = 0
+right_only = 0
+differ = 0
+moved = 0
