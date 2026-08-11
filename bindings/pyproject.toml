@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bcr"
+version = "0.1.0"
+description = "Beyond Compare 风格文件对比工具的 Python 绑定（薄封装，纯标准库）"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "bcr" }]
+keywords = ["diff", "compare", "sync", "beyond-compare"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/kevienkay/bcr"
+
+[tool.setuptools]
+py-modules = ["bcr"]

@@ -50,6 +50,13 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **P22** 报告深度定制（--report-sort / --report-group 状态分组）
 - **P23** GUI 拖放排序
 
+### P24-P27（特殊格式 / 版本比较 / 云盘浏览 / 自动化）
+
+- **P24** MP3 标签比较器（自研 ID3v1/v2 解析，UTF-8/UTF-16/ISO-8859-1，`bcr mp3tag` 字段级差异）
+- **P25** 版本比较模式（--compare-version，从 FileVersion/ProductVersion 提取，UTF-16/ASCII，段数值比较）
+- **P26** GUI 云盘浏览（☁ 窗口输入 webdav/s3/onedrive/dropbox/sftp/ftp URL，扫描并打开目录对比）
+- **P27** 自动化：全命令 `--json` 契约（compare.v1/sync.v1/compare3.v1/csv.v1/merge.v1/mp3tag.v1/imgcmp.v1）+ Python 绑定 `bindings/bcr.py`（纯标准库 dataclass API）+ 纯数据任务清单 `bcr task run/check`（JSON/TOML，%date%/%time%/%fn_time%/%env:VAR%/%1-%9 动态变量，差异不中止语义）
+
 ### 后端扩展（M6b-M6h）
 
 - **M6b** tar/tar.gz/tar.bz2/tar.xz/7z 只读后端（`tar://` / `7z://`）
@@ -71,5 +78,7 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 - README：完整功能矩阵 + 使用示例 + 云凭证配置说明
 - docs/P0-P1-design.md：编码检测/语法高亮设计稿
+- docs/P27-python-binding-design.md：自动化方案 v3 设计稿
+- docs/automation.md：自动化指南（JSON 契约参考 + bcr.py API + 任务清单 + 场景示例）
 
 [0.1.0]: https://github.com/kevienkay/bcr/releases/tag/v0.1.0

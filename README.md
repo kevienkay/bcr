@@ -1,6 +1,6 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（10 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（10 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览** + **P27：自动化（JSON 契约 + Python 绑定 bcr.py + 纯数据任务清单 bcr task）**。
 
 ## 功能
 
@@ -65,6 +65,13 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 
 - GUI 工具栏「☁ 云盘」：输入远程目录 URL（webdav:// webdavs:// s3:// onedrive:// dropbox:// sftp:// ftp://）或本地路径
 - 扫描列出顶层条目，点选进入子目录，确认后打开目录对比标签页（CLI/GUI 共用的 10 种后端全可用）
+
+### P27 自动化（JSON 契约 + Python 绑定 + 任务清单）
+
+- **全命令 `--json` 契约**：compare / sync / compare3 / csv / merge / mp3tag / imgcmp 输出版本化 schema JSON（`compare.v1` 等），stdout 只出 JSON，错误走 stderr，退出码 0/1/2 语义不变
+- **Python 绑定 `bindings/bcr.py`**：纯标准库（零第三方依赖），类型化 dataclass 返回值，`bcr.compare()/sync()/compare3()/csv()/merge()/mp3tag()/imgcmp()` 全覆盖；`BCR_BIN` 环境变量指定二进制路径
+- **任务清单 `bcr task`**：JSON/TOML 纯数据步骤清单（load/compare/compare3/csv/merge/sync/report/echo/exit），`%date%` `%time%` `%fn_time%` `%env:VAR%` `%1-%9` 动态变量，compare/sync 有差异不中止、遇错即停（或 continue_on_error），`bcr task check` 只校验不执行
+- 完整参考：`docs/automation.md`（契约 + API + 场景示例）
 
 ### P20 细节增强（右键菜单 / 报告布局 / 缓存 / Profile 迁移）
 
