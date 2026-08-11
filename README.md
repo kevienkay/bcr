@@ -1,8 +1,29 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统** + **I18N：多语言**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统** + **I18N：多语言** + **P1：二进制 hex 对比** + **P2：移动/重命名检测** + **P3：流式读取** + **P4：HTML 报告与会话**。
 
 ## 功能
+
+### P4 HTML 报告与会话保存
+
+- `bcr compare A B --html report.html`：导出自包含 HTML 对比报告（内嵌 CSS，浏览器直接打开），含统计摘要 + 差异条目表 + 移动标记
+- `bcr session save <name> <left> <right> [--compare-content] [--include ...] [--exclude ...]`：把比较配置持久化为会话（`~/.bcr-sessions.toml`）
+- `bcr session list` / `bcr session run <name>` / `bcr session delete <name>`：列出/复跑/删除会话
+
+### P3 分块流式读取
+
+- 内容比较（compare/sync `--compare-content`、移动检测）走 `Vfs::hash` 流式 blake3，内存 O(64KB)，300MB 文件实测内存 ~10MB
+- `bcr hex` 分块渲染（64KB/块），超大二进制文件不占内存
+
+### P2 重命名/移动检测（Detect Moves）
+
+- `bcr compare A B` 默认开启：仅左侧与仅右侧中内容哈希一致的文件对合并为 `[M] old -> new`（跨子目录移动同样识别）
+- `--detect-moves false` 关闭；`--summary` 输出移动/重命名对数
+
+### P1 十六进制对比（二进制文件）
+
+- `bcr hex LEFT RIGHT`：逐字节对比，差异行 `!` 标记 + 偏移 + 两侧 hex/ASCII，退出码 0/1/2
+- GUI 检测到二进制文件自动切换 hex 视图（DiffTab 内渲染，差异行高亮）
 
 ### I18N 多语言支持
 
@@ -123,6 +144,23 @@ bcr diff --ignore-whitespace --color=always old.rs new.rs
 
 # stdin 对比
 printf 'a\nb\n' | bcr diff - new.txt -L stdin -L file
+
+# 十六进制对比（二进制文件，P1）
+bcr hex old.bin new.bin
+bcr hex old.bin new.bin --show-same
+
+# 目录对比 + 移动/重命名检测（P2，默认开启）
+bcr compare old-dir new-dir
+bcr compare old-dir new-dir --detect-moves false
+
+# 导出 HTML 对比报告（P4）
+bcr compare old-dir new-dir --html report.html
+
+# 会话保存/复跑/删除（P4）
+bcr session save backup old-dir new-dir --compare-content --exclude 'target/**'
+bcr session list
+bcr session run backup
+bcr session delete backup
 
 # 作为 git difftool 使用
 git difftool --tool=bcr
