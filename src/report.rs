@@ -121,6 +121,7 @@ pub fn render_txt_fields(
 }
 
 /// 渲染文本报告（全部字段，向后兼容）
+#[allow(dead_code)] // 公共 API，保留向后兼容
 pub fn render_txt(left: &str, right: &str, result: &CompareResult) -> String {
     render_txt_fields(left, right, result, &parse_fields("").unwrap())
 }
@@ -198,6 +199,7 @@ pub fn render_csv_fields(
 }
 
 /// 渲染 CSV 报告（全部字段，向后兼容）
+#[allow(dead_code)] // 公共 API，保留向后兼容
 pub fn render_csv(left: &str, right: &str, result: &CompareResult) -> String {
     render_csv_fields(left, right, result, &parse_fields("").unwrap())
 }
