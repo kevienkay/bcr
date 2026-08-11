@@ -502,8 +502,8 @@ printf 'x' > c3_b/gone.txt
 printf 'new' > c3_l/only_l.txt
 printf 'other' > c3_r/only_r.txt
 printf 'b1' > c3_b/conf.txt; printf 'l1' > c3_l/conf.txt; printf 'r1' > c3_r/conf.txt
-# C3.1 左侧修改标记
-"$BIN" compare3 c3_b c3_l c3_r --show-same > c3_out.txt; check "C3.1 退出码=1(有差异)" 1 "$?"
+# C3.1 左侧修改标记（用 --compare-content：快速模式受 mtime 精度影响，CI 上同秒创建会误判）
+"$BIN" compare3 c3_b c3_l c3_r --compare-content --show-same > c3_out.txt; check "C3.1 退出码=1(有差异)" 1 "$?"
 check_contains "C3.2 左侧修改标记" "[LM] a.txt" "$(cat c3_out.txt)"
 check_contains "C3.3 三处相同标记" "[S] s.txt" "$(cat c3_out.txt)"
 check_contains "C3.4 仅BASE标记" "[B] gone.txt" "$(cat c3_out.txt)"
@@ -511,9 +511,9 @@ check_contains "C3.5 仅LEFT标记" "[L] only_l.txt" "$(cat c3_out.txt)"
 check_contains "C3.6 仅RIGHT标记" "[R] only_r.txt" "$(cat c3_out.txt)"
 check_contains "C3.7 冲突标记" "[C] conf.txt" "$(cat c3_out.txt)"
 # C3.8 三路完全相同 → 退出码 0
-"$BIN" compare3 c3_b c3_b c3_b > /dev/null 2>&1; check "C3.8 三路相同退出码=0" 0 "$?"
+"$BIN" compare3 c3_b c3_b c3_b --compare-content > /dev/null 2>&1; check "C3.8 三路相同退出码=0" 0 "$?"
 # C3.9 summary 统计
-"$BIN" compare3 c3_b c3_l c3_r --summary > c3_sum.txt
+"$BIN" compare3 c3_b c3_l c3_r --compare-content --summary > c3_sum.txt
 check_contains "C3.9 summary 统计" "冲突" "$(cat c3_sum.txt)"
 # C3.10 缺失目录退出码=2
 "$BIN" compare3 /nonexistent-c3-a /nonexistent-c3-b c3_r > /dev/null 2>&1; check "C3.10 缺失目录退出码=2" 2 "$?"
