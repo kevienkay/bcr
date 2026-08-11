@@ -12,6 +12,7 @@ mod highlight;
 mod htmlreport;
 mod i18n;
 mod imgcmp;
+mod jsonout;
 mod merge;
 mod mergeview;
 mod mp3tag;

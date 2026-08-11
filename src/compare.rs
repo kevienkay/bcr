@@ -84,6 +84,10 @@ pub struct CompareArgs {
     #[arg(long = "report-group")]
     pub report_group: bool,
 
+    /// 以 JSON 契约输出结果（schema: compare.v1，供脚本/CI 消费）
+    #[arg(long)]
+    pub json: bool,
+
     /// 复用已保存的规则 Profile（过滤/忽略/编码等，可叠加本命令显式参数）
     #[arg(long)]
     pub profile: Option<String>,
@@ -561,6 +565,16 @@ pub fn run(args: &CompareArgs) -> i32 {
         eprintln!("bcr: {w}");
     }
 
+    // JSON 契约输出：stdout 只输出 JSON，人类可读错误走 stderr
+    if args.json {
+        let v = crate::jsonout::compare_json(&args.left, &args.right, &result, args.show_same);
+        println!(
+            "{}",
+            serde_json::to_string(&v).unwrap_or_else(|_| "{}".into())
+        );
+        return if result.stats.has_differences() { 1 } else { 0 };
+    }
+
     let color = match args.color.as_str() {
         "always" => true,
         "never" => false,
@@ -725,6 +739,7 @@ mod tests {
             detect_moves: true,
             compare_attrs: false,
             compare_version: false,
+            json: false,
             summary: false,
             html: None,
             txt: None,
@@ -1071,6 +1086,39 @@ mod tests {
         )
         .unwrap();
         assert_eq!(r.stats.same, 1);
+    }
+
+    #[test]
+    fn json_output_contract_shape() {
+        // compare --json 的契约形状：schema/ok/result.stats/entries
+        let d1 = tempdir().unwrap();
+        let d2 = tempdir().unwrap();
+        make_tree(d1.path(), &[("a.txt", "aaa"), ("same.txt", "same")]);
+        make_tree(d2.path(), &[("a.txt", "bbb"), ("same.txt", "same")]);
+        let result = compare_dirs(d1.path(), d2.path(), &empty_filter(), true, true).unwrap();
+        let v = crate::jsonout::compare_json(
+            d1.path().to_str().unwrap(),
+            d2.path().to_str().unwrap(),
+            &result,
+            false,
+        );
+        assert_eq!(v["schema"], "compare.v1");
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["command"], "compare");
+        assert_eq!(v["error"], serde_json::Value::Null);
+        let entries = v["result"]["entries"].as_array().unwrap();
+        // 默认不含 same 条目
+        assert!(entries.iter().all(|e| e["status"] != "same"));
+        // 每个条目含契约字段
+        for e in entries {
+            assert!(e["rel"].is_string());
+            assert!(e["status"].is_string());
+            assert!(e["moved_to"].is_null() || e["moved_to"].is_string());
+        }
+        // mtime 为 ISO-8601 字符串
+        let a = entries.iter().find(|e| e["rel"] == "a.txt").unwrap();
+        let m = a["left"]["mtime"].as_str().unwrap();
+        assert!(m.ends_with('Z') && m.contains('T'));
     }
 
     #[test]

@@ -41,6 +41,10 @@ pub struct SyncArgs {
     /// 输出统计信息
     #[arg(long)]
     pub summary: bool,
+
+    /// 以 JSON 契约输出计划/结果（schema: sync.v1，供脚本/CI 消费）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// 同步计划项。from_src=true 表示从 src 复制到 dst，false 反之（仅 two-way 会出现）
@@ -381,10 +385,29 @@ pub fn run(args: &SyncArgs) -> i32 {
     ) {
         Ok(p) => p,
         Err(e) => {
+            if args.json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&crate::jsonout::error_envelope(
+                        "sync.v1",
+                        "sync",
+                        &e.to_string(),
+                    ))
+                    .unwrap_or_default()
+                );
+            }
             eprintln!("bcr: {}", e);
             return 2;
         }
     };
+
+    // JSON 契约输出：dry-run 只输出计划；执行模式输出计划+结果
+    if args.json && args.dry_run {
+        let v = crate::jsonout::sync_plan_json(src, dst, mode, &plan);
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        let has_ops = plan.iter().any(|p| !matches!(p, SyncOp::Skip { .. }));
+        return if has_ops { 1 } else { 0 };
+    }
 
     // 输出并执行
     let mut n_copy = 0usize;
@@ -395,6 +418,12 @@ pub fn run(args: &SyncArgs) -> i32 {
     let mut n_conflict = 0usize;
     let mut n_error = 0usize;
 
+    let emit = |msg: String| {
+        if !args.json {
+            println!("{msg}");
+        }
+    };
+
     for p in &plan {
         match p {
             SyncOp::Copy { rel, from_src } => {
@@ -404,7 +433,7 @@ pub fn run(args: &SyncArgs) -> i32 {
                 } else {
                     (dst_vfs.as_ref(), src_vfs.as_ref())
                 };
-                println!("{}", fmt(Key::TagCopy, &[rel, &to.describe()]));
+                emit(fmt(Key::TagCopy, &[rel, &to.describe()]));
                 if !args.dry_run {
                     if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
                         eprintln!("bcr: {}", fmt(Key::CopyFailed, &[rel, &e]));
@@ -414,7 +443,7 @@ pub fn run(args: &SyncArgs) -> i32 {
             }
             SyncOp::Delete { rel } => {
                 n_delete += 1;
-                println!("{}", fmt(Key::TagDelete, &[rel]));
+                emit(fmt(Key::TagDelete, &[rel]));
                 if !args.dry_run {
                     if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
                         eprintln!("bcr: {}", fmt(Key::DeleteFailed, &[rel, &e]));
@@ -424,7 +453,7 @@ pub fn run(args: &SyncArgs) -> i32 {
             }
             SyncOp::Rename { from, to } => {
                 n_rename += 1;
-                println!("{}", fmt(Key::TagRename, &[from, to]));
+                emit(fmt(Key::TagRename, &[from, to]));
                 if !args.dry_run {
                     if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
                         eprintln!("bcr: {}", fmt(Key::RenameFailed, &[from, to, &e]));
@@ -434,7 +463,7 @@ pub fn run(args: &SyncArgs) -> i32 {
             }
             SyncOp::RmDir { rel } => {
                 n_rmdir += 1;
-                println!("{}", fmt(Key::TagRmDir, &[rel]));
+                emit(fmt(Key::TagRmDir, &[rel]));
                 if !args.dry_run {
                     // 非空目录删除失败可忽略（残留文件已被单独处理）
                     if let Some(e) = execute_op(p, src_vfs.as_ref(), dst_vfs.as_ref()) {
@@ -445,13 +474,35 @@ pub fn run(args: &SyncArgs) -> i32 {
             }
             SyncOp::Skip { rel, reason } => {
                 n_skip += 1;
-                println!("{}", fmt(Key::TagSkip, &[rel, reason]));
+                emit(fmt(Key::TagSkip, &[rel, reason]));
             }
             SyncOp::Conflict { rel } => {
                 n_conflict += 1;
-                println!("{}", fmt(Key::TagConflict, &[rel]));
+                emit(fmt(Key::TagConflict, &[rel]));
             }
         }
+    }
+
+    // JSON 契约输出：执行结果（含计划）
+    if args.json {
+        let stats = crate::sync::SyncStats {
+            copy: n_copy,
+            delete: n_delete,
+            rename: n_rename,
+            rmdir: n_rmdir,
+            skip: n_skip,
+            conflict: n_conflict,
+            error: n_error,
+        };
+        let v = crate::jsonout::sync_result_json(src, dst, mode, &plan, &stats);
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        return if n_error > 0 {
+            2
+        } else if n_conflict > 0 || n_copy + n_delete + n_rename + n_rmdir > 0 {
+            1
+        } else {
+            0
+        };
     }
 
     if args.summary {
@@ -519,6 +570,7 @@ mod tests {
             includes: vec![],
             excludes: vec![],
             summary: false,
+            json: false,
         }
     }
 
@@ -848,5 +900,50 @@ mod tests {
         let dst_dir = tempdir().unwrap();
         let dst = crate::vfs::LocalVfs::new(dst_dir.path()).unwrap();
         assert!(do_copy_vfs(&src, &dst, "missing.txt").is_err());
+    }
+
+    #[test]
+    fn json_sync_plan_contract() {
+        // sync 计划 JSON 契约形状(sync.v1)
+        let src = tempdir().unwrap();
+        let dst = tempdir().unwrap();
+        write_tree(src.path(), &[("a.txt", "aaa", 1_700_000_000)]);
+        write_tree(dst.path(), &[("a.txt", "aaa", 1_700_000_000)]);
+        let sv = crate::vfs::LocalVfs::new(src.path()).unwrap();
+        let dv = crate::vfs::LocalVfs::new(dst.path()).unwrap();
+        let filter = Filter::new(&[], &[]).unwrap();
+        let plan = build_plan("mirror", false, &sv, &dv, &filter).unwrap();
+        let v = crate::jsonout::sync_plan_json(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "mirror",
+            &plan,
+        );
+        assert_eq!(v["schema"], "sync.v1");
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["result"]["dry_run"], true);
+        assert_eq!(v["result"]["mode"], "mirror");
+        assert!(v["result"]["plan"].is_array());
+        assert!(v["result"]["stats"].is_object());
+        // 执行结果契约
+        let stats = crate::sync::SyncStats {
+            copy: 1,
+            delete: 0,
+            rename: 0,
+            rmdir: 0,
+            skip: 1,
+            conflict: 0,
+            error: 0,
+        };
+        let v2 = crate::jsonout::sync_result_json(
+            src.path().to_str().unwrap(),
+            dst.path().to_str().unwrap(),
+            "mirror",
+            &plan,
+            &stats,
+        );
+        assert_eq!(v2["result"]["dry_run"], false);
+        assert_eq!(v2["result"]["stats"]["copy"], 1);
+        assert_eq!(v2["result"]["stats"]["errors"], 0);
     }
 }
