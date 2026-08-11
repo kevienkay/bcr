@@ -11,6 +11,7 @@
 
 pub mod archive;
 pub mod ftp;
+pub mod s3;
 pub mod sftp;
 pub mod webdav;
 pub mod zip;
@@ -196,6 +197,10 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         let w = webdav::WebdavVfs::connect(rest)?;
         return Ok(Box::new(w));
     }
+    if let Some(rest) = spec.strip_prefix("s3://") {
+        let s = s3::S3Vfs::connect(rest)?;
+        return Ok(Box::new(s));
+    }
     Ok(Box::new(LocalVfs::new(Path::new(spec))?))
 }
 
@@ -208,6 +213,7 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("ftp://")
         || spec.starts_with("webdav://")
         || spec.starts_with("webdavs://")
+        || spec.starts_with("s3://")
 }
 
 /// 跨后端内容比对：流式计算两侧 blake3 哈希比较（内存 O(64KB)，支持超大文件）

@@ -33,6 +33,7 @@ suppaftp = "10.0.1"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 quick-xml = "0.37"
 regex = "1"
+rust-s3 = { version = "0.37.2", default-features = false, features = ["blocking", "with-tokio"] }
 
 [dev-dependencies]
 tempfile = "3"
