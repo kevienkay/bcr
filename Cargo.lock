@@ -584,6 +584,7 @@ dependencies = [
  "lzma-rs",
  "memmap2",
  "quick-xml 0.37.5",
+ "regex",
  "reqwest",
  "rfd",
  "russh",

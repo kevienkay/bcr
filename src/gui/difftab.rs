@@ -248,7 +248,7 @@ impl DiffTab {
                 return;
             }
         };
-        let (rows, stats) = build_rows(l, r, self.opts);
+        let (rows, stats) = build_rows(l, r, self.opts.clone());
         self.diff_rows = rows
             .iter()
             .enumerate()
@@ -262,7 +262,7 @@ impl DiffTab {
     }
 
     pub fn reload(&mut self) {
-        let opts = self.opts;
+        let opts = self.opts.clone();
         let l = self.left.as_ref().map(|f| f.path.clone());
         let r = self.right.as_ref().map(|f| f.path.clone());
         match (l, r) {
@@ -409,12 +409,12 @@ impl DiffTab {
             ui.horizontal_wrapped(|ui| {
                 if ui.button(t(I18nKey::OpenLeft)).clicked() {
                     if let Some(p) = super::pick_file() {
-                        self.load_left(&p, self.opts);
+                        self.load_left(&p, self.opts.clone());
                     }
                 }
                 if ui.button(t(I18nKey::OpenRight)).clicked() {
                     if let Some(p) = super::pick_file() {
-                        self.load_right(&p, self.opts);
+                        self.load_right(&p, self.opts.clone());
                     }
                 }
                 ui.separator();
@@ -621,8 +621,8 @@ impl DiffTab {
                         close = true;
                         // 保存后重新加载对应侧并重算 diff
                         match side {
-                            EditSide::Left => self.load_left(&path, self.opts),
-                            EditSide::Right => self.load_right(&path, self.opts),
+                            EditSide::Left => self.load_left(&path, self.opts.clone()),
+                            EditSide::Right => self.load_right(&path, self.opts.clone()),
                         }
                         self.error = Some(fmt(I18nKey::Saved, &[&path]));
                     }
@@ -781,7 +781,7 @@ impl DiffTab {
                             Ok(()) => {
                                 self.hex_edit = None;
                                 // 重新加载并重建
-                                self.load_pair(&l_path, &r_path, self.opts);
+                                self.load_pair(&l_path, &r_path, self.opts.clone());
                             }
                             Err(e) => {
                                 self.error = Some(format!("保存失败: {}", e));

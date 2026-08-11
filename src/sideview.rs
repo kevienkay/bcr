@@ -57,13 +57,15 @@ pub struct Stats {
 }
 
 /// 忽略选项（与 CLI diff 对齐）
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ViewOptions {
     pub ignore_whitespace: bool,
     pub ignore_trailing: bool,
     pub ignore_case: bool,
     /// 忽略行尾 CR/LF 差异（CRLF vs LF）
     pub ignore_crlf: bool,
+    /// 内容过滤：匹配这些正则的行视为相同（GUI 目录对比输入，逗号分隔）
+    pub ignore_lines: Vec<String>,
 }
 
 /// 将两个文件内容展开为并排行序列。
@@ -74,6 +76,12 @@ pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, 
     let algo = Algorithm::Patience;
     let lines_l: Vec<&str> = left.lines().collect();
     let lines_r: Vec<&str> = right.lines().collect();
+    // 编译内容过滤正则
+    let ignore_lines: Vec<regex::Regex> = opts
+        .ignore_lines
+        .iter()
+        .filter_map(|p| regex::Regex::new(p).ok())
+        .collect();
     let keys_l: Vec<String> = lines_l
         .iter()
         .map(|l| {
@@ -83,6 +91,7 @@ pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, 
                 opts.ignore_trailing,
                 opts.ignore_case,
                 opts.ignore_crlf,
+                &ignore_lines,
             )
         })
         .collect();
@@ -95,6 +104,7 @@ pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, 
                 opts.ignore_trailing,
                 opts.ignore_case,
                 opts.ignore_crlf,
+                &ignore_lines,
             )
         })
         .collect();

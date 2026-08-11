@@ -48,6 +48,10 @@ pub struct GuiArgs {
     /// 忽略行尾 CR/LF 差异（CRLF vs LF）
     #[arg(long)]
     pub ignore_crlf: bool,
+
+    /// 忽略匹配正则的行（内容过滤：如版本号/时间戳行，可重复）
+    #[arg(long = "ignore-lines")]
+    pub ignore_lines: Vec<String>,
 }
 
 /// 标签页
@@ -177,6 +181,7 @@ impl DiffApp {
             ignore_trailing: self.settings.ignore_trailing,
             ignore_case: self.settings.ignore_case,
             ignore_crlf: false,
+            ignore_lines: Vec::new(),
         };
         t.show_stats = self.settings.show_stats;
         self.add_tab(Tab::Diff(t));
@@ -259,11 +264,11 @@ impl DiffApp {
         // 若当前是 diff 标签且有一侧空 → 填充；否则新建 diff 标签
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
             if t.left.is_none() {
-                t.load_left(path, t.opts);
+                t.load_left(path, t.opts.clone());
                 return;
             }
             if t.right.is_none() {
-                t.load_right(path, t.opts);
+                t.load_right(path, t.opts.clone());
                 return;
             }
         }
@@ -912,6 +917,7 @@ pub fn run(args: &GuiArgs) -> i32 {
         ignore_trailing: args.ignore_trailing || app.settings.ignore_trailing,
         ignore_case: args.ignore_case || app.settings.ignore_case,
         ignore_crlf: args.ignore_crlf,
+        ignore_lines: args.ignore_lines.clone(),
     };
     // CLI 显式参数优先于持久化值
     if args.ignore_whitespace {
@@ -1079,8 +1085,8 @@ mod tests {
             .unwrap();
         fs::write(&path, "a\nEDITED\n").unwrap();
         match side {
-            EditSide::Left => t.load_left(&path, t.opts),
-            EditSide::Right => t.load_right(&path, t.opts),
+            EditSide::Left => t.load_left(&path, t.opts.clone()),
+            EditSide::Right => t.load_right(&path, t.opts.clone()),
         }
         t.editing = None;
         assert!(t.editing.is_none());

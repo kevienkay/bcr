@@ -33,6 +33,10 @@ pub struct DiffArgs {
     #[arg(long)]
     pub ignore_crlf: bool,
 
+    /// 忽略匹配正则的行（内容过滤：如版本号/时间戳行，可重复）
+    #[arg(long = "ignore-lines")]
+    pub ignore_lines: Vec<String>,
+
     /// 颜色输出：auto | always | never
     #[arg(long, default_value = "auto", value_parser = ["auto", "always", "never"])]
     pub color: String,
@@ -127,10 +131,22 @@ pub fn run(args: &DiffArgs) -> i32 {
         .unwrap_or_else(|| args.right.clone());
 
     // 原始行（用于输出）与比较键（用于 diff，按选项归一化）
+    // 编译内容过滤正则（--ignore-lines）
+    let ignore_lines: Vec<regex::Regex> = args
+        .ignore_lines
+        .iter()
+        .filter_map(|p| regex::Regex::new(p).ok())
+        .collect();
     let lines_l: Vec<&str> = left.lines().collect();
     let lines_r: Vec<&str> = right.lines().collect();
-    let keys_l: Vec<String> = lines_l.iter().map(|l| normalize(l, args)).collect();
-    let keys_r: Vec<String> = lines_r.iter().map(|l| normalize(l, args)).collect();
+    let keys_l: Vec<String> = lines_l
+        .iter()
+        .map(|l| normalize(l, args, &ignore_lines))
+        .collect();
+    let keys_r: Vec<String> = lines_r
+        .iter()
+        .map(|l| normalize(l, args, &ignore_lines))
+        .collect();
 
     let ops = capture_diff_slices(algo, &keys_l, &keys_r);
     // capture_diff_slices 对完全相同的输入返回全 Equal op，而非空 vec，需显式判断
@@ -189,13 +205,14 @@ fn merge_profile(args: &DiffArgs) -> DiffArgs {
 }
 
 /// 按忽略选项归一化一行，仅用于匹配，不改变输出内容
-fn normalize(line: &str, args: &DiffArgs) -> String {
+fn normalize(line: &str, args: &DiffArgs, ignore_lines: &[regex::Regex]) -> String {
     normalize_line(
         line,
         args.ignore_whitespace,
         args.ignore_trailing,
         args.ignore_case,
         args.ignore_crlf,
+        ignore_lines,
     )
 }
 
@@ -206,7 +223,14 @@ pub(crate) fn normalize_line(
     ignore_trailing: bool,
     ignore_case: bool,
     ignore_crlf: bool,
+    ignore_lines: &[regex::Regex],
 ) -> String {
+    // 内容过滤：匹配忽略正则的行 → 空比较键（两侧都空则视为相同）
+    for re in ignore_lines {
+        if re.is_match(line) {
+            return String::new();
+        }
+    }
     // 先剥离行尾 CR（CRLF vs LF 归一），再走其他忽略选项
     let line = if ignore_crlf {
         line.strip_suffix('\r').unwrap_or(line)
@@ -271,6 +295,7 @@ mod tests {
             ignore_trailing: false,
             ignore_case: false,
             ignore_crlf: false,
+            ignore_lines: vec![],
             color: "never".into(),
             highlight: false,
             labels: vec![],
@@ -281,30 +306,30 @@ mod tests {
     #[test]
     fn normalize_default_keeps_line() {
         let a = args();
-        assert_eq!(normalize("  Hello World  ", &a), "  Hello World  ");
+        assert_eq!(normalize("  Hello World  ", &a, &[]), "  Hello World  ");
     }
 
     #[test]
     fn normalize_ignore_whitespace_strips_all() {
         let mut a = args();
         a.ignore_whitespace = true;
-        assert_eq!(normalize("  a \t b \n c ", &a), "abc");
+        assert_eq!(normalize("  a \t b \n c ", &a, &[]), "abc");
     }
 
     #[test]
     fn normalize_ignore_trailing_trims_end() {
         let mut a = args();
         a.ignore_trailing = true;
-        assert_eq!(normalize("hello   ", &a), "hello");
+        assert_eq!(normalize("hello   ", &a, &[]), "hello");
         // 行首空白保留
-        assert_eq!(normalize("  hello  ", &a), "  hello");
+        assert_eq!(normalize("  hello  ", &a, &[]), "  hello");
     }
 
     #[test]
     fn normalize_ignore_case_lowercases() {
         let mut a = args();
         a.ignore_case = true;
-        assert_eq!(normalize("Hello World", &a), "hello world");
+        assert_eq!(normalize("Hello World", &a, &[]), "hello world");
     }
 
     #[test]
@@ -312,7 +337,7 @@ mod tests {
         let mut a = args();
         a.ignore_whitespace = true;
         a.ignore_case = true;
-        assert_eq!(normalize("  Foo Bar ", &a), "foobar");
+        assert_eq!(normalize("  Foo Bar ", &a, &[]), "foobar");
     }
 
     #[test]
@@ -417,6 +442,7 @@ mod crlf_tests {
             ignore_trailing: false,
             ignore_case: false,
             ignore_crlf: false,
+            ignore_lines: vec![],
             color: "never".into(),
             highlight: false,
             labels: vec![],
@@ -427,10 +453,16 @@ mod crlf_tests {
     #[test]
     fn ignore_crlf_normalizes_cr() {
         // lines() 已剥离 \r\n 的 \n；单独 \r 行尾会残留（如末行 "b\r"）
-        assert_eq!(normalize_line("abc\r", false, false, false, true), "abc");
-        assert_eq!(normalize_line("abc", false, false, false, true), "abc");
+        assert_eq!(
+            normalize_line("abc\r", false, false, false, true, &[]),
+            "abc"
+        );
+        assert_eq!(normalize_line("abc", false, false, false, true, &[]), "abc");
         // 不忽略时保留 CR
-        assert_eq!(normalize_line("abc\r", false, false, false, false), "abc\r");
+        assert_eq!(
+            normalize_line("abc\r", false, false, false, false, &[]),
+            "abc\r"
+        );
     }
 
     #[test]
@@ -449,5 +481,84 @@ mod crlf_tests {
         // --ignore-crlf：视为相同
         a.ignore_crlf = true;
         assert_eq!(run(&a), 0);
+    }
+}
+
+#[cfg(test)]
+mod content_filter_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn args() -> DiffArgs {
+        DiffArgs {
+            left: String::new(),
+            right: String::new(),
+            algo: "patience".into(),
+            ignore_whitespace: false,
+            ignore_trailing: false,
+            ignore_case: false,
+            ignore_crlf: false,
+            ignore_lines: vec![],
+            color: "never".into(),
+            highlight: false,
+            labels: vec![],
+            profile: None,
+        }
+    }
+
+    #[test]
+    fn ignore_lines_compiles_and_matches() {
+        let re = regex::Regex::new(r"time: \d{4}-\d{2}-\d{2}").unwrap();
+        // 匹配 → 空键
+        assert_eq!(
+            normalize_line(
+                "time: 2026-08-11 12:00:00",
+                false,
+                false,
+                false,
+                false,
+                std::slice::from_ref(&re)
+            ),
+            ""
+        );
+        // 不匹配 → 原样
+        assert_eq!(
+            normalize_line("hello", false, false, false, false, &[re]),
+            "hello"
+        );
+    }
+
+    #[test]
+    fn ignore_lines_merges_diff() {
+        let d = tempdir().unwrap();
+        let l = d.path().join("l.txt");
+        let r = d.path().join("r.txt");
+        // 两文件仅时间戳行不同（version 行相同）
+        fs::write(&l, "version: 1.0\ntime: 2026-08-11 12:00:00\n").unwrap();
+        fs::write(&r, "version: 1.0\ntime: 2026-08-11 13:00:00\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        // 默认：时间戳行不同 → 有差异
+        assert_eq!(run(&a), 1);
+        // --ignore-lines 忽略时间戳行 → 无差异
+        a.ignore_lines = vec![r"time: \d{4}-\d{2}-\d{2}".to_string()];
+        assert_eq!(run(&a), 0);
+    }
+
+    #[test]
+    fn ignore_lines_still_detects_real_diff() {
+        let d = tempdir().unwrap();
+        let l = d.path().join("l.txt");
+        let r = d.path().join("r.txt");
+        fs::write(&l, "time: 2026-08-11 12:00:00\nreal line\n").unwrap();
+        fs::write(&r, "time: 2026-08-11 13:00:00\nREAL CHANGED\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        a.ignore_lines = vec![r"time: \d{4}-\d{2}-\d{2}".to_string()];
+        // 时间戳被忽略，但 real line 仍不同 → 有差异
+        assert_eq!(run(&a), 1);
     }
 }
