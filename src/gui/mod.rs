@@ -1678,7 +1678,10 @@ mod tests {
 
     #[test]
     fn join_cloud_url_keeps_single_slash() {
-        assert_eq!(join_cloud_url("webdav://host/share", "docs"), "webdav://host/share/docs");
+        assert_eq!(
+            join_cloud_url("webdav://host/share", "docs"),
+            "webdav://host/share/docs"
+        );
         assert_eq!(
             join_cloud_url("webdav://host/share/", "docs"),
             "webdav://host/share/docs"
