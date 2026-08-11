@@ -913,9 +913,12 @@ mod tests {
 #[cfg(test)]
 mod attrs_tests {
     use super::*;
+    #[cfg(unix)]
     use std::fs;
+    #[cfg(unix)]
     use tempfile::tempdir;
 
+    #[cfg(unix)]
     fn empty_filter() -> Filter {
         Filter::new(&[], &[]).unwrap()
     }
