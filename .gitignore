@@ -1,1 +1,6 @@
 /target
+.bcr-cache.toml
+.bcr-cloud.toml
+.bcr-sessions.toml
+.bcr-profiles.toml
+.bcr-gui.toml
