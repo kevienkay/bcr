@@ -6,6 +6,13 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### 优化（按差距分析优先级推进）
+
+- **归档内存保护**：tar/7z 全量解压加上限（默认 1 GiB，`BCR_MAX_ARCHIVE_SIZE` 环境变量可调），超限报 `OutOfMemory` 错误而非 OOM 崩溃；`read_tar_with_limit` 支持注入上限（测试用）
+- **benchmarks**：新增 `benches/core.rs`（criterion，黑盒 CLI 方式）——文本 diff（1K/10K/50K 行）、文件夹对比（100/1K/5K 文件）、CSV 对齐（1K/10K 行）、同步计划（100/1K 文件）；`cargo bench` 可运行，`cargo bench --bench core -- --test` 验证模式
+- **测试稳定性修复**：`dirtab_collapse_hides_children` Windows 偶发失败（默认 `ViewFilter::Diff` 把两侧相同文件滤掉 → flat 为空 → `unwrap()` panic）——测试显式设置 `ViewFilter::All`，消除平台时序依赖
+- **基线数据**（本机 arm64）：diff 1K 行 ≈6.8ms / 10K ≈129ms / 50K ≈2.57s；compare 100 文件 ≈57ms
+
 ### 文档（P30 收尾）
 
 - **README 新增「安装」章节**：macOS dmg（拖入应用程序/未签名说明）、Windows zip（解压+PATH）、Linux deb/tar.gz（dpkg -i / 解压到 ~/.local/bin），含 SHA256SUMS 校验指引

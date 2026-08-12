@@ -42,3 +42,8 @@ cab = "0.6.0"
 
 [dev-dependencies]
 tempfile = "3"
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "core"
+harness = false

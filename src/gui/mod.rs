@@ -1362,6 +1362,9 @@ mod tests {
         let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
         t.only_diff = false;
         t.show_same = true;
+        // 必须显式改为 All：默认 Diff 过滤会把两侧相同文件滤掉 → flat 为空 → unwrap 失败
+        // （macOS 上 mtime 巧合导致偶发通过，Windows 稳定复现）
+        t.view_filter = dirtab::ViewFilter::All;
         t.refresh_sync();
         let dir_idx = t.flat.iter().position(|r| r.is_dir).unwrap();
         let dir_path = t.flat[dir_idx].path.clone();
