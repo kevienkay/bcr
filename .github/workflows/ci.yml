@@ -61,6 +61,21 @@ jobs:
       - name: Build (release)
         run: cargo build --release --locked
 
+      # GUI 冒烟：验证双击/启动不闪退（Windows 双击 exe 无参数等价场景）
+      - name: Install xvfb (Linux GUI smoke)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y xvfb
+
+      - name: GUI smoke test
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN="./target/release/bcr.exe"; else BIN="./target/release/bcr"; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a bash tests/gui_smoke.sh "$BIN"
+          else
+            bash tests/gui_smoke.sh "$BIN"
+          fi
+
       - name: Upload release binary
         uses: actions/upload-artifact@v4
         with:

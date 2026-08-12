@@ -92,3 +92,59 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+
+  verify:
+    name: Verify packages (${{ matrix.os }})
+    needs: checksums
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pkg: "*.deb"
+            install: sudo dpkg -i ./*.deb
+            bin: /usr/bin/bcr
+          - os: windows-latest
+            pkg: "*.zip"
+            install: powershell -Command "Expand-Archive -Force ./*.zip -DestinationPath ./inst"
+            bin: ./inst/bcr.exe
+          - os: macos-latest
+            pkg: "*.dmg"
+            install: hdiutil attach ./*.dmg -nobrowse -readonly
+            bin: "" # 由脚本解析挂载卷路径
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xvfb (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y xvfb
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Install / extract package
+        shell: bash
+        run: |
+          cd artifacts
+          ${{ matrix.install }}
+
+      - name: Version + GUI smoke check
+        shell: bash
+        run: |
+          cd artifacts
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            VOL="$(ls -d /Volumes/bcr* | head -1)"
+            BIN="$VOL/bcr.app/Contents/MacOS/bcr"
+          else
+            BIN="${{ matrix.bin }}"
+          fi
+          "$BIN" --version
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a bash ../tests/gui_smoke.sh "$BIN"
+          else
+            bash ../tests/gui_smoke.sh "$BIN"
+          fi

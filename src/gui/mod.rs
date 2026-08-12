@@ -23,7 +23,7 @@ use mergetab::MergeTab;
 use std::path::PathBuf;
 
 /// GUI 子命令参数
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct GuiArgs {
     /// 左侧文件/目录（与 RIGHT 组成并排 diff 或目录对比）
     pub left: Option<String>,

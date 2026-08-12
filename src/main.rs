@@ -30,6 +30,7 @@ mod version;
 mod vfs;
 
 use clap::{Parser, Subcommand};
+use std::io::IsTerminal;
 
 #[derive(Parser)]
 #[command(
@@ -120,7 +121,30 @@ fn init_platform() {}
 
 fn main() {
     init_platform();
-    let cli = Cli::parse();
+    // Windows 双击 exe：无参数 + stdin 非终端（无控制台输入）→ 自动启动 GUI；
+    // 终端里无参数仍打印帮助退出（保持 CLI 行为）。
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(e)
+            if matches!(
+                e.kind(),
+                clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                    | clap::error::ErrorKind::MissingSubcommand
+            ) =>
+        {
+            if !std::io::stdin().is_terminal() {
+                Cli {
+                    lang: None,
+                    encoding: None,
+                    max_size: None,
+                    command: Commands::Gui(gui::GuiArgs::default()),
+                }
+            } else {
+                e.exit();
+            }
+        }
+        Err(e) => e.exit(),
+    };
     // 初始化语言：--lang 优先，其次 BCR_LANG/系统 LANG，最后中文
     let lang = cli
         .lang
