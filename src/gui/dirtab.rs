@@ -70,6 +70,10 @@ pub struct DirTab {
     align_right: Option<String>,
     /// 手动对齐弹窗开关
     show_align: bool,
+    /// B1 F2 重命名：目标文件的相对路径
+    pub(crate) rename_target: Option<String>,
+    /// B1 F2 重命名：输入缓冲区
+    pub(crate) rename_buf: String,
     /// B2 后台任务（对比/同步在独立线程执行，UI 不卡顿）
     pub bg: Option<BgTask>,
 }
@@ -187,6 +191,8 @@ impl DirTab {
             align_left: None,
             align_right: None,
             show_align: false,
+            rename_target: None,
+            rename_buf: String::new(),
             bg: None,
         }
     }
@@ -687,6 +693,13 @@ impl DirTab {
         if ui.input(|i| i.key_pressed(Key::Enter)) {
             self.open_selected();
         }
+        // B1：F2 重命名选中文件
+        if ui.input(|i| i.key_pressed(Key::F2)) {
+            if let Some(rel) = self.selected_rel() {
+                self.rename_target = Some(rel.clone());
+                self.rename_buf = basename(&rel);
+            }
+        }
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
@@ -743,7 +756,11 @@ impl DirTab {
                     }
                     ui.separator();
                 }
-                if ui.button(format!("⟳ {}", t(I18nKey::Refresh))).clicked() {
+                if ui
+                    .button(format!("⟳ {}", t(I18nKey::Refresh)))
+                    .on_hover_text("刷新 (F5)")
+                    .clicked()
+                {
                     self.refresh();
                 }
                 ui.separator();
@@ -1027,6 +1044,67 @@ impl DirTab {
             }
             if close_req || !keep {
                 self.show_align = false;
+            }
+        }
+
+        // B1：F2 重命名弹窗（选中文件 → 输入新名 → 重命名左侧或右侧实际文件）
+        if let Some(rel) = self.rename_target.clone() {
+            let mut keep = true;
+            let mut do_rename = false;
+            let mut cancel_req = false;
+            egui::Window::new("重命名 (F2)")
+                .collapsible(false)
+                .resizable(false)
+                .default_size([320.0, 100.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(format!("重命名: {}", rel));
+                    ui.text_edit_singleline(&mut self.rename_buf);
+                    ui.horizontal(|ui| {
+                        if ui.button("确定").clicked() || ui.input(|i| i.key_pressed(Key::Enter))
+                        {
+                            do_rename = true;
+                        }
+                        if ui.button("取消").clicked() {
+                            cancel_req = true;
+                        }
+                    });
+                });
+            let new_name = self.rename_buf.trim().to_string();
+            if do_rename && !new_name.is_empty() && new_name != basename(&rel) {
+                let new_rel = {
+                    let parent = std::path::Path::new(&rel)
+                        .parent()
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    if parent.is_empty() {
+                        new_name.clone()
+                    } else {
+                        format!("{}/{}", parent, new_name)
+                    }
+                };
+                let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+                    (Ok(l), Ok(r)) => (l, r),
+                    _ => {
+                        self.sync_msg = Some("无法打开目录进行重命名".to_string());
+                        self.rename_target = None;
+                        return;
+                    }
+                };
+                let err = l
+                    .rename(&rel, &new_rel)
+                    .or_else(|_| r.rename(&rel, &new_rel))
+                    .err()
+                    .map(|e| e.to_string());
+                self.sync_msg = Some(match err {
+                    None => format!("重命名: {} → {}", rel, new_rel),
+                    Some(e) => format!("重命名失败: {}", e),
+                });
+                self.refresh_sync();
+            }
+            // 仅当确认/取消/关闭时关闭弹窗；否则保持打开等待输入
+            if do_rename || cancel_req || !keep {
+                self.rename_target = None;
             }
         }
 

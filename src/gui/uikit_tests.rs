@@ -512,3 +512,96 @@ fn welcome_page_shows_session_cards() {
         .next()
         .is_some());
 }
+
+// ---- P32-B1：快捷键系统化 ----------------
+
+#[test]
+fn difftab_f6_f7_diff_navigation_via_keys() {
+    let d = tempdir().unwrap();
+    // 两处差异，验证连续跳转
+    let l = write(d.path(), "l.txt", "x\nx\ny\nz\n");
+    let r = write(d.path(), "r.txt", "x\nX\ny\nZ\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // F6 下一差异 → diff_pos 变为 Some
+    assert_eq!(tab.borrow().diff_pos, None);
+    h.key_press(eframe::egui::Key::F6);
+    h.run();
+    let first = tab.borrow().diff_pos;
+    assert!(first.is_some(), "F6 后应有跳转目标");
+    // F6 再按一次 → 跳到下一处差异（位置不同）
+    h.key_press(eframe::egui::Key::F6);
+    h.run();
+    let second = tab.borrow().diff_pos;
+    assert_ne!(first, second, "连续 F6 应跳到不同差异行");
+    // F7 上一差异 → 回到第一处
+    h.key_press(eframe::egui::Key::F7);
+    h.run();
+    assert_eq!(tab.borrow().diff_pos, first, "F7 应回到上一差异");
+}
+
+#[test]
+fn difftab_f5_reload_via_key() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nX\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    assert!(
+        tab.borrow()
+            .rows
+            .iter()
+            .any(|row| row.tag != crate::sideview::RowTag::Equal),
+        "前置：应有差异行"
+    );
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 修改右侧文件后 F5 重新加载 → 差异消除
+    std::fs::write(&r, "a\nb\n").unwrap();
+    h.key_press(eframe::egui::Key::F5);
+    h.run();
+    assert!(
+        tab.borrow()
+            .rows
+            .iter()
+            .all(|row| row.tag == crate::sideview::RowTag::Equal),
+        "F5 重新加载后应无差异"
+    );
+}
+
+#[test]
+fn dirtab_f2_rename_opens_dialog() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "a.txt", "x");
+    // 不同尺寸（x vs yy）：快速模式（mtime+size）必判 Differ，避免同尺寸被误判 Same 而过滤
+    write(d2.path(), "a.txt", "yy");
+    let tab = RefCell::new(DirTab::new(
+        d1.path().to_str().unwrap(),
+        d2.path().to_str().unwrap(),
+    ));
+    tab.borrow_mut().refresh_sync();
+    assert!(
+        tab.borrow().flat.iter().any(|r| r.name == "a.txt"),
+        "前置：目录有文件 a.txt"
+    );
+    // 选中文件后按 F2 → 打开重命名弹窗（rename_target 置位、缓冲预填文件名）
+    {
+        let mut t = tab.borrow_mut();
+        t.selected = t.flat.iter().position(|r| r.name == "a.txt");
+        assert!(t.selected_rel().is_some(), "应有选中文件");
+    }
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    h.key_press(eframe::egui::Key::F2);
+    h.run();
+    let t = tab.borrow();
+    assert_eq!(
+        t.rename_target.as_deref(),
+        Some("a.txt"),
+        "F2 应打开重命名弹窗并设置目标"
+    );
+    assert_eq!(t.rename_buf, "a.txt", "重命名缓冲应预填文件名");
+}

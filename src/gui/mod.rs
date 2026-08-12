@@ -562,6 +562,12 @@ impl eframe::App for DiffApp {
 
         self.handle_dropped(ui.ctx());
 
+        // B1：全局快捷键 Ctrl+W 关闭当前标签（仅在有标签时）
+        if !self.tabs.is_empty() && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::W))
+        {
+            self.close_tab(self.active);
+        }
+
         // 顶部菜单栏
         egui::Panel::top("menu").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {

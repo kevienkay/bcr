@@ -177,12 +177,14 @@ impl MergeTab {
                 ));
                 if ui
                     .button(format!("⬇ {}", t(I18nKey::NextConflict)))
+                    .on_hover_text("下一冲突 (F7)")
                     .clicked()
                 {
                     self.next_conflict();
                 }
                 if ui
                     .button(format!("⬆ {}", t(I18nKey::PrevConflict)))
+                    .on_hover_text("上一冲突 (Shift+F7)")
                     .clicked()
                 {
                     self.prev_conflict();

@@ -666,13 +666,12 @@ impl DiffTab {
         if self.diff_rows.is_empty() {
             return;
         }
-        let cur = self.rows.iter().position(|r| r.tag != RowTag::Equal);
-        let base = match (self.diff_pos, cur) {
-            (Some(p), _) => p,
-            (None, Some(c)) => c,
-            (None, None) => 0,
+        let n = self.diff_rows.len();
+        // diff_pos 是 diff_rows 的索引（与 P31 竖条标记一致），循环前进
+        let next = match self.diff_pos {
+            Some(p) => (p + 1) % n,
+            None => 0,
         };
-        let next = self.diff_rows.iter().position(|&r| r > base).unwrap_or(0);
         self.diff_pos = Some(next);
         self.jump_to_row(self.diff_rows[next]);
     }
@@ -681,18 +680,11 @@ impl DiffTab {
         if self.diff_rows.is_empty() {
             return;
         }
-        let cur = self.rows.iter().position(|r| r.tag != RowTag::Equal);
-        let base = match (self.diff_pos, cur) {
-            (Some(p), _) => p,
-            (None, Some(c)) => c,
-            (None, None) => 0,
-        };
         let n = self.diff_rows.len();
-        let prev = self
-            .diff_rows
-            .iter()
-            .rposition(|&r| r < base)
-            .unwrap_or(n - 1);
+        let prev = match self.diff_pos {
+            Some(p) => (p + n - 1) % n,
+            None => n - 1,
+        };
         self.diff_pos = Some(prev);
         self.jump_to_row(self.diff_rows[prev]);
     }
@@ -738,12 +730,16 @@ impl DiffTab {
             self.goto_focus = true;
             return;
         }
+        // B1：F6 下一差异 / F7 上一差异（Shift+F7 兼容保留）
+        if ui.input(|i| i.key_pressed(Key::F6)) {
+            self.next_diff();
+        }
         if ui.input(|i| i.key_pressed(Key::F7)) {
-            if ui.input(|i| i.modifiers.shift) {
-                self.prev_diff();
-            } else {
-                self.next_diff();
-            }
+            self.prev_diff();
+        }
+        // B7：F5 重新加载
+        if ui.input(|i| i.key_pressed(Key::F5)) {
+            self.reload();
         }
         if ui.input(|i| i.key_pressed(Key::Enter)) {
             self.next_match();
@@ -870,7 +866,11 @@ impl DiffTab {
                     self.redo();
                 }
                 ui.separator();
-                if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
+                if ui
+                    .button(format!("⟳ {}", t(I18nKey::Reload)))
+                    .on_hover_text("重新加载 (F5)")
+                    .clicked()
+                {
                     self.reload();
                 }
                 ui.separator();
@@ -952,10 +952,18 @@ impl DiffTab {
                         &self.rows.len().to_string(),
                     ],
                 ));
-                if ui.button(format!("⬇ {}", t(I18nKey::NextDiff))).clicked() {
+                if ui
+                    .button(format!("⬇ {}", t(I18nKey::NextDiff)))
+                    .on_hover_text("下一差异 (F6)")
+                    .clicked()
+                {
                     self.next_diff();
                 }
-                if ui.button(format!("⬆ {}", t(I18nKey::PrevDiff))).clicked() {
+                if ui
+                    .button(format!("⬆ {}", t(I18nKey::PrevDiff)))
+                    .on_hover_text("上一差异 (F7)")
+                    .clicked()
+                {
                     self.prev_diff();
                 }
             });
