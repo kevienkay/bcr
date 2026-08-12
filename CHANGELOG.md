@@ -57,6 +57,31 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **P26** GUI 云盘浏览（☁ 窗口输入 webdav/s3/onedrive/dropbox/sftp/ftp URL，扫描并打开目录对比）
 - **P27** 自动化：全命令 `--json` 契约（compare.v1/sync.v1/compare3.v1/csv.v1/merge.v1/mp3tag.v1/imgcmp.v1）+ Python 绑定 `bindings/bcr.py`（纯标准库 dataclass API）+ 纯数据任务清单 `bcr task run/check`（JSON/TOML，%date%/%time%/%fn_time%/%env:VAR%/%1-%9 动态变量，差异不中止语义）
 
+### P28（全面对标收口，A/B/C 差距消除）
+
+- **A1** 三路文件夹合并 `merge3`（BASE/L/R → 输出目录，文本自动三路合并 + 冲突标记，--dry-run/--json）
+- **A2** 保存自动备份（GUI 编辑保存前生成 .bak）
+- **A3** 剪贴板对比（GUI 剪贴板→左/右，arboard 跨平台）
+- **A4** 文本替换（GUI 查找升级为替换/全部替换，按原编码回写）
+- **A5** 通用音频标签（mp3tag 魔数自动识别 MP3/FLAC/OGG/MP4/AAC，Vorbis comment + MP4 ilst 自研解析）
+- **A6** FTPS 后端（ftps:// implicit TLS，端口默认 990）
+- **A7** 忽略文件夹结构（compare/sync --ignore-structure 按文件名跨目录对齐）
+- **A8** 自动换行（GUI word wrap，BC5 特性）
+- **A9** 转换后比较（diff --convert 统一换行符）
+- **A10** 打印报告（compare --print，lp/lpr/PowerShell Out-Printer）
+- **A11** 缩略图总览（GUI 文本对比右侧迷你差异地图，点击跳转）
+- **A12** CAB/ISO 归档后端（cab:// 纯 Rust + iso:// 外部 7z/bsdtar）
+- **A13** SVN 后端（svn:// 外部 svn 命令，只读）
+- **A14** 第三方对比工具（~/.bcr-external.toml 扩展名映射，diff --external）
+- **B1** 目录状态过滤（GUI 下拉：全部/差异/仅左/仅右/仅移动/仅相同）
+- **B2** 后台多任务（GUI 对比/同步后台线程 + 进度条 + 暂停/继续/取消）
+- **B3** HTML 报告深度（--report-template 模板 + --report-link-files 文件级链接）
+- **B4** 符号链接跟随（compare/sync --follow-symlinks）
+- **C1** 大文件内存优化（memmap2 只读映射，默认上限 64MB→256MB）
+- **C2** 7z 可写（sevenz-rust2 LZMA2 全量重写 + 原子替换）
+- **C3** SFTP host key 校验（TOFU 保存 ~/.bcr-known-hosts，sftp+insecure:// 兼容跳过）
+- **C4** FTP mtime（MFMT 扩展设置，不支持时静默降级）
+
 ### 后端扩展（M6b-M6h）
 
 - **M6b** tar/tar.gz/tar.bz2/tar.xz/7z 只读后端（`tar://` / `7z://`）

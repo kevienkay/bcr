@@ -1,6 +1,6 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（10 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览** + **P27：自动化（JSON 契约 + Python 绑定 bcr.py + 纯数据任务清单 bcr task）**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（14 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览** + **P27：自动化（JSON 契约 + Python 绑定 bcr.py + 纯数据任务清单 bcr task）** + **P28：全面对标收口（三路文件夹合并/忽略结构/符号链接跟随/转换后比较/替换/缩略图/打印/HTML 模板/通用音频标签/FTPS/SFTP host key 校验/SVN/外部工具/CAB/ISO/7z 可写/大文件 mmap/后台任务）**。
 
 ## 功能
 
@@ -72,6 +72,31 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - **Python 绑定 `bindings/bcr.py`**：纯标准库（零第三方依赖），类型化 dataclass 返回值，`bcr.compare()/sync()/compare3()/csv()/merge()/mp3tag()/imgcmp()` 全覆盖；`BCR_BIN` 环境变量指定二进制路径
 - **任务清单 `bcr task`**：JSON/TOML 纯数据步骤清单（load/compare/compare3/csv/merge/sync/report/echo/exit），`%date%` `%time%` `%fn_time%` `%env:VAR%` `%1-%9` 动态变量，compare/sync 有差异不中止、遇错即停（或 continue_on_error），`bcr task check` 只校验不执行
 - 完整参考：`docs/automation.md`（契约 + API + 场景示例）
+
+### P28 全面对标收口（A/B/C 差距消除）
+
+- **A1 三路文件夹合并 `merge3`**：`bcr merge3 BASE LEFT RIGHT -o OUT` —— 文本自动三路合并（冲突标记）、二进制冲突复制左侧并标记、单侧复制/删除，`--dry-run`/`--json`
+- **A2 保存自动备份**：GUI 文本/hex 编辑保存前自动复制 `<name>.bak`
+- **A3 剪贴板对比**：GUI「剪贴板→左/右」按钮（arboard 读系统剪贴板）
+- **A4 文本替换**：GUI 查找升级为替换/全部替换（按原编码回写 + 自动备份）
+- **A5 通用音频标签**：mp3tag 升级为魔数自动识别 MP3/FLAC/OGG/MP4/AAC（Vorbis comment + MP4 ilst 自研解析）
+- **A6 FTPS**：`ftps://` implicit TLS 后端（suppaftp rustls，端口默认 990）
+- **A7 忽略文件夹结构**：compare/sync `--ignore-structure` 按文件名跨目录对齐
+- **A8 自动换行**：GUI 文本对比 word wrap（BC5 特性）
+- **A9 转换后比较**：`diff --convert` 统一换行符（CRLF/CR→LF）再比较
+- **A10 打印报告**：`compare --print` 调系统打印（lp/lpr/PowerShell Out-Printer）
+- **A11 缩略图总览**：GUI 文本对比右侧迷你差异地图（按状态着色，点击跳转）
+- **A12 CAB/ISO 归档**：`cab://`（纯 Rust）+ `iso://`（外部 7z/bsdtar）只读后端
+- **A13 SVN 后端**：`svn://` 外部 svn 命令（list/cat/info，认证参数，未安装友好报错）
+- **A14 第三方对比工具**：`~/.bcr-external.toml` 扩展名映射外部命令，`diff --external`
+- **B1 显示过滤**：GUI 目录对比按状态过滤下拉（全部/差异/仅左/仅右/仅移动/仅相同）
+- **B2 后台多任务**：GUI 对比/同步放后台线程（进度条 + 暂停/继续/取消）
+- **B3 HTML 报告深度**：`--report-template` 自定义模板 + `--report-link-files` 差异条目链接文件级报告
+- **B4 符号链接跟随**：compare/sync `--follow-symlinks`（Filter 开关 + 扫描跟随防死循环）
+- **C1 大文件内存**：文本读取改 memmap2 只读映射，默认上限 64MB→256MB
+- **C2 7z 可写**：sevenz-rust2 LZMA2 编码全量重写（write/delete/rename/set_mtime + 原子替换）
+- **C3 SFTP host key 校验**：TOFU 首次保存 `~/.bcr-known-hosts` 后续校验（含 `~/.ssh/known_hosts` 通配匹配），`sftp+insecure://` 兼容跳过
+- **C4 FTP mtime**：MFMT（RFC 3659）设置，服务器不支持静默降级
 
 ### P20 细节增强（右键菜单 / 报告布局 / 缓存 / Profile 迁移）
 
@@ -392,13 +417,14 @@ src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 
 ## 已知限制
 
-- 文本 diff 整文件读入内存，超过 `--max-size` 上限（默认 64MB）报错；超大文件内容比较走 P3 流式哈希
+- 文本 diff 整文件读入内存，超过 `--max-size` 上限（默认 256MB，C1 mmap 优化）报错；超大文件内容比较走 P3 流式哈希
 - 不处理 "No newline at end of file" 标记
 - 二进制文件已做检测：CLI diff/merge 报错 exit 2；GUI 自动切 hex 视图
 - M5 目录对比的 glob 过滤在 GUI 中以逗号分隔输入；拖放仅支持本地文件
-- M6 7z 与 tar.bz2 后端只读（写入/删除会报错）；tar/7z 全量解压进内存，超大归档建议 zip 或本地；SFTP 首次连接不校验 host key，且依赖网络可达性；FTP 无标准 mtime 设置命令（同步建议 `--compare-content`）
-- 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确
+- M6 tar.bz2 后端只读（无纯 Rust 编码器）；tar/7z 全量解压进内存，超大归档建议 zip 或本地；FTP 无标准 mtime 设置命令（已用 MFMT 扩展，服务器不支持时静默降级，同步建议 `--compare-content`）；SVN/ISO/RAR 走外部命令（7z/bsdtar/svn），未安装时友好报错
+- 快速模式依赖 mtime，跨文件系统/拷贝场景建议用 `--compare-content` 保证准确（与 BC 行为一致）
 - M3 三处 stdin 不能同时用（`-` 只能出现一次）
 - 与 git 的行为差异：两侧对**相邻行**的独立修改，bcr 按经典 diff3 语义无冲突合并，git 保守判冲突
 - sync 快速模式下无法检测“mtime 相同但内容不同”，two-way 冲突检测需 `--compare-content`
 - 语法高亮仅在 GUI 与 `diff --highlight` 生效；CLI compare/sync 输出无语法色
+- SFTP host key 校验默认 TOFU（首次连接保存到 `~/.bcr-known-hosts`）；`sftp+insecure://` 可跳过
