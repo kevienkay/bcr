@@ -1215,9 +1215,14 @@ fn paint_diff_row(
         );
     }
 
-    // 左 gutter + 内容
+    // 左 gutter + 内容（P31：gutter 用微灰底色与内容区分，BC 观感）
+    let gutter_bg = if ui.visuals().dark_mode {
+        Some(Color32::from_gray(30))
+    } else {
+        Some(Color32::from_gray(238))
+    };
     let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H));
-    paint_bg(ui, gutter_rect, bg_l);
+    paint_bg(ui, gutter_rect, gutter_bg);
     paint_line_no(ui, gutter_rect, row.left_no);
     let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_l);
@@ -1226,7 +1231,7 @@ fn paint_diff_row(
     // 右 gutter + 内容
     let x_r = x + gutter_l + content_w;
     let gutter_rect = Rect::from_min_size(Pos2::new(x_r, y), vec2(gutter_r, ROW_H));
-    paint_bg(ui, gutter_rect, bg_r);
+    paint_bg(ui, gutter_rect, gutter_bg);
     paint_line_no(ui, gutter_rect, row.right_no);
     let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_r);
