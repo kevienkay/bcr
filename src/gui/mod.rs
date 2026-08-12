@@ -507,20 +507,24 @@ impl eframe::App for DiffApp {
                 }
 
                 ui.separator();
-                // 语言切换
+                // 语言切换（下拉选择，避免一排按钮占位）
                 let mut lang_changed = false;
                 let mut new_lang = crate::i18n::current();
                 ui.horizontal(|ui| {
                     ui.label(crate::i18n::t(crate::i18n::Key::Language));
-                    for l in crate::i18n::Lang::ALL {
-                        if ui
-                            .selectable_label(new_lang == l, l.native_name())
-                            .clicked()
-                        {
-                            new_lang = l;
-                            lang_changed = true;
-                        }
-                    }
+                    egui::ComboBox::from_id_salt("lang_select")
+                        .selected_text(new_lang.native_name())
+                        .show_ui(ui, |ui| {
+                            for l in crate::i18n::Lang::ALL {
+                                if ui
+                                    .selectable_label(new_lang == l, l.native_name())
+                                    .clicked()
+                                {
+                                    new_lang = l;
+                                    lang_changed = true;
+                                }
+                            }
+                        });
                 });
                 if lang_changed {
                     self.settings.lang = new_lang.code().to_string();
