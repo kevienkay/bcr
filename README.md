@@ -1,6 +1,6 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（14 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览** + **P27：自动化（JSON 契约 + Python 绑定 bcr.py + 纯数据任务清单 bcr task）** + **P28：全面对标收口（三路文件夹合并/忽略结构/符号链接跟随/转换后比较/替换/缩略图/打印/HTML 模板/通用音频标签/FTPS/SFTP host key 校验/SVN/外部工具/CAB/ISO/7z 可写/大文件 mmap/后台任务）** + **P29：CSV 表格 GUI** + **P30：三平台安装包（dmg/zip/tar.gz/deb）**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（14 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览** + **P27：自动化（JSON 契约 + Python 绑定 bcr.py + 纯数据任务清单 bcr task）** + **P28：全面对标收口（三路文件夹合并/忽略结构/符号链接跟随/转换后比较/替换/缩略图/打印/HTML 模板/通用音频标签/FTPS/SFTP host key 校验/SVN/外部工具/CAB/ISO/7z 可写/大文件 mmap/后台任务）** + **P29：CSV 表格 GUI** + **P30：三平台安装包（dmg/zip/tar.gz/deb）** + **P31：UI 精修（主题引擎/状态栏/标签栏）** + **P32：UI 差距消除（差异连接线/内联编辑/撤销重做/右键菜单全覆盖/差异块折叠/会话类型起始页/快捷键系统化/过滤面板/状态栏信息/标签拖拽/hex 差异导航）**。
 
 ## 安装
 
@@ -148,6 +148,20 @@ bcr compare 目录A 目录B --json # JSON 契约输出（自动化用）
 - **Python 绑定 `bindings/bcr.py`**：纯标准库（零第三方依赖），类型化 dataclass 返回值，`bcr.compare()/sync()/compare3()/csv()/merge()/mp3tag()/imgcmp()` 全覆盖；`BCR_BIN` 环境变量指定二进制路径
 - **任务清单 `bcr task`**：JSON/TOML 纯数据步骤清单（load/compare/compare3/csv/merge/sync/report/echo/exit），`%date%` `%time%` `%fn_time%` `%env:VAR%` `%1-%9` 动态变量，compare/sync 有差异不中止、遇错即停（或 continue_on_error），`bcr task check` 只校验不执行
 - 完整参考：`docs/automation.md`（契约 + API + 场景示例）
+
+### P32 UI 差距消除（对标 BC 4 全量盘点，A 类核心交互 + B 类次要差距）
+
+- **差异连接线（A1）**：DiffTab 左右面板间空隙 + 差异行水平连接线（红/绿/黄按差异类型），单 ScrollArea 双栏渲染天然同步滚动
+- **直接内联编辑（A2）+ 撤销/重做（A6）**：双击行就地编辑（Enter 提交 / ESC 取消）；编辑/替换入撤销栈（Ctrl+Z / Ctrl+Y，工具栏 ↩/↪）
+- **右键菜单全覆盖（A4）**：DiffTab/CsvTab/ImageTab/MergeTab 行级 context_menu（复制路径/打开所在位置/系统打开/交换/忽略），跨平台文件定位 `reveal_in_file_manager`
+- **差异块折叠（A5）**：块首 ▾ 折叠，占位行「N 行已折叠」点击展开
+- **标记忽略差异（B5）**：右键忽略/取消忽略，从导航与统计排除（会话级）
+- **会话类型起始页（A7）**：欢迎页网格卡片（文本/文件夹/三路合并/图片/CSV），独立会话入口
+- **快捷键系统化（B1）**：F6/F7 差异跳转、F5 重载/刷新、F2 重命名（DirTab，vfs 跨后端）、Ctrl+W 关标签；tooltip 带快捷键提示
+- **DirTab 过滤面板（B2）**：左侧可折叠 SidePanel（扩展名/大小范围/修改时间 YYYY-MM-DD），与工具栏联动
+- **状态栏信息（B3）**：当前标签路径、行数/行列数、选中项数
+- **标签拖拽重排（B6）**：标签栏拖拽换位，active 保持指向
+- **hex 差异导航（B4）**：二进制 hex 视图补 F6/F7 差异行循环跳转
 
 ### P31 UI 精修（对标 BC 视觉）
 

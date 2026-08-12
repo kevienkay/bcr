@@ -6,6 +6,22 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### UI 差距消除（P32，对标 Beyond Compare 4 全量盘点，A类核心交互 + B类次要差距）
+
+- **差异连接线（A1）**：DiffTab 左右面板间空隙 + 差异行水平连接线（红/绿/黄按差异类型着色），等行弱色分隔；单 ScrollArea 双栏渲染天然同步滚动（A3）
+- **直接内联编辑（A2）+ 撤销/重做（A6）**：DiffTab 双击行就地编辑（Enter 提交 / ESC 取消）；编辑/替换入撤销栈（Ctrl+Z / Ctrl+Y 或 Ctrl+Shift+Z，工具栏 ↩/↪ 按钮）
+- **右键菜单全覆盖（A4）**：DiffTab/CsvTab/ImageTab/MergeTab 全部行级 context_menu（复制路径/打开所在位置/系统打开/交换左右/忽略差异），DirTab 扩展；`open_with_system_app` 与 `reveal_in_file_manager` 跨平台（macOS open / Windows explorer / Linux xdg-open）提升到 common 复用
+- **差异块折叠（A5）**：DiffTab 差异块行首 ▾ 折叠箭头，折叠后隐藏中间行显示「N 行已折叠」占位，点击展开
+- **标记忽略差异（B5）**：差异行右键「忽略此行/此块」→ 从导航/统计排除（会话级，右键可取消），弱化显示
+- **会话类型起始页（A7）**：欢迎页扩展为网格卡片（文本对比/文件夹对比/三路合并/图片对比/CSV 表格），新增 `open_image_compare` / `open_csv_compare` 独立会话入口，10 语言 i18n
+- **快捷键系统化（B1）**：DiffTab F6 下一差异/F7 上一差异（循环跳转，修正索引语义）、F5 重载；DirTab F2 重命名（vfs 跨后端弹窗）+ F5 刷新；全局 Ctrl+W 关闭当前标签；按钮 tooltip 带快捷键提示
+- **DirTab 过滤/显示面板（B2）**：左侧可折叠 SidePanel——扩展名（逗号分隔）、大小范围（字节）、修改时间范围（YYYY-MM-DD，自研公历转换）过滤，与工具栏联动，清除/计数显示
+- **状态栏信息（B3）**：底部状态栏补当前标签路径（DiffTab 文件名）、行数/行列数（DiffTab 行数、CsvTab 行×列）、选中项数（DirTab 选中 x/y）
+- **标签拖拽重排（B6）**：标签栏拖拽换位（`move_tab` 保持 active 指向原标签）
+- **独立 Hex 差异导航（B4）**：二进制自动切换 hex 对比视图已有基础上补 F6/F7 差异行循环跳转（滚动定位，`show_rows_offset` 支持初始偏移）
+- **工具栏图标细节（B7）**：按钮 tooltip 统一补快捷键提示（如「⟳ 重新加载 (F5)」「下一差异 (F6)」）
+- **质量**：每批新增 uikit 测试（egui_kittest 驱动真实标签页交互，含键盘事件），累计 392+ 测试全绿；clippy 0 警告；fmt 干净
+
 ### UI 精修（P31，对标 Beyond Compare 视觉）
 
 - **主题引擎**：新增 `src/gui/theme.rs`——集中视觉常量（行高 22、圆角 4、间距统一），差异配色对齐 BC（仅左红/仅右绿/修改黄）按深浅主题微调，启动时对 Dark/Light 两套主题全局应用
