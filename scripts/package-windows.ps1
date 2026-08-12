@@ -1,4 +1,4 @@
-# P30: Windows 安装包打包 — zip（保证产物）+ msi（WiX，尽力而为）。
+# P30: Windows packaging - zip (guaranteed) + msi (WiX, best effort).
 #
 # 用法:
 #   powershell -File scripts/package-windows.ps1 [-Bin target\release\bcr.exe] [-OutDir dist]
@@ -18,7 +18,7 @@ $Ver = [regex]::Match($Cargo, '^version\s*=\s*"([^"]+)"', [System.Text.RegularEx
 if (-not $Ver) { $Ver = "0.1.0" }
 
 if (-not (Test-Path $Bin)) {
-  Write-Error "找不到二进制 $Bin（先 cargo build --release）"
+  Write-Error "Binary not found: $Bin (run cargo build --release first)"
   exit 1
 }
 
@@ -42,7 +42,7 @@ Write-Host "OK $Zip"
 # 2) msi：WiX 工具链可用时构建（尽力而为，失败不阻塞 zip）
 $Wix = Get-Command candle, light -ErrorAction SilentlyContinue
 if (-not $Wix) {
-  Write-Host "NOTE: WiX (candle/light) 未安装，跳过 msi（仅产出 zip）"
+  Write-Host "NOTE: WiX (candle/light) not installed, skipping msi (zip only)"
   exit 0
 }
 
@@ -57,7 +57,7 @@ $Wxs = Join-Path $WixDir "bcr.wxs"
   <Product Id="*" Name="bcr" Language="1033" Version="$Ver"
            Manufacturer="bcr" UpgradeCode="{B4C2E7A1-3D6F-4A9B-8C1D-2E5F6A7B8C9D}">
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
-    <MajorUpgrade DowngradeErrorMessage="已安装更高版本。" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
@@ -81,7 +81,7 @@ try {
   Copy-Item "bcr.msi" $Msi -Force
   Write-Host "OK $Msi"
 } catch {
-  Write-Host "NOTE: WiX 构建失败（$($_.Exception.Message)），仅产出 zip"
+  Write-Host "NOTE: WiX build failed ($($_.Exception.Message)), zip only"
 } finally {
   Pop-Location
   Remove-Item -Recurse -Force $WixDir
