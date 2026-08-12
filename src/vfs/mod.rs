@@ -10,6 +10,7 @@
 //! read/write/delete 以相对路径为键，复制跨后端进行（先读后写）。
 
 pub mod archive;
+pub mod cab;
 pub mod dropbox;
 pub mod ftp;
 pub mod onedrive;
@@ -184,6 +185,11 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         let a = archive::ArchiveVfs::open(rest)?;
         return Ok(Box::new(a));
     }
+    // A12 CAB 归档（只读，纯 Rust）
+    if let Some(rest) = spec.strip_prefix("cab://") {
+        let c = cab::CabVfs::connect(rest)?;
+        return Ok(Box::new(c));
+    }
     if let Some(rest) = spec.strip_prefix("sftp://") {
         let s = sftp::SftpVfs::connect(rest)?;
         return Ok(Box::new(s));
@@ -235,6 +241,7 @@ pub fn is_remote(spec: &str) -> bool {
     spec.starts_with("zip://")
         || spec.starts_with("tar://")
         || spec.starts_with("7z://")
+        || spec.starts_with("cab://")
         || spec.starts_with("sftp://")
         || spec.starts_with("sftp+insecure://")
         || spec.starts_with("ftp://")
