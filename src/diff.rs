@@ -37,6 +37,11 @@ pub struct DiffArgs {
     #[arg(long)]
     pub convert: bool,
 
+    /// 外部工具对比（A14）：不按文本 diff，改用 ~/.bcr-external.toml 中配置的
+    /// 命令对比（按扩展名匹配，如 docx/pdf/xlsx），适合未支持的二进制格式
+    #[arg(long)]
+    pub external: bool,
+
     /// 忽略匹配正则的行（内容过滤：如版本号/时间戳行，可重复）
     #[arg(long = "ignore-lines")]
     pub ignore_lines: Vec<String>,
@@ -60,6 +65,28 @@ pub struct DiffArgs {
 
 /// 运行 diff 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
 pub fn run(args: &DiffArgs) -> i32 {
+    // A14 外部工具对比：跳过内置文本 diff，直接调用配置的外部命令
+    if args.external {
+        let tools = crate::external::ExternalTools::load();
+        let Some(tpl) = tools.command_for(&args.left) else {
+            eprintln!(
+                "bcr: 未找到 {} 的外部对比工具配置（~/.bcr-external.toml [tools] 表，如 \"docx\" = \"soffice --diff {{left}} {{right}}\"）",
+                std::path::Path::new(&args.left)
+                    .extension()
+                    .map(|e| e.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "未知扩展名".to_string())
+            );
+            return 2;
+        };
+        return match crate::external::ExternalTools::run(tpl, &args.left, &args.right) {
+            Some(code) => code,
+            None => {
+                eprintln!("bcr: 外部命令启动失败：{}", tpl);
+                2
+            }
+        };
+    }
+
     // Profile 合并：忽略选项默认值来自 Profile，命令显式参数优先
     let merged = merge_profile(args);
     let args = &merged;
@@ -317,6 +344,7 @@ mod tests {
             ignore_case: false,
             ignore_crlf: false,
             convert: false,
+            external: false,
             ignore_lines: vec![],
             color: "never".into(),
             highlight: false,
@@ -465,6 +493,7 @@ mod crlf_tests {
             ignore_case: false,
             ignore_crlf: false,
             convert: false,
+            external: false,
             ignore_lines: vec![],
             color: "never".into(),
             highlight: false,
@@ -541,6 +570,7 @@ mod content_filter_tests {
             ignore_case: false,
             ignore_crlf: false,
             convert: false,
+            external: false,
             ignore_lines: vec![],
             color: "never".into(),
             highlight: false,

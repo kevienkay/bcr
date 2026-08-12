@@ -4,6 +4,7 @@ mod compare3;
 mod csvcmp;
 mod diff;
 mod encoding;
+mod external;
 mod fsscan;
 mod gui;
 mod hex;
