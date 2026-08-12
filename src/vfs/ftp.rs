@@ -25,9 +25,115 @@ pub struct FtpVfs {
     port: u16,
     /// 远程根目录（绝对路径）
     root: String,
+    /// A6 FTPS：implicit TLS（true）
+    tls: bool,
 }
 
-/// 解析 ftp:// URL：返回 (user, pass, host, port, remote_path)
+/// 统一明文/TLS 连接（suppaftp 的 FtpStream 与 RustlsFtpStream 类型不同，用 enum 收口）
+enum FtpConn {
+    Plain(FtpStream),
+    Secure(suppaftp::RustlsFtpStream),
+}
+
+impl FtpConn {
+    fn login(&mut self, user: &str, pass: &str) -> suppaftp::FtpResult<()> {
+        match self {
+            FtpConn::Plain(f) => f.login(user, pass),
+            FtpConn::Secure(f) => f.login(user, pass),
+        }
+    }
+
+    fn cwd(&mut self, path: &str) -> suppaftp::FtpResult<()> {
+        match self {
+            FtpConn::Plain(f) => f.cwd(path),
+            FtpConn::Secure(f) => f.cwd(path),
+        }
+    }
+
+    fn quit(&mut self) -> suppaftp::FtpResult<()> {
+        match self {
+            FtpConn::Plain(f) => f.quit(),
+            FtpConn::Secure(f) => f.quit(),
+        }
+    }
+
+    fn list(&mut self, path: Option<&str>) -> suppaftp::FtpResult<Vec<String>> {
+        match self {
+            FtpConn::Plain(f) => f.list(path),
+            FtpConn::Secure(f) => f.list(path),
+        }
+    }
+
+    fn nlst(&mut self, path: Option<&str>) -> suppaftp::FtpResult<Vec<String>> {
+        match self {
+            FtpConn::Plain(f) => f.nlst(path),
+            FtpConn::Secure(f) => f.nlst(path),
+        }
+    }
+
+    fn size(&mut self, path: String) -> suppaftp::FtpResult<usize> {
+        match self {
+            FtpConn::Plain(f) => f.size(path),
+            FtpConn::Secure(f) => f.size(path),
+        }
+    }
+
+    fn mkdir(&mut self, path: String) -> suppaftp::FtpResult<()> {
+        match self {
+            FtpConn::Plain(f) => f.mkdir(path),
+            FtpConn::Secure(f) => f.mkdir(path),
+        }
+    }
+
+    fn put_file(&mut self, path: String, data: &mut &[u8]) -> suppaftp::FtpResult<u64> {
+        match self {
+            FtpConn::Plain(f) => f.put_file(path, data),
+            FtpConn::Secure(f) => f.put_file(path, data),
+        }
+    }
+
+    fn rm(&mut self, path: String) -> suppaftp::FtpResult<()> {
+        match self {
+            FtpConn::Plain(f) => f.rm(path),
+            FtpConn::Secure(f) => f.rm(path),
+        }
+    }
+
+    fn rmdir(&mut self, path: String) -> suppaftp::FtpResult<()> {
+        match self {
+            FtpConn::Plain(f) => f.rmdir(path),
+            FtpConn::Secure(f) => f.rmdir(path),
+        }
+    }
+
+    fn rename(&mut self, from: String, to: String) -> suppaftp::FtpResult<()> {
+        match self {
+            FtpConn::Plain(f) => f.rename(from, to),
+            FtpConn::Secure(f) => f.rename(from, to),
+        }
+    }
+
+    fn custom_command(
+        &mut self,
+        cmd: String,
+        expect: &[suppaftp::Status],
+    ) -> suppaftp::FtpResult<suppaftp::types::Response> {
+        match self {
+            FtpConn::Plain(f) => f.custom_command(cmd, expect),
+            FtpConn::Secure(f) => f.custom_command(cmd, expect),
+        }
+    }
+
+    fn retr_as_buffer(&mut self, path: &str) -> suppaftp::FtpResult<std::io::Cursor<Vec<u8>>> {
+        match self {
+            FtpConn::Plain(f) => f.retr_as_buffer(path),
+            FtpConn::Secure(f) => f.retr_as_buffer(path),
+        }
+    }
+}
+
+/// 解析 ftp:// 或 ftps:// URL：返回 (user, pass, host, port, remote_path)
+/// 注：tls 由调用方（vfs::open 按前缀）决定，此函数只解析主机信息。
 fn parse_url(rest: &str) -> io::Result<(String, String, String, u16, String)> {
     let rest = rest.trim_end_matches('/');
     let (auth, host_port_path) = match rest.rsplit_once('@') {
@@ -69,6 +175,7 @@ fn parse_url(rest: &str) -> io::Result<(String, String, String, u16, String)> {
         },
         None => ("anonymous".to_string(), String::new()),
     };
+    // 调用方负责剥离 ftps:// 前缀并传入 rest；这里统一返回 tls=false（由前缀决定）
     Ok((user, pass, host, port, path.to_string()))
 }
 
@@ -81,27 +188,53 @@ fn join_root(root: &str, rel: &str) -> String {
 }
 
 impl FtpVfs {
-    /// 打开 FTP 连接并登录、进入根目录
-    pub fn connect(rest: &str) -> io::Result<Self> {
+    /// 打开 FTP 连接并登录、进入根目录。tls=true 时按 implicit FTPS（端口默认 990）
+    pub fn connect(rest: &str, tls: bool) -> io::Result<Self> {
         let (user, pass, host, port, root) = parse_url(rest)?;
+        // implicit TLS 默认端口 990（显式指定端口则尊重用户）
+        let port = if tls && port == 21 { 990 } else { port };
         Ok(FtpVfs {
-            desc: format!("ftp://{}", rest),
+            desc: format!("{}://{}", if tls { "ftps" } else { "ftp" }, rest),
             user,
             pass,
             host,
             port,
             root,
+            tls,
         })
     }
 
     /// 建立新连接并登录、进入 root（每次操作调用，用完 quit）
-    fn session(&self) -> io::Result<FtpStream> {
-        let mut ftp = FtpStream::connect((self.host.as_str(), self.port)).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("FTP 连接 {}:{} 失败: {e}", self.host, self.port),
+    fn session(&self) -> io::Result<FtpConn> {
+        let mut ftp = if self.tls {
+            // A6 FTPS：implicit TLS（RFC 4217，直接 TLS 握手，端口默认 990）
+            let config = rustls::ClientConfig::builder()
+                .with_root_certificates(rustls::RootCertStore::empty())
+                .with_no_client_auth();
+            let connector = suppaftp::RustlsConnector::from(std::sync::Arc::new(config));
+            FtpConn::Secure(
+                suppaftp::RustlsFtpStream::connect_secure_implicit(
+                    (self.host.as_str(), self.port),
+                    connector,
+                    &self.host,
+                )
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("FTPS 连接 {}:{} 失败: {e}", self.host, self.port),
+                    )
+                })?,
             )
-        })?;
+        } else {
+            FtpConn::Plain(
+                FtpStream::connect((self.host.as_str(), self.port)).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("FTP 连接 {}:{} 失败: {e}", self.host, self.port),
+                    )
+                })?,
+            )
+        };
         ftp.login(&self.user, &self.pass).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -130,7 +263,7 @@ impl FtpVfs {
 
     /// 递归扫描目录（连接复用）
     fn scan_rec(
-        ftp: &mut FtpStream,
+        ftp: &mut FtpConn,
         abs: &str,
         root: &str,
         filter: &Filter,

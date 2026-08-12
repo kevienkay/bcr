@@ -188,7 +188,12 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         return Ok(Box::new(s));
     }
     if let Some(rest) = spec.strip_prefix("ftp://") {
-        let f = ftp::FtpVfs::connect(rest)?;
+        let f = ftp::FtpVfs::connect(rest, false)?;
+        return Ok(Box::new(f));
+    }
+    // A6 FTPS：implicit TLS（端口默认 990）
+    if let Some(rest) = spec.strip_prefix("ftps://") {
+        let f = ftp::FtpVfs::connect(rest, true)?;
         return Ok(Box::new(f));
     }
     if let Some(rest) = spec.strip_prefix("webdav://") {
@@ -221,6 +226,7 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("7z://")
         || spec.starts_with("sftp://")
         || spec.starts_with("ftp://")
+        || spec.starts_with("ftps://")
         || spec.starts_with("webdav://")
         || spec.starts_with("webdavs://")
         || spec.starts_with("s3://")
