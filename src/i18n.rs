@@ -186,6 +186,27 @@ pub enum Key {
     CsvBadDelimiter,
     /// CSV 统计: {} 相同行, {} 仅左侧, {} 仅右侧, {} 修改
     SummaryCsv,
+    // ---- CsvTab（P29 表格 GUI）----
+    /// CSV: {} ↔ {}
+    CsvTitle,
+    /// 主键
+    CsvKeyCol,
+    /// 分隔符
+    CsvDelimiter,
+    /// 行号对齐
+    CsvRowAlign,
+    /// 全部
+    CsvFilterAll,
+    /// 仅差异
+    CsvFilterDiff,
+    /// 仅左侧
+    CsvFilterLeft,
+    /// 仅右侧
+    CsvFilterRight,
+    /// 仅修改
+    CsvFilterModified,
+    /// 仅相同
+    CsvFilterSame,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}

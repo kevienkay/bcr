@@ -6,6 +6,7 @@
 //! - 主题切换 + 设置持久化（TOML）
 
 mod common;
+mod csvtab;
 mod difftab;
 mod dirtab;
 mod imagetab;
@@ -13,6 +14,7 @@ mod mergetab;
 
 use crate::sideview::ViewOptions;
 use common::*;
+use csvtab::CsvTab;
 use difftab::DiffTab;
 use dirtab::DirTab;
 use eframe::egui::{self, Color32, RichText, ThemePreference};
@@ -60,6 +62,7 @@ enum Tab {
     Dir(DirTab),
     Merge(MergeTab),
     Image(ImageTab),
+    Csv(CsvTab),
 }
 
 impl Tab {
@@ -69,6 +72,7 @@ impl Tab {
             Tab::Dir(t) => t.title(),
             Tab::Merge(t) => t.title(),
             Tab::Image(t) => t.title(),
+            Tab::Csv(t) => t.title(),
         }
     }
 }
@@ -972,6 +976,7 @@ impl eframe::App for DiffApp {
                 }
                 Tab::Merge(t) => t.ui(ui),
                 Tab::Image(t) => t.ui(ui),
+                Tab::Csv(t) => t.ui(ui),
             }
         }
 
@@ -985,6 +990,8 @@ impl eframe::App for DiffApp {
                 let rs = r.to_string_lossy();
                 if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
                     self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
+                } else if crate::csvcmp::is_csv_file(&ls) && crate::csvcmp::is_csv_file(&rs) {
+                    self.add_tab(Tab::Csv(CsvTab::new(&ls, &rs)));
                 } else {
                     let mut t = DiffTab::new();
                     t.load_pair(&ls, &rs, ViewOptions::default());
@@ -1005,6 +1012,11 @@ impl eframe::App for DiffApp {
                 let rs = r.to_string_lossy();
                 if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
                     self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
+                    return;
+                }
+                // CSV 表格 → 表格对比标签（P29）
+                if crate::csvcmp::is_csv_file(&ls) && crate::csvcmp::is_csv_file(&rs) {
+                    self.add_tab(Tab::Csv(CsvTab::new(&ls, &rs)));
                     return;
                 }
                 let mut t = DiffTab::new();

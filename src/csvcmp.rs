@@ -382,6 +382,12 @@ pub(crate) fn compare_csv(a: &Table, b: &Table, key: Option<&str>) -> (Vec<Strin
     (out, stats)
 }
 
+/// 判断路径是否为 CSV/TSV 文件（GUI 表格视图路由用）
+pub fn is_csv_file(path: &str) -> bool {
+    let p = path.to_ascii_lowercase();
+    p.ends_with(".csv") || p.ends_with(".tsv") || p.ends_with(".tab")
+}
+
 /// 运行 csv 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
 pub fn run(args: &CsvArgs) -> i32 {
     let delim = match args.delimiter.as_str() {
