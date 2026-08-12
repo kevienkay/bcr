@@ -6,6 +6,8 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-12
+
 ### UI 差距消除（P32，对标 Beyond Compare 4 全量盘点，A类核心交互 + B类次要差距）
 
 - **差异连接线（A1）**：DiffTab 左右面板间空隙 + 差异行水平连接线（红/绿/黄按差异类型着色），等行弱色分隔；单 ScrollArea 双栏渲染天然同步滚动（A3）
@@ -163,3 +165,4 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - docs/automation.md：自动化指南（JSON 契约参考 + bcr.py API + 任务清单 + 场景示例）
 
 [0.1.0]: https://github.com/kevienkay/bcr/releases/tag/v0.1.0
+[0.2.0]: https://github.com/kevienkay/bcr/releases/tag/v0.2.0
