@@ -995,11 +995,52 @@ impl eframe::App for DiffApp {
         if self.tabs.is_empty() {
             egui::CentralPanel::default().show(ui, |ui| {
                 ui.centered_and_justified(|ui| {
-                    ui.label(
-                        RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
-                            .size(18.0)
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 8.0;
+                        // P31 欢迎页：大标题 + 副标题 + 操作入口（BC 观感）
+                        ui.label(RichText::new("bcr").size(42.0).strong().color(
+                            if ui.visuals().dark_mode {
+                                egui::Color32::from_rgb(140, 180, 235)
+                            } else {
+                                egui::Color32::from_rgb(60, 110, 190)
+                            },
+                        ));
+                        ui.label(
+                            RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
+                                .size(14.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                        ui.add_space(16.0);
+                        ui.horizontal(|ui| {
+                            if ui
+                                .button(format!(
+                                    "📁 {}",
+                                    crate::i18n::t(crate::i18n::Key::MenuOpenFiles)
+                                ))
+                                .clicked()
+                            {
+                                self.open_diff_files();
+                            }
+                            if ui
+                                .button(format!(
+                                    "📂 {}",
+                                    crate::i18n::t(crate::i18n::Key::MenuOpenDir)
+                                ))
+                                .clicked()
+                            {
+                                self.open_dir_compare();
+                            }
+                            if ui
+                                .button(format!(
+                                    "🔀 {}",
+                                    crate::i18n::t(crate::i18n::Key::MenuOpenMerge)
+                                ))
+                                .clicked()
+                            {
+                                self.open_merge();
+                            }
+                        });
+                    });
                 });
             });
             return;
