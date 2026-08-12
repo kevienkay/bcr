@@ -376,8 +376,29 @@ impl CsvTab {
                         };
                         let (rect, resp) = ui.allocate_exact_size(
                             Vec2::new(ui.available_width().max(200.0), ROW_H),
-                            egui::Sense::hover(),
+                            egui::Sense::click(),
                         );
+                        // P32-A4：行右键菜单（复制路径/打开文件）
+                        let (lp, rp) = (self.left.clone(), self.right.clone());
+                        resp.context_menu(|ui| {
+                            if ui.button("复制左侧路径").clicked() {
+                                ui.ctx().copy_text(lp.clone());
+                                ui.close();
+                            }
+                            if ui.button("复制右侧路径").clicked() {
+                                ui.ctx().copy_text(rp.clone());
+                                ui.close();
+                            }
+                            ui.separator();
+                            if ui.button("打开左侧文件").clicked() {
+                                super::common::open_with_system_app(&lp);
+                                ui.close();
+                            }
+                            if ui.button("打开右侧文件").clicked() {
+                                super::common::open_with_system_app(&rp);
+                                ui.close();
+                            }
+                        });
                         // 行级底色（P31：hover 浅色 + 状态色）
                         let bg = match (ar.status, side) {
                             (RowStatus::LeftOnly, true) | (RowStatus::RightOnly, false) => {

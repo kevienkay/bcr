@@ -1281,18 +1281,6 @@ fn split_globs(s: &str) -> Vec<String> {
 }
 
 /// 用系统默认应用打开文件/目录（跨平台：macOS open / Windows explorer / Linux xdg-open）
-fn open_with_system_app(path: &str) {
-    #[cfg(target_os = "macos")]
-    let cmd = "open";
-    #[cfg(target_os = "windows")]
-    let cmd = "explorer";
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let cmd = "xdg-open";
-    #[cfg(not(any(unix, windows)))]
-    let cmd = "open";
-    let _ = std::process::Command::new(cmd).arg(path).spawn();
-}
-
 fn basename(p: &str) -> String {
     std::path::Path::new(p)
         .file_name()

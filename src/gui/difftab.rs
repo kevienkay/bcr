@@ -1425,7 +1425,7 @@ impl DiffTab {
                     };
                     // P32-A5：块首行左侧画折叠箭头 ▾（点击折叠）
                     let block_start = self.diff_blocks.iter().position(|&(s, _)| s == oi);
-                    let hit = paint_diff_row(
+                    let (hit, resp) = paint_diff_row(
                         ui,
                         row,
                         gutter_l,
@@ -1446,9 +1446,51 @@ impl DiffTab {
                     match hit {
                         Some(RowHit::Edit(side)) => dbl = Some((oi, side)),
                         Some(RowHit::FoldToggle(bi)) => fold_toggle = Some(bi),
-                        Some(RowHit::Ignore(row)) => ignore_req = Some(row),
                         None => {}
                     }
+                    // P32-A4：行右键菜单（复制路径/打开文件/忽略）——闭包内只收集请求
+                    let row_idx = oi;
+                    let (lp, rp) = (
+                        self.left.as_ref().map(|f| f.path.clone()),
+                        self.right.as_ref().map(|f| f.path.clone()),
+                    );
+                    resp.context_menu(|ui| {
+                        if let Some(p) = &lp {
+                            if ui.button("复制左侧路径").clicked() {
+                                ui.ctx().copy_text(p.clone());
+                                ui.close();
+                            }
+                        }
+                        if let Some(p) = &rp {
+                            if ui.button("复制右侧路径").clicked() {
+                                ui.ctx().copy_text(p.clone());
+                                ui.close();
+                            }
+                        }
+                        ui.separator();
+                        if let Some(p) = &lp {
+                            if ui.button("打开左侧文件").clicked() {
+                                super::common::open_with_system_app(p);
+                                ui.close();
+                            }
+                        }
+                        if let Some(p) = &rp {
+                            if ui.button("打开右侧文件").clicked() {
+                                super::common::open_with_system_app(p);
+                                ui.close();
+                            }
+                        }
+                        ui.separator();
+                        if ignored {
+                            if ui.button("取消忽略此行").clicked() {
+                                ignore_req = Some(row_idx);
+                                ui.close();
+                            }
+                        } else if ui.button("忽略此行").clicked() {
+                            ignore_req = Some(row_idx);
+                            ui.close();
+                        }
+                    });
                 }
             });
             // P32-A5：处理折叠切换
@@ -1575,8 +1617,6 @@ pub enum RowHit {
     Edit(EditSide),
     /// 点击折叠箭头（切换差异块折叠）
     FoldToggle(usize),
-    /// 右键点击行（忽略/取消忽略该行）
-    Ignore(usize),
 }
 
 #[allow(clippy::too_many_arguments)] // egui 行绘制参数较多，保持扁平可读
@@ -1597,7 +1637,7 @@ fn paint_diff_row(
     mut inline: Option<&mut InlineEditState>,
     block_start: Option<usize>,
     ignored: bool,
-) -> Option<RowHit> {
+) -> (Option<RowHit>, egui::Response) {
     let mid_gap = super::theme::MID_GAP;
     let (rect, resp) = ui.allocate_exact_size(
         Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H),
@@ -1605,11 +1645,6 @@ fn paint_diff_row(
     );
     let x = rect.left();
     let y = rect.top();
-
-    // P32-B5：右键点击行 → 忽略/取消忽略该行
-    if resp.secondary_clicked() {
-        return Some(RowHit::Ignore(0));
-    }
 
     // P32-A5：块首行左侧画折叠箭头 ▾（点击折叠）
     if let Some(bi) = block_start {
@@ -1629,7 +1664,7 @@ fn paint_diff_row(
         );
         if resp.clicked() && arrow_rect.contains(resp.interact_pointer_pos().unwrap_or(Pos2::ZERO))
         {
-            return Some(RowHit::FoldToggle(bi));
+            return (Some(RowHit::FoldToggle(bi)), resp);
         }
     }
 
@@ -1741,14 +1776,14 @@ fn paint_diff_row(
             let right_zone =
                 Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
             if left_zone.contains(pos) {
-                return Some(RowHit::Edit(EditSide::Left));
+                return (Some(RowHit::Edit(EditSide::Left)), resp);
             }
             if right_zone.contains(pos) {
-                return Some(RowHit::Edit(EditSide::Right));
+                return (Some(RowHit::Edit(EditSide::Right)), resp);
             }
         }
     }
-    None
+    (None, resp)
 }
 
 /// P32-A1：差异连接线颜色（有差异的行返回对应颜色，无差异返回 None）
