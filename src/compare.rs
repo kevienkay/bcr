@@ -1411,74 +1411,6 @@ mod tests {
         let e = &r.entries[0];
         assert_eq!(e.status, FileStatus::Moved);
     }
-}
-
-#[cfg(test)]
-mod attrs_tests {
-    #[cfg(unix)]
-    use super::*;
-    #[cfg(unix)]
-    use std::fs;
-    #[cfg(unix)]
-    use tempfile::tempdir;
-
-    #[cfg(unix)]
-    fn empty_filter() -> Filter {
-        Filter::new(&[], &[]).unwrap()
-    }
-
-    #[test]
-    fn compare_attrs_detects_mode_diff() {
-        // Unix 下验证权限差异；非 Unix 平台跳过
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let d1 = tempdir().unwrap();
-            let d2 = tempdir().unwrap();
-            let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
-            for (dir, mode) in [(d1.path(), 0o644), (d2.path(), 0o600)] {
-                let p = dir.join("f.txt");
-                fs::write(&p, "same-content").unwrap();
-                fs::set_permissions(&p, fs::Permissions::from_mode(mode)).unwrap();
-                filetime::set_file_mtime(&p, fixed).unwrap();
-            }
-            // 内容相同但权限不同：不开 --compare-attrs 判 Same
-            let r1 = compare_dirs(d1.path(), d2.path(), &empty_filter(), true, true).unwrap();
-            let e1 = r1.entries.iter().find(|e| e.rel == "f.txt").unwrap();
-            assert_eq!(e1.status, FileStatus::Same);
-            // 开 --compare-attrs 判 Differ + attrs_differ
-            let r2 = compare_dirs_attrs(d1.path(), d2.path(), &empty_filter(), true, true, true)
-                .unwrap();
-            let e2 = r2.entries.iter().find(|e| e.rel == "f.txt").unwrap();
-            assert_eq!(e2.status, FileStatus::Differ);
-            assert!(e2.attrs_differ);
-        }
-    }
-
-    #[test]
-    fn compare_attrs_detects_symlink() {
-        #[cfg(unix)]
-        {
-            let d1 = tempdir().unwrap();
-            let d2 = tempdir().unwrap();
-            let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
-            // 左侧: 普通文件; 右侧: 符号链接 f.txt -> real.txt（real.txt 内容与左侧相同）
-            let lp = d1.path().join("f.txt");
-            fs::write(&lp, "data").unwrap();
-            filetime::set_file_mtime(&lp, fixed).unwrap();
-            fs::write(d2.path().join("real.txt"), "data").unwrap();
-            filetime::set_file_mtime(d2.path().join("real.txt"), fixed).unwrap();
-            let rp = d2.path().join("f.txt");
-            std::os::unix::fs::symlink("real.txt", &rp).unwrap();
-            filetime::set_file_mtime(&rp, fixed).unwrap();
-            // 内容一致(符号链接读目标)但链接属性不同 → attrs_differ
-            let r = compare_dirs_attrs(d1.path(), d2.path(), &empty_filter(), true, true, true)
-                .unwrap();
-            let e = r.entries.iter().find(|e| e.rel == "f.txt").unwrap();
-            assert_eq!(e.status, FileStatus::Differ);
-            assert!(e.attrs_differ);
-        }
-    }
 
     // ---- A7 忽略文件夹结构 ----
 
@@ -1561,5 +1493,73 @@ mod attrs_tests {
             .any(|e| e.status == FileStatus::LeftOnly && e.rel.contains("extra")));
         assert_eq!(r.stats.same, 1);
         assert_eq!(r.stats.left_only, 1);
+    }
+}
+
+#[cfg(test)]
+mod attrs_tests {
+    #[cfg(unix)]
+    use super::*;
+    #[cfg(unix)]
+    use std::fs;
+    #[cfg(unix)]
+    use tempfile::tempdir;
+
+    #[cfg(unix)]
+    fn empty_filter() -> Filter {
+        Filter::new(&[], &[]).unwrap()
+    }
+
+    #[test]
+    fn compare_attrs_detects_mode_diff() {
+        // Unix 下验证权限差异；非 Unix 平台跳过
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let d1 = tempdir().unwrap();
+            let d2 = tempdir().unwrap();
+            let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+            for (dir, mode) in [(d1.path(), 0o644), (d2.path(), 0o600)] {
+                let p = dir.join("f.txt");
+                fs::write(&p, "same-content").unwrap();
+                fs::set_permissions(&p, fs::Permissions::from_mode(mode)).unwrap();
+                filetime::set_file_mtime(&p, fixed).unwrap();
+            }
+            // 内容相同但权限不同：不开 --compare-attrs 判 Same
+            let r1 = compare_dirs(d1.path(), d2.path(), &empty_filter(), true, true).unwrap();
+            let e1 = r1.entries.iter().find(|e| e.rel == "f.txt").unwrap();
+            assert_eq!(e1.status, FileStatus::Same);
+            // 开 --compare-attrs 判 Differ + attrs_differ
+            let r2 = compare_dirs_attrs(d1.path(), d2.path(), &empty_filter(), true, true, true)
+                .unwrap();
+            let e2 = r2.entries.iter().find(|e| e.rel == "f.txt").unwrap();
+            assert_eq!(e2.status, FileStatus::Differ);
+            assert!(e2.attrs_differ);
+        }
+    }
+
+    #[test]
+    fn compare_attrs_detects_symlink() {
+        #[cfg(unix)]
+        {
+            let d1 = tempdir().unwrap();
+            let d2 = tempdir().unwrap();
+            let fixed = filetime::FileTime::from_unix_time(1_700_000_000, 0);
+            // 左侧: 普通文件; 右侧: 符号链接 f.txt -> real.txt（real.txt 内容与左侧相同）
+            let lp = d1.path().join("f.txt");
+            fs::write(&lp, "data").unwrap();
+            filetime::set_file_mtime(&lp, fixed).unwrap();
+            fs::write(d2.path().join("real.txt"), "data").unwrap();
+            filetime::set_file_mtime(d2.path().join("real.txt"), fixed).unwrap();
+            let rp = d2.path().join("f.txt");
+            std::os::unix::fs::symlink("real.txt", &rp).unwrap();
+            filetime::set_file_mtime(&rp, fixed).unwrap();
+            // 内容一致(符号链接读目标)但链接属性不同 → attrs_differ
+            let r = compare_dirs_attrs(d1.path(), d2.path(), &empty_filter(), true, true, true)
+                .unwrap();
+            let e = r.entries.iter().find(|e| e.rel == "f.txt").unwrap();
+            assert_eq!(e.status, FileStatus::Differ);
+            assert!(e.attrs_differ);
+        }
     }
 }
