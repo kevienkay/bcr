@@ -187,6 +187,11 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         let s = sftp::SftpVfs::connect(rest)?;
         return Ok(Box::new(s));
     }
+    // C3 兼容：sftp+insecure:// 跳过 host key 校验
+    if let Some(rest) = spec.strip_prefix("sftp+insecure://") {
+        let s = sftp::SftpVfs::connect_insecure(rest)?;
+        return Ok(Box::new(s));
+    }
     if let Some(rest) = spec.strip_prefix("ftp://") {
         let f = ftp::FtpVfs::connect(rest, false)?;
         return Ok(Box::new(f));
@@ -225,6 +230,7 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("tar://")
         || spec.starts_with("7z://")
         || spec.starts_with("sftp://")
+        || spec.starts_with("sftp+insecure://")
         || spec.starts_with("ftp://")
         || spec.starts_with("ftps://")
         || spec.starts_with("webdav://")

@@ -3,8 +3,10 @@
 //! 通过 russh（纯 Rust SSH 实现）连接 SFTP 服务器，把远程目录当作本地树。
 //! URL 规范：`sftp://[user[:pass]@]host[:port]/remote/path`
 //!
-//! 注意：首次连接不校验服务器 host key（等价 `StrictHostKeyChecking=no`），
-//! 仅适用于受信环境；生产使用请自行校验。
+//! host key 校验（C3）：默认 TOFU（Trust On First Use）——
+//! 首次连接把服务器 host key 保存到 `~/.bcr-known-hosts`，后续连接校验；
+//! 同时加载 `~/.ssh/known_hosts` 参与匹配。
+//! 兼容旧行为：`sftp+insecure://` 前缀跳过校验（等价 StrictHostKeyChecking=no）。
 
 use super::Vfs;
 use crate::fsscan::{FileMeta, Filter};
@@ -15,18 +17,147 @@ use std::io;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// 不校验 host key 的 handler（M6 最小实现）
-struct NoVerify;
+/// C3 TOFU host key 校验：首次保存到 ~/.bcr-known-hosts，后续校验；
+/// 也匹配 ~/.ssh/known_hosts 中已记录的密钥。insecure=true 时跳过校验。
+struct KeyVerify {
+    /// `[host]:port` 形式的连接目标（known_hosts 条目格式）
+    target: String,
+    /// 纯主机名（兼容无端口条目）
+    host: String,
+    /// 跳过校验（sftp+insecure:// 兼容旧行为）
+    insecure: bool,
+}
 
-impl Handler for NoVerify {
+impl KeyVerify {
+    /// known_hosts 文件路径
+    fn known_hosts_paths() -> Vec<std::path::PathBuf> {
+        let home = std::env::var("HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_default();
+        vec![home.join(".ssh/known_hosts"), home.join(".bcr-known-hosts")]
+    }
+
+    /// 目标是否匹配某条 known_hosts 记录的主机模式（支持 [host]:port、host、host,host 逗号列表）
+    fn target_matches(pattern: &str, target: &str, host: &str) -> bool {
+        for pat in pattern.split(',') {
+            let pat = pat.trim();
+            if pat.is_empty() {
+                continue;
+            }
+            if pat == target || pat == host {
+                return true;
+            }
+            // 通配符：* 匹配任意非分隔符序列
+            let (pat, host_to_check) = if pat.starts_with('[') {
+                // [host]:port 形式，仅匹配主机部分通配
+                (pat, target)
+            } else {
+                (pat, host)
+            };
+            if wildcard_match(pat, host_to_check) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+impl Handler for KeyVerify {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::ssh_key::PublicKey,
+        server_public_key: &russh::keys::ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
+        if self.insecure {
+            return Ok(true);
+        }
+        let key_openssh = server_public_key.to_openssh().unwrap_or_default();
+        let mut matched = false;
+        for path in Self::known_hosts_paths() {
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if line.starts_with("@cert-authority") || line.starts_with("@revoked") {
+                    continue;
+                }
+                let mut parts = line.split_whitespace();
+                let (Some(hosts), Some(_ktype), Some(key)) =
+                    (parts.next(), parts.next(), parts.next())
+                else {
+                    continue;
+                };
+                if !Self::target_matches(hosts, &self.target, &self.host) {
+                    continue;
+                }
+                matched = true;
+                // 密钥一致 → 可信
+                if key == key_openssh {
+                    return Ok(true);
+                }
+            }
+        }
+        if matched {
+            // 有条目但密钥不匹配 → 拒绝（可能中间人攻击或 host key 更换）
+            eprintln!(
+                "bcr: host key 不匹配 {}(known_hosts 已记录不同密钥；如确认服务器重装，请删除 ~/.bcr-known-hosts 对应条目)",
+                self.target
+            );
+            return Ok(false);
+        }
+        // TOFU：首次连接，保存到 ~/.bcr-known-hosts 并接受
+        let home = std::env::var("HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_default();
+        let path = home.join(".bcr-known-hosts");
+        let line = format!("{} {}\n", self.target, key_openssh);
+        if std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()))
+            .is_ok()
+        {
+            eprintln!(
+                "bcr: 首次连接，host key 已保存到 {}（TOFU）",
+                path.display()
+            );
+        }
         Ok(true)
     }
+}
+
+/// 简单通配符匹配：* 匹配任意字符序列（不含路径分隔符语义，足够 host 匹配用）
+fn wildcard_match(pattern: &str, s: &str) -> bool {
+    let p: Vec<char> = pattern.chars().collect();
+    let t: Vec<char> = s.chars().collect();
+    let (mut pi, mut ti) = (0usize, 0usize);
+    let (mut star, mut mark) = (usize::MAX, 0usize);
+    while ti < t.len() {
+        if pi < p.len() && (p[pi] == '?' || p[pi] == t[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if pi < p.len() && p[pi] == '*' {
+            star = pi;
+            mark = ti;
+            pi += 1;
+        } else if star != usize::MAX {
+            pi = star + 1;
+            mark += 1;
+            ti = mark;
+        } else {
+            return false;
+        }
+    }
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
 }
 
 /// 解析 sftp:// URL：返回 (user, pass, host, port, remote_path)
@@ -93,8 +224,17 @@ pub struct SftpVfs {
 }
 
 impl SftpVfs {
-    /// 连接并建立 SFTP 会话（阻塞）
+    /// 连接并建立 SFTP 会话（阻塞）。insecure=true 时跳过 host key 校验。
     pub fn connect(url_rest: &str) -> io::Result<Self> {
+        Self::connect_impl(url_rest, false)
+    }
+
+    /// sftp+insecure:// 前缀：跳过 host key 校验（兼容旧行为）
+    pub fn connect_insecure(url_rest: &str) -> io::Result<Self> {
+        Self::connect_impl(url_rest, true)
+    }
+
+    fn connect_impl(url_rest: &str, insecure: bool) -> io::Result<Self> {
         let (user, pass, host, port, root) = parse_url(url_rest)?;
         let desc = format!("sftp://{user}@{host}:{port}{root}");
 
@@ -105,9 +245,18 @@ impl SftpVfs {
 
         let session = rt.block_on(async {
             let config = Arc::new(russh::client::Config::default());
-            let mut session = russh::client::connect(config, (host.as_str(), port), NoVerify)
-                .await
-                .map_err(|e| io::Error::other(format!("SSH 连接失败: {e}")))?;
+            let target = format!("[{}]:{}", host, port);
+            let mut session = russh::client::connect(
+                config,
+                (host.as_str(), port),
+                KeyVerify {
+                    target,
+                    host: host.clone(),
+                    insecure,
+                },
+            )
+            .await
+            .map_err(|e| io::Error::other(format!("SSH 连接失败: {e}")))?;
 
             let authed = match &pass {
                 Some(p) => session.authenticate_password(&user, p).await.map_err(|e| {
@@ -343,5 +492,59 @@ mod tests {
         assert_eq!(join_root("/root", ""), "/root");
         assert_eq!(join_root("/root/", "x.txt"), "/root/x.txt");
         assert_eq!(join_root("/", "a.txt"), "/a.txt");
+    }
+
+    // ---- C3 host key 校验（纯逻辑） ----
+
+    #[test]
+    fn wildcard_match_basic() {
+        assert!(wildcard_match("*", "anything"));
+        assert!(wildcard_match("git*.com", "github.com"));
+        assert!(wildcard_match("*.example.com", "a.example.com"));
+        assert!(!wildcard_match("*.example.com", "example.org"));
+        assert!(wildcard_match("host", "host"));
+        assert!(!wildcard_match("host", "other"));
+        assert!(wildcard_match("h?st", "host"));
+        assert!(!wildcard_match("h?st", "haast"));
+    }
+
+    #[test]
+    fn target_matches_port_and_wildcard() {
+        // [host]:port 精确匹配
+        assert!(KeyVerify::target_matches(
+            "[example.com]:22",
+            "[example.com]:22",
+            "example.com"
+        ));
+        // 纯 host 条目匹配（忽略端口）
+        assert!(KeyVerify::target_matches(
+            "example.com",
+            "[example.com]:22",
+            "example.com"
+        ));
+        // 逗号列表
+        assert!(KeyVerify::target_matches(
+            "a.com,b.com",
+            "[b.com]:2222",
+            "b.com"
+        ));
+        // 通配符 host 条目
+        assert!(KeyVerify::target_matches(
+            "*.example.com",
+            "[sub.example.com]:22",
+            "sub.example.com"
+        ));
+        // 不匹配
+        assert!(!KeyVerify::target_matches(
+            "other.com",
+            "[example.com]:22",
+            "example.com"
+        ));
+        // 空模式
+        assert!(!KeyVerify::target_matches(
+            "",
+            "[example.com]:22",
+            "example.com"
+        ));
     }
 }
