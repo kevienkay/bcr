@@ -648,14 +648,14 @@ impl DiffTab {
                         .desired_width(100.0),
                 );
                 if ui
-                    .button("替换")
+                    .button("🔁 替换")
                     .on_hover_text("替换当前匹配（写回文件并自动备份）")
                     .clicked()
                 {
                     self.replace_current();
                 }
                 if ui
-                    .button("全部替换")
+                    .button("🔁 全部替换")
                     .on_hover_text("替换所有匹配（写回文件并自动备份）")
                     .clicked()
                 {
@@ -674,7 +674,7 @@ impl DiffTab {
                 }
                 self.goto_line = goto_text.parse().ok();
                 if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                    || ui.button(t(I18nKey::Goto)).clicked()
+                    || ui.button(format!("🎯 {}", t(I18nKey::Goto))).clicked()
                 {
                     if let Some(line) = self.goto_line {
                         if line >= 1 {
