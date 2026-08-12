@@ -119,9 +119,40 @@ fn init_platform() {
 #[cfg(not(windows))]
 fn init_platform() {}
 
+/// Windows：判断是否由「双击」启动（而非从终端运行）。
+/// 双击时系统新建控制台，进程列表只有自己（≤1）；从 cmd/powershell 启动时列表含 shell（≥2）。
+/// 双击场景同时隐藏系统新建的控制台黑框（避免一闪而过的窗口残留）。
+#[cfg(windows)]
+fn console_procs() -> u32 {
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn GetConsoleProcessList(lpdwProcessList: *mut u32, dwProcessCount: u32) -> u32;
+        fn FreeConsole() -> i32;
+    }
+    let mut list = [0u32; 4];
+    let count = unsafe { GetConsoleProcessList(list.as_mut_ptr(), list.len() as u32) };
+    if count <= 1 {
+        unsafe {
+            FreeConsole();
+        }
+    }
+    count
+}
+
+#[cfg(not(windows))]
+fn console_procs() -> u32 {
+    2
+}
+
+/// 判断无参数时应否启动 GUI（纯逻辑，便于测试）：
+/// stdin 非终端（管道/重定向）或 Windows 双击（控制台进程列表 ≤1）→ GUI。
+fn should_launch_gui(stdin_is_terminal: bool, console_procs: u32) -> bool {
+    !stdin_is_terminal || console_procs <= 1
+}
+
 fn main() {
     init_platform();
-    // Windows 双击 exe：无参数 + stdin 非终端（无控制台输入）→ 自动启动 GUI；
+    // Windows 双击 exe（无参数 + 独立控制台）或 stdin 非终端（管道/重定向）→ 自动启动 GUI；
     // 终端里无参数仍打印帮助退出（保持 CLI 行为）。
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
@@ -132,7 +163,7 @@ fn main() {
                     | clap::error::ErrorKind::MissingSubcommand
             ) =>
         {
-            if !std::io::stdin().is_terminal() {
+            if should_launch_gui(std::io::stdin().is_terminal(), console_procs()) {
                 Cli {
                     lang: None,
                     encoding: None,
@@ -178,4 +209,29 @@ fn main() {
         Commands::Task(args) => task::run(&args),
     };
     std::process::exit(code);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gui_launch_logic_covers_all_cases() {
+        // 终端 + 控制台进程 ≥2（cmd/powershell 里运行）→ 打印帮助
+        assert!(!should_launch_gui(true, 2));
+        assert!(!should_launch_gui(true, 5));
+        // 终端 + 控制台进程 ≤1（Windows 双击，新建控制台只有自己）→ GUI
+        assert!(should_launch_gui(true, 1));
+        assert!(should_launch_gui(true, 0));
+        // stdin 非终端（管道/重定向/CI 模拟）→ GUI
+        assert!(should_launch_gui(false, 2));
+        assert!(should_launch_gui(false, 1));
+        assert!(should_launch_gui(false, 0));
+    }
+
+    #[test]
+    fn console_procs_platform_safe() {
+        // 非 Windows 恒为 2；Windows 上返回真实值（不 panic）
+        let _ = console_procs();
+    }
 }
