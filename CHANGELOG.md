@@ -6,6 +6,14 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-12
+
+### 修复（UI 精修跟进）
+
+- **文本对比左右两页**：两栏固定各占半屏并排（不再被长行撑出视口），顶部加左右文件名头部（固定视口宽度，不随滚动移动）
+- **长行不截断**：内容宽度按最长行扩展，超宽时出现水平滚动条，可左右拖动查看完整内容（鼠标拖动/滚动条/触摸板）
+- **CI 修复**：恢复 Cargo.lock 至干净状态（windows/windows-core 依赖误降级导致 Windows clippy 编译 wgpu-hal 失败）
+
 ## [0.2.0] - 2026-08-12
 
 ### UI 差距消除（P32，对标 Beyond Compare 4 全量盘点，A类核心交互 + B类次要差距）
@@ -165,4 +173,5 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - docs/automation.md：自动化指南（JSON 契约参考 + bcr.py API + 任务清单 + 场景示例）
 
 [0.1.0]: https://github.com/kevienkay/bcr/releases/tag/v0.1.0
+[0.2.1]: https://github.com/kevienkay/bcr/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kevienkay/bcr/releases/tag/v0.2.0

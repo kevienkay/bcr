@@ -1,6 +1,6 @@
 [package]
 name = "bcr"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Beyond Compare 风格的文件对比工具（Rust 实现）"
 license = "MIT"
