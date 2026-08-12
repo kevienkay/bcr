@@ -15,6 +15,7 @@ pub mod ftp;
 pub mod onedrive;
 pub mod s3;
 pub mod sftp;
+pub mod svn;
 pub mod webdav;
 pub mod zip;
 
@@ -201,6 +202,11 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         let f = ftp::FtpVfs::connect(rest, true)?;
         return Ok(Box::new(f));
     }
+    // A13 SVN：外部 svn 命令（只读）
+    if let Some(rest) = spec.strip_prefix("svn://") {
+        let s = svn::SvnVfs::connect(rest)?;
+        return Ok(Box::new(s));
+    }
     if let Some(rest) = spec.strip_prefix("webdav://") {
         let w = webdav::WebdavVfs::connect(rest)?;
         return Ok(Box::new(w));
@@ -233,6 +239,7 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("sftp+insecure://")
         || spec.starts_with("ftp://")
         || spec.starts_with("ftps://")
+        || spec.starts_with("svn://")
         || spec.starts_with("webdav://")
         || spec.starts_with("webdavs://")
         || spec.starts_with("s3://")
