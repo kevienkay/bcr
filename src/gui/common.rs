@@ -167,3 +167,34 @@ pub fn open_with_system_app(path: &str) {
     let cmd = "open";
     let _ = std::process::Command::new(cmd).arg(path).spawn();
 }
+
+/// P32-A4：在文件管理器中定位文件（macOS open -R / Windows explorer /select / Linux xdg-open 父目录）
+pub fn reveal_in_file_manager(path: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .args(["-R", path])
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("explorer")
+            .args(["/select,", path])
+            .spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // Linux 无原生定位；打开父目录
+        let parent = std::path::Path::new(path)
+            .parent()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string());
+        let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = std::process::Command::new("open")
+            .args(["-R", path])
+            .spawn();
+    }
+}

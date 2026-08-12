@@ -322,14 +322,61 @@ impl MergeTab {
                 let syn_r = crate::highlight::syntax_for(&self.right_path);
                 sa.show_rows(ui, ROW_H, rows.len(), |ui, range| {
                     ui.set_min_width(total_w);
+                    let (bp, lp, rp) = (
+                        self.base_path.clone(),
+                        self.left_path.clone(),
+                        self.right_path.clone(),
+                    );
                     for i in range {
                         let row = &rows[i];
                         let (bg_b, bg_l, bg_r) = merge_row_bg(row);
                         let (hl_l, hl_r) = merge_row_hl(row);
-                        paint_merge_row(
+                        let resp = paint_merge_row(
                             ui, row, gutter, col_w, bg_b, bg_l, bg_r, hl_l, hl_r, fg, syn_b, syn_l,
                             syn_r,
                         );
+                        // P32-A4：行右键菜单（复制路径/打开所在位置/系统打开）
+                        let (bp2, lp2, rp2) = (bp.clone(), lp.clone(), rp.clone());
+                        resp.context_menu(|ui| {
+                            if ui.button("复制 BASE 路径").clicked() {
+                                ui.ctx().copy_text(bp2.clone());
+                                ui.close();
+                            }
+                            if ui.button("复制左侧路径").clicked() {
+                                ui.ctx().copy_text(lp2.clone());
+                                ui.close();
+                            }
+                            if ui.button("复制右侧路径").clicked() {
+                                ui.ctx().copy_text(rp2.clone());
+                                ui.close();
+                            }
+                            ui.separator();
+                            if ui.button("打开所在位置（BASE）").clicked() {
+                                super::common::reveal_in_file_manager(&bp2);
+                                ui.close();
+                            }
+                            if ui.button("打开所在位置（左）").clicked() {
+                                super::common::reveal_in_file_manager(&lp2);
+                                ui.close();
+                            }
+                            if ui.button("打开所在位置（右）").clicked() {
+                                super::common::reveal_in_file_manager(&rp2);
+                                ui.close();
+                            }
+                            ui.separator();
+                            if ui.button("系统打开（BASE）").clicked() {
+                                super::common::open_with_system_app(&bp2);
+                                ui.close();
+                            }
+                            if ui.button("系统打开（左）").clicked() {
+                                super::common::open_with_system_app(&lp2);
+                                ui.close();
+                            }
+                            if ui.button("系统打开（右）").clicked() {
+                                super::common::open_with_system_app(&rp2);
+                                ui.close();
+                            }
+                        });
                     }
                 })
             };
@@ -381,10 +428,10 @@ fn paint_merge_row(
     syn_b: Option<&'static syntect::parsing::SyntaxReference>,
     syn_l: Option<&'static syntect::parsing::SyntaxReference>,
     syn_r: Option<&'static syntect::parsing::SyntaxReference>,
-) {
-    let (rect, _) = ui.allocate_exact_size(
+) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(
         Vec2::new(gutter * 3.0 + col_w * 3.0, ROW_H),
-        egui::Sense::hover(),
+        egui::Sense::click(),
     );
     let x = rect.left();
     let y = rect.top();
@@ -423,6 +470,7 @@ fn paint_merge_row(
     let c = Rect::from_min_size(Pos2::new(xr + gutter, y), vec2(col_w, ROW_H));
     paint_bg(ui, c, bg_r);
     paint_cell(ui, c, row.right.as_ref(), fg, hl_r, syn_r);
+    resp
 }
 
 fn basename(p: &str) -> String {

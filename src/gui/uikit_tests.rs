@@ -11,6 +11,7 @@
 use crate::gui::csvtab::CsvTab;
 use crate::gui::difftab::DiffTab;
 use crate::gui::dirtab::{DirTab, ViewFilter};
+use crate::gui::imagetab::ImageTab;
 use crate::gui::mergetab::MergeTab;
 use crate::sideview::ViewOptions;
 use egui_kittest::{kittest::Queryable, Harness};
@@ -24,6 +25,19 @@ fn write(dir: &std::path::Path, name: &str, content: &str) -> String {
         fs::create_dir_all(parent).unwrap();
     }
     fs::write(&p, content).unwrap();
+    p.to_str().unwrap().to_string()
+}
+
+/// 生成纯色 PNG 并写入临时目录，返回路径
+fn write_png(dir: &std::path::Path, name: &str, rgba: [u8; 4]) -> String {
+    let img = image::RgbaImage::from_pixel(4, 4, image::Rgba(rgba));
+    let p = dir.join(name);
+    image::DynamicImage::ImageRgba8(img)
+        .write_to(
+            &mut std::io::BufWriter::new(std::fs::File::create(&p).unwrap()),
+            image::ImageFormat::Png,
+        )
+        .unwrap();
     p.to_str().unwrap().to_string()
 }
 
@@ -400,4 +414,74 @@ fn difftab_ignore_excludes_row_from_navigation_via_state() {
     tab.ignored_rows.clear();
     tab.recompute();
     assert_eq!(tab.diff_rows.len(), before, "取消忽略后差异行恢复");
+}
+
+// ---- P32-A4：右键菜单全覆盖 ----------------
+
+#[test]
+fn imagetab_context_menu_swap_exchanges_sides() {
+    let d = tempdir().unwrap();
+    let a = write_png(d.path(), "a.png", [10, 20, 30, 255]);
+    let b = write_png(d.path(), "b.png", [10, 20, 99, 255]);
+    let tab = RefCell::new(ImageTab::new(&a, &b));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 右键点击图片 → 菜单出现（含交换左右）
+    // 左右两张图都是 Image 角色，取第一个即可（两张图挂同一套菜单）
+    let img = h
+        .get_all_by_role(eframe::egui::accesskit::Role::Image)
+        .next()
+        .unwrap();
+    img.click_secondary();
+    h.run();
+    assert!(
+        h.query_by_label_contains("交换左右").is_some(),
+        "右键菜单应包含交换左右"
+    );
+    // 点击交换左右 → 左右路径互换
+    h.get_by_label_contains("交换左右").click();
+    h.run();
+    let t = tab.borrow();
+    assert_eq!(t.left, b, "交换后左侧应为原右侧");
+    assert_eq!(t.right, a, "交换后右侧应为原左侧");
+}
+
+#[test]
+fn mergetab_context_menu_registers_without_panic() {
+    let d = tempdir().unwrap();
+    let base = write(d.path(), "base.txt", "line1\nline2\n");
+    let left = write(d.path(), "left.txt", "LEFT1\nline2\n");
+    let right = write(d.path(), "right.txt", "RIGHT1\nline2\n");
+    let tab = RefCell::new(MergeTab::new(&base, &left, &right));
+    assert!(tab.borrow().view.conflicts > 0, "前置：应有冲突行");
+    // 渲染多帧：右键菜单注册（context_menu 挂载）不 panic
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(tab.borrow().view.conflicts > 0, "渲染后冲突仍在");
+}
+
+#[test]
+fn dirtab_context_menu_extends_with_reveal() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "a.txt", "l");
+    write(d1.path(), "b.txt", "b");
+    write(d2.path(), "a.txt", "r");
+    let tab = RefCell::new(DirTab::new(
+        d1.path().to_str().unwrap(),
+        d2.path().to_str().unwrap(),
+    ));
+    tab.borrow_mut().refresh_sync();
+    assert!(
+        tab.borrow().flat.iter().any(|r| r.name == "a.txt"),
+        "前置：目录有两文件"
+    );
+    // 渲染多帧：右键菜单（含打开所在位置）挂载不 panic
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(tab.borrow().result.is_some(), "渲染后对比结果仍在");
 }

@@ -1248,6 +1248,19 @@ impl DirTab {
                                     ui.close();
                                 }
                                 ui.separator();
+                                if ui.button("打开所在位置（左）").clicked() {
+                                    super::common::reveal_in_file_manager(
+                                        &full_l.to_string_lossy(),
+                                    );
+                                    ui.close();
+                                }
+                                if ui.button("打开所在位置（右）").clicked() {
+                                    super::common::reveal_in_file_manager(
+                                        &full_r.to_string_lossy(),
+                                    );
+                                    ui.close();
+                                }
+                                ui.separator();
                                 if ui.button("在对比中打开 (Enter)").clicked() {
                                     pending_open = Some(e.rel.clone());
                                     ui.close();

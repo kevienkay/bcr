@@ -383,17 +383,59 @@ impl ImageTab {
                 eff_zoom = sx.min(sy).clamp(0.01, 8.0);
             }
             // 受控滚动：定位差异时用 self.scroll 覆盖，否则跟随用户滚动
+            let mut swap_req = false;
             let out = egui::ScrollArea::both()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.horizontal_top(|ui| {
-                        img_block(ui, &tex.left, &self.left, eff_zoom, "左");
-                        img_block(ui, &tex.right, &self.right, eff_zoom, "右");
+                        let rl = img_block(ui, &tex.left, &self.left, eff_zoom, "左");
+                        let rr = img_block(ui, &tex.right, &self.right, eff_zoom, "右");
+                        // P32-A4：右键菜单（复制路径/打开所在位置/系统打开/交换左右）
+                        let (lp, rp) = (self.left.clone(), self.right.clone());
+                        for resp in [rl, rr] {
+                            resp.context_menu(|ui| {
+                                if ui.button("复制左侧路径").clicked() {
+                                    ui.ctx().copy_text(lp.clone());
+                                    ui.close();
+                                }
+                                if ui.button("复制右侧路径").clicked() {
+                                    ui.ctx().copy_text(rp.clone());
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button("打开所在位置（左）").clicked() {
+                                    super::common::reveal_in_file_manager(&lp);
+                                    ui.close();
+                                }
+                                if ui.button("打开所在位置（右）").clicked() {
+                                    super::common::reveal_in_file_manager(&rp);
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button("系统打开（左）").clicked() {
+                                    super::common::open_with_system_app(&lp);
+                                    ui.close();
+                                }
+                                if ui.button("系统打开（右）").clicked() {
+                                    super::common::open_with_system_app(&rp);
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button("交换左右").clicked() {
+                                    swap_req = true;
+                                    ui.close();
+                                }
+                            });
+                        }
                         if self.show_overlay {
                             img_block(ui, &tex.overlay, "差异叠加", eff_zoom, "叠加");
                         }
                     });
                 });
+            if swap_req {
+                let (l, r) = (self.left.clone(), self.right.clone());
+                self.load_pair(&r, &l);
+            }
             // 用户未主动滚动时保持受控偏移；用户滚动后跟随用户
             if out.state.offset != self.scroll {
                 self.scroll = out.state.offset;
@@ -463,8 +505,14 @@ impl ImageTab {
     }
 }
 
-/// 单图渲染块（标题 + 图片，按 zoom 缩放）
-fn img_block(ui: &mut egui::Ui, tex: &egui::TextureHandle, label: &str, zoom: f32, side: &str) {
+/// 单图渲染块（标题 + 图片，按 zoom 缩放），返回 Response 供右键菜单使用
+fn img_block(
+    ui: &mut egui::Ui,
+    tex: &egui::TextureHandle,
+    label: &str,
+    zoom: f32,
+    side: &str,
+) -> egui::Response {
     let size = tex.size_vec2() * zoom;
     ui.vertical(|ui| {
         ui.label(
@@ -475,9 +523,10 @@ fn img_block(ui: &mut egui::Ui, tex: &egui::TextureHandle, label: &str, zoom: f3
         ui.add(
             egui::Image::new((tex.id(), size))
                 .fit_to_exact_size(size)
-                .sense(egui::Sense::hover()),
-        );
-    });
+                .sense(egui::Sense::click()),
+        )
+    })
+    .inner
 }
 
 /// RgbaImage → egui 纹理（超限缩小，防 GPU 纹理超尺寸）
