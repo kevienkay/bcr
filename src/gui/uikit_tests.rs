@@ -687,3 +687,71 @@ fn parse_date_secs_basic() {
     assert_eq!(super::dirtab::parse_date_secs("2026-13-01"), None);
     assert_eq!(super::dirtab::parse_date_secs("abc"), None);
 }
+
+// ---- P32-B4：独立 Hex 对比视图（差异导航） ----------------
+
+#[test]
+fn difftab_hex_diff_navigation_via_keys() {
+    let d = tempdir().unwrap();
+    // 二进制文件：前 16 字节相同，第 16 字节起有差异（跨两行）
+    let l = {
+        let mut v = vec![0u8; 40];
+        v[0] = 0x41;
+        v[15] = 0x42;
+        v[16] = 0x01;
+        v[31] = 0x02;
+        let s = String::from_utf8_lossy(&v).into_owned();
+        write(d.path(), "l.bin", &s)
+    };
+    let r = {
+        let mut v = vec![0u8; 40];
+        v[0] = 0x41;
+        v[15] = 0x43; // 第 1 行（offset 0）差异
+        v[16] = 0x01;
+        v[31] = 0x03; // 第 2 行（offset 16）差异
+        let s = String::from_utf8_lossy(&v).into_owned();
+        write(d.path(), "r.bin", &s)
+    };
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // 二进制 → hex 模式（非文本行）
+    assert!(tab.borrow().hex.is_some(), "二进制文件应进入 hex 模式");
+    assert!(!tab.borrow().hex.as_ref().unwrap().rows.is_empty());
+    let diff_rows = tab
+        .borrow()
+        .hex
+        .as_ref()
+        .unwrap()
+        .rows
+        .iter()
+        .filter(|row| row.diff)
+        .count();
+    assert!(
+        diff_rows >= 2,
+        "应有至少两处 hex 差异行，实际 {}",
+        diff_rows
+    );
+
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // F6 下一差异 → hex_diff_pos 置位
+    assert_eq!(tab.borrow().hex_diff_pos, None);
+    h.key_press(eframe::egui::Key::F6);
+    h.run();
+    let first = tab.borrow().hex_diff_pos;
+    assert!(first.is_some(), "F6 后应有 hex 差异目标");
+    // 再按 F6 → 跳到下一处差异（不同行）
+    h.key_press(eframe::egui::Key::F6);
+    h.run();
+    let second = tab.borrow().hex_diff_pos;
+    assert_ne!(first, second, "连续 F6 应跳到不同 hex 差异行");
+    // F7 上一差异 → 回到第一处
+    h.key_press(eframe::egui::Key::F7);
+    h.run();
+    assert_eq!(tab.borrow().hex_diff_pos, first, "F7 应回到上一差异");
+    // 滚动偏移已设置（跳转生效）
+    assert!(
+        tab.borrow().scroll.y > 0.0 || first == Some(0),
+        "hex 跳转应设置滚动偏移"
+    );
+}

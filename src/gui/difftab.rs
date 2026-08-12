@@ -94,6 +94,8 @@ pub struct DiffTab {
     pub hex: Option<HexTabData>,
     /// hex 编辑状态
     pub hex_edit: Option<HexEditState>,
+    /// B4：hex 差异导航位置（hex 差异行索引）
+    pub hex_diff_pos: Option<usize>,
     /// A8 自动换行（word wrap，BC5 特性）
     pub wrap: bool,
     /// A11 缩略图总览（右侧迷你差异地图，点击跳转）
@@ -151,6 +153,7 @@ impl DiffTab {
             redo_stack: Vec::new(),
             hex: None,
             hex_edit: None,
+            hex_diff_pos: None,
             wrap: false,
             show_overview: true,
         }
@@ -697,6 +700,66 @@ impl DiffTab {
         self.scroll.x = 0.0;
     }
 
+    /// B4：hex 模式下一差异（按行循环跳转）
+    pub fn hex_next_diff(&mut self) {
+        let Some(h) = &self.hex else { return };
+        let n = h.rows.len();
+        if n == 0 {
+            return;
+        }
+        let start = self.hex_diff_pos.map(|p| p + 1).unwrap_or(0);
+        let mut target = None;
+        for i in start..n {
+            if h.rows[i].diff {
+                target = Some(i);
+                break;
+            }
+        }
+        if target.is_none() {
+            for i in 0..start.min(n) {
+                if h.rows[i].diff {
+                    target = Some(i);
+                    break;
+                }
+            }
+        }
+        if let Some(i) = target {
+            self.hex_diff_pos = Some(i);
+            self.scroll.y = (i as f32 * HEX_ROW_H - 4.0 * HEX_ROW_H).max(0.0);
+            self.scroll.x = 0.0;
+        }
+    }
+
+    /// B4：hex 模式上一差异（按行循环跳转）
+    pub fn hex_prev_diff(&mut self) {
+        let Some(h) = &self.hex else { return };
+        let n = h.rows.len();
+        if n == 0 {
+            return;
+        }
+        let start = self.hex_diff_pos.map(|p| p.saturating_sub(1)).unwrap_or(n);
+        let mut target = None;
+        for i in (0..=start).rev() {
+            if i < n && h.rows[i].diff {
+                target = Some(i);
+                break;
+            }
+        }
+        if target.is_none() {
+            for i in (0..n).rev() {
+                if h.rows[i].diff {
+                    target = Some(i);
+                    break;
+                }
+            }
+        }
+        if let Some(i) = target {
+            self.hex_diff_pos = Some(i);
+            self.scroll.y = (i as f32 * HEX_ROW_H - 4.0 * HEX_ROW_H).max(0.0);
+            self.scroll.x = 0.0;
+        }
+    }
+
     pub fn handle_keys(&mut self, ui: &egui::Ui) {
         let ctrl = ui.input(|i| i.modifiers.command);
         // P32-A2：内联编辑中 Enter 提交 / ESC 取消（优先于搜索 Enter）
@@ -730,12 +793,20 @@ impl DiffTab {
             self.goto_focus = true;
             return;
         }
-        // B1：F6 下一差异 / F7 上一差异（Shift+F7 兼容保留）
+        // B1：F6 下一差异 / F7 上一差异（hex 模式下走 hex 差异导航）
         if ui.input(|i| i.key_pressed(Key::F6)) {
-            self.next_diff();
+            if self.hex.is_some() {
+                self.hex_next_diff();
+            } else {
+                self.next_diff();
+            }
         }
         if ui.input(|i| i.key_pressed(Key::F7)) {
-            self.prev_diff();
+            if self.hex.is_some() {
+                self.hex_prev_diff();
+            } else {
+                self.prev_diff();
+            }
         }
         // B7：F5 重新加载
         if ui.input(|i| i.key_pressed(Key::F5)) {
@@ -1104,60 +1175,66 @@ impl DiffTab {
                 {
                     save_req = true;
                 }
-                let out = super::show_rows(ui, h.rows.len(), HEX_ROW_H, |ui, range| {
-                    ui.set_min_width(total_w);
-                    for i in range {
-                        let row = &h.rows[i];
-                        // 正在编辑的行：显示输入框
-                        if let Some(he) = &self.hex_edit {
-                            if he.row == i {
-                                let (rect, resp) = ui.allocate_exact_size(
-                                    Vec2::new(total_w, HEX_ROW_H),
-                                    egui::Sense::click(),
-                                );
-                                if row.diff {
-                                    paint_bg(ui, rect, Some(bg_replace_l()));
+                let out = super::show_rows_offset(
+                    ui,
+                    h.rows.len(),
+                    HEX_ROW_H,
+                    self.scroll,
+                    |ui, range| {
+                        ui.set_min_width(total_w);
+                        for i in range {
+                            let row = &h.rows[i];
+                            // 正在编辑的行：显示输入框
+                            if let Some(he) = &self.hex_edit {
+                                if he.row == i {
+                                    let (rect, resp) = ui.allocate_exact_size(
+                                        Vec2::new(total_w, HEX_ROW_H),
+                                        egui::Sense::click(),
+                                    );
+                                    if row.diff {
+                                        paint_bg(ui, rect, Some(bg_replace_l()));
+                                    }
+                                    ui.painter().text(
+                                        Pos2::new(rect.left() + HEX_OFF_X, rect.top() + 2.0),
+                                        egui::Align2::LEFT_TOP,
+                                        format!("{:08x}", row.offset),
+                                        egui::FontId::monospace(13.0),
+                                        GUTTER,
+                                    );
+                                    let mut buf = self
+                                        .hex_edit
+                                        .as_ref()
+                                        .map(|e| e.buf.clone())
+                                        .unwrap_or_default();
+                                    let te = ui.add(
+                                        egui::TextEdit::singleline(&mut buf)
+                                            .font(egui::TextStyle::Monospace)
+                                            .desired_width(240.0)
+                                            .hint_text("hex bytes, e.g. 01 0a ff"),
+                                    );
+                                    if let Some(he) = self.hex_edit.as_mut() {
+                                        he.buf = buf;
+                                    }
+                                    if resp.double_clicked() {
+                                        edit_click = Some(i);
+                                    }
+                                    let _ = te;
+                                    continue;
                                 }
-                                ui.painter().text(
-                                    Pos2::new(rect.left() + HEX_OFF_X, rect.top() + 2.0),
-                                    egui::Align2::LEFT_TOP,
-                                    format!("{:08x}", row.offset),
-                                    egui::FontId::monospace(13.0),
-                                    GUTTER,
-                                );
-                                let mut buf = self
-                                    .hex_edit
-                                    .as_ref()
-                                    .map(|e| e.buf.clone())
-                                    .unwrap_or_default();
-                                let te = ui.add(
-                                    egui::TextEdit::singleline(&mut buf)
-                                        .font(egui::TextStyle::Monospace)
-                                        .desired_width(240.0)
-                                        .hint_text("hex bytes, e.g. 01 0a ff"),
-                                );
-                                if let Some(he) = self.hex_edit.as_mut() {
-                                    he.buf = buf;
-                                }
-                                if resp.double_clicked() {
-                                    edit_click = Some(i);
-                                }
-                                let _ = te;
-                                continue;
                             }
+                            paint_hex_row(ui, row, fg);
+                            // 双击进入编辑（编辑该行左/右侧字节）
+                            let (rect, resp) = ui.allocate_exact_size(
+                                Vec2::new(total_w, HEX_ROW_H),
+                                egui::Sense::click(),
+                            );
+                            if resp.double_clicked() {
+                                edit_click = Some(i);
+                            }
+                            let _ = rect;
                         }
-                        paint_hex_row(ui, row, fg);
-                        // 双击进入编辑（编辑该行左/右侧字节）
-                        let (rect, resp) = ui.allocate_exact_size(
-                            Vec2::new(total_w, HEX_ROW_H),
-                            egui::Sense::click(),
-                        );
-                        if resp.double_clicked() {
-                            edit_click = Some(i);
-                        }
-                        let _ = rect;
-                    }
-                });
+                    },
+                );
                 // 双击 → 打开编辑（默认编辑差异行左侧）
                 if let Some(i) = edit_click {
                     if let Some(h) = &self.hex {

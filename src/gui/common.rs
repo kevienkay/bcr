@@ -141,6 +141,25 @@ pub fn show_rows<R>(
     out
 }
 
+/// 带初始滚动偏移的虚拟化渲染（B4：hex 差异导航跳转用）
+pub fn show_rows_offset<R>(
+    ui: &mut egui::Ui,
+    total: usize,
+    row_h: f32,
+    offset: egui::Vec2,
+    add: impl FnOnce(&mut egui::Ui, std::ops::Range<usize>) -> R,
+) -> egui::scroll_area::ScrollAreaOutput<R> {
+    let prev = ui.spacing().item_spacing.y;
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let out = egui::ScrollArea::both()
+        .auto_shrink([false, false])
+        .vertical_scroll_offset(offset.y)
+        .horizontal_scroll_offset(offset.x)
+        .show_rows(ui, row_h, total, add);
+    ui.spacing_mut().item_spacing.y = prev;
+    out
+}
+
 /// 状态色（目录对比/合并视图用）
 pub fn status_color(ui: &egui::Ui, letter: char) -> Color32 {
     match letter {
