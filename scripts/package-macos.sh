@@ -63,6 +63,16 @@ if [ -f "assets/bcr.icns" ]; then
   cp "assets/bcr.icns" "$APP/Contents/Resources/bcr.icns"
 fi
 
+# ad-hoc 签名（Gatekeeper 必需）：无开发者证书时用 - 签名，
+# 避免 macOS 报“已损坏，无法打开”（未签名 .app 会被 Gatekeeper 拦截）
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign - "$APP"
+  echo "✓ ad-hoc 签名完成"
+  codesign --verify --deep --strict "$APP" || echo "警告: codesign 验证未通过" >&2
+else
+  echo "警告: 未找到 codesign，跳过签名" >&2
+fi
+
 # 链接动态库（本机 rustls/aws-lc 通常静态链接，无需 dylib 拷贝；若依赖外部 dylib 会失败时提示）
 if otool -L "$APP/Contents/MacOS/bcr" 2>/dev/null | grep -qE '^\s+/[^/]*(lib|\.dylib)' &&
    ! otool -L "$APP/Contents/MacOS/bcr" 2>/dev/null | grep -qE '/System/|/usr/lib/'; then
