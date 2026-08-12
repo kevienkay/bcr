@@ -343,10 +343,10 @@ pub enum Key {
     TakeRight,
     /// 取 BASE
     TakeBase,
-    /// 当前冲突解决: {}
-    CurrentRes,
     /// 未解决（默认取左）
     ResAuto,
+    /// 已解决
+    Resolved,
     /// 合并结果预览
     MergePreview,
     /// {} 行

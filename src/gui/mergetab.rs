@@ -188,19 +188,21 @@ impl MergeTab {
                 if ui.button(t(I18nKey::TakeBase)).clicked() {
                     self.resolve_current(Resolution::Base);
                 }
-                // 显示当前冲突块的解决状态
+                // 显示当前冲突块的解决状态（P31：已解决 ✓ 绿标）
                 if let Some(bi) = self.current_conflict_block() {
                     if let Some(blk) = self.view.blocks.get(bi) {
                         ui.separator();
-                        ui.label(fmt(
-                            I18nKey::CurrentRes,
-                            &[match blk.resolution {
-                                Resolution::Auto => t(I18nKey::ResAuto),
-                                Resolution::Left => t(I18nKey::TakeLeft),
-                                Resolution::Right => t(I18nKey::TakeRight),
-                                Resolution::Base => t(I18nKey::TakeBase),
-                            }],
-                        ));
+                        let (mark, color) = match blk.resolution {
+                            Resolution::Auto => (
+                                t(I18nKey::ResAuto).to_string(),
+                                Color32::from_rgb(240, 180, 60),
+                            ),
+                            Resolution::Left | Resolution::Right | Resolution::Base => (
+                                format!("✓ {}", t(I18nKey::Resolved)),
+                                Color32::from_rgb(110, 230, 120),
+                            ),
+                        };
+                        ui.colored_label(color, mark);
                     }
                 }
             });
