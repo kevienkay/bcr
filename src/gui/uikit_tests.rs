@@ -468,7 +468,8 @@ fn dirtab_context_menu_extends_with_reveal() {
     let d2 = tempdir().unwrap();
     write(d1.path(), "a.txt", "l");
     write(d1.path(), "b.txt", "b");
-    write(d2.path(), "a.txt", "r");
+    // 不同尺寸（l vs rr）：快速模式（mtime+size）必判 Differ，避免同尺寸被误判 Same 而过滤
+    write(d2.path(), "a.txt", "rr");
     let tab = RefCell::new(DirTab::new(
         d1.path().to_str().unwrap(),
         d2.path().to_str().unwrap(),
@@ -612,12 +613,13 @@ fn dirtab_f2_rename_opens_dialog() {
 fn dirtab_filter_panel_filters_by_ext_and_size() {
     let d1 = tempdir().unwrap();
     let d2 = tempdir().unwrap();
+    // 两侧内容不同尺寸：快速模式（mtime+size）必判 Differ，避免 CI 文件系统（mtime 精度低）误判 Same
     write(d1.path(), "a.txt", "xxxx");
     write(d1.path(), "b.rs", "rr");
     write(d1.path(), "c.md", "mmmmmmmm");
-    write(d2.path(), "a.txt", "yyyy");
-    write(d2.path(), "b.rs", "ss");
-    write(d2.path(), "c.md", "nnnnnnnn");
+    write(d2.path(), "a.txt", "yyyyy");
+    write(d2.path(), "b.rs", "sss");
+    write(d2.path(), "c.md", "nnnnnnnnn");
     let tab = RefCell::new(DirTab::new(
         d1.path().to_str().unwrap(),
         d2.path().to_str().unwrap(),
