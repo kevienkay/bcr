@@ -208,3 +208,47 @@ fn mergetab_take_left_resolves_conflict() {
         "取左侧后冲突应标记为 Left"
     );
 }
+
+// ---- P32-A1：差异连接线（mid_gap 布局） -------------
+
+#[test]
+fn difftab_mid_gap_renders_with_connector_lines() {
+    // 加载含三类差异的文件（Myers 实测：Delete + 不等长 Replace→Replace+Insert + Equal）
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\nREP1\nm2\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\nREP2\nm2\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    h.run(); // 多帧稳定渲染
+
+    let t = tab.borrow();
+    // 差异行存在：删除(仅左)/插入(仅右)/替换
+    assert!(
+        t.rows
+            .iter()
+            .any(|r| r.tag == crate::sideview::RowTag::Delete),
+        "应有 Delete(仅左) 行"
+    );
+    assert!(
+        t.rows
+            .iter()
+            .any(|r| r.tag == crate::sideview::RowTag::Insert),
+        "应有 Insert(仅右) 行"
+    );
+    assert!(
+        t.rows
+            .iter()
+            .any(|r| r.tag == crate::sideview::RowTag::Replace),
+        "应有 Replace(修改) 行"
+    );
+    // 连接线颜色映射：有差异→有颜色，无差异→None
+    use crate::sideview::RowTag;
+    assert!(super::difftab::diff_mid_line_color(RowTag::Delete).is_some());
+    assert!(super::difftab::diff_mid_line_color(RowTag::Insert).is_some());
+    assert!(super::difftab::diff_mid_line_color(RowTag::Replace).is_some());
+    assert!(super::difftab::diff_mid_line_color(RowTag::Equal).is_none());
+    // mid_gap 布局常量生效（左右面板之间有空隙）
+    assert!(crate::gui::theme::MID_GAP > 0.0);
+}

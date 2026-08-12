@@ -1020,7 +1020,9 @@ impl DiffTab {
                 .max()
                 .unwrap_or(0);
             let content_w = half.max(max_chars as f32 * 8.5 + 24.0);
-            let total_w = gutter_l + content_w + gutter_r + content_w;
+            // P32-A1：左右面板之间留空隙画差异连接线（BC 观感）
+            let mid_gap = super::theme::MID_GAP;
+            let total_w = gutter_l + content_w + mid_gap + gutter_r + content_w;
             let fg = text_color(ui);
 
             // 匹配行集合（搜索高亮）
@@ -1199,8 +1201,9 @@ fn paint_diff_row(
     syn_r: Option<&'static syntect::parsing::SyntaxReference>,
     is_current: bool,
 ) {
+    let mid_gap = super::theme::MID_GAP;
     let (rect, _) = ui.allocate_exact_size(
-        Vec2::new(gutter_l + content_w + gutter_r + content_w, ROW_H),
+        Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H),
         egui::Sense::hover(),
     );
     let x = rect.left();
@@ -1228,14 +1231,64 @@ fn paint_diff_row(
     paint_bg(ui, content_rect, bg_l);
     paint_cell(ui, content_rect, row.left.as_ref(), fg, hl_l, syn_l);
 
+    // P32-A1：左右面板空隙画差异连接线（有差异的行画线连接两侧，BC 观感）
+    let mid_x = x + gutter_l + content_w;
+    let mid_rect = Rect::from_min_size(Pos2::new(mid_x, y), vec2(mid_gap, ROW_H));
+    let mid_color = diff_mid_line_color(row.tag);
+    if let Some(c) = mid_color {
+        // 空隙底色（比 gutter 略深一档，突出连接线）
+        paint_bg(
+            ui,
+            mid_rect,
+            if ui.visuals().dark_mode {
+                Some(Color32::from_gray(24))
+            } else {
+                Some(Color32::from_gray(244))
+            },
+        );
+        // 水平连接线（行垂直居中，左右各留 2px）
+        let cy = y + ROW_H / 2.0;
+        ui.painter().line_segment(
+            [
+                Pos2::new(mid_x + 2.0, cy),
+                Pos2::new(mid_x + mid_gap - 2.0, cy),
+            ],
+            egui::Stroke::new(1.5, c),
+        );
+    } else {
+        // 无差异行：弱色垂直分隔线（延续面板分隔感）
+        let sep = if ui.visuals().dark_mode {
+            Color32::from_gray(48)
+        } else {
+            Color32::from_gray(210)
+        };
+        ui.painter().line_segment(
+            [
+                Pos2::new(mid_x + mid_gap / 2.0, y),
+                Pos2::new(mid_x + mid_gap / 2.0, y + ROW_H),
+            ],
+            egui::Stroke::new(1.0, sep),
+        );
+    }
+
     // 右 gutter + 内容
-    let x_r = x + gutter_l + content_w;
+    let x_r = mid_x + mid_gap;
     let gutter_rect = Rect::from_min_size(Pos2::new(x_r, y), vec2(gutter_r, ROW_H));
     paint_bg(ui, gutter_rect, gutter_bg);
     paint_line_no(ui, gutter_rect, row.right_no);
     let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_r);
     paint_cell(ui, content_rect, row.right.as_ref(), fg, hl_r, syn_r);
+}
+
+/// P32-A1：差异连接线颜色（有差异的行返回对应颜色，无差异返回 None）
+pub(crate) fn diff_mid_line_color(tag: RowTag) -> Option<Color32> {
+    match tag {
+        RowTag::Equal => None,
+        RowTag::Delete => Some(super::theme::diff_delete()),
+        RowTag::Insert => Some(super::theme::diff_insert()),
+        RowTag::Replace => Some(super::theme::diff_modify()),
+    }
 }
 
 fn basename(p: &str) -> String {
