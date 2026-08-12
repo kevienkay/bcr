@@ -93,7 +93,9 @@ fn dirtab_refresh_builds_tree_via_ui() {
     write(d1.path(), "a.txt", "x");
     write(d1.path(), "sub/b.txt", "b");
     write(d2.path(), "a.txt", "x");
-    write(d2.path(), "sub/b.txt", "B");
+    // 内容长度不同（b vs bb）：快速模式（mtime+size）必判 Differ，
+    // 避免同尺寸文件在 CI 文件系统（mtime 精度低）下被误判 Same 而过滤掉
+    write(d2.path(), "sub/b.txt", "bb");
     let tab = RefCell::new(DirTab::new(
         d1.path().to_str().unwrap(),
         d2.path().to_str().unwrap(),
