@@ -20,6 +20,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// 归档内文件表：相对路径 -> (内容, 大小, mtime)
 type ArchiveFiles = BTreeMap<String, (Vec<u8>, u64, SystemTime)>;
 
+/// 归档解压内存上限（默认 1 GiB；可用 BCR_MAX_ARCHIVE_SIZE 环境变量覆盖，单位字节）
+pub(crate) fn archive_size_limit() -> u64 {
+    std::env::var("BCR_MAX_ARCHIVE_SIZE")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .unwrap_or(1 << 30)
+}
+
 /// 归档虚拟文件系统（全量解压进内存）
 pub struct ArchiveVfs {
     /// 归档路径（仅用于描述）
@@ -206,9 +214,16 @@ fn encode_tar(files: &ArchiveFiles) -> io::Result<Vec<u8>> {
 }
 
 /// 从 tar 字节流读取全部文件条目（跳过目录/链接/设备）
+/// 累计解压大小超过上限时报错，避免超大归档 OOM。
 fn read_tar(data: &[u8]) -> io::Result<ArchiveFiles> {
+    read_tar_with_limit(data, archive_size_limit())
+}
+
+/// read_tar 的可注入上限版本（测试用，避免环境变量竞态）
+fn read_tar_with_limit(data: &[u8], limit: u64) -> io::Result<ArchiveFiles> {
     let mut ar = tar::Archive::new(Cursor::new(data));
     let mut files = BTreeMap::new();
+    let mut total: u64 = 0;
     let entries = ar
         .entries()
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("tar 解析失败: {e}")))?;
@@ -230,18 +245,29 @@ fn read_tar(data: &[u8]) -> io::Result<ArchiveFiles> {
         let mtime = entry.header().mtime().ok().map(secs_to_systemtime);
         let mut buf = Vec::new();
         entry.read_to_end(&mut buf)?;
+        total = total.saturating_add(buf.len() as u64);
+        if total > limit {
+            return Err(io::Error::new(
+                io::ErrorKind::OutOfMemory,
+                format!(
+                    "归档解压超过内存上限 {limit} 字节（BCR_MAX_ARCHIVE_SIZE 可调），建议改用 zip 或本地目录"
+                ),
+            ));
+        }
         let size = buf.len() as u64;
         files.insert(rel, (buf, size, mtime.unwrap_or(UNIX_EPOCH)));
     }
     Ok(files)
 }
 
-/// 读取 7z 全部文件条目
+/// 读取 7z 全部文件条目（同样受 archive_size_limit 约束）
 fn read_sevenz(path: &str) -> io::Result<ArchiveFiles> {
+    let limit = archive_size_limit();
     let mut reader = sevenz_rust2::SevenZReader::open(path, sevenz_rust2::Password::empty())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("7z 打开失败: {e}")))?;
     let mut files = BTreeMap::new();
     let mut err: Option<io::Error> = None;
+    let mut total: u64 = 0;
     let r = reader.for_each_entries(|entry, r| {
         if entry.is_directory() || !entry.has_stream() {
             return Ok(true);
@@ -253,6 +279,16 @@ fn read_sevenz(path: &str) -> io::Result<ArchiveFiles> {
         let mut buf = Vec::new();
         if let Err(e) = r.read_to_end(&mut buf) {
             err = Some(e);
+            return Ok(false);
+        }
+        total = total.saturating_add(buf.len() as u64);
+        if total > limit {
+            err = Some(io::Error::new(
+                io::ErrorKind::OutOfMemory,
+                format!(
+                    "归档解压超过内存上限 {limit} 字节（BCR_MAX_ARCHIVE_SIZE 可调），建议改用 zip 或本地目录"
+                ),
+            ));
             return Ok(false);
         }
         let size = buf.len() as u64;
@@ -505,6 +541,31 @@ mod tests {
         let p = d.path().join("x.rar");
         fs::write(&p, "fake rar").unwrap();
         assert!(ArchiveVfs::open(p.to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn archive_size_limit_rejects_huge_tar() {
+        // 注入极小上限：归档内容（hello/world/deep 共 14 字节）超过 4 字节上限应报错
+        let d = tempdir().unwrap();
+        let tp = d.path().join("t.tar");
+        make_tar(&tp);
+        let data = fs::read(&tp).unwrap();
+        let err = read_tar_with_limit(&data, 4).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::OutOfMemory);
+        assert!(err.to_string().contains("BCR_MAX_ARCHIVE_SIZE"));
+        // 默认上限下正常
+        assert_eq!(read_tar(&data).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn archive_size_limit_large_enough_passes() {
+        // 大上限下正常打开（走 ArchiveVfs::open 全链路）
+        let d = tempdir().unwrap();
+        let tp = d.path().join("t.tar");
+        make_tar(&tp);
+        let v = ArchiveVfs::open(tp.to_str().unwrap()).unwrap();
+        let f = Filter::new(&[], &[]).unwrap();
+        assert_eq!(v.scan(&f).unwrap().len(), 3);
     }
 
     #[test]
