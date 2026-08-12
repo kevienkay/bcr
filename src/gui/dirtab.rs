@@ -700,6 +700,19 @@ impl DirTab {
         }
         egui::Panel::top("dirtab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
+                // P31 路径栏：左路径 ⇄ 右路径（弱色只读，BC 观感）
+                ui.label(
+                    egui::RichText::new(&self.left)
+                        .color(ui.visuals().weak_text_color())
+                        .monospace(),
+                );
+                ui.label(egui::RichText::new("⇄").color(ui.visuals().weak_text_color()));
+                ui.label(
+                    egui::RichText::new(&self.right)
+                        .color(ui.visuals().weak_text_color())
+                        .monospace(),
+                );
+                ui.separator();
                 // B2 后台任务指示与暂停/取消控制
                 if let Some(bg) = &self.bg {
                     let done = bg.done.load(std::sync::atomic::Ordering::SeqCst);
