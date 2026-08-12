@@ -605,3 +605,85 @@ fn dirtab_f2_rename_opens_dialog() {
     );
     assert_eq!(t.rename_buf, "a.txt", "重命名缓冲应预填文件名");
 }
+
+// ---- P32-B2：DirTab 过滤/显示面板 ----------------
+
+#[test]
+fn dirtab_filter_panel_filters_by_ext_and_size() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "a.txt", "xxxx");
+    write(d1.path(), "b.rs", "rr");
+    write(d1.path(), "c.md", "mmmmmmmm");
+    write(d2.path(), "a.txt", "yyyy");
+    write(d2.path(), "b.rs", "ss");
+    write(d2.path(), "c.md", "nnnnnnnn");
+    let tab = RefCell::new(DirTab::new(
+        d1.path().to_str().unwrap(),
+        d2.path().to_str().unwrap(),
+    ));
+    {
+        let mut t = tab.borrow_mut();
+        t.only_diff = false;
+        t.show_same = true;
+        t.refresh_sync();
+        assert_eq!(t.flat.len(), 3, "前置：三文件全部可见");
+    }
+    // 扩展名过滤：仅 .txt
+    {
+        let mut t = tab.borrow_mut();
+        t.ext_filter = "txt".to_string();
+        t.rebuild_tree();
+        assert_eq!(t.flat.len(), 1, "扩展名过滤后应只剩 a.txt");
+        assert_eq!(t.flat[0].name, "a.txt");
+    }
+    // 大小范围：2~5 字节（b.rs=2 命中，a.txt=4 命中，c.md=8 排除）
+    {
+        let mut t = tab.borrow_mut();
+        t.ext_filter.clear();
+        t.min_size = "2".to_string();
+        t.max_size = "5".to_string();
+        t.rebuild_tree();
+        let names: Vec<String> = t.flat.iter().map(|r| r.name.clone()).collect();
+        assert_eq!(names.len(), 2, "大小过滤后应剩 a.txt + b.rs");
+        assert!(names.contains(&"a.txt".to_string()));
+        assert!(names.contains(&"b.rs".to_string()));
+        assert!(!names.contains(&"c.md".to_string()));
+    }
+    // 清除过滤恢复
+    {
+        let mut t = tab.borrow_mut();
+        t.min_size.clear();
+        t.max_size.clear();
+        t.rebuild_tree();
+        assert_eq!(t.flat.len(), 3, "清除大小过滤后恢复三文件");
+    }
+    // 渲染过滤面板（展开）不 panic
+    {
+        let mut t = tab.borrow_mut();
+        t.show_filter_panel = true;
+    }
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(
+        h.query_all_by_label_contains("过滤/显示").next().is_some(),
+        "过滤面板应渲染标题"
+    );
+}
+
+#[test]
+fn parse_date_secs_basic() {
+    // 1970-01-01 → 0
+    assert_eq!(super::dirtab::parse_date_secs("1970-01-01"), Some(0));
+    // 1970-01-02 → 86400
+    assert_eq!(super::dirtab::parse_date_secs("1970-01-02"), Some(86400));
+    // 2026-01-01 在 1970 之后很远
+    let v = super::dirtab::parse_date_secs("2026-01-01").unwrap();
+    assert!(v > 1_700_000_000);
+    // 非法格式 → None
+    assert_eq!(super::dirtab::parse_date_secs(""), None);
+    assert_eq!(super::dirtab::parse_date_secs("2026-13-01"), None);
+    assert_eq!(super::dirtab::parse_date_secs("abc"), None);
+}

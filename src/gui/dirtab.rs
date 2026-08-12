@@ -74,6 +74,18 @@ pub struct DirTab {
     pub(crate) rename_target: Option<String>,
     /// B1 F2 重命名：输入缓冲区
     pub(crate) rename_buf: String,
+    /// B2 过滤/显示面板：是否展开（左侧 SidePanel）
+    pub(crate) show_filter_panel: bool,
+    /// B2 扩展名过滤（逗号分隔，如 "txt,rs"；空 = 全部）
+    pub(crate) ext_filter: String,
+    /// B2 大小下限（字节，空 = 不限）
+    pub(crate) min_size: String,
+    /// B2 大小上限（字节，空 = 不限）
+    pub(crate) max_size: String,
+    /// B2 修改时间下限（YYYY-MM-DD，空 = 不限）
+    pub(crate) mtime_from: String,
+    /// B2 修改时间上限（YYYY-MM-DD，空 = 不限）
+    pub(crate) mtime_to: String,
     /// B2 后台任务（对比/同步在独立线程执行，UI 不卡顿）
     pub bg: Option<BgTask>,
 }
@@ -193,6 +205,12 @@ impl DirTab {
             show_align: false,
             rename_target: None,
             rename_buf: String::new(),
+            show_filter_panel: false,
+            ext_filter: String::new(),
+            min_size: String::new(),
+            max_size: String::new(),
+            mtime_from: String::new(),
+            mtime_to: String::new(),
             bg: None,
         }
     }
@@ -318,7 +336,7 @@ impl DirTab {
     }
 
     /// 从结果重建树并展平
-    fn rebuild_tree(&mut self) {
+    pub(crate) fn rebuild_tree(&mut self) {
         self.flat.clear();
         let Some(r) = &self.result else { return };
         let mut visible: Vec<&crate::compare::FileEntry> = r.entries.iter().collect();
@@ -344,6 +362,59 @@ impl DirTab {
             ViewFilter::Same => {
                 visible.retain(|e| e.status == FileStatus::Same);
             }
+        }
+        // B2：扩展名过滤（逗号分隔，如 "txt,rs"）
+        let exts: Vec<String> = self
+            .ext_filter
+            .split(',')
+            .map(|s| s.trim().trim_start_matches('.').to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !exts.is_empty() {
+            visible.retain(|e| {
+                let ext = std::path::Path::new(&e.rel)
+                    .extension()
+                    .map(|s| s.to_string_lossy().to_lowercase())
+                    .unwrap_or_default();
+                exts.iter().any(|x| x == &ext)
+            });
+        }
+        // B2：大小范围（字节；取存在侧的最大 size）
+        let min_sz = self.min_size.trim().parse::<u64>().ok();
+        let max_sz = self.max_size.trim().parse::<u64>().ok();
+        if min_sz.is_some() || max_sz.is_some() {
+            visible.retain(|e| {
+                let sz = e
+                    .left
+                    .as_ref()
+                    .map(|m| m.size)
+                    .into_iter()
+                    .chain(e.right.as_ref().map(|m| m.size))
+                    .max()
+                    .unwrap_or(0);
+                min_sz.map(|v| sz >= v).unwrap_or(true) && max_sz.map(|v| sz <= v).unwrap_or(true)
+            });
+        }
+        // B2：修改时间范围（YYYY-MM-DD → 当日零点 Unix 秒，取存在侧最新 mtime）
+        let t_from = parse_date_secs(&self.mtime_from);
+        let t_to = parse_date_secs(&self.mtime_to);
+        if t_from.is_some() || t_to.is_some() {
+            visible.retain(|e| {
+                let mt = e
+                    .left
+                    .as_ref()
+                    .map(|m| m.mtime)
+                    .into_iter()
+                    .chain(e.right.as_ref().map(|m| m.mtime))
+                    .map(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0)
+                    })
+                    .max()
+                    .unwrap_or(0);
+                t_from.map(|v| mt >= v).unwrap_or(true) && t_to.map(|v| mt <= v).unwrap_or(true)
+            });
         }
         if visible.is_empty() {
             self.selected = None;
@@ -762,6 +833,14 @@ impl DirTab {
                     .clicked()
                 {
                     self.refresh();
+                }
+                // B2：过滤/显示面板开关（左侧 SidePanel）
+                if ui
+                    .selectable_label(self.show_filter_panel, "⛭ 过滤")
+                    .on_hover_text("扩展名/大小/时间过滤面板")
+                    .clicked()
+                {
+                    self.show_filter_panel = !self.show_filter_panel;
                 }
                 ui.separator();
                 if ui
@@ -1187,6 +1266,99 @@ impl DirTab {
             }
         }
 
+        // B2：左侧过滤/显示面板（可折叠）——扩展名/大小/时间范围，与工具栏过滤联动
+        if self.show_filter_panel {
+            egui::Panel::left("dir_filter_panel")
+                .resizable(true)
+                .default_size(230.0)
+                .show(ui, |ui| {
+                    ui.heading("过滤/显示");
+                    ui.separator();
+                    ui.label("扩展名（逗号分隔）");
+                    let mut ext = self.ext_filter.clone();
+                    let r = ui.add(
+                        egui::TextEdit::singleline(&mut ext)
+                            .hint_text("txt,rs,md")
+                            .desired_width(200.0),
+                    );
+                    if r.changed() {
+                        self.ext_filter = ext;
+                        self.rebuild_tree();
+                    }
+                    ui.add_space(6.0);
+                    ui.label("大小范围（字节）");
+                    ui.horizontal(|ui| {
+                        ui.label("最小");
+                        let mut mn = self.min_size.clone();
+                        let r1 = ui.add(
+                            egui::TextEdit::singleline(&mut mn)
+                                .hint_text("0")
+                                .desired_width(70.0),
+                        );
+                        if r1.changed() {
+                            self.min_size = mn;
+                            self.rebuild_tree();
+                        }
+                        ui.label("最大");
+                        let mut mx = self.max_size.clone();
+                        let r2 = ui.add(
+                            egui::TextEdit::singleline(&mut mx)
+                                .hint_text("不限")
+                                .desired_width(70.0),
+                        );
+                        if r2.changed() {
+                            self.max_size = mx;
+                            self.rebuild_tree();
+                        }
+                    });
+                    ui.add_space(6.0);
+                    ui.label("修改时间（YYYY-MM-DD）");
+                    ui.horizontal(|ui| {
+                        ui.label("从");
+                        let mut f = self.mtime_from.clone();
+                        let r3 = ui.add(
+                            egui::TextEdit::singleline(&mut f)
+                                .hint_text("2026-01-01")
+                                .desired_width(90.0),
+                        );
+                        if r3.changed() {
+                            self.mtime_from = f;
+                            self.rebuild_tree();
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("到");
+                        let mut to = self.mtime_to.clone();
+                        let r4 = ui.add(
+                            egui::TextEdit::singleline(&mut to)
+                                .hint_text("2026-12-31")
+                                .desired_width(90.0),
+                        );
+                        if r4.changed() {
+                            self.mtime_to = to;
+                            self.rebuild_tree();
+                        }
+                    });
+                    ui.add_space(8.0);
+                    if ui.button("清除全部过滤").clicked() {
+                        self.ext_filter.clear();
+                        self.min_size.clear();
+                        self.max_size.clear();
+                        self.mtime_from.clear();
+                        self.mtime_to.clear();
+                        self.rebuild_tree();
+                    }
+                    ui.separator();
+                    if let Some(r) = &self.result {
+                        ui.label(format!(
+                            "共 {} 项 / 当前显示 {} 项",
+                            r.entries.len(),
+                            self.flat.len()
+                        ));
+                    }
+                });
+        }
+
         egui::CentralPanel::default().show(ui, |ui| {
             if self.result.is_none() && self.error.is_none() {
                 self.refresh();
@@ -1377,4 +1549,36 @@ fn basename(p: &str) -> String {
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| p.to_string())
+}
+
+/// B2：解析 YYYY-MM-DD → 当日零点 Unix 秒；格式非法返回 None
+pub(crate) fn parse_date_secs(s: &str) -> Option<u64> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = s.split('-').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let y: u64 = parts[0].parse().ok()?;
+    let m: u64 = parts[1].parse().ok()?;
+    let d: u64 = parts[2].parse().ok()?;
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    // 公历日序号 → Unix 秒（1970-01-01 起）
+    let days = days_from_civil(y as i64, m as i64, d as i64)?;
+    Some((days as u64) * 86400)
+}
+
+/// 公历日期 → 1970-01-01 起的天数（Howard Hinnant 算法）
+fn days_from_civil(y: i64, m: i64, d: i64) -> Option<i64> {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146097 + doe - 719468)
 }
