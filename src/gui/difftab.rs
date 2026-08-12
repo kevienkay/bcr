@@ -608,7 +608,7 @@ impl DiffTab {
                     }
                 }
                 ui.separator();
-                if ui.button(t(I18nKey::Reload)).clicked() {
+                if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
                     self.reload();
                 }
                 ui.separator();
@@ -690,10 +690,10 @@ impl DiffTab {
                         &self.rows.len().to_string(),
                     ],
                 ));
-                if ui.button(t(I18nKey::NextDiff)).clicked() {
+                if ui.button(format!("⬇ {}", t(I18nKey::NextDiff))).clicked() {
                     self.next_diff();
                 }
-                if ui.button(t(I18nKey::PrevDiff)).clicked() {
+                if ui.button(format!("⬆ {}", t(I18nKey::PrevDiff))).clicked() {
                     self.prev_diff();
                 }
             });

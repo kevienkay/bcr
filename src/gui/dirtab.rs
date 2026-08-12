@@ -730,7 +730,7 @@ impl DirTab {
                     }
                     ui.separator();
                 }
-                if ui.button(t(I18nKey::Refresh)).clicked() {
+                if ui.button(format!("⟳ {}", t(I18nKey::Refresh))).clicked() {
                     self.refresh();
                 }
                 ui.separator();
@@ -814,7 +814,11 @@ impl DirTab {
                     ));
                 }
                 ui.separator();
-                if ui.button("⇄ 同步").clicked() {
+                if ui
+                    .button("⇄ 同步")
+                    .on_hover_text("生成同步计划（update/mirror/two-way）")
+                    .clicked()
+                {
                     self.show_sync = !self.show_sync;
                     if self.show_sync && self.sync_plan.is_none() {
                         self.gen_sync_plan();
@@ -840,14 +844,14 @@ impl DirTab {
                     if has_diff {
                         ui.separator();
                         if ui
-                            .button("批量复制→右")
+                            .button("⧉ 批量复制→右")
                             .on_hover_text("把全部差异/仅左侧文件复制到右侧")
                             .clicked()
                         {
                             self.run_batch_copy_to_right();
                         }
                         if ui
-                            .button("批量删除右侧")
+                            .button("🗑 批量删除右侧")
                             .on_hover_text("删除右侧全部差异文件")
                             .clicked()
                         {
@@ -875,11 +879,11 @@ impl DirTab {
                         };
                         self.run_single_op(op);
                     }
-                    if ui.button("删除右侧").clicked() {
+                    if ui.button("🗑 删除右侧").clicked() {
                         let op = SyncOp::Delete { rel: rel.clone() };
                         self.run_single_op(op);
                     }
-                    if ui.button("删除左侧").clicked() {
+                    if ui.button("🗑 删除左侧").clicked() {
                         // 删除左侧 = 把右侧当源、左侧当目标执行 Delete
                         let (l, r) =
                             match (crate::vfs::open(&self.right), crate::vfs::open(&self.left)) {

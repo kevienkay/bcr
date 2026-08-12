@@ -449,10 +449,10 @@ impl eframe::App for DiffApp {
                 {
                     self.show_git_help = !self.show_git_help;
                 }
-                if ui.button("会话中心").clicked() {
+                if ui.button("💬 会话中心").clicked() {
                     self.show_sessions = !self.show_sessions;
                 }
-                if ui.button("规则").clicked() {
+                if ui.button("⚙ 规则").clicked() {
                     self.show_profiles = !self.show_profiles;
                 }
                 ui.separator();

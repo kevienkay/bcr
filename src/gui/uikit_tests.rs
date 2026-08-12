@@ -70,16 +70,16 @@ fn difftab_next_diff_jumps_via_ui() {
     tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run();
-    // 点「下一差异」按钮（t(NextDiff)="F7 下一个差异"）→ diff_pos 变为 Some
+    // 点「下一差异」按钮（P31 图标前缀 ⬇）→ diff_pos 变为 Some
     assert_eq!(tab.borrow().diff_pos, None);
-    h.get_by_label("F7 下一个差异").click();
+    h.get_by_label_contains("下一个差异").click();
     h.run();
     assert!(
         tab.borrow().diff_pos.is_some(),
         "点击下一差异后应有跳转目标"
     );
     // 再点一次仍可跳转（不 panic）
-    h.get_by_label("F7 下一个差异").click();
+    h.get_by_label_contains("下一个差异").click();
     h.run();
     assert!(tab.borrow().diff_pos.is_some());
 }
@@ -104,8 +104,8 @@ fn dirtab_refresh_builds_tree_via_ui() {
     // → 统一用 run_steps 推帧；断言后台任务启动（bg.is_some()）而非等待线程结果
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run_steps(4);
-    // 点击「刷新」按钮 → 后台线程启动（B2）
-    h.get_by_label("刷新").click();
+    // 点「刷新」按钮（P31 图标前缀 ⟳，精确匹配避免命中后台任务指示 label）
+    h.get_by_label("⟳ 刷新").click();
     h.run_steps(4);
     // 时序兼容：小目录线程可能已跑完（bg 已置 None、result 已就绪），
     // 也可能仍在跑（bg 为 Some）——两者都算按钮生效
