@@ -163,6 +163,8 @@ struct DiffApp {
     cloud_right_entries: Option<Vec<String>>,
     /// 云盘浏览错误消息
     cloud_err: Option<String>,
+    /// B6 标签拖拽：当前被拖拽的标签索引
+    drag_tab: Option<usize>,
 }
 
 impl DiffApp {
@@ -180,6 +182,7 @@ impl DiffApp {
             cloud_left_entries: None,
             cloud_right_entries: None,
             cloud_err: None,
+            drag_tab: None,
         }
     }
 
@@ -196,6 +199,25 @@ impl DiffApp {
         if self.active >= self.tabs.len() {
             self.active = self.tabs.len().saturating_sub(1);
         }
+    }
+
+    /// B6：标签拖拽重排（from → to，保持 active 指向同一标签）
+    fn move_tab(&mut self, from: usize, to: usize) {
+        if from == to || from >= self.tabs.len() || to > self.tabs.len() {
+            return;
+        }
+        let active_tab = self.active;
+        let t = self.tabs.remove(from);
+        let insert_at = if to > from { to - 1 } else { to };
+        self.tabs.insert(insert_at, t);
+        // 修正 active：指向原先激活的标签
+        self.active = if active_tab == from {
+            insert_at
+        } else if active_tab > from && active_tab <= insert_at {
+            active_tab - 1
+        } else {
+            active_tab
+        };
     }
 
     fn new_diff_tab(&mut self) {
@@ -614,6 +636,8 @@ impl eframe::App for DiffApp {
                 // 标签栏
                 let mut close: Option<usize> = None;
                 let mut activate: Option<usize> = None;
+                // B6：标签拖拽重排（拖拽标签到另一标签上 → 交换）
+                let mut drag_req: Option<(usize, usize)> = None;
                 for i in 0..self.tabs.len() {
                     let selected = i == self.active;
                     // BC 风格：当前标签高亮底色 + 圆角，与普通标签区分
@@ -623,6 +647,18 @@ impl eframe::App for DiffApp {
                         RichText::new(self.tabs[i].title())
                     };
                     let resp = ui.selectable_label(selected, text);
+                    // B6：拖拽检测（拖拽标签标题区域）
+                    if resp.drag_started() {
+                        self.drag_tab = Some(i);
+                    }
+                    if let Some(from) = self.drag_tab {
+                        if resp.dragged() && from != i {
+                            drag_req = Some((from, i));
+                        }
+                        if resp.drag_stopped() {
+                            self.drag_tab = None;
+                        }
+                    }
                     if resp.clicked() {
                         activate = Some(i);
                     }
@@ -645,6 +681,10 @@ impl eframe::App for DiffApp {
                     if close_resp.clicked() {
                         close = Some(i);
                     }
+                }
+                if let Some((from, to)) = drag_req {
+                    self.move_tab(from, to);
+                    self.drag_tab = Some(if to > from { to - 1 } else { to });
                 }
                 if let Some(i) = activate {
                     self.active = i;
@@ -1169,7 +1209,7 @@ impl eframe::App for DiffApp {
             }
         }
 
-        // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总）
+        // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总；B3 补路径/行列数/选中项数）
         egui::Panel::bottom("status_bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.add_space(6.0);
@@ -1177,6 +1217,33 @@ impl eframe::App for DiffApp {
                     match tab {
                         Tab::Diff(t) => {
                             let s = &t.stats;
+                            // B3：当前标签路径 + 行数
+                            let paths = match (&t.left, &t.right) {
+                                (Some(l), Some(r)) => format!(
+                                    "{} ↔ {}",
+                                    std::path::Path::new(&l.path)
+                                        .file_name()
+                                        .map(|s| s.to_string_lossy().into_owned())
+                                        .unwrap_or_else(|| l.path.clone()),
+                                    std::path::Path::new(&r.path)
+                                        .file_name()
+                                        .map(|s| s.to_string_lossy().into_owned())
+                                        .unwrap_or_else(|| r.path.clone()),
+                                ),
+                                (Some(l), None) => std::path::Path::new(&l.path)
+                                    .file_name()
+                                    .map(|s| s.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| l.path.clone()),
+                                (None, Some(r)) => std::path::Path::new(&r.path)
+                                    .file_name()
+                                    .map(|s| s.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| r.path.clone()),
+                                (None, None) => String::new(),
+                            };
+                            ui.label(paths);
+                            ui.separator();
+                            ui.label(format!("行 {}", t.rows.len()));
+                            ui.separator();
                             ui.label(format!(
                                 "{}  {} {}  {} {}  {} {}  {} {}",
                                 crate::i18n::t(crate::i18n::Key::StatsPanel),
@@ -1191,10 +1258,12 @@ impl eframe::App for DiffApp {
                             ));
                         }
                         Tab::Dir(t) => {
+                            // B3：选中项数
+                            let sel = t.selected.map(|i| i + 1).unwrap_or(0);
                             if let Some(r) = &t.result {
                                 let s = &r.stats;
                                 ui.label(format!(
-                                    "{}  {} {}  {} {}  {} {}  {} {}",
+                                    "{}  {} {}  {} {}  {} {}  {} {}  | 选中 {}/{}",
                                     crate::i18n::t(crate::i18n::Key::StatsPanel),
                                     crate::i18n::t(crate::i18n::Key::StatSame),
                                     s.same,
@@ -1204,6 +1273,8 @@ impl eframe::App for DiffApp {
                                     s.right_only,
                                     crate::i18n::t(crate::i18n::Key::StatReplace),
                                     s.differ,
+                                    sel,
+                                    t.flat.len(),
                                 ));
                             } else {
                                 ui.label(crate::i18n::t(crate::i18n::Key::Hint));
@@ -1211,8 +1282,13 @@ impl eframe::App for DiffApp {
                         }
                         Tab::Csv(t) => {
                             let s = t.stats();
+                            // B3：行列数
+                            let ncols = t.col_count();
+                            let nrows = t.row_count();
                             ui.label(format!(
-                                "{}  {} {}  {} {}  {} {}  {} {}",
+                                "{} × {}  |  {}  {} {}  {} {}  {} {}  {} {}",
+                                nrows,
+                                ncols,
                                 crate::i18n::t(crate::i18n::Key::StatsPanel),
                                 crate::i18n::t(crate::i18n::Key::StatSame),
                                 s.same,
@@ -1962,6 +2038,31 @@ mod tests {
         app.close_tab(0);
         assert!(app.tabs.is_empty());
         assert_eq!(app.active, 0);
+    }
+
+    #[test]
+    fn app_move_tab_reorders_and_keeps_active() {
+        let mut app = DiffApp::new(Settings::default());
+        // 三个标签，激活中间的
+        app.new_diff_tab();
+        app.new_diff_tab();
+        app.new_diff_tab();
+        assert_eq!(app.tabs.len(), 3);
+        app.active = 1;
+        // 把 0 拖到 2 → [1, 2, 0]
+        app.move_tab(0, 2);
+        assert_eq!(app.tabs.len(), 3);
+        // active 原为 1（拖拽源之后），应仍指向原标签
+        // move_tab(0→2)：remove 0 → [t1,t2]，insert at 1 → [t1,t2,t0]
+        // active 1 > from 0 且 <= insert_at 1 → 1-1=0，指向原 t1（现在位置 0）
+        assert_eq!(app.active, 0, "拖拽后 active 应指向原标签");
+        // 再把 0 拖到 0（原地）不改变
+        let before = app.tabs.len();
+        app.move_tab(0, 0);
+        assert_eq!(app.tabs.len(), before);
+        // 越界忽略
+        app.move_tab(5, 0);
+        assert_eq!(app.tabs.len(), before);
     }
 
     #[test]

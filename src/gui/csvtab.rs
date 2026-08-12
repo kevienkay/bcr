@@ -192,9 +192,14 @@ impl CsvTab {
         }
     }
 
-    fn col_count(&self) -> usize {
+    pub(crate) fn col_count(&self) -> usize {
         let n = |t: &Option<Table>| t.as_ref().map(|t| t.headers.len()).unwrap_or(0);
         n(&self.table_a).max(n(&self.table_b))
+    }
+
+    /// B3：行数（对齐后行数，与渲染一致）
+    pub(crate) fn row_count(&self) -> usize {
+        self.aligned.len()
     }
 
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui) {
