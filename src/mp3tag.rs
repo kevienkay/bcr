@@ -65,6 +65,8 @@ impl Mp3Compare {
 
 /// 解析 MP3 文件标签（ID3v1 + ID3v2，v2 优先覆盖同名帧）。
 /// 非 MP3/无标签返回空标签（不算错误，与 BC 一致：无标签视为全空）。
+/// 已由 A5 `parse_audio` 取代（自动识别 MP3/FLAC/OGG/MP4/AAC），保留供兼容。
+#[allow(dead_code)]
 pub fn parse_mp3(path: &str) -> std::io::Result<Mp3Tags> {
     let data = std::fs::read(path)?;
     Ok(parse_mp3_bytes(&data))
@@ -82,6 +84,329 @@ pub fn parse_mp3_bytes(data: &[u8]) -> Mp3Tags {
         tags.merge(v1);
     }
     tags
+}
+
+// ---------------------------------------------------------------------------
+// A5 通用音频标签：按魔数自动识别 FLAC/OGG/MP4/AAC/MP3
+// ---------------------------------------------------------------------------
+
+/// Vorbis comment 键 → 字段名（大小写不敏感）
+fn vorbis_field(key: &str) -> Option<&'static str> {
+    match key.to_ascii_uppercase().as_str() {
+        "TITLE" => Some("title"),
+        "ARTIST" => Some("artist"),
+        "ALBUM" => Some("album"),
+        "DATE" | "YEAR" => Some("year"),
+        "GENRE" => Some("genre"),
+        "TRACKNUMBER" | "TRACK" => Some("track"),
+        "COMMENT" | "DESCRIPTION" => Some("comment"),
+        _ => None,
+    }
+}
+
+/// 解析 Vorbis comment（FLAC METADATA_BLOCK 与 OGG 包共用）。
+/// 格式：`\x03vorbis` + vendor_len(u32 LE) + vendor + count(u32 LE) + count*(len(u32 LE) + "KEY=value")
+/// 入参为完整数据，函数内部搜索 `\x03vorbis` 起始位置（OGG 需跳过页头）。
+fn parse_vorbis_comment(data: &[u8]) -> Option<Mp3Tags> {
+    // 定位 "\x03vorbis" 标识
+    let start = data.windows(7).position(|w| w == b"\x03vorbis")?;
+    let mut pos = start + 7;
+    let read_u32 = |p: usize| -> Option<u32> {
+        if p + 4 > data.len() {
+            None
+        } else {
+            Some(u32::from_le_bytes([
+                data[p],
+                data[p + 1],
+                data[p + 2],
+                data[p + 3],
+            ]))
+        }
+    };
+    // vendor 长度
+    let vendor_len = read_u32(pos)? as usize;
+    pos += 4 + vendor_len;
+    if pos > data.len() {
+        return None;
+    }
+    let count = read_u32(pos)? as usize;
+    pos += 4;
+    let mut tags = Mp3Tags::default();
+    for _ in 0..count {
+        let len = read_u32(pos)? as usize;
+        pos += 4;
+        if pos + len > data.len() {
+            break;
+        }
+        let entry = &data[pos..pos + len];
+        pos += len;
+        let text = String::from_utf8_lossy(entry).to_string();
+        let Some((k, v)) = text.split_once('=') else {
+            continue;
+        };
+        let v = v.trim();
+        if v.is_empty() {
+            continue;
+        }
+        if let Some(field) = vorbis_field(k) {
+            let slot = match field {
+                "title" => &mut tags.title,
+                "artist" => &mut tags.artist,
+                "album" => &mut tags.album,
+                "year" => &mut tags.year,
+                "genre" => &mut tags.genre,
+                "track" => &mut tags.track,
+                "comment" => &mut tags.comment,
+                _ => continue,
+            };
+            if slot.is_none() {
+                *slot = Some(v.to_string());
+            }
+        }
+    }
+    if tags == Mp3Tags::default() {
+        None
+    } else {
+        Some(tags)
+    }
+}
+
+/// 解析 FLAC：跳过 `fLaC` 魔数，扫描 METADATA_BLOCK，取 VORBIS_COMMENT（type=4）块。
+fn parse_flac(data: &[u8]) -> Option<Mp3Tags> {
+    if data.len() < 4 || &data[..4] != b"fLaC" {
+        return None;
+    }
+    let mut pos = 4usize;
+    loop {
+        if pos + 4 > data.len() {
+            break;
+        }
+        let header = data[pos];
+        let last = header & 0x80 != 0;
+        let block_type = header & 0x7F;
+        let len = ((data[pos + 1] as usize) << 16)
+            | ((data[pos + 2] as usize) << 8)
+            | (data[pos + 3] as usize);
+        pos += 4;
+        if pos + len > data.len() {
+            break;
+        }
+        if block_type == 4 {
+            // VORBIS_COMMENT：块内直接是 vorbis comment 数据（无 \x03vorbis 前缀？实际有）
+            return parse_vorbis_comment(&data[pos..pos + len]);
+        }
+        pos += len;
+        if last {
+            break;
+        }
+    }
+    None
+}
+
+/// 解析 MP4/M4A：定位 moov → udta → meta → ilst，逐个标签 atom 取值。
+/// atom 结构：size(u32 BE) + type(4B)；meta 后有 4 字节 version/flags。
+fn parse_mp4(data: &[u8]) -> Option<Mp3Tags> {
+    // 顶层找 moov
+    let mut pos = 0usize;
+    let mut moov: Option<(usize, usize)> = None;
+    while pos + 8 <= data.len() {
+        let size =
+            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+        let typ = &data[pos + 4..pos + 8];
+        if typ == b"moov" {
+            moov = Some((
+                pos + 8,
+                if size >= 8 {
+                    size - 8
+                } else {
+                    data.len() - pos - 8
+                },
+            ));
+            break;
+        }
+        if size < 8 {
+            break;
+        }
+        pos += size;
+    }
+    let (mut p, moov_len) = moov?;
+    let moov_end = p + moov_len.min(data.len().saturating_sub(p));
+    // moov → udta → meta → ilst
+    let find = |from: &mut usize, end: usize, target: &[u8]| -> Option<(usize, usize)> {
+        while *from + 8 <= end {
+            let size = u32::from_be_bytes([
+                data[*from],
+                data[*from + 1],
+                data[*from + 2],
+                data[*from + 3],
+            ]) as usize;
+            let typ = &data[*from + 4..*from + 8];
+            if typ == target {
+                let body_start = *from + 8;
+                let body_len = if size >= 8 {
+                    size - 8
+                } else {
+                    end - body_start
+                };
+                return Some((body_start, body_len));
+            }
+            if size < 8 {
+                break;
+            }
+            *from += size;
+        }
+        None
+    };
+    let (mut q, udta_len) = find(&mut p, moov_end, b"udta")?;
+    let udta_end = q + udta_len.min(moov_end.saturating_sub(q));
+    let (r, meta_len) = find(&mut q, udta_end, b"meta")?;
+    // meta 前 4 字节 version/flags，ilst 从其后开始找
+    let mut meta_body_start = r + 4;
+    let meta_end = (meta_body_start + meta_len.saturating_sub(4)).min(data.len());
+    let (mut s, _ilst_len) = find(&mut meta_body_start, meta_end, b"ilst")?;
+    let ilst_end = meta_end.max(s).min(data.len());
+
+    // ilst 内每个子 atom = 标签；内含 data atom 承载值
+    let mut tags = Mp3Tags::default();
+    let mut set = |field: &str, v: String| {
+        let slot = match field {
+            "title" => &mut tags.title,
+            "artist" => &mut tags.artist,
+            "album" => &mut tags.album,
+            "year" => &mut tags.year,
+            "genre" => &mut tags.genre,
+            "track" => &mut tags.track,
+            "comment" => &mut tags.comment,
+            _ => return,
+        };
+        if slot.is_none() {
+            *slot = Some(v);
+        }
+    };
+    while s + 8 <= ilst_end {
+        let size = u32::from_be_bytes([data[s], data[s + 1], data[s + 2], data[s + 3]]) as usize;
+        let typ = &data[s + 4..s + 8];
+        let field = match typ {
+            b"\xA9nam" => Some("title"),
+            b"\xA9ART" => Some("artist"),
+            b"\xA9alb" => Some("album"),
+            b"\xA9day" => Some("year"),
+            b"\xA9gen" => Some("genre"),
+            b"trkn" => Some("track"),
+            b"\xA9cmt" => Some("comment"),
+            _ => None,
+        };
+        if let Some(field) = field {
+            let body_start = s + 8;
+            let body_end = if size >= 8 {
+                body_start + size - 8
+            } else {
+                ilst_end
+            };
+            let body_end = body_end.min(ilst_end);
+            // 内部找 data atom：size + 'data' + type(4) + locale(4) + payload
+            let mut d = body_start;
+            while d + 16 <= body_end {
+                let dsize =
+                    u32::from_be_bytes([data[d], data[d + 1], data[d + 2], data[d + 3]]) as usize;
+                if &data[d + 4..d + 8] == b"data" {
+                    let payload = &data[d + 16..(d + dsize).min(body_end)];
+                    if field == "track" {
+                        // trkn：2 字节 track number（BE）
+                        if payload.len() >= 4 {
+                            let tn = u16::from_be_bytes([payload[2], payload[3]]);
+                            if tn > 0 {
+                                set(field, tn.to_string());
+                            }
+                        }
+                    } else {
+                        let v = String::from_utf8_lossy(payload).trim().to_string();
+                        if !v.is_empty() {
+                            set(field, v);
+                        }
+                    }
+                    break;
+                }
+                if dsize < 8 {
+                    break;
+                }
+                d += dsize;
+            }
+        }
+        if size < 8 {
+            break;
+        }
+        s += size;
+    }
+    if tags == Mp3Tags::default() {
+        None
+    } else {
+        Some(tags)
+    }
+}
+
+/// 按魔数嗅探格式并解析音频标签（A5）。
+/// 支持：MP3（ID3/MPEG 帧）、FLAC（fLaC）、OGG（OggS）、MP4/M4A（ftyp）、AAC（ID3 前缀或 ADTS）。
+pub fn parse_audio(path: &str) -> std::io::Result<Mp3Tags> {
+    let data = std::fs::read(path)?;
+    Ok(parse_audio_bytes(&data))
+}
+
+/// 从字节解析音频标签（A5 通用入口，分离以便单元测试）
+pub fn parse_audio_bytes(data: &[u8]) -> Mp3Tags {
+    // MP4：ftyp 魔数
+    if data.len() >= 12 && &data[4..8] == b"ftyp" {
+        if let Some(t) = parse_mp4(data) {
+            return t;
+        }
+    }
+    // FLAC
+    if data.len() >= 4 && &data[..4] == b"fLaC" {
+        if let Some(t) = parse_flac(data) {
+            return t;
+        }
+    }
+    // OGG：OggS 页，含 vorbis comment
+    if data.len() >= 4 && &data[..4] == b"OggS" {
+        if let Some(t) = parse_vorbis_comment(data) {
+            return t;
+        }
+    }
+    // MP3 / AAC（ID3 前缀）
+    parse_mp3_bytes(data)
+}
+
+/// 判断文件是否为音频（魔数嗅探 + 扩展名兜底）
+#[allow(dead_code)] // GUI 使用
+pub fn is_audio_file(path: &str) -> bool {
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return false;
+    };
+    use std::io::Read;
+    let mut head = [0u8; 12];
+    let n = match f.read(&mut head) {
+        Ok(n) => n,
+        Err(_) => return false,
+    };
+    let b = &head[..n];
+    if b.len() >= 4 && (&b[..4] == b"fLaC" || &b[..4] == b"OggS") {
+        return true;
+    }
+    if b.len() >= 12 && &b[4..8] == b"ftyp" {
+        return true;
+    }
+    if b.len() >= 3 && &b[..3] == b"ID3" {
+        return true;
+    }
+    if b.len() >= 2 && b[0] == 0xFF && (b[1] & 0xE0) == 0xE0 {
+        return true; // MPEG 帧同步 / ADTS
+    }
+    let lower = path.to_lowercase();
+    [
+        ".mp3", ".flac", ".ogg", ".oga", ".m4a", ".mp4", ".aac", ".wma",
+    ]
+    .iter()
+    .any(|s| lower.ends_with(s))
 }
 
 impl Mp3Tags {
@@ -360,9 +685,10 @@ fn u24(b: &[u8]) -> u32 {
 }
 
 /// 对比两个 MP3 的标签，返回字段级差异
+/// 对比两个音频文件的标签（A5 通用：MP3/FLAC/OGG/MP4/AAC），返回字段级差异
 pub fn compare_mp3(left_path: &str, right_path: &str) -> std::io::Result<Mp3Compare> {
-    let left = parse_mp3(left_path)?;
-    let right = parse_mp3(right_path)?;
+    let left = parse_audio(left_path)?;
+    let right = parse_audio(right_path)?;
     Ok(compare_tags(&left, &right))
 }
 
@@ -753,5 +1079,154 @@ mod tests {
         let p2 = dir.path().join("y.mp3");
         std::fs::write(&p2, b"\xFF\xFB\x90\x00").unwrap(); // MPEG frame sync
         assert!(is_mp3_file(p2.to_str().unwrap()));
+    }
+
+    // ---- A5 通用音频标签（FLAC/OGG/MP4） ----
+
+    /// 构造 FLAC：fLaC + VORBIS_COMMENT 块
+    fn build_flac(comments: &[(&str, &str)]) -> Vec<u8> {
+        let mut body = Vec::new();
+        body.extend_from_slice(b"\x03vorbis");
+        body.extend_from_slice(&0u32.to_le_bytes()); // vendor len
+        body.extend_from_slice(&(comments.len() as u32).to_le_bytes());
+        for (k, v) in comments {
+            let entry = format!("{k}={v}");
+            body.extend_from_slice(&(entry.len() as u32).to_le_bytes());
+            body.extend_from_slice(entry.as_bytes());
+        }
+        let mut out = Vec::new();
+        out.extend_from_slice(b"fLaC");
+        out.push(0x84); // last=1, type=4 (VORBIS_COMMENT)
+        let len = body.len();
+        out.push(((len >> 16) & 0xFF) as u8);
+        out.push(((len >> 8) & 0xFF) as u8);
+        out.push((len & 0xFF) as u8);
+        out.extend_from_slice(&body);
+        out
+    }
+
+    #[test]
+    fn flac_vorbis_comment_parsed() {
+        let data = build_flac(&[
+            ("TITLE", "Song"),
+            ("ARTIST", "Artist"),
+            ("ALBUM", "Album"),
+            ("DATE", "2024"),
+            ("GENRE", "Rock"),
+            ("TRACKNUMBER", "3"),
+            ("COMMENT", "note"),
+        ]);
+        let t = parse_audio_bytes(&data);
+        assert_eq!(t.title.as_deref(), Some("Song"));
+        assert_eq!(t.artist.as_deref(), Some("Artist"));
+        assert_eq!(t.album.as_deref(), Some("Album"));
+        assert_eq!(t.year.as_deref(), Some("2024"));
+        assert_eq!(t.genre.as_deref(), Some("Rock"));
+        assert_eq!(t.track.as_deref(), Some("3"));
+        assert_eq!(t.comment.as_deref(), Some("note"));
+    }
+
+    #[test]
+    fn flac_missing_comment_is_empty() {
+        let data = build_flac(&[]);
+        let t = parse_audio_bytes(&data);
+        assert_eq!(t, Mp3Tags::default());
+    }
+
+    #[test]
+    fn ogg_vorbis_comment_parsed() {
+        // OggS 页头 + vorbis comment 包
+        let mut data = Vec::new();
+        data.extend_from_slice(
+            b"OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+        );
+        let mut body = Vec::new();
+        body.extend_from_slice(b"\x03vorbis");
+        body.extend_from_slice(&0u32.to_le_bytes());
+        body.extend_from_slice(&1u32.to_le_bytes());
+        let entry = "TITLE=Ogg Song";
+        body.extend_from_slice(&(entry.len() as u32).to_le_bytes());
+        body.extend_from_slice(entry.as_bytes());
+        data.extend_from_slice(&body);
+        let t = parse_audio_bytes(&data);
+        assert_eq!(t.title.as_deref(), Some("Ogg Song"));
+    }
+
+    /// 构造最小 MP4 ilst：ftyp + moov（平级顶层 atom）→ udta → meta → ilst → ©nam/data
+    fn build_mp4(title: &str, artist: &str, track: u16) -> Vec<u8> {
+        let atom = |typ: &[u8; 4], body: &[u8]| -> Vec<u8> {
+            let mut a = Vec::new();
+            a.extend_from_slice(&((8 + body.len()) as u32).to_be_bytes());
+            a.extend_from_slice(typ);
+            a.extend_from_slice(body);
+            a
+        };
+        let data_atom = |payload: &[u8]| -> Vec<u8> {
+            let mut d = Vec::new();
+            d.extend_from_slice(&((16 + payload.len()) as u32).to_be_bytes());
+            d.extend_from_slice(b"data");
+            d.extend_from_slice(&1u32.to_be_bytes()); // type 1 = UTF-8
+            d.extend_from_slice(&0u32.to_be_bytes()); // locale
+            d.extend_from_slice(payload);
+            d
+        };
+        let ilst_atom = |typ: &[u8; 4], payload: &[u8]| -> Vec<u8> {
+            let d = data_atom(payload);
+            atom(typ, &d)
+        };
+        let mut ilst_body = ilst_atom(b"\xA9nam", title.as_bytes());
+        ilst_body.extend_from_slice(&ilst_atom(b"\xA9ART", artist.as_bytes()));
+        // trkn：2 字节版本 + 2 字节 track number
+        let mut trkn_payload = vec![0u8, 0];
+        trkn_payload.extend_from_slice(&track.to_be_bytes());
+        ilst_body.extend_from_slice(&ilst_atom(b"trkn", &trkn_payload));
+        let ilst = atom(b"ilst", &ilst_body);
+        let meta = {
+            let mut m = vec![0u8, 0, 0, 0]; // version/flags
+            m.extend_from_slice(&ilst);
+            atom(b"meta", &m)
+        };
+        let udta = atom(b"udta", &meta);
+        let moov = atom(b"moov", &udta);
+        let mut out = Vec::new();
+        // ftyp（顶层平级 atom，body 仅 "M4A " 品牌）
+        out.extend_from_slice(&12u32.to_be_bytes());
+        out.extend_from_slice(b"ftyp");
+        out.extend_from_slice(b"M4A ");
+        // moov（独立顶层 atom）
+        out.extend_from_slice(&moov);
+        out
+    }
+
+    #[test]
+    fn mp4_ilst_parsed() {
+        let data = build_mp4("M4A Title", "M4A Artist", 7);
+        let t = parse_audio_bytes(&data);
+        assert_eq!(t.title.as_deref(), Some("M4A Title"));
+        assert_eq!(t.artist.as_deref(), Some("M4A Artist"));
+        assert_eq!(t.track.as_deref(), Some("7"));
+    }
+
+    #[test]
+    fn audio_dispatch_by_magic() {
+        let dir = tempfile::tempdir().unwrap();
+        // 扩展名兜底：文件存在但魔数未知
+        let p = dir.path().join("x.flac");
+        std::fs::write(&p, b"not-audio").unwrap();
+        assert!(is_audio_file(p.to_str().unwrap()));
+        let p2 = dir.path().join("x.m4a");
+        std::fs::write(&p2, b"not-audio").unwrap();
+        assert!(is_audio_file(p2.to_str().unwrap()));
+        let p3 = dir.path().join("x.ogg");
+        std::fs::write(&p3, b"not-audio").unwrap();
+        assert!(is_audio_file(p3.to_str().unwrap()));
+        // 魔数优先（扩展名无关）
+        let p4 = dir.path().join("a.dat");
+        std::fs::write(&p4, build_flac(&[("TITLE", "T")])).unwrap();
+        assert!(is_audio_file(p4.to_str().unwrap()));
+        // 非音频
+        let p5 = dir.path().join("x.txt");
+        std::fs::write(&p5, b"hello").unwrap();
+        assert!(!is_audio_file(p5.to_str().unwrap()));
     }
 }
