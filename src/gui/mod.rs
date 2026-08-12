@@ -1305,7 +1305,7 @@ mod tests {
             filetime::set_file_mtime(&p, fixed).unwrap();
         }
         let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
-        t.refresh();
+        t.refresh_sync();
         assert!(t.result.is_some());
         // only_diff 默认 → 只有 only_l.txt 是差异文件
         assert!(!t.flat.is_empty());
@@ -1330,7 +1330,7 @@ mod tests {
         let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
         t.only_diff = false;
         t.show_same = true;
-        t.refresh();
+        t.refresh_sync();
         let dir_idx = t.flat.iter().position(|r| r.is_dir).unwrap();
         let dir_path = t.flat[dir_idx].path.clone();
         let before = t.flat.len();
@@ -1353,6 +1353,7 @@ mod tests {
         let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
         t.only_diff = false;
         t.show_same = true;
+        t.refresh_sync();
         egui::__run_test_ui(|ui| {
             t.ui(ui);
         });
@@ -1378,7 +1379,7 @@ mod tests {
         w(d2.path(), "same.txt", "same");
         w(d2.path(), "only.txt", "dst-only");
         let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
-        t.refresh();
+        t.refresh_sync();
         // update 模式：复制 new.txt 到右侧，保留 only.txt
         t.gen_sync_plan();
         let plan = t.sync_plan.as_ref().unwrap();
@@ -1389,7 +1390,7 @@ mod tests {
             .iter()
             .any(|op| matches!(op, SyncOp::Skip { rel, .. } if rel == "only.txt")));
         // 执行勾选
-        t.run_sync_checked();
+        t.run_sync_checked_sync();
         assert_eq!(
             fs::read_to_string(d2.path().join("new.txt")).unwrap(),
             "hello"
@@ -1425,7 +1426,7 @@ mod tests {
         w(d1.path(), "a.txt", "A");
         w(d2.path(), "b.txt", "B");
         let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
-        t.refresh();
+        t.refresh_sync();
         // 复制左侧 a.txt → 右侧
         t.run_single_op(SyncOp::Copy {
             rel: "a.txt".to_string(),
@@ -1458,7 +1459,7 @@ mod tests {
         let mut t = DirTab::new(d1.path().to_str().unwrap(), d2.path().to_str().unwrap());
         // 内容级对比：同 size 同 mtime 的 diff.txt 才能被识别为差异
         t.compare_content = true;
-        t.refresh();
+        t.refresh_sync();
         // 批量复制 → 右：diff.txt 与 only_l.txt 复制到右侧
         t.run_batch_copy_to_right();
         assert_eq!(fs::read_to_string(d2.path().join("diff.txt")).unwrap(), "L");

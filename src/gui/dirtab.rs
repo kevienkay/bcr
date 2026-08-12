@@ -70,6 +70,80 @@ pub struct DirTab {
     align_right: Option<String>,
     /// 手动对齐弹窗开关
     show_align: bool,
+    /// B2 后台任务（对比/同步在独立线程执行，UI 不卡顿）
+    pub bg: Option<BgTask>,
+}
+
+/// B2 后台任务：线程 + 结果通道 + 暂停/取消标志 + 进度
+pub struct BgTask {
+    /// 任务标题（如「目录对比」「同步」）
+    pub label: String,
+    /// 结果通道（UI 线程每帧 poll）
+    pub rx: std::sync::mpsc::Receiver<BgResult>,
+    /// 暂停标志（true = 暂停，线程忙等）
+    pub pause: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// 取消标志（true = 终止）
+    pub cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// 已完成项数（进度显示）
+    pub done: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    /// 总项数（0 = 不确定进度）
+    pub total: usize,
+}
+
+impl BgTask {
+    /// 暂停切换：返回新的暂停状态
+    pub fn toggle_pause(&self) -> bool {
+        let cur = self.pause.load(std::sync::atomic::Ordering::SeqCst);
+        self.pause.store(!cur, std::sync::atomic::Ordering::SeqCst);
+        !cur
+    }
+
+    pub fn request_cancel(&self) {
+        self.cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// B2 后台任务回传结果
+pub enum BgResult {
+    /// 目录对比完成
+    Compare(Result<CompareResult, String>),
+    /// 同步完成
+    SyncDone { ok: usize, err: usize },
+}
+
+/// 执行勾选的同步操作（纯逻辑，后台线程与同步版共用）。
+/// 返回 (成功数, 失败数)；支持取消/暂停（AtomicBool 标志）。
+fn execute_sync_ops(
+    plan: &[SyncOp],
+    checked: &[usize],
+    l: &dyn crate::vfs::Vfs,
+    r: &dyn crate::vfs::Vfs,
+    cancel: &std::sync::atomic::AtomicBool,
+    pause: &std::sync::atomic::AtomicBool,
+    done: &std::sync::atomic::AtomicUsize,
+) -> (usize, usize) {
+    let mut n_ok = 0usize;
+    let mut n_err = 0usize;
+    for (k, i) in checked.iter().enumerate() {
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
+        // 暂停：忙等直到继续或取消
+        while pause.load(std::sync::atomic::Ordering::SeqCst)
+            && !cancel.load(std::sync::atomic::Ordering::SeqCst)
+        {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
+        match execute_op(&plan[*i], l, r) {
+            Some(_) => n_err += 1,
+            None => n_ok += 1,
+        }
+        done.store(k + 1, std::sync::atomic::Ordering::SeqCst);
+    }
+    (n_ok, n_err)
 }
 
 /// 展平后的树行
@@ -113,6 +187,7 @@ impl DirTab {
             align_left: None,
             align_right: None,
             show_align: false,
+            bg: None,
         }
     }
 
@@ -124,6 +199,88 @@ impl DirTab {
     }
 
     pub fn refresh(&mut self) {
+        // B2：后台线程执行对比，UI 不卡顿（大目录）
+        if self.bg.is_some() {
+            return;
+        }
+        let filter = match Filter::new(&split_globs(&self.includes), &split_globs(&self.excludes)) {
+            Ok(f) => f,
+            Err(e) => {
+                self.error = Some(fmt(I18nKey::FilterError, &[&e.to_string()]));
+                self.result = None;
+                self.flat.clear();
+                return;
+            }
+        };
+        let left = self.left.clone();
+        let right = self.right.clone();
+        let compare_content = self.compare_content;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let pause = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cancel2 = cancel.clone();
+        let pause2 = pause.clone();
+        let _handle = std::thread::spawn(move || {
+            let result = compare_dirs(
+                std::path::Path::new(&left),
+                std::path::Path::new(&right),
+                &filter,
+                compare_content,
+                true,
+            );
+            // 取消后丢弃结果
+            if cancel2.load(std::sync::atomic::Ordering::SeqCst) {
+                return;
+            }
+            let _ = pause2;
+            let _ = tx.send(BgResult::Compare(result.map_err(|e| e.to_string())));
+        });
+        self.bg = Some(BgTask {
+            label: t(I18nKey::Refresh).to_string(),
+            rx,
+            pause,
+            cancel,
+            done,
+            total: 0,
+        });
+    }
+
+    /// B2：每帧轮询后台任务结果，完成后应用
+    pub fn poll_bg(&mut self) {
+        let Some(bg) = &self.bg else { return };
+        match bg.rx.try_recv() {
+            Ok(BgResult::Compare(Ok(r))) => {
+                for w in &r.warnings {
+                    self.error = Some(w.clone());
+                }
+                self.result = Some(r);
+                self.bg = None;
+                self.rebuild_tree();
+            }
+            Ok(BgResult::Compare(Err(e))) => {
+                self.error = Some(fmt(I18nKey::ScanFailed, &[&e]));
+                self.result = None;
+                self.bg = None;
+                self.rebuild_tree();
+            }
+            Ok(BgResult::SyncDone { ok, err }) => {
+                self.sync_msg = Some(format!("同步完成: 成功 {} 项，失败 {} 项", ok, err));
+                self.sync_plan = None;
+                self.sync_checked.clear();
+                self.bg = None;
+                self.refresh();
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                // 线程已退出但未发送结果（如被取消）
+                self.bg = None;
+            }
+        }
+    }
+
+    /// 同步刷新（测试/无头场景用）：直接执行对比并立即应用结果
+    pub fn refresh_sync(&mut self) {
         let filter = match Filter::new(&split_globs(&self.includes), &split_globs(&self.excludes)) {
             Ok(f) => f,
             Err(e) => {
@@ -306,31 +463,87 @@ impl DirTab {
         }
     }
 
-    /// 执行勾选的同步操作，完成后重新对比
+    /// 执行勾选的同步操作（B2 后台线程，支持暂停/取消），完成后重新对比
     pub fn run_sync_checked(&mut self) {
+        if self.bg.is_some() {
+            return;
+        }
         let Some(plan) = self.sync_plan.clone() else {
             self.sync_msg = Some("请先生成计划".to_string());
             return;
         };
+        let checked: Vec<usize> = self.sync_checked.iter().copied().collect();
+        let left = self.left.clone();
+        let right = self.right.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let pause = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let cancel2 = cancel.clone();
+        let pause2 = pause.clone();
+        let done2 = done.clone();
+        let total = checked.len();
+        // dyn Vfs 非 Send，线程内重新打开（每次调用独立建连）
+        let _handle = std::thread::spawn(move || {
+            let (l, r) = match (crate::vfs::open(&left), crate::vfs::open(&right)) {
+                (Ok(l), Ok(r)) => (l, r),
+                _ => {
+                    let _ = tx.send(BgResult::SyncDone { ok: 0, err: 1 });
+                    return;
+                }
+            };
+            let (n_ok, n_err) = execute_sync_ops(
+                &plan,
+                &checked,
+                l.as_ref(),
+                r.as_ref(),
+                &cancel2,
+                &pause2,
+                &done2,
+            );
+            let _ = tx.send(BgResult::SyncDone {
+                ok: n_ok,
+                err: n_err,
+            });
+        });
+        self.bg = Some(BgTask {
+            label: "同步".to_string(),
+            rx,
+            pause,
+            cancel,
+            done,
+            total,
+        });
+    }
+
+    /// 同步执行勾选的同步操作（测试/无头场景用），完成后立即刷新
+    #[cfg(test)]
+    pub fn run_sync_checked_sync(&mut self) {
+        let Some(plan) = self.sync_plan.clone() else {
+            self.sync_msg = Some("请先生成计划".to_string());
+            return;
+        };
+        let checked: Vec<usize> = self.sync_checked.iter().copied().collect();
         let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
             (Ok(l), Ok(r)) => (l, r),
             _ => return,
         };
-        let mut n_ok = 0usize;
-        let mut n_err = 0usize;
-        for (i, op) in plan.iter().enumerate() {
-            if !self.sync_checked.contains(&i) {
-                continue;
-            }
-            match execute_op(op, l.as_ref(), r.as_ref()) {
-                Some(_) => n_err += 1,
-                None => n_ok += 1,
-            }
-        }
+        let noop_cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let noop_pause = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let noop_done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (n_ok, n_err) = execute_sync_ops(
+            &plan,
+            &checked,
+            l.as_ref(),
+            r.as_ref(),
+            &noop_cancel,
+            &noop_pause,
+            &noop_done,
+        );
         self.sync_msg = Some(format!("同步完成: 成功 {} 项，失败 {} 项", n_ok, n_err));
         self.sync_plan = None;
         self.sync_checked.clear();
-        self.refresh();
+        self.refresh_sync();
     }
 
     /// 对选中文件执行单项操作（复制/删除等），成功则重新对比
@@ -343,7 +556,7 @@ impl DirTab {
             Some(e) => self.sync_msg = Some(format!("操作失败: {}", e)),
             None => {
                 self.sync_msg = Some(format!("完成: {}", op.describe()));
-                self.refresh();
+                self.refresh_sync();
             }
         }
     }
@@ -380,7 +593,7 @@ impl DirTab {
             }
         }
         self.sync_msg = Some(format!("批量复制: 成功 {}，失败 {}", ok, err));
-        self.refresh();
+        self.refresh_sync();
     }
 
     /// 批量操作：删除右侧全部差异/仅右侧文件（镜像清理）
@@ -413,7 +626,7 @@ impl DirTab {
             }
         }
         self.sync_msg = Some(format!("批量删除: 成功 {}，失败 {}", ok, err));
-        self.refresh();
+        self.refresh_sync();
     }
 
     pub(crate) fn toggle_dir(&mut self, path: &str) {
@@ -477,14 +690,46 @@ impl DirTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        // 自动刷新：每 2 秒重扫一次（仅在已加载过结果后生效）
+        // B2：轮询后台任务结果（对比/同步完成时应用）
+        self.poll_bg();
+        // 自动刷新：每 2 秒重扫一次（仅在已加载过结果且无后台任务时生效）
         let now = ui.input(|i| i.time);
-        if self.result.is_some() && now - self.last_auto_refresh > 2.0 {
+        if self.result.is_some() && self.bg.is_none() && now - self.last_auto_refresh > 2.0 {
             self.last_auto_refresh = now;
             self.refresh();
         }
         egui::Panel::top("dirtab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
+                // B2 后台任务指示与暂停/取消控制
+                if let Some(bg) = &self.bg {
+                    let done = bg.done.load(std::sync::atomic::Ordering::SeqCst);
+                    let paused = bg.pause.load(std::sync::atomic::Ordering::SeqCst);
+                    ui.label(format!(
+                        "⏳ {} {}",
+                        bg.label,
+                        if bg.total > 0 {
+                            format!("{done}/{}", bg.total)
+                        } else {
+                            "…".to_string()
+                        }
+                    ));
+                    if bg.total > 0 {
+                        let frac = (done as f32 / bg.total as f32).clamp(0.0, 1.0);
+                        ui.add(egui::ProgressBar::new(frac).desired_width(120.0));
+                    } else {
+                        ui.spinner();
+                    }
+                    if ui
+                        .button(if paused { "▶ 继续" } else { "⏸ 暂停" })
+                        .clicked()
+                    {
+                        bg.toggle_pause();
+                    }
+                    if ui.button("✕ 取消").clicked() {
+                        bg.request_cancel();
+                    }
+                    ui.separator();
+                }
                 if ui.button(t(I18nKey::Refresh)).clicked() {
                     self.refresh();
                 }
