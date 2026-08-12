@@ -250,5 +250,5 @@ fn difftab_mid_gap_renders_with_connector_lines() {
     assert!(super::difftab::diff_mid_line_color(RowTag::Replace).is_some());
     assert!(super::difftab::diff_mid_line_color(RowTag::Equal).is_none());
     // mid_gap 布局常量生效（左右面板之间有空隙）
-    assert!(crate::gui::theme::MID_GAP > 0.0);
+    const _: () = assert!(crate::gui::theme::MID_GAP > 0.0);
 }
