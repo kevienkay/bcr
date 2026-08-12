@@ -118,7 +118,7 @@ jobs:
 
       - name: Install xvfb (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y xvfb
+        run: sudo apt-get install -y xvfb libxkbcommon-x11-0
 
       - name: Download packages
         uses: actions/download-artifact@v4
