@@ -1355,20 +1355,12 @@ impl DiffTab {
                 .unwrap_or(0);
             let gutter_l = gutter_width(max_no_l);
             let gutter_r = gutter_width(max_no_r);
-            // 内容宽度：撑满窗口一半，长行可横向滚动
+            // 内容宽度：两栏固定各占半屏（BC 式左右两页），长行在栏内截断
             let avail = ui.available_width();
-            let half = ((avail - gutter_l - gutter_r) / 2.0).max(200.0);
-            let max_chars = self
-                .rows
-                .iter()
-                .flat_map(|r| [r.left.as_ref(), r.right.as_ref()])
-                .flatten()
-                .map(|c| c.text.chars().count())
-                .max()
-                .unwrap_or(0);
-            let content_w = half.max(max_chars as f32 * 8.5 + 24.0);
-            // P32-A1：左右面板之间留空隙画差异连接线（BC 观感）
             let mid_gap = super::theme::MID_GAP;
+            let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
+            let content_w = half;
+            // P32-A1：左右面板之间留空隙画差异连接线（BC 观感）
             let total_w = gutter_l + content_w + mid_gap + gutter_r + content_w;
             let fg = text_color(ui);
 
@@ -1437,6 +1429,63 @@ impl DiffTab {
             }
             let mut fold_toggle: Option<usize> = None;
             let mut ignore_req: Option<usize> = None;
+
+            // BC 式左右两页：顶部文件名头部（左侧/右侧各占一栏，中间留空隙）
+            {
+                let head_h = 26.0;
+                let head_bg = if ui.visuals().dark_mode {
+                    Some(Color32::from_gray(38))
+                } else {
+                    Some(Color32::from_gray(230))
+                };
+                let l_name = self
+                    .left
+                    .as_ref()
+                    .map(|f| basename(&f.path))
+                    .unwrap_or_else(|| t(I18nKey::OpenLeft).to_string());
+                let r_name = self
+                    .right
+                    .as_ref()
+                    .map(|f| basename(&f.path))
+                    .unwrap_or_else(|| t(I18nKey::OpenRight).to_string());
+                let head_fg = if ui.visuals().dark_mode {
+                    Color32::from_rgb(150, 190, 240)
+                } else {
+                    Color32::from_rgb(60, 110, 190)
+                };
+                ui.horizontal(|ui| {
+                    // 左头部
+                    let (l_rect, _) = ui.allocate_exact_size(
+                        Vec2::new(gutter_l + content_w, head_h),
+                        egui::Sense::hover(),
+                    );
+                    paint_bg(ui, l_rect, head_bg);
+                    ui.painter().text(
+                        Pos2::new(l_rect.left() + 10.0, l_rect.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        l_name,
+                        egui::FontId::proportional(13.0),
+                        head_fg,
+                    );
+                    // 中间空隙
+                    ui.allocate_exact_size(Vec2::new(mid_gap, head_h), egui::Sense::hover());
+                    // 右头部
+                    let (r_rect, _) = ui.allocate_exact_size(
+                        Vec2::new(gutter_r + content_w, head_h),
+                        egui::Sense::hover(),
+                    );
+                    paint_bg(ui, r_rect, head_bg);
+                    ui.painter().text(
+                        Pos2::new(r_rect.left() + 10.0, r_rect.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        r_name,
+                        egui::FontId::proportional(13.0),
+                        head_fg,
+                    );
+                });
+                ui.separator();
+            }
+
             let out = super::show_rows(ui, view.len(), ROW_H, |ui, range| {
                 ui.set_min_width(total_w);
                 // 当前差异行（diff_pos → diff_rows 中的行索引，P31 竖条标记）

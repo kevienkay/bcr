@@ -96,8 +96,9 @@ pub fn paint_cell(
     }
     let galley = ui.painter().layout_job(job);
     let y = rect.center().y - galley.size().y / 2.0;
-    ui.painter()
-        .galley(Pos2::new(rect.left() + 4.0, y), galley, fg);
+    // 裁剪到单元格内：长行在栏内截断（BC 式左右两页，不溢出到中线/对侧）
+    let painter = ui.painter().with_clip_rect(rect);
+    painter.galley(Pos2::new(rect.left() + 4.0, y), galley, fg);
 }
 
 /// 绘制行号（右对齐在 gutter 内）
