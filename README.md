@@ -149,6 +149,15 @@ bcr compare 目录A 目录B --json # JSON 契约输出（自动化用）
 - **任务清单 `bcr task`**：JSON/TOML 纯数据步骤清单（load/compare/compare3/csv/merge/sync/report/echo/exit），`%date%` `%time%` `%fn_time%` `%env:VAR%` `%1-%9` 动态变量，compare/sync 有差异不中止、遇错即停（或 continue_on_error），`bcr task check` 只校验不执行
 - 完整参考：`docs/automation.md`（契约 + API + 场景示例）
 
+### P31 UI 精修（对标 BC 视觉）
+
+- **主题引擎 `src/gui/theme.rs`**：集中视觉常量（行高 22/圆角 4/间距统一），差异配色对齐 BC（仅左红/仅右绿/修改黄）按深浅主题微调，启动时全局应用
+- **主窗口**：底部全局状态栏（当前标签统计：Diff 行级/Dir 目录/Csv 表格/Merge 冲突/Image 帧差异）、标签栏美化（当前标签 strong + 关闭按钮 hover 红色）
+- **DiffTab**：当前差异行 BC 风格左侧竖条标记
+- **DirTab**：目录名文件夹色（浅蓝）、文件行状态徽标（圆形底替代纯文本 `[L]`）
+- **CsvTab**：表头底色区分内容区
+- **MergeTab**：冲突行左侧黄色竖条标记
+
 ### P29 CSV 表格 GUI（对标 BC 表格视图）
 
 - **CsvTab 标签页**：并排渲染左右表格，行按主键（或行号）对齐，行级状态着色（相同/仅左/仅右/修改）

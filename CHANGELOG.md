@@ -6,6 +6,15 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### UI 精修（P31，对标 Beyond Compare 视觉）
+
+- **主题引擎**：新增 `src/gui/theme.rs`——集中视觉常量（行高 22、圆角 4、间距统一），差异配色对齐 BC（仅左红/仅右绿/修改黄）按深浅主题微调，启动时对 Dark/Light 两套主题全局应用
+- **主窗口**：底部全局状态栏（当前标签统计：Diff 行级 / Dir 目录 / Csv 表格 / Merge 冲突 / Image 帧差异）；标签栏美化（当前标签 strong 高亮 + 关闭按钮 hover 变红）
+- **DiffTab**：当前差异行 BC 风格左侧竖条标记（CURRENT_BAR 3px，黄色）
+- **DirTab**：目录名文件夹色（浅蓝，深浅主题区分）；文件行状态徽标（圆形底色 + 状态字母，替代纯文本 `[L]`）
+- **CsvTab**：表头底色与内容区区分；新增 `stats()` 访问器供状态栏
+- **MergeTab**：冲突行左侧黄色竖条标记
+
 ### 优化（按差距分析优先级推进）
 
 - **归档内存保护**：tar/7z 全量解压加上限（默认 1 GiB，`BCR_MAX_ARCHIVE_SIZE` 环境变量可调），超限报 `OutOfMemory` 错误而非 OOM 崩溃；`read_tar_with_limit` 支持注入上限（测试用）

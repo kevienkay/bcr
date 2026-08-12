@@ -307,6 +307,14 @@ impl CsvTab {
 
         // 表头行（固定，不随行滚动）：左侧列名 | 右侧列名（点击排序）
         egui::Panel::top("csvtab_header").show(ui, |ui| {
+            // P31 表头底色：与内容区区分
+            let header_bg = if ui.visuals().dark_mode {
+                Color32::from_rgb(40, 44, 52)
+            } else {
+                Color32::from_rgb(236, 238, 242)
+            };
+            let hrect = ui.max_rect();
+            ui.painter().rect_filled(hrect, 0.0, header_bg);
             ui.horizontal(|ui| {
                 ui.add_space(4.0);
                 // 行号 + 状态 占位（与数据行同宽）

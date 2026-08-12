@@ -378,6 +378,15 @@ fn paint_merge_row(
     let x = rect.left();
     let y = rect.top();
 
+    // P31 冲突行：左侧竖条标记（黄色，BC 风格）
+    if row.in_conflict {
+        ui.painter().rect_filled(
+            Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H)),
+            0.0,
+            super::theme::diff_modify(),
+        );
+    }
+
     // BASE 列
     let g = Rect::from_min_size(Pos2::new(x, y), vec2(gutter, ROW_H));
     paint_bg(ui, g, bg_b);
