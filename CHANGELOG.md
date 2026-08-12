@@ -6,6 +6,12 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-13
+
+### 修复（macOS 安装包）
+
+- **macOS dmg 双击报「bcr 已损坏」**：打包脚本加 ad-hoc codesign（无证书时 `codesign --force --deep --sign -`），避免 Gatekeeper 拦截未签名 .app；本地验证 `Signature=adhoc` + `codesign --verify --deep --strict` 通过
+
 ## [0.2.1] - 2026-08-12
 
 ### 修复（UI 精修跟进）
@@ -173,5 +179,6 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - docs/automation.md：自动化指南（JSON 契约参考 + bcr.py API + 任务清单 + 场景示例）
 
 [0.1.0]: https://github.com/kevienkay/bcr/releases/tag/v0.1.0
+[0.2.2]: https://github.com/kevienkay/bcr/releases/tag/v0.2.2
 [0.2.1]: https://github.com/kevienkay/bcr/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kevienkay/bcr/releases/tag/v0.2.0
