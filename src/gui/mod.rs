@@ -11,6 +11,7 @@ mod difftab;
 mod dirtab;
 mod imagetab;
 mod mergetab;
+mod theme;
 #[cfg(test)]
 mod uikit_tests;
 
@@ -1175,6 +1176,7 @@ pub fn run(args: &GuiArgs) -> i32 {
         options,
         Box::new(move |cc| {
             install_cjk_fonts(&cc.egui_ctx);
+            theme::apply(&cc.egui_ctx);
             for theme in [egui::Theme::Dark, egui::Theme::Light] {
                 cc.egui_ctx.style_mut_of(theme, |style| {
                     style.text_styles.insert(

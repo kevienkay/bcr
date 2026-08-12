@@ -1,47 +1,49 @@
 //! GUI 公共绘制辅助：颜色、单元格渲染（含行内高亮）、虚拟化行高常量。
+//!
+//! 颜色与视觉常量已收敛到 `super::theme`（P31），此处保留兼容别名并复用。
 
 use crate::sideview::Cell;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Vec2};
 
 /// 虚拟化行高
-pub const ROW_H: f32 = 20.0;
+pub const ROW_H: f32 = super::theme::ROW_H;
 /// 等宽字体大小
-pub const FONT_SIZE: f32 = 14.0;
+pub const FONT_SIZE: f32 = super::theme::FONT_SIZE;
 
-/// 差异底色（半透明，深浅主题通用）
+/// 差异底色（兼容别名，指向 theme 的统一配色）
 pub fn bg_delete() -> Color32 {
-    Color32::from_rgba_unmultiplied(220, 60, 60, 60)
+    super::theme::bg_left_only()
 }
 pub fn bg_insert() -> Color32 {
-    Color32::from_rgba_unmultiplied(60, 200, 90, 55)
+    super::theme::bg_right_only()
 }
 pub fn bg_replace_l() -> Color32 {
-    Color32::from_rgba_unmultiplied(220, 80, 80, 70)
+    super::theme::bg_modified_l()
 }
 pub fn bg_replace_r() -> Color32 {
-    Color32::from_rgba_unmultiplied(70, 210, 100, 70)
+    super::theme::bg_modified_r()
 }
 pub fn bg_match() -> Color32 {
-    Color32::from_rgba_unmultiplied(230, 200, 60, 45)
+    super::theme::bg_match()
 }
 pub fn bg_match_current() -> Color32 {
-    Color32::from_rgba_unmultiplied(240, 190, 40, 90)
+    super::theme::bg_current()
 }
 /// 行内高亮（变更段背景）
 pub fn hl_delete() -> Color32 {
-    Color32::from_rgba_unmultiplied(225, 90, 90, 150)
+    super::theme::hl_delete()
 }
 pub fn hl_insert() -> Color32 {
-    Color32::from_rgba_unmultiplied(90, 225, 120, 150)
+    super::theme::hl_insert()
 }
 pub fn hl_replace_l() -> Color32 {
-    Color32::from_rgba_unmultiplied(230, 100, 100, 160)
+    super::theme::hl_modify_l()
 }
 pub fn hl_replace_r() -> Color32 {
-    Color32::from_rgba_unmultiplied(100, 230, 130, 160)
+    super::theme::hl_modify_r()
 }
 /// 行号颜色
-pub const GUTTER: Color32 = Color32::from_gray(120);
+pub const GUTTER: Color32 = super::theme::GUTTER;
 
 /// 绘制一行单元格的背景
 pub fn paint_bg(ui: &egui::Ui, rect: Rect, bg: Option<Color32>) {
@@ -105,7 +107,7 @@ pub fn paint_line_no(ui: &egui::Ui, rect: Rect, no: Option<usize>) {
             Pos2::new(rect.right() - 4.0, rect.center().y),
             Align2::RIGHT_CENTER,
             n.to_string(),
-            FontId::monospace(12.0),
+            FontId::monospace(super::theme::GUTTER_SIZE),
             GUTTER,
         );
     }
@@ -142,10 +144,9 @@ pub fn show_rows<R>(
 /// 状态色（目录对比/合并视图用）
 pub fn status_color(ui: &egui::Ui, letter: char) -> Color32 {
     match letter {
-        'L' => Color32::from_rgb(235, 100, 100),
+        'L' => super::theme::diff_delete(),
         'R' => Color32::from_rgb(110, 150, 240),
-        'C' => Color32::from_rgb(235, 200, 90),
-        'M' => Color32::from_rgb(235, 200, 90),
+        'C' | 'M' => super::theme::diff_modify(),
         _ => ui.visuals().weak_text_color(),
     }
 }
