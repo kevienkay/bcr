@@ -485,3 +485,30 @@ fn dirtab_context_menu_extends_with_reveal() {
     }
     assert!(tab.borrow().result.is_some(), "渲染后对比结果仍在");
 }
+
+// ---- P32-A7：会话类型起始页 ----------------
+
+#[test]
+fn welcome_page_shows_session_cards() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().welcome_ui(ui));
+    h.run();
+    // 五种会话类型卡片齐全（标题与描述）
+    for label in ["文本对比", "文件夹对比", "三路合并", "图片对比", "CSV 表格"] {
+        assert!(
+            h.query_all_by_label_contains(label).next().is_some(),
+            "欢迎页应有卡片: {}",
+            label
+        );
+    }
+    // 描述文案也渲染（抽查）
+    assert!(h
+        .query_all_by_label_contains("像素级差异叠加")
+        .next()
+        .is_some());
+    // 底部入口按钮仍保留
+    assert!(h
+        .query_all_by_label_contains("打开文件对比")
+        .next()
+        .is_some());
+}

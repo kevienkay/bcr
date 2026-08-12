@@ -383,6 +383,28 @@ pub enum Key {
     ThemeLight,
     /// 语言:
     Language,
+
+    // ---- P32-A7：会话类型起始页 ----
+    /// 文本对比
+    SessionText,
+    /// 并排文本差异
+    SessionTextDesc,
+    /// 文件夹对比
+    SessionDir,
+    /// 目录与文件差异
+    SessionDirDesc,
+    /// 三路合并
+    SessionMerge,
+    /// BASE/LEFT/RIGHT 冲突解决
+    SessionMergeDesc,
+    /// 图片对比
+    SessionImage,
+    /// 像素级差异叠加
+    SessionImageDesc,
+    /// CSV 表格
+    SessionCsv,
+    /// 行级表格对比
+    SessionCsvDesc,
     /// Git 集成
     GitTitle,
     /// 把 bcr 作为 git difftool / mergetool（写入 ~/.gitconfig）：

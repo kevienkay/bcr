@@ -345,11 +345,158 @@ impl DiffApp {
         self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
     }
 
+    /// P32-A7：强制图片对比会话（选两个图片文件 → ImageTab）
+    fn open_image_compare(&mut self) {
+        let Some(l) = pick_file() else { return };
+        let Some(r) = pick_file() else { return };
+        self.add_tab(Tab::Image(ImageTab::new(&l, &r)));
+    }
+
+    /// P32-A7：强制 CSV 表格对比会话（选两个 CSV/TSV → CsvTab）
+    fn open_csv_compare(&mut self) {
+        let Some(l) = pick_file() else { return };
+        let Some(r) = pick_file() else { return };
+        self.add_tab(Tab::Csv(CsvTab::new(&l, &r)));
+    }
+
     fn open_merge(&mut self) {
         let Some(b) = pick_file() else { return };
         let Some(l) = pick_file() else { return };
         let Some(r) = pick_file() else { return };
         self.add_tab(Tab::Merge(MergeTab::new(&b, &l, &r)));
+    }
+
+    /// P32-A7：欢迎页 — 大标题 + 会话类型网格卡片（文本/文件夹/三路合并/图片/CSV）
+    fn welcome_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CentralPanel::default().show(ui, |ui| {
+            ui.centered_and_justified(|ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 8.0;
+                    // P31/P32-A7 欢迎页：大标题 + 副标题 + 会话类型网格卡片（BC 观感）
+                    ui.label(RichText::new("bcr").size(42.0).strong().color(
+                        if ui.visuals().dark_mode {
+                            egui::Color32::from_rgb(140, 180, 235)
+                        } else {
+                            egui::Color32::from_rgb(60, 110, 190)
+                        },
+                    ));
+                    ui.label(
+                        RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
+                            .size(14.0)
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                    ui.add_space(16.0);
+                    // P32-A7：会话类型选择卡片（网格布局）
+                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 5] = [
+                        (
+                            "📄",
+                            crate::i18n::Key::SessionText,
+                            crate::i18n::Key::SessionTextDesc,
+                            0,
+                        ),
+                        (
+                            "📁",
+                            crate::i18n::Key::SessionDir,
+                            crate::i18n::Key::SessionDirDesc,
+                            1,
+                        ),
+                        (
+                            "🔀",
+                            crate::i18n::Key::SessionMerge,
+                            crate::i18n::Key::SessionMergeDesc,
+                            2,
+                        ),
+                        (
+                            "🖼",
+                            crate::i18n::Key::SessionImage,
+                            crate::i18n::Key::SessionImageDesc,
+                            3,
+                        ),
+                        (
+                            "📊",
+                            crate::i18n::Key::SessionCsv,
+                            crate::i18n::Key::SessionCsvDesc,
+                            4,
+                        ),
+                    ];
+                    let card_w = 190.0;
+                    let card_h = 88.0;
+                    let mut card_click: Option<u32> = None;
+                    egui::Grid::new("session-cards")
+                        .spacing([12.0, 12.0])
+                        .show(ui, |ui| {
+                            for (i, (icon, title, desc, id)) in cards.iter().enumerate() {
+                                let resp = egui::Frame::group(ui.style())
+                                    .corner_radius(8.0)
+                                    .inner_margin(egui::Margin::same(12))
+                                    .show(ui, |ui| {
+                                        ui.set_min_size(egui::vec2(card_w, card_h));
+                                        ui.vertical(|ui| {
+                                            ui.label(RichText::new(*icon).size(26.0));
+                                            ui.label(
+                                                RichText::new(crate::i18n::t(*title))
+                                                    .size(15.0)
+                                                    .strong(),
+                                            );
+                                            ui.label(
+                                                RichText::new(crate::i18n::t(*desc))
+                                                    .size(12.0)
+                                                    .color(ui.visuals().weak_text_color()),
+                                            );
+                                        });
+                                    })
+                                    .response
+                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if resp.clicked() {
+                                    card_click = Some(*id);
+                                }
+                                // 每行最多 3 张卡片（5 张 → 3+2）
+                                if i % 3 == 2 {
+                                    ui.end_row();
+                                }
+                            }
+                        });
+                    match card_click {
+                        Some(0) => self.open_diff_files(),
+                        Some(1) => self.open_dir_compare(),
+                        Some(2) => self.open_merge(),
+                        Some(3) => self.open_image_compare(),
+                        Some(4) => self.open_csv_compare(),
+                        _ => {}
+                    }
+                    ui.add_space(12.0);
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button(format!(
+                                "📁 {}",
+                                crate::i18n::t(crate::i18n::Key::MenuOpenFiles)
+                            ))
+                            .clicked()
+                        {
+                            self.open_diff_files();
+                        }
+                        if ui
+                            .button(format!(
+                                "📂 {}",
+                                crate::i18n::t(crate::i18n::Key::MenuOpenDir)
+                            ))
+                            .clicked()
+                        {
+                            self.open_dir_compare();
+                        }
+                        if ui
+                            .button(format!(
+                                "🔀 {}",
+                                crate::i18n::t(crate::i18n::Key::MenuOpenMerge)
+                            ))
+                            .clicked()
+                        {
+                            self.open_merge();
+                        }
+                    });
+                });
+            });
+        });
     }
 }
 
@@ -994,56 +1141,7 @@ impl eframe::App for DiffApp {
 
         // 当前标签内容
         if self.tabs.is_empty() {
-            egui::CentralPanel::default().show(ui, |ui| {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 8.0;
-                        // P31 欢迎页：大标题 + 副标题 + 操作入口（BC 观感）
-                        ui.label(RichText::new("bcr").size(42.0).strong().color(
-                            if ui.visuals().dark_mode {
-                                egui::Color32::from_rgb(140, 180, 235)
-                            } else {
-                                egui::Color32::from_rgb(60, 110, 190)
-                            },
-                        ));
-                        ui.label(
-                            RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
-                                .size(14.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(16.0);
-                        ui.horizontal(|ui| {
-                            if ui
-                                .button(format!(
-                                    "📁 {}",
-                                    crate::i18n::t(crate::i18n::Key::MenuOpenFiles)
-                                ))
-                                .clicked()
-                            {
-                                self.open_diff_files();
-                            }
-                            if ui
-                                .button(format!(
-                                    "📂 {}",
-                                    crate::i18n::t(crate::i18n::Key::MenuOpenDir)
-                                ))
-                                .clicked()
-                            {
-                                self.open_dir_compare();
-                            }
-                            if ui
-                                .button(format!(
-                                    "🔀 {}",
-                                    crate::i18n::t(crate::i18n::Key::MenuOpenMerge)
-                                ))
-                                .clicked()
-                            {
-                                self.open_merge();
-                            }
-                        });
-                    });
-                });
-            });
+            self.welcome_ui(ui);
             return;
         }
 
