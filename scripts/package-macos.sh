@@ -65,7 +65,7 @@ fi
 # dmg: 先放一个 Applications 快捷方式（可选，保持简单仅含 .app）
 cp -R "$APP" "$STAGING/"
 hdiutil create -volname "bcr ${VER}" -srcfolder "$STAGING" -ov -format UDZO "$DMG" >/dev/null
-rm -rf "$STAGING"
+rm -rf "$STAGING" "$APP"   # 只保留 dmg，避免 .app 目录混入产物
 
 echo "✓ $DMG"
 echo "  $(du -h "$DMG" | cut -f1)"
