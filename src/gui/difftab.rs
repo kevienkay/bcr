@@ -1355,11 +1355,20 @@ impl DiffTab {
                 .unwrap_or(0);
             let gutter_l = gutter_width(max_no_l);
             let gutter_r = gutter_width(max_no_r);
-            // 内容宽度：两栏固定各占半屏（BC 式左右两页），长行在栏内截断
+            // 内容宽度：两栏至少各占半屏；长行不截断，按最长行扩展（超宽时水平拖动查看）
             let avail = ui.available_width();
             let mid_gap = super::theme::MID_GAP;
             let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
-            let content_w = half;
+            let max_chars = self
+                .rows
+                .iter()
+                .flat_map(|r| [r.left.as_ref(), r.right.as_ref()])
+                .flatten()
+                .map(|c| c.text.chars().count())
+                .max()
+                .unwrap_or(0);
+            // 9.0px/字符略宽于等宽实际值，确保长行完整显示不被截断
+            let content_w = half.max(max_chars as f32 * 9.0 + 24.0);
             // P32-A1：左右面板之间留空隙画差异连接线（BC 观感）
             let total_w = gutter_l + content_w + mid_gap + gutter_r + content_w;
             let fg = text_color(ui);
@@ -1430,7 +1439,7 @@ impl DiffTab {
             let mut fold_toggle: Option<usize> = None;
             let mut ignore_req: Option<usize> = None;
 
-            // BC 式左右两页：顶部文件名头部（左侧/右侧各占一栏，中间留空隙）
+            // BC 式左右两页：顶部文件名头部（固定视口宽度，不随内容横向滚动移动）
             {
                 let head_h = 26.0;
                 let head_bg = if ui.visuals().dark_mode {
@@ -1453,12 +1462,13 @@ impl DiffTab {
                 } else {
                     Color32::from_rgb(60, 110, 190)
                 };
+                // 头部两栏各占视口半宽（gutter + half），长行内容超宽时头部不跟随滚动
+                let head_l_w = gutter_l + half;
+                let head_r_w = gutter_r + half;
                 ui.horizontal(|ui| {
                     // 左头部
-                    let (l_rect, _) = ui.allocate_exact_size(
-                        Vec2::new(gutter_l + content_w, head_h),
-                        egui::Sense::hover(),
-                    );
+                    let (l_rect, _) =
+                        ui.allocate_exact_size(Vec2::new(head_l_w, head_h), egui::Sense::hover());
                     paint_bg(ui, l_rect, head_bg);
                     ui.painter().text(
                         Pos2::new(l_rect.left() + 10.0, l_rect.center().y),
@@ -1470,10 +1480,8 @@ impl DiffTab {
                     // 中间空隙
                     ui.allocate_exact_size(Vec2::new(mid_gap, head_h), egui::Sense::hover());
                     // 右头部
-                    let (r_rect, _) = ui.allocate_exact_size(
-                        Vec2::new(gutter_r + content_w, head_h),
-                        egui::Sense::hover(),
-                    );
+                    let (r_rect, _) =
+                        ui.allocate_exact_size(Vec2::new(head_r_w, head_h), egui::Sense::hover());
                     paint_bg(ui, r_rect, head_bg);
                     ui.painter().text(
                         Pos2::new(r_rect.left() + 10.0, r_rect.center().y),
