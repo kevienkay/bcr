@@ -13,7 +13,7 @@ use std::io::{self, Read};
 use std::path::Path;
 
 /// 文本读取默认大小上限（字节）。超过时拒绝按文本加载，防止 OOM。
-pub const DEFAULT_MAX_TEXT_BYTES: u64 = 64 * 1024 * 1024;
+pub const DEFAULT_MAX_TEXT_BYTES: u64 = 256 * 1024 * 1024;
 
 /// 读取文件前检查大小上限（`BCR_MAX_SIZE` 环境变量可覆盖，单位 MB；0 表示不限制）
 pub fn check_size(path: &str) -> io::Result<()> {
@@ -54,7 +54,7 @@ pub fn read_input(path: &str) -> io::Result<TextFile> {
         Ok(decode(&buf))
     } else {
         check_size(path)?;
-        let data = std::fs::read(Path::new(path))?;
+        let data = read_mmap(path)?;
         Ok(decode(&data))
     }
 }
@@ -62,8 +62,16 @@ pub fn read_input(path: &str) -> io::Result<TextFile> {
 /// 读取本地文件并解码（不处理 stdin）
 pub fn read_text(path: &str) -> io::Result<TextFile> {
     check_size(path)?;
-    let data = std::fs::read(Path::new(path))?;
+    let data = read_mmap(path)?;
     Ok(decode(&data))
+}
+
+/// C1：memmap2 只读映射读取（避免整文件拷贝进堆，峰值内存更低）。
+/// 映射后立即复制为 Vec（decode 需要稳定缓冲区，且不长期持有映射避免
+/// 外部修改触发 SIGBUS）；对超大文件比 std::fs::read 少一次内核→用户拷贝。
+fn read_mmap(path: &str) -> io::Result<Vec<u8>> {
+    let f = std::fs::File::open(Path::new(path))?;
+    unsafe { Ok(memmap2::Mmap::map(&f)?.to_vec()) }
 }
 
 /// 检测/指定的编码种类
