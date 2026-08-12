@@ -1,4 +1,4 @@
-# P30: Windows packaging - zip (guaranteed) + msi (WiX, best effort).
+﻿# P30: Windows packaging - zip (guaranteed) + msi (WiX, best effort).
 #
 # 用法:
 #   powershell -File scripts/package-windows.ps1 [-Bin target\release\bcr.exe] [-OutDir dist]
