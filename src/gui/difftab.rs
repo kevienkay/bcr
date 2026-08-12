@@ -1055,6 +1055,8 @@ impl DiffTab {
             // 受控滚动 + 虚拟化渲染（统一走 common::show_rows）
             let out = super::show_rows(ui, display_rows.len(), ROW_H, |ui, range| {
                 ui.set_min_width(total_w);
+                // 当前差异行（diff_pos → diff_rows 中的行索引，P31 竖条标记）
+                let cur_diff_orig = self.diff_pos.and_then(|k| self.diff_rows.get(k)).copied();
                 for i in range {
                     let row = &display_rows[i];
                     let (bg_l, bg_r) = match row.tag {
@@ -1082,8 +1084,19 @@ impl DiffTab {
                         RowTag::Equal => (None, None),
                     };
                     paint_diff_row(
-                        ui, row, gutter_l, gutter_r, content_w, bg_l, bg_r, hl_l, hl_r, fg, syn_l,
+                        ui,
+                        row,
+                        gutter_l,
+                        gutter_r,
+                        content_w,
+                        bg_l,
+                        bg_r,
+                        hl_l,
+                        hl_r,
+                        fg,
+                        syn_l,
                         syn_r,
+                        cur_diff_orig == Some(oi),
                     );
                 }
             });
@@ -1184,6 +1197,7 @@ fn paint_diff_row(
     fg: Color32,
     syn_l: Option<&'static syntect::parsing::SyntaxReference>,
     syn_r: Option<&'static syntect::parsing::SyntaxReference>,
+    is_current: bool,
 ) {
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(gutter_l + content_w + gutter_r + content_w, ROW_H),
@@ -1191,6 +1205,15 @@ fn paint_diff_row(
     );
     let x = rect.left();
     let y = rect.top();
+
+    // BC 风格当前差异行：左侧 3px 竖条（P31）
+    if is_current {
+        ui.painter().rect_filled(
+            Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H)),
+            0.0,
+            super::theme::diff_modify(),
+        );
+    }
 
     // 左 gutter + 内容
     let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H));

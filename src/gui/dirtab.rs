@@ -1135,19 +1135,25 @@ impl DirTab {
 
                     if row.is_dir {
                         let arrow = if row.expanded { "▼" } else { "▶" };
+                        // BC 风格：目录名用文件夹色（浅蓝），与文件区分
+                        let dir_color = if ui.visuals().dark_mode {
+                            Color32::from_rgb(140, 180, 235)
+                        } else {
+                            Color32::from_rgb(60, 110, 190)
+                        };
                         ui.painter().text(
                             Pos2::new(x0, rect.center().y),
                             egui::Align2::LEFT_CENTER,
                             arrow,
                             egui::FontId::proportional(12.0),
-                            fg,
+                            dir_color,
                         );
                         ui.painter().text(
                             Pos2::new(x0 + 16.0, rect.center().y),
                             egui::Align2::LEFT_CENTER,
                             &row.name,
                             egui::FontId::proportional(14.0),
-                            fg,
+                            dir_color,
                         );
                         if resp.clicked() {
                             pending_toggle = Some(row.path.clone());
@@ -1156,15 +1162,23 @@ impl DirTab {
                         if let Some(e) = self.result.as_ref().and_then(|r| r.entries.get(ei)) {
                             let letter = e.status.letter();
                             let color = status_color(ui, letter);
+                            // P31 状态徽标：圆形底色 + 字母（替代纯文本 [L]）
+                            let badge_r = 9.0;
+                            let badge_c = Pos2::new(x0 + badge_r, rect.center().y);
+                            ui.painter().circle_filled(
+                                badge_c,
+                                badge_r,
+                                color.gamma_multiply(0.25),
+                            );
                             ui.painter().text(
-                                Pos2::new(x0, rect.center().y),
-                                egui::Align2::LEFT_CENTER,
-                                format!("[{letter}]"),
-                                egui::FontId::monospace(14.0),
+                                badge_c,
+                                egui::Align2::CENTER_CENTER,
+                                letter.to_string(),
+                                egui::FontId::monospace(12.0),
                                 color,
                             );
                             ui.painter().text(
-                                Pos2::new(x0 + 44.0, rect.center().y),
+                                Pos2::new(x0 + 24.0, rect.center().y),
                                 egui::Align2::LEFT_CENTER,
                                 &row.name,
                                 egui::FontId::monospace(14.0),
