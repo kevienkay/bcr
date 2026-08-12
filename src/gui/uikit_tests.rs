@@ -107,7 +107,12 @@ fn dirtab_refresh_builds_tree_via_ui() {
     // 点击「刷新」按钮 → 后台线程启动（B2）
     h.get_by_label("刷新").click();
     h.run_steps(4);
-    assert!(tab.borrow().bg.is_some(), "点击刷新后应启动后台任务");
+    // 时序兼容：小目录线程可能已跑完（bg 已置 None、result 已就绪），
+    // 也可能仍在跑（bg 为 Some）——两者都算按钮生效
+    assert!(
+        tab.borrow().bg.is_some() || tab.borrow().result.is_some(),
+        "点击刷新后应有后台任务或结果"
+    );
     // 用同步路径验证树构建（后台线程结果由 GUI 轮询，单测不易等待）
     tab.borrow_mut().refresh_sync();
     assert!(tab.borrow().result.is_some(), "同步刷新后应有对比结果");
