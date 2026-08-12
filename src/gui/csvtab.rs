@@ -374,11 +374,11 @@ impl CsvTab {
                                 ar.b_no.map(|n| n + 1),
                             )
                         };
-                        let (rect, _resp) = ui.allocate_exact_size(
+                        let (rect, resp) = ui.allocate_exact_size(
                             Vec2::new(ui.available_width().max(200.0), ROW_H),
                             egui::Sense::hover(),
                         );
-                        // 行级底色
+                        // 行级底色（P31：hover 浅色 + 状态色）
                         let bg = match (ar.status, side) {
                             (RowStatus::LeftOnly, true) | (RowStatus::RightOnly, false) => {
                                 Some(bg_replace_l())
@@ -388,6 +388,11 @@ impl CsvTab {
                             }
                             (RowStatus::Modified, _) => Some(bg_match()),
                             _ => None,
+                        };
+                        let bg = if resp.hovered() {
+                            Some(bg.unwrap_or(bg_match()))
+                        } else {
+                            bg
                         };
                         paint_bg(ui, rect, bg);
                         // 行号
