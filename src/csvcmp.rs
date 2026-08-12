@@ -53,13 +53,13 @@ pub struct CsvArgs {
 /// 解析后的表格：表头 + 数据行
 pub(crate) struct Table {
     /// 列名（无表头时用 "col0/col1/..." 代替）
-    headers: Vec<String>,
+    pub(crate) headers: Vec<String>,
     /// 数据行
-    rows: Vec<Vec<String>>,
+    pub(crate) rows: Vec<Vec<String>>,
 }
 
 /// 解析 CSV 文本（RFC 4180 子集：逗号分隔、双引号引用、"" 转义、引号内可含分隔符与换行）
-fn parse_csv(text: &str, delim: char) -> Vec<Vec<String>> {
+pub(crate) fn parse_csv(text: &str, delim: char) -> Vec<Vec<String>> {
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut row: Vec<String> = Vec::new();
     let mut field = String::new();
@@ -118,7 +118,7 @@ fn parse_csv(text: &str, delim: char) -> Vec<Vec<String>> {
 }
 
 impl Table {
-    fn new(text: &str, delim: char, no_header: bool) -> Self {
+    pub(crate) fn new(text: &str, delim: char, no_header: bool) -> Self {
         let parsed = parse_csv(text, delim);
         let (headers, rows) = if no_header || parsed.is_empty() {
             let width = parsed.iter().map(|r| r.len()).max().unwrap_or(0);
@@ -132,7 +132,7 @@ impl Table {
     }
 
     /// 取主键值：--key 指定列名或列号；返回 (key, 行内是否可用)
-    fn key_of(&self, row: &[String], key: &str) -> Option<String> {
+    pub(crate) fn key_of(&self, row: &[String], key: &str) -> Option<String> {
         if let Ok(idx) = key.parse::<usize>() {
             return row.get(idx).cloned();
         }
@@ -152,11 +152,161 @@ pub struct RowStats {
     pub modified: usize,
 }
 
+/// 行对齐状态（供 GUI 渲染）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RowStatus {
+    Same,
+    LeftOnly,
+    RightOnly,
+    Modified,
+}
+
+/// 行对齐结果（结构化，供 GUI 表格视图渲染）
+pub(crate) struct AlignedRow {
+    /// 左侧行号（None = 仅右侧）
+    pub a_no: Option<usize>,
+    /// 右侧行号（None = 仅左侧）
+    pub b_no: Option<usize>,
+    /// 行状态
+    pub status: RowStatus,
+    /// 修改的列索引（Modified 时非空）
+    pub changed_cols: Vec<usize>,
+}
+
+/// 结构化对比：按 key（或行号）对齐两表，返回逐行状态 + 变化列
+pub(crate) fn align_tables(a: &Table, b: &Table, key: Option<&str>) -> (Vec<AlignedRow>, RowStats) {
+    let mut out: Vec<AlignedRow> = Vec::new();
+    let mut stats = RowStats::default();
+
+    match key {
+        Some(k) => {
+            // 按主键对齐：右侧建立 key -> 行索引
+            let mut b_idx: BTreeMap<String, usize> = BTreeMap::new();
+            for (i, row) in b.rows.iter().enumerate() {
+                if let Some(_kv) = b.key_of(row, k) {
+                    b_idx.insert(_kv, i);
+                }
+            }
+            let mut used_b: std::collections::BTreeSet<usize> = Default::default();
+            for (i, row) in a.rows.iter().enumerate() {
+                let Some(kv) = a.key_of(row, k) else {
+                    continue;
+                };
+                if let Some(&j) = b_idx.get(&kv) {
+                    used_b.insert(j);
+                    let (status, changed) = compare_row_cells(
+                        a.headers.as_slice(),
+                        row,
+                        b.headers.as_slice(),
+                        &b.rows[j],
+                    );
+                    match status {
+                        RowStatus::Same => stats.same += 1,
+                        RowStatus::Modified => stats.modified += 1,
+                        _ => {}
+                    }
+                    out.push(AlignedRow {
+                        a_no: Some(i),
+                        b_no: Some(j),
+                        status,
+                        changed_cols: changed,
+                    });
+                } else {
+                    stats.left_only += 1;
+                    out.push(AlignedRow {
+                        a_no: Some(i),
+                        b_no: None,
+                        status: RowStatus::LeftOnly,
+                        changed_cols: Vec::new(),
+                    });
+                }
+            }
+            for (j, row) in b.rows.iter().enumerate() {
+                if used_b.contains(&j) {
+                    continue;
+                }
+                if let Some(_kv) = b.key_of(row, k) {
+                    stats.right_only += 1;
+                    out.push(AlignedRow {
+                        a_no: None,
+                        b_no: Some(j),
+                        status: RowStatus::RightOnly,
+                        changed_cols: Vec::new(),
+                    });
+                }
+            }
+        }
+        None => {
+            // 按行号对齐
+            let n = a.rows.len().max(b.rows.len());
+            for i in 0..n {
+                match (a.rows.get(i), b.rows.get(i)) {
+                    (Some(ra), Some(rb)) => {
+                        let (status, changed) =
+                            compare_row_cells(a.headers.as_slice(), ra, b.headers.as_slice(), rb);
+                        match status {
+                            RowStatus::Same => stats.same += 1,
+                            RowStatus::Modified => stats.modified += 1,
+                            _ => {}
+                        }
+                        out.push(AlignedRow {
+                            a_no: Some(i),
+                            b_no: Some(i),
+                            status,
+                            changed_cols: changed,
+                        });
+                    }
+                    (Some(_), None) => {
+                        stats.left_only += 1;
+                        out.push(AlignedRow {
+                            a_no: Some(i),
+                            b_no: None,
+                            status: RowStatus::LeftOnly,
+                            changed_cols: Vec::new(),
+                        });
+                    }
+                    (None, Some(_)) => {
+                        stats.right_only += 1;
+                        out.push(AlignedRow {
+                            a_no: None,
+                            b_no: Some(i),
+                            status: RowStatus::RightOnly,
+                            changed_cols: Vec::new(),
+                        });
+                    }
+                    (None, None) => {}
+                }
+            }
+        }
+    }
+    (out, stats)
+}
+
+/// 对比一对已对齐的行：返回状态与变化列索引
+fn compare_row_cells(
+    _a_headers: &[String],
+    a_row: &[String],
+    _b_headers: &[String],
+    b_row: &[String],
+) -> (RowStatus, Vec<usize>) {
+    if a_row == b_row {
+        return (RowStatus::Same, Vec::new());
+    }
+    let mut changed: Vec<usize> = Vec::new();
+    let n = a_row.len().max(b_row.len());
+    for i in 0..n {
+        let av = a_row.get(i).cloned().unwrap_or_default();
+        let bv = b_row.get(i).cloned().unwrap_or_default();
+        if av != bv {
+            changed.push(i);
+        }
+    }
+    (RowStatus::Modified, changed)
+}
+
 /// 对比两个 CSV，返回渲染行（字符串，便于测试）
 pub(crate) fn compare_csv(a: &Table, b: &Table, key: Option<&str>) -> (Vec<String>, RowStats) {
     let mut out: Vec<String> = Vec::new();
-    let mut stats = RowStats::default();
-    let mut shown_headers = false;
 
     // 表头差异
     if a.headers != b.headers {
@@ -168,65 +318,60 @@ pub(crate) fn compare_csv(a: &Table, b: &Table, key: Option<&str>) -> (Vec<Strin
         ));
     }
 
-    match key {
-        Some(k) => {
-            // 按主键对齐：右侧建立 key -> 行索引
-            let mut b_idx: BTreeMap<String, usize> = BTreeMap::new();
-            for (i, row) in b.rows.iter().enumerate() {
-                if let Some(kv) = b.key_of(row, k) {
-                    b_idx.insert(kv, i);
-                }
-            }
-            let mut used_b: std::collections::BTreeSet<usize> = Default::default();
-            for (i, row) in a.rows.iter().enumerate() {
-                let Some(kv) = a.key_of(row, k) else {
+    let (aligned, stats) = align_tables(a, b, key);
+    for ar in &aligned {
+        match ar.status {
+            RowStatus::Same => {}
+            RowStatus::LeftOnly => {
+                let i = ar.a_no.unwrap_or(0);
+                let Some(row) = a.rows.get(i) else { continue };
+                if row.is_empty() {
                     continue;
-                };
-                if let Some(&j) = b_idx.get(&kv) {
-                    used_b.insert(j);
-                    if !shown_headers && !out.is_empty() {
-                        shown_headers = true;
-                    }
-                    compare_rows(
-                        &mut out, &mut stats, i, &a.headers, row, j, &b.headers, &b.rows[j],
-                    );
-                } else {
-                    stats.left_only += 1;
-                    if !row.is_empty() {
+                }
+                if let Some(k) = key {
+                    if let Some(kv) = a.key_of(row, k) {
                         out.push(format!("[L] 行{}  {}={}", i + 1, k, kv));
+                        continue;
                     }
                 }
+                out.push(format!("[L] 行{}  {}", i + 1, row.join(",")));
             }
-            for (j, row) in b.rows.iter().enumerate() {
-                if used_b.contains(&j) {
+            RowStatus::RightOnly => {
+                let j = ar.b_no.unwrap_or(0);
+                let Some(row) = b.rows.get(j) else { continue };
+                if row.is_empty() {
                     continue;
                 }
-                if let Some(kv) = b.key_of(row, k) {
-                    stats.right_only += 1;
-                    if !row.is_empty() {
+                if let Some(k) = key {
+                    if let Some(kv) = b.key_of(row, k) {
                         out.push(format!("[R] 行{}  {}={}", j + 1, k, kv));
+                        continue;
                     }
                 }
+                out.push(format!("[R] 行{}  {}", j + 1, row.join(",")));
             }
-        }
-        None => {
-            // 按行号对齐
-            let n = a.rows.len().max(b.rows.len());
-            for i in 0..n {
-                match (a.rows.get(i), b.rows.get(i)) {
-                    (Some(ra), Some(rb)) => {
-                        compare_rows(&mut out, &mut stats, i, &a.headers, ra, i, &b.headers, rb)
-                    }
-                    (Some(ra), None) => {
-                        stats.left_only += 1;
-                        out.push(format!("[L] 行{}  {}", i + 1, ra.join(",")));
-                    }
-                    (None, Some(rb)) => {
-                        stats.right_only += 1;
-                        out.push(format!("[R] 行{}  {}", i + 1, rb.join(",")));
-                    }
-                    (None, None) => {}
+            RowStatus::Modified => {
+                let (i, j) = (ar.a_no.unwrap_or(0), ar.b_no.unwrap_or(0));
+                let a_row = &a.rows[i];
+                let b_row = &b.rows[j];
+                let mut changes: Vec<String> = Vec::new();
+                for &ci in &ar.changed_cols {
+                    let av = a_row.get(ci).cloned().unwrap_or_default();
+                    let bv = b_row.get(ci).cloned().unwrap_or_default();
+                    let h = a
+                        .headers
+                        .get(ci)
+                        .or(b.headers.get(ci))
+                        .cloned()
+                        .unwrap_or_else(|| format!("col{ci}"));
+                    changes.push(format!("{h}: {av} -> {bv}"));
                 }
+                out.push(format!(
+                    "[M] 行{} ↔ {}  {}",
+                    i + 1,
+                    j + 1,
+                    changes.join("; ")
+                ));
             }
         }
     }
@@ -235,46 +380,6 @@ pub(crate) fn compare_csv(a: &Table, b: &Table, key: Option<&str>) -> (Vec<Strin
         out.push(t(Key::CsvIdentical).to_string());
     }
     (out, stats)
-}
-
-/// 对比一对已对齐的行：逐列 diff
-#[allow(clippy::too_many_arguments)]
-fn compare_rows(
-    out: &mut Vec<String>,
-    stats: &mut RowStats,
-    a_no: usize,
-    a_headers: &[String],
-    a_row: &[String],
-    b_no: usize,
-    b_headers: &[String],
-    b_row: &[String],
-) {
-    if a_row == b_row {
-        stats.same += 1;
-        // 相同行默认不输出（show_same 由上层处理）
-        return;
-    }
-    stats.modified += 1;
-    let mut changes: Vec<String> = Vec::new();
-    let n = a_row.len().max(b_row.len());
-    for i in 0..n {
-        let av = a_row.get(i).cloned().unwrap_or_default();
-        let bv = b_row.get(i).cloned().unwrap_or_default();
-        if av != bv {
-            let h = a_headers
-                .get(i)
-                .or(b_headers.get(i))
-                .cloned()
-                .unwrap_or_else(|| format!("col{i}"));
-            changes.push(format!("{h}: {av} -> {bv}"));
-        }
-    }
-    out.push(format!(
-        "[M] 行{} ↔ {}  {}",
-        a_no + 1,
-        b_no + 1,
-        changes.join("; ")
-    ));
 }
 
 /// 运行 csv 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
@@ -448,5 +553,85 @@ mod tests {
     fn tab_delimiter() {
         let t = Table::new("a\tb\n1\t2\n", '\t', false);
         assert_eq!(t.rows[0], vec!["1", "2"]);
+    }
+
+    // ---- P29 结构化对齐 API ----
+
+    #[test]
+    fn align_by_row_number() {
+        let a = tbl("id,name\n1,alice\n");
+        let b = tbl("id,name\n1,alice\n2,bob\n");
+        let (rows, stats) = align_tables(&a, &b, None);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].status, RowStatus::Same);
+        assert_eq!(rows[0].a_no, Some(0));
+        assert_eq!(rows[0].b_no, Some(0));
+        assert_eq!(rows[1].status, RowStatus::RightOnly);
+        assert_eq!(rows[1].a_no, None);
+        assert_eq!(rows[1].b_no, Some(1));
+        assert_eq!(stats.same, 1);
+        assert_eq!(stats.right_only, 1);
+    }
+
+    #[test]
+    fn align_reports_changed_cols() {
+        let a = tbl("id,name,age\n1,alice,30\n");
+        let b = tbl("id,name,age\n1,ALICE,31\n");
+        let (rows, stats) = align_tables(&a, &b, None);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, RowStatus::Modified);
+        assert_eq!(rows[0].changed_cols, vec![1, 2]);
+        assert_eq!(stats.modified, 1);
+    }
+
+    #[test]
+    fn align_by_key_matches_order_independent() {
+        let a = tbl("id,name\n1,alice\n2,bob\n");
+        let b = tbl("id,name\n2,BOB\n1,alice\n");
+        let (rows, stats) = align_tables(&a, &b, Some("id"));
+        // 按 id 对齐：行2 的 bob -> BOB 是修改，不是删除+新增
+        assert_eq!(rows.len(), 2);
+        assert_eq!(stats.modified, 1);
+        assert_eq!(stats.same, 1);
+        let mod_row = rows
+            .iter()
+            .find(|r| r.status == RowStatus::Modified)
+            .unwrap();
+        assert_eq!(mod_row.a_no, Some(1));
+        assert_eq!(mod_row.b_no, Some(0));
+        assert_eq!(mod_row.changed_cols, vec![1]);
+    }
+
+    #[test]
+    fn align_by_key_orphans() {
+        let a = tbl("id,v\n1,x\n3,z\n");
+        let b = tbl("id,v\n1,x\n2,y\n");
+        let (rows, stats) = align_tables(&a, &b, Some("id"));
+        assert_eq!(stats.left_only, 1);
+        assert_eq!(stats.right_only, 1);
+        assert_eq!(stats.same, 1);
+        let lo = rows
+            .iter()
+            .find(|r| r.status == RowStatus::LeftOnly)
+            .unwrap();
+        assert_eq!(lo.a_no, Some(1));
+        assert_eq!(lo.b_no, None);
+        let ro = rows
+            .iter()
+            .find(|r| r.status == RowStatus::RightOnly)
+            .unwrap();
+        assert_eq!(ro.a_no, None);
+        assert_eq!(ro.b_no, Some(1));
+    }
+
+    #[test]
+    fn align_headers_and_rows_public() {
+        // GUI 需要访问 Table 的 headers/rows（pub(crate)）
+        let t = Table::new("a,b\n1,2\n", ',', false);
+        assert_eq!(t.headers.len(), 2);
+        assert_eq!(t.rows.len(), 1);
+        // parse_csv 也需 pub(crate) 供 GUI 复用
+        let parsed = parse_csv("x,y\n1,2\n", ',');
+        assert_eq!(parsed.len(), 2);
     }
 }
