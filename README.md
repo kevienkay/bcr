@@ -73,6 +73,15 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 - **任务清单 `bcr task`**：JSON/TOML 纯数据步骤清单（load/compare/compare3/csv/merge/sync/report/echo/exit），`%date%` `%time%` `%fn_time%` `%env:VAR%` `%1-%9` 动态变量，compare/sync 有差异不中止、遇错即停（或 continue_on_error），`bcr task check` 只校验不执行
 - 完整参考：`docs/automation.md`（契约 + API + 场景示例）
 
+### P29 CSV 表格 GUI（对标 BC 表格视图）
+
+- **CsvTab 标签页**：并排渲染左右表格，行按主键（或行号）对齐，行级状态着色（相同/仅左/仅右/修改）
+- **单元格级差异高亮**：修改的列左右两侧同时着色（左红右黄）
+- **工具栏**：主键下拉（表头列名/行号对齐）、分隔符（`,`/`\t`）、显示相同开关、状态过滤下拉（全部/仅差异/仅左/仅右/仅修改/仅相同）
+- **表头点击排序**：按任意列升/降序（纯显示排序，不改对齐数据）
+- **入口路由**：目录对比双击/手动对齐/打开对比/拖放/CLI 启动，两侧均为 .csv/.tsv/.tab 自动进表格视图
+- 结构化对比 API：`csvcmp::align_tables` 返回逐行状态 + 变化列（CLI 文本输出契约 csv.v1 不变）
+
 ### P28 全面对标收口（A/B/C 差距消除）
 
 - **A1 三路文件夹合并 `merge3`**：`bcr merge3 BASE LEFT RIGHT -o OUT` —— 文本自动三路合并（冲突标记）、二进制冲突复制左侧并标记、单侧复制/删除，`--dry-run`/`--json`

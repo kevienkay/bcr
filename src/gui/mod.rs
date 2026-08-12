@@ -244,6 +244,19 @@ impl DiffApp {
                     self.add_tab(Tab::Merge(merge));
                 }
             }
+            (_, [a, b]) => {
+                // 两个文件：图片/CSV → 专用标签，否则文本对比
+                let (a, b) = (a.clone(), b.clone());
+                if crate::imgcmp::is_image_file(&a) && crate::imgcmp::is_image_file(&b) {
+                    self.add_tab(Tab::Image(ImageTab::new(&a, &b)));
+                } else if crate::csvcmp::is_csv_file(&a) && crate::csvcmp::is_csv_file(&b) {
+                    self.add_tab(Tab::Csv(CsvTab::new(&a, &b)));
+                } else {
+                    let mut t = DiffTab::new();
+                    t.load_pair(&a, &b, ViewOptions::default());
+                    self.add_tab(Tab::Diff(t));
+                }
+            }
             (_, [a]) => {
                 // 单个文件：补到当前 diff 标签或新建（图片文件走图片对比）
                 self.drop_single_file(a);
@@ -310,6 +323,11 @@ impl DiffApp {
         // 两侧均为图片 → 图片对比标签
         if crate::imgcmp::is_image_file(&l) && crate::imgcmp::is_image_file(&r) {
             self.add_tab(Tab::Image(ImageTab::new(&l, &r)));
+            return;
+        }
+        // 两侧均为 CSV/TSV → 表格对比标签（P29）
+        if crate::csvcmp::is_csv_file(&l) && crate::csvcmp::is_csv_file(&r) {
+            self.add_tab(Tab::Csv(CsvTab::new(&l, &r)));
             return;
         }
         let mut t = DiffTab::new();
@@ -1125,6 +1143,8 @@ pub fn run(args: &GuiArgs) -> i32 {
                     app.add_tab(Tab::Dir(DirTab::new(l, r)));
                 } else if crate::imgcmp::is_image_file(l) && crate::imgcmp::is_image_file(r) {
                     app.add_tab(Tab::Image(ImageTab::new(l, r)));
+                } else if crate::csvcmp::is_csv_file(l) && crate::csvcmp::is_csv_file(r) {
+                    app.add_tab(Tab::Csv(CsvTab::new(l, r)));
                 } else {
                     let mut t = DiffTab::new();
                     t.show_stats = show_stats;
@@ -1720,5 +1740,16 @@ mod tests {
     #[test]
     fn scan_cloud_root_nonexistent_returns_none() {
         assert!(scan_cloud_root("/nonexistent/definitely/not/here").is_none());
+    }
+
+    // ---- P29 CSV 表格路由 ----------------
+
+    #[test]
+    fn is_csv_file_detects_extensions() {
+        assert!(crate::csvcmp::is_csv_file("a.CSV"));
+        assert!(crate::csvcmp::is_csv_file("b.tsv"));
+        assert!(crate::csvcmp::is_csv_file("c.tab"));
+        assert!(!crate::csvcmp::is_csv_file("d.txt"));
+        assert!(!crate::csvcmp::is_csv_file("e.csv.bak"));
     }
 }

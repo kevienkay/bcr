@@ -57,6 +57,15 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **P26** GUI 云盘浏览（☁ 窗口输入 webdav/s3/onedrive/dropbox/sftp/ftp URL，扫描并打开目录对比）
 - **P27** 自动化：全命令 `--json` 契约（compare.v1/sync.v1/compare3.v1/csv.v1/merge.v1/mp3tag.v1/imgcmp.v1）+ Python 绑定 `bindings/bcr.py`（纯标准库 dataclass API）+ 纯数据任务清单 `bcr task run/check`（JSON/TOML，%date%/%time%/%fn_time%/%env:VAR%/%1-%9 动态变量，差异不中止语义）
 
+### P29（CSV 表格 GUI）
+
+- **CsvTab 标签页**：并排渲染左右表格，行按主键/行号对齐，行级状态着色 + 单元格级差异高亮（左红右黄）
+- **工具栏**：主键下拉、分隔符（`,`/`\t`）、显示相同、状态过滤（全部/仅差异/仅左/仅右/仅修改/仅相同）
+- **表头点击排序**（升/降，纯显示排序）+ 统计栏
+- **入口路由**：目录双击/手动对齐/打开对比/拖放/CLI 启动自动识别 .csv/.tsv/.tab 进表格视图
+- **结构化 API**：`csvcmp::align_tables` 返回逐行状态 + 变化列（RowStatus/AlignedRow）；CLI 文本输出契约 csv.v1 不变
+- i18n：10 语言新增 CsvTitle/CsvKeyCol/CsvDelimiter/CsvRowAlign/CsvFilter* 条目
+
 ### P28（全面对标收口，A/B/C 差距消除）
 
 - **A1** 三路文件夹合并 `merge3`（BASE/L/R → 输出目录，文本自动三路合并 + 冲突标记，--dry-run/--json）
