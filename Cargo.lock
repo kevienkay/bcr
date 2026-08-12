@@ -610,6 +610,7 @@ dependencies = [
  "clap",
  "criterion",
  "eframe",
+ "egui_kittest",
  "encoding_rs",
  "filetime",
  "flate2",
@@ -634,7 +635,7 @@ dependencies = [
  "tar",
  "tempfile",
  "tokio",
- "toml",
+ "toml 0.8.23",
  "walkdir",
  "zip",
 ]
@@ -1629,9 +1630,9 @@ dependencies = [
 
 [[package]]
 name = "ecolor"
-version = "0.36.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30429559efada7bd06098ced68e90f1f745acb9a25b51caf158741493c5b94bb"
+checksum = "fc883f505d446814c0226bef4b64564b9adb9966fc00c88c57ce6d827dd152d6"
 dependencies = [
  "bytemuck",
  "emath",
@@ -1700,9 +1701,9 @@ dependencies = [
 
 [[package]]
 name = "egui"
-version = "0.36.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8e70d4e8e8896ba5becb0bc1c8c06d203cb44ff16a93d7a619a5e565500085d"
+checksum = "c977ac91dfaa651633fd9722e4ce9ccb32cda4c748b89a5cb57e504036e37c13"
 dependencies = [
  "accesskit",
  "ahash",
@@ -1775,6 +1776,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_kittest"
+version = "0.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a9ea43248738d0396342e7b537b3a79568b2a5d16e8c3fdfc0d8bcbd89dbf6d"
+dependencies = [
+ "egui",
+ "kittest",
+ "log",
+ "serde",
+ "toml 1.1.4+spec-1.1.0",
+]
+
+[[package]]
 name = "either"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1804,9 +1818,9 @@ dependencies = [
 
 [[package]]
 name = "emath"
-version = "0.36.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60b4d19daeb47a1e42e9e67fdc8dd003364b4d3e6c6bc4df865a2b5ad2c920e0"
+checksum = "dce03cf1604f74515830012c29991beb0b58f69e4e43f5afe22fa7afed65ccd5"
 dependencies = [
  "bytemuck",
 ]
@@ -1861,9 +1875,9 @@ dependencies = [
 
 [[package]]
 name = "epaint"
-version = "0.36.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84a7cb8f831a5a43423e4838101ac4a3264910f2f326670c24f4f4b7ee43d9c8"
+checksum = "11863a6b2b7823010c1090ddf4706947bdda46766742def0673195cbf7ff4a73"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1886,9 +1900,9 @@ dependencies = [
 
 [[package]]
 name = "epaint_default_fonts"
-version = "0.36.0"
+version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d16e23bfeaa81d590306ae25da24269a0686d240c623013badbda44d3f5fab46"
+checksum = "18dee69613aac468922cf28a32025eb7d7ed6985b61f73245848e58f37876c98"
 
 [[package]]
 name = "equivalent"
@@ -3020,6 +3034,16 @@ name = "khronos_api"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
+
+[[package]]
+name = "kittest"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90ceaa75eb0036a32b6b9833962eb18137449e9817e2e586006471925b727fd5"
+dependencies = [
+ "accesskit",
+ "accesskit_consumer 0.35.0",
+]
 
 [[package]]
 name = "kurbo"
@@ -5074,6 +5098,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5806,9 +5839,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
 dependencies = [
  "serde",
- "serde_spanned",
+ "serde_spanned 0.6.9",
  "toml_datetime 0.6.11",
  "toml_edit 0.22.27",
+]
+
+[[package]]
+name = "toml"
+version = "1.1.4+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aace63f4bbcdfc2c965b059de67119c89c4017a70d633be6c104910f67056f5"
+dependencies = [
+ "serde_core",
+ "serde_spanned 1.1.1",
+ "toml_datetime 1.1.1+spec-1.1.0",
+ "toml_parser",
+ "winnow 1.0.4",
 ]
 
 [[package]]
@@ -5837,7 +5883,7 @@ checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
 dependencies = [
  "indexmap",
  "serde",
- "serde_spanned",
+ "serde_spanned 0.6.9",
  "toml_datetime 0.6.11",
  "toml_write",
  "winnow 0.7.15",
