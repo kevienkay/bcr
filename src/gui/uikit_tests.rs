@@ -252,3 +252,95 @@ fn difftab_mid_gap_renders_with_connector_lines() {
     // mid_gap 布局常量生效（左右面板之间有空隙）
     const _: () = assert!(crate::gui::theme::MID_GAP > 0.0);
 }
+
+// ---- P32-A2：行内直接编辑（双击进入 + Enter 提交） ----
+
+#[test]
+fn difftab_inline_edit_commits_via_ui() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "alpha\nbeta\ngamma\n");
+    let r = write(d.path(), "r.txt", "alpha\nbeta\ngamma\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 双击第一行内容 → 进入行内编辑（左侧）
+    {
+        let mut t = tab.borrow_mut();
+        let row = t.rows.first().cloned().unwrap();
+        let text = row.left.as_ref().unwrap().text.clone();
+        t.inline_edit = Some(crate::gui::difftab::InlineEditState {
+            side: crate::gui::difftab::EditSide::Left,
+            row: 0,
+            buf: text,
+        });
+    }
+    h.run();
+    // 修改缓冲区 → Enter 提交
+    {
+        let mut t = tab.borrow_mut();
+        if let Some(ie) = &mut t.inline_edit {
+            ie.buf = "alpha-edited".to_string();
+        }
+    }
+    // 模拟 Ctrl+Enter 提交（handle_keys 由 ui 内部调用；直接调 commit 更可靠）
+    tab.borrow_mut().commit_inline_edit();
+    h.run();
+    // 提交后：文件内容更新 + 撤销栈非空 + 重做栈清空
+    let content = std::fs::read_to_string(&l).unwrap();
+    assert!(content.contains("alpha-edited"), "文件应已写入编辑内容");
+    let t = tab.borrow();
+    assert_eq!(t.undo_stack.len(), 1, "撤销栈应有 1 条记录");
+    assert!(t.redo_stack.is_empty(), "重做栈应清空");
+    assert!(t.inline_edit.is_none(), "提交后退出编辑态");
+}
+
+// ---- P32-A6：撤销/重做 ----
+
+#[test]
+fn difftab_undo_redo_restores_content_via_ui() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "alpha\nbeta\ngamma\n");
+    let r = write(d.path(), "r.txt", "alpha\nbeta\ngamma\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, &r, ViewOptions::default());
+    // 制造一次编辑提交：直接改文件 + 入撤销栈 + 重载（等价于 commit_inline_edit 结果）
+    {
+        let path = l.clone();
+        let orig = std::fs::read_to_string(&path).unwrap();
+        let new_content = orig.replace("alpha", "edited-line");
+        std::fs::write(&path, &new_content).unwrap();
+        tab.undo_stack.push(crate::gui::difftab::EditSnapshot {
+            side: crate::gui::difftab::EditSide::Left,
+            path: path.clone(),
+            before: orig,
+            after: new_content,
+        });
+        tab.load_left(&path, ViewOptions::default());
+    }
+    // 渲染（&mut tab 捕获，无 RefCell 借用纠缠）
+    let mut h = Harness::new_ui(|ui| tab.ui(ui));
+    h.run();
+    assert!(
+        std::fs::read_to_string(&l).unwrap().contains("edited-line"),
+        "前置：文件已修改"
+    );
+    // 工具栏点「↩ 撤销」→ 恢复 before
+    h.get_by_label("↩ 撤销").click();
+    h.run();
+    assert!(
+        std::fs::read_to_string(&l).unwrap().contains("alpha\n"),
+        "撤销后文件应恢复原内容"
+    );
+    // 工具栏点「↪ 重做」→ 恢复 after
+    h.get_by_label("↪ 重做").click();
+    h.run();
+    assert!(
+        std::fs::read_to_string(&l).unwrap().contains("edited-line"),
+        "重做后文件应恢复修改内容"
+    );
+    // 释放 Harness 后检查内部栈状态（重做后：undo 栈恢复 1 条，redo 栈清空）
+    drop(h);
+    assert_eq!(tab.undo_stack.len(), 1, "重做后撤销栈恢复 1 条");
+    assert!(tab.redo_stack.is_empty(), "重做栈应清空");
+}

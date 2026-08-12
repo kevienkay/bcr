@@ -53,7 +53,7 @@ pub struct HexEditState {
 }
 
 /// 行内编辑状态
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum EditSide {
     Left,
     Right,
@@ -78,6 +78,12 @@ pub struct DiffTab {
     pub goto_focus: bool,
     /// 编辑状态（编辑左侧/右侧内容）
     pub editing: Option<EditState>,
+    /// P32-A2：行内直接编辑状态（双击行进入）
+    pub inline_edit: Option<InlineEditState>,
+    /// P32-A6：撤销栈（编辑/替换前的文件内容）
+    pub undo_stack: Vec<EditSnapshot>,
+    /// P32-A6：重做栈
+    pub redo_stack: Vec<EditSnapshot>,
     /// 二进制 hex 对比模式（Some 时优先于文本行渲染）
     pub hex: Option<HexTabData>,
     /// hex 编辑状态
@@ -93,6 +99,25 @@ pub struct EditState {
     pub side: EditSide,
     pub path: String,
     pub content: String,
+}
+
+/// P32-A2：行内直接编辑状态（双击差异行/内容行进入）
+#[derive(Clone)]
+pub struct InlineEditState {
+    pub side: EditSide,
+    /// 行索引（对齐后的显示行索引）
+    pub row: usize,
+    /// 编辑缓冲区
+    pub buf: String,
+}
+
+/// P32-A6：编辑快照（撤销/重做用）
+#[derive(Clone)]
+pub struct EditSnapshot {
+    pub side: EditSide,
+    pub path: String,
+    pub before: String,
+    pub after: String,
 }
 
 impl DiffTab {
@@ -112,6 +137,9 @@ impl DiffTab {
             goto_line: None,
             goto_focus: false,
             editing: None,
+            inline_edit: None,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             hex: None,
             hex_edit: None,
             wrap: false,
@@ -384,6 +412,158 @@ impl DiffTab {
         }
     }
 
+    // ---- P32-A2/A6：行内编辑提交 + 撤销/重做 ----
+
+    /// 提交行内编辑：修改对应侧文件对应行 → 按原编码写回 → 重新加载 → 入撤销栈
+    pub fn commit_inline_edit(&mut self) {
+        let Some(ie) = self.inline_edit.take() else {
+            return;
+        };
+        let Some(row) = self.rows.get(ie.row) else {
+            return;
+        };
+        // 取该侧文件信息与行号
+        let (path, line_no, enc, bom) = match ie.side {
+            EditSide::Left => match (&self.left, row.left_no) {
+                (Some(f), Some(no)) => (f.path.clone(), no, f.encoding, f.had_bom),
+                _ => return,
+            },
+            EditSide::Right => match (&self.right, row.right_no) {
+                (Some(f), Some(no)) => (f.path.clone(), no, f.encoding, f.had_bom),
+                _ => return,
+            },
+        };
+        // 读取当前文件原文，替换目标行
+        let Ok(orig) = std::fs::read_to_string(&path) else {
+            return;
+        };
+        let mut lines: Vec<&str> = orig.split('\n').collect();
+        let idx = line_no.saturating_sub(1);
+        if idx >= lines.len() {
+            return;
+        }
+        let before_line = lines[idx].to_string();
+        let after_line = ie.buf.clone();
+        if before_line == after_line {
+            return;
+        }
+        lines[idx] = &after_line;
+        let new_content = lines.join("\n");
+        // 按原编码写回（保留 BOM，自动备份）
+        let _ = std::fs::copy(&path, format!("{path}.bak"));
+        let bytes = crate::encoding::encode_back(
+            &crate::encoding::TextFile {
+                text: String::new(),
+                encoding: enc,
+                had_bom: bom,
+                is_binary: false,
+            },
+            &new_content,
+        );
+        if let Err(e) = std::fs::write(&path, bytes) {
+            self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
+            return;
+        }
+        // 入撤销栈（重做栈清空）
+        self.undo_stack.push(EditSnapshot {
+            side: ie.side,
+            path: path.clone(),
+            before: orig,
+            after: new_content,
+        });
+        self.redo_stack.clear();
+        // 重新加载对应侧并重算
+        match ie.side {
+            EditSide::Left => self.load_left(&path, self.opts.clone()),
+            EditSide::Right => self.load_right(&path, self.opts.clone()),
+        }
+        self.error = Some(fmt(I18nKey::Saved, &[&path]));
+    }
+
+    /// 撤销：恢复快照 before 内容到文件并重新加载
+    pub fn undo(&mut self) {
+        let Some(snap) = self.undo_stack.pop() else {
+            return;
+        };
+        let before = snap.before.clone();
+        let path = snap.path.clone();
+        let (enc, bom) = match snap.side {
+            EditSide::Left => self
+                .left
+                .as_ref()
+                .map(|f| (f.encoding, f.had_bom))
+                .unwrap_or((crate::encoding::EncodingKind::Utf8, false)),
+            EditSide::Right => self
+                .right
+                .as_ref()
+                .map(|f| (f.encoding, f.had_bom))
+                .unwrap_or((crate::encoding::EncodingKind::Utf8, false)),
+        };
+        let _ = std::fs::copy(&path, format!("{path}.bak"));
+        let bytes = crate::encoding::encode_back(
+            &crate::encoding::TextFile {
+                text: String::new(),
+                encoding: enc,
+                had_bom: bom,
+                is_binary: false,
+            },
+            &before,
+        );
+        if let Err(e) = std::fs::write(&path, bytes) {
+            self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
+            self.undo_stack.push(snap);
+            return;
+        }
+        match snap.side {
+            EditSide::Left => self.load_left(&path, self.opts.clone()),
+            EditSide::Right => self.load_right(&path, self.opts.clone()),
+        }
+        self.redo_stack.push(snap);
+        self.error = Some(fmt(I18nKey::Saved, &["已撤销"]));
+    }
+
+    /// 重做：恢复快照 after 内容到文件并重新加载
+    pub fn redo(&mut self) {
+        let Some(snap) = self.redo_stack.pop() else {
+            return;
+        };
+        let after = snap.after.clone();
+        let path = snap.path.clone();
+        let (enc, bom) = match snap.side {
+            EditSide::Left => self
+                .left
+                .as_ref()
+                .map(|f| (f.encoding, f.had_bom))
+                .unwrap_or((crate::encoding::EncodingKind::Utf8, false)),
+            EditSide::Right => self
+                .right
+                .as_ref()
+                .map(|f| (f.encoding, f.had_bom))
+                .unwrap_or((crate::encoding::EncodingKind::Utf8, false)),
+        };
+        let _ = std::fs::copy(&path, format!("{path}.bak"));
+        let bytes = crate::encoding::encode_back(
+            &crate::encoding::TextFile {
+                text: String::new(),
+                encoding: enc,
+                had_bom: bom,
+                is_binary: false,
+            },
+            &after,
+        );
+        if let Err(e) = std::fs::write(&path, bytes) {
+            self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
+            self.redo_stack.push(snap);
+            return;
+        }
+        match snap.side {
+            EditSide::Left => self.load_left(&path, self.opts.clone()),
+            EditSide::Right => self.load_right(&path, self.opts.clone()),
+        }
+        self.undo_stack.push(snap);
+        self.error = Some(fmt(I18nKey::Saved, &["已重做"]));
+    }
+
     // ---- 搜索 ----
 
     pub fn update_search(&mut self) {
@@ -486,6 +666,29 @@ impl DiffTab {
 
     pub fn handle_keys(&mut self, ui: &egui::Ui) {
         let ctrl = ui.input(|i| i.modifiers.command);
+        // P32-A2：内联编辑中 Enter 提交 / ESC 取消（优先于搜索 Enter）
+        if self.inline_edit.is_some() {
+            if ui.input(|i| i.key_pressed(Key::Enter)) {
+                self.commit_inline_edit();
+            }
+            if ui.input(|i| i.key_pressed(Key::Escape)) {
+                self.inline_edit = None;
+            }
+            return;
+        }
+        // P32-A6：撤销/重做（Ctrl+Z / Ctrl+Y 或 Ctrl+Shift+Z）
+        if ui.input(|i| i.key_pressed(Key::Z) && ctrl) {
+            if ui.input(|i| i.modifiers.shift) {
+                self.redo();
+            } else {
+                self.undo();
+            }
+            return;
+        }
+        if ui.input(|i| i.key_pressed(Key::Y) && ctrl) {
+            self.redo();
+            return;
+        }
         if ui.input(|i| i.key_pressed(Key::F) && ctrl) {
             self.search.focus = true;
             return;
@@ -606,6 +809,24 @@ impl DiffTab {
                             content: r.content.clone(),
                         });
                     }
+                }
+                ui.separator();
+                // P32-A6：撤销/重做按钮
+                let can_undo = !self.undo_stack.is_empty();
+                let can_redo = !self.redo_stack.is_empty();
+                if ui
+                    .add_enabled(can_undo, egui::Button::new("↩ 撤销"))
+                    .on_hover_text("Ctrl+Z")
+                    .clicked()
+                {
+                    self.undo();
+                }
+                if ui
+                    .add_enabled(can_redo, egui::Button::new("↪ 重做"))
+                    .on_hover_text("Ctrl+Y")
+                    .clicked()
+                {
+                    self.redo();
                 }
                 ui.separator();
                 if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
@@ -1055,6 +1276,9 @@ impl DiffTab {
             let syn_r = self.right.as_ref().and_then(|f| f.syntax);
 
             // 受控滚动 + 虚拟化渲染（统一走 common::show_rows）
+            // P32-A2：取出行内编辑状态，渲染循环内传入；双击请求在下循环结束后处理
+            let mut inline = self.inline_edit.take();
+            let mut dbl: Option<(usize, EditSide)> = None;
             let out = super::show_rows(ui, display_rows.len(), ROW_H, |ui, range| {
                 ui.set_min_width(total_w);
                 // 当前差异行（diff_pos → diff_rows 中的行索引，P31 竖条标记）
@@ -1085,7 +1309,7 @@ impl DiffTab {
                         RowTag::Insert => (None, Some(hl_insert())),
                         RowTag::Equal => (None, None),
                     };
-                    paint_diff_row(
+                    let hit = paint_diff_row(
                         ui,
                         row,
                         gutter_l,
@@ -1099,9 +1323,30 @@ impl DiffTab {
                         syn_l,
                         syn_r,
                         cur_diff_orig == Some(oi),
+                        inline.as_mut().filter(|ie| ie.row == oi),
                     );
+                    if let Some(side) = hit {
+                        dbl = Some((oi, side));
+                    }
                 }
             });
+            // P32-A2：双击行内容 → 进入行内编辑（buf 取该侧当前行文本）
+            if let Some((i, side)) = dbl {
+                let text = match side {
+                    EditSide::Left => display_rows[i].left.as_ref().map(|c| c.text.clone()),
+                    EditSide::Right => display_rows[i].right.as_ref().map(|c| c.text.clone()),
+                };
+                if let Some(text) = text {
+                    inline = Some(InlineEditState {
+                        side,
+                        row: i,
+                        buf: text,
+                    });
+                    self.inline_edit = inline;
+                }
+            } else {
+                self.inline_edit = inline;
+            }
             self.scroll = out.state.offset;
 
             // A11 缩略图总览：右侧迷你差异地图（点击跳转到对应行）
@@ -1200,11 +1445,12 @@ fn paint_diff_row(
     syn_l: Option<&'static syntect::parsing::SyntaxReference>,
     syn_r: Option<&'static syntect::parsing::SyntaxReference>,
     is_current: bool,
-) {
+    mut inline: Option<&mut InlineEditState>,
+) -> Option<EditSide> {
     let mid_gap = super::theme::MID_GAP;
-    let (rect, _) = ui.allocate_exact_size(
+    let (rect, resp) = ui.allocate_exact_size(
         Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H),
-        egui::Sense::hover(),
+        egui::Sense::click(),
     );
     let x = rect.left();
     let y = rect.top();
@@ -1229,7 +1475,22 @@ fn paint_diff_row(
     paint_line_no(ui, gutter_rect, row.left_no);
     let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_l);
-    paint_cell(ui, content_rect, row.left.as_ref(), fg, hl_l, syn_l);
+    // P32-A2：行内编辑命中左侧 → 就地 TextEdit
+    let editing_side = inline.as_ref().map(|ie| ie.side);
+    match editing_side {
+        Some(EditSide::Left) => {
+            if let Some(ie) = inline.as_mut() {
+                ui.add(
+                    egui::TextEdit::singleline(&mut ie.buf)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(content_w - 8.0),
+                );
+            }
+        }
+        _ => {
+            paint_cell(ui, content_rect, row.left.as_ref(), fg, hl_l, syn_l);
+        }
+    }
 
     // P32-A1：左右面板空隙画差异连接线（有差异的行画线连接两侧，BC 观感）
     let mid_x = x + gutter_l + content_w;
@@ -1278,7 +1539,38 @@ fn paint_diff_row(
     paint_line_no(ui, gutter_rect, row.right_no);
     let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_r);
-    paint_cell(ui, content_rect, row.right.as_ref(), fg, hl_r, syn_r);
+    // P32-A2：行内编辑命中右侧 → 就地 TextEdit
+    let editing_side = inline.as_ref().map(|ie| ie.side);
+    match editing_side {
+        Some(EditSide::Right) => {
+            if let Some(ie) = inline.as_mut() {
+                ui.add(
+                    egui::TextEdit::singleline(&mut ie.buf)
+                        .font(egui::TextStyle::Monospace)
+                        .desired_width(content_w - 8.0),
+                );
+            }
+        }
+        _ => {
+            paint_cell(ui, content_rect, row.right.as_ref(), fg, hl_r, syn_r);
+        }
+    }
+
+    // P32-A2：双击行内容 → 进入行内编辑（左/右内容区命中）
+    if resp.double_clicked() {
+        if let Some(pos) = resp.interact_pointer_pos() {
+            let left_zone = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
+            let right_zone =
+                Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
+            if left_zone.contains(pos) {
+                return Some(EditSide::Left);
+            }
+            if right_zone.contains(pos) {
+                return Some(EditSide::Right);
+            }
+        }
+    }
+    None
 }
 
 /// P32-A1：差异连接线颜色（有差异的行返回对应颜色，无差异返回 None）
