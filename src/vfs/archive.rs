@@ -96,41 +96,48 @@ impl ArchiveVfs {
 
     /// 是否支持写入（tar / tar.gz / tar.xz 可重写；tar.bz2 无纯 Rust 编码器、7z 只读）
     fn writable(&self) -> bool {
-        matches!(self.kind.as_str(), "tar" | "tar.gz" | "tar.xz")
+        matches!(self.kind.as_str(), "tar" | "tar.gz" | "tar.xz" | "7z")
     }
 
-    /// 全量重写：修改内存表 → 编码回 tar → 按 kind 压缩 → 原子替换文件
+    /// 全量重写：修改内存表 → 编码回 tar/7z → 按 kind 压缩 → 原子替换文件
     fn rewrite(&self, modify: impl FnOnce(&mut ArchiveFiles)) -> io::Result<()> {
         if !self.writable() {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
-                format!("{} 归档为只读后端（仅 tar/tar.gz/tar.xz 可写）", self.kind),
+                format!(
+                    "{} 归档为只读后端（仅 tar/tar.gz/tar.xz/7z 可写）",
+                    self.kind
+                ),
             ));
         }
         {
             let mut files = self.files.borrow_mut();
             modify(&mut files);
         }
-        // 编码 tar 字节流
-        let tar_bytes = encode_tar(&self.files.borrow())?;
-        // 按 kind 压缩
-        let out: Vec<u8> = match self.kind.as_str() {
-            "tar" => tar_bytes,
-            "tar.gz" => {
-                let mut out = Vec::new();
-                let mut enc =
-                    flate2::write::GzEncoder::new(&mut out, flate2::Compression::default());
-                enc.write_all(&tar_bytes)?;
-                enc.finish()?;
-                out
+        // 编码归档字节流
+        let out: Vec<u8> = if self.kind == "7z" {
+            encode_sevenz(&self.files.borrow())?
+        } else {
+            // 编码 tar 字节流
+            let tar_bytes = encode_tar(&self.files.borrow())?;
+            match self.kind.as_str() {
+                "tar" => tar_bytes,
+                "tar.gz" => {
+                    let mut out = Vec::new();
+                    let mut enc =
+                        flate2::write::GzEncoder::new(&mut out, flate2::Compression::default());
+                    enc.write_all(&tar_bytes)?;
+                    enc.finish()?;
+                    out
+                }
+                "tar.xz" => {
+                    let mut out = Vec::new();
+                    lzma_rs::xz_compress(&mut BufReader::new(tar_bytes.as_slice()), &mut out)
+                        .map_err(|e| io::Error::other(format!("xz 压缩失败: {e}")))?;
+                    out
+                }
+                _ => unreachable!(),
             }
-            "tar.xz" => {
-                let mut out = Vec::new();
-                lzma_rs::xz_compress(&mut BufReader::new(tar_bytes.as_slice()), &mut out)
-                    .map_err(|e| io::Error::other(format!("xz 压缩失败: {e}")))?;
-                out
-            }
-            _ => unreachable!(),
         };
         // 原子替换
         let tmp = format!("{}.bcr-tmp{}", self.path, std::process::id());
@@ -144,6 +151,32 @@ impl ArchiveVfs {
         }
         result
     }
+}
+
+/// 从内存文件表编码 7z 字节流（LZMA2 压缩，保留 mtime）
+fn encode_sevenz(files: &ArchiveFiles) -> io::Result<Vec<u8>> {
+    use sevenz_rust2::{SevenZArchiveEntry, SevenZMethod, SevenZWriter};
+    let mut buf = std::io::Cursor::new(Vec::new());
+    {
+        let mut writer = SevenZWriter::new(&mut buf)
+            .map_err(|e| io::Error::other(format!("7z 编码器初始化失败: {e}")))?;
+        writer.set_content_methods(vec![SevenZMethod::LZMA2.into()]);
+        for (rel, (data, _, mtime)) in files {
+            let mut entry = SevenZArchiveEntry::new_file(rel);
+            // SystemTime → FileTime（与 from_path 的转换路径一致）
+            if let Ok(date) = (*mtime).try_into() {
+                entry.last_modified_date = date;
+                entry.has_last_modified_date = entry.last_modified_date.to_raw() > 0;
+            }
+            writer
+                .push_archive_entry(entry, Some(data.as_slice()))
+                .map_err(|e| io::Error::other(format!("7z 写入 {rel} 失败: {e}")))?;
+        }
+        writer
+            .finish()
+            .map_err(|e| io::Error::other(format!("7z 收尾失败: {e}")))?;
+    }
+    Ok(buf.into_inner())
 }
 
 /// 从内存文件表编码 tar 字节流（保留 mtime；目录项隐式）
@@ -501,14 +534,24 @@ mod tests {
     }
 
     #[test]
-    fn sevenz_remains_readonly() {
+    fn sevenz_write_roundtrip() {
         let d = tempdir().unwrap();
         let zp = d.path().join("t.7z");
         make_7z(&zp);
         let v = ArchiveVfs::open(zp.to_str().unwrap()).unwrap();
-        assert!(v.write("x.txt", b"x").is_err());
-        assert!(v.delete("a.txt").is_err());
-        assert!(v.set_mtime("a.txt", UNIX_EPOCH).is_err());
+        // 写入新文件 → 重开读取验证
+        v.write("new.txt", b"hello 7z").unwrap();
+        drop(v);
+        let v2 = ArchiveVfs::open(zp.to_str().unwrap()).unwrap();
+        assert_eq!(v2.read("new.txt").unwrap(), b"hello 7z");
+        assert_eq!(v2.read("a.txt").unwrap(), b"hello");
+        assert_eq!(v2.read("sub/b.txt").unwrap(), b"world");
+        // 删除 → 重开验证消失
+        v2.delete("a.txt").unwrap();
+        drop(v2);
+        let v3 = ArchiveVfs::open(zp.to_str().unwrap()).unwrap();
+        assert!(v3.read("a.txt").is_err());
+        assert_eq!(v3.read("new.txt").unwrap(), b"hello 7z");
     }
 
     #[test]
