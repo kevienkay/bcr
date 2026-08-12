@@ -85,6 +85,11 @@ impl CsvTab {
         fmt(I18nKey::CsvTitle, &[&self.left, &self.right])
     }
 
+    /// 统计信息（P31 状态栏用）
+    pub(crate) fn stats(&self) -> RowStats {
+        self.stats
+    }
+
     fn delim_char(&self) -> char {
         match self.delimiter.as_str() {
             "\\t" | "tab" => '\t',

@@ -462,13 +462,31 @@ impl eframe::App for DiffApp {
                 let mut activate: Option<usize> = None;
                 for i in 0..self.tabs.len() {
                     let selected = i == self.active;
-                    let resp = ui.selectable_label(selected, self.tabs[i].title());
+                    // BC 风格：当前标签高亮底色 + 圆角，与普通标签区分
+                    let text = if selected {
+                        RichText::new(self.tabs[i].title()).strong()
+                    } else {
+                        RichText::new(self.tabs[i].title())
+                    };
+                    let resp = ui.selectable_label(selected, text);
                     if resp.clicked() {
                         activate = Some(i);
                     }
-                    // 关闭按钮
+                    // 关闭按钮（hover 变色）
                     let close_resp = ui
-                        .small_button("✕")
+                        .add(
+                            egui::Button::new(
+                                RichText::new("✕").color(if resp.hovered() {
+                                    theme::diff_delete()
+                                } else {
+                                    ui.visuals().weak_text_color()
+                                }),
+                            )
+                            .small()
+                            .corner_radius(eframe::egui::CornerRadius::same(
+                                theme::CORNER as u8,
+                            )),
+                        )
                         .on_hover_text(crate::i18n::t(crate::i18n::Key::CloseTab));
                     if close_resp.clicked() {
                         close = Some(i);
@@ -1000,6 +1018,85 @@ impl eframe::App for DiffApp {
                 Tab::Csv(t) => t.ui(ui),
             }
         }
+
+        // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总）
+        egui::Panel::bottom("status_bar").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_space(6.0);
+                if let Some(tab) = self.tabs.get(self.active) {
+                    match tab {
+                        Tab::Diff(t) => {
+                            let s = &t.stats;
+                            ui.label(format!(
+                                "{}  {} {}  {} {}  {} {}  {} {}",
+                                crate::i18n::t(crate::i18n::Key::StatsPanel),
+                                crate::i18n::t(crate::i18n::Key::StatSame),
+                                s.equal,
+                                crate::i18n::t(crate::i18n::Key::StatDelete),
+                                s.delete,
+                                crate::i18n::t(crate::i18n::Key::StatInsert),
+                                s.insert,
+                                crate::i18n::t(crate::i18n::Key::StatReplace),
+                                s.replace,
+                            ));
+                        }
+                        Tab::Dir(t) => {
+                            if let Some(r) = &t.result {
+                                let s = &r.stats;
+                                ui.label(format!(
+                                    "{}  {} {}  {} {}  {} {}  {} {}",
+                                    crate::i18n::t(crate::i18n::Key::StatsPanel),
+                                    crate::i18n::t(crate::i18n::Key::StatSame),
+                                    s.same,
+                                    crate::i18n::t(crate::i18n::Key::StatDelete),
+                                    s.left_only,
+                                    crate::i18n::t(crate::i18n::Key::StatInsert),
+                                    s.right_only,
+                                    crate::i18n::t(crate::i18n::Key::StatReplace),
+                                    s.differ,
+                                ));
+                            } else {
+                                ui.label(crate::i18n::t(crate::i18n::Key::Hint));
+                            }
+                        }
+                        Tab::Csv(t) => {
+                            let s = t.stats();
+                            ui.label(format!(
+                                "{}  {} {}  {} {}  {} {}  {} {}",
+                                crate::i18n::t(crate::i18n::Key::StatsPanel),
+                                crate::i18n::t(crate::i18n::Key::StatSame),
+                                s.same,
+                                crate::i18n::t(crate::i18n::Key::StatDelete),
+                                s.left_only,
+                                crate::i18n::t(crate::i18n::Key::StatInsert),
+                                s.right_only,
+                                crate::i18n::t(crate::i18n::Key::StatReplace),
+                                s.modified,
+                            ));
+                        }
+                        Tab::Merge(t) => {
+                            ui.label(format!(
+                                "{}  {}",
+                                crate::i18n::t(crate::i18n::Key::ConflictsCount),
+                                t.view.conflicts,
+                            ));
+                        }
+                        Tab::Image(t) => {
+                            let diff_frames = t.frame_diffs.iter().filter(|d| **d).count();
+                            ui.label(format!(
+                                "{}  {} {}/{}",
+                                crate::i18n::t(crate::i18n::Key::StatsPanel),
+                                crate::i18n::t(crate::i18n::Key::StatReplace),
+                                diff_frames,
+                                t.frame_diffs.len(),
+                            ));
+                        }
+                    }
+                } else {
+                    ui.label(crate::i18n::t(crate::i18n::Key::Hint));
+                }
+            });
+        });
 
         if let Some((l_rel, r_rel)) = open_pair_req {
             // 手动对齐：左右相对路径配对打开并排 diff（可不同文件名）
