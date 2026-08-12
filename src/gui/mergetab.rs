@@ -158,10 +158,13 @@ impl MergeTab {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("mergetab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button(t(I18nKey::Reload)).clicked() {
+                if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
                     self.reload();
                 }
-                if ui.button(t(I18nKey::SaveMerged)).clicked() {
+                if ui
+                    .button(format!("💾 {}", t(I18nKey::SaveMerged)))
+                    .clicked()
+                {
                     self.save();
                 }
                 ui.separator();
@@ -172,20 +175,26 @@ impl MergeTab {
                     I18nKey::ConflictsCount,
                     &[&self.view.conflicts.to_string()],
                 ));
-                if ui.button(t(I18nKey::NextConflict)).clicked() {
+                if ui
+                    .button(format!("⬇ {}", t(I18nKey::NextConflict)))
+                    .clicked()
+                {
                     self.next_conflict();
                 }
-                if ui.button(t(I18nKey::PrevConflict)).clicked() {
+                if ui
+                    .button(format!("⬆ {}", t(I18nKey::PrevConflict)))
+                    .clicked()
+                {
                     self.prev_conflict();
                 }
                 ui.separator();
-                if ui.button(t(I18nKey::TakeLeft)).clicked() {
+                if ui.button(format!("← {}", t(I18nKey::TakeLeft))).clicked() {
                     self.resolve_current(Resolution::Left);
                 }
-                if ui.button(t(I18nKey::TakeRight)).clicked() {
+                if ui.button(format!("→ {}", t(I18nKey::TakeRight))).clicked() {
                     self.resolve_current(Resolution::Right);
                 }
-                if ui.button(t(I18nKey::TakeBase)).clicked() {
+                if ui.button(format!("B {}", t(I18nKey::TakeBase))).clicked() {
                     self.resolve_current(Resolution::Base);
                 }
                 // 显示当前冲突块的解决状态（P31：已解决 ✓ 绿标）

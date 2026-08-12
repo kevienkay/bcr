@@ -188,11 +188,11 @@ fn mergetab_take_left_resolves_conflict() {
     let tab = RefCell::new(MergeTab::new(&base, &left, &right));
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run();
-    // 先定位到冲突（F7 下一冲突）再取左侧
-    h.get_by_label("F7 下一冲突").click();
+    // 先定位到冲突（F7 下一冲突，P31 图标前缀 ⬇）再取左侧
+    h.get_by_label_contains("下一冲突").click();
     h.run();
     assert!(tab.borrow().conflict_idx.is_some(), "定位后应有冲突索引");
-    h.get_by_label("取左侧").click();
+    h.get_by_label_contains("取左侧").click();
     h.run();
     // 冲突已解决：resolution 变为 Left
     let t = tab.borrow();
