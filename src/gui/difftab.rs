@@ -72,6 +72,12 @@ pub struct DiffTab {
     /// 差异行索引（tag != Equal），供跳转
     pub diff_rows: Vec<usize>,
     pub diff_pos: Option<usize>,
+    /// P32-A5：差异块（连续差异行的起止），供折叠
+    pub diff_blocks: Vec<(usize, usize)>,
+    /// P32-A5：已折叠的差异块（按块索引）
+    pub collapsed_blocks: std::collections::HashSet<usize>,
+    /// P32-B5：已忽略的行（原始行索引），导航/统计排除
+    pub ignored_rows: std::collections::HashSet<usize>,
     pub search: SearchState,
     /// 待跳转行号（1-based）
     pub goto_line: Option<usize>,
@@ -133,6 +139,9 @@ impl DiffTab {
             scroll: Vec2::ZERO,
             diff_rows: Vec::new(),
             diff_pos: None,
+            diff_blocks: Vec::new(),
+            collapsed_blocks: std::collections::HashSet::new(),
+            ignored_rows: std::collections::HashSet::new(),
             search: SearchState::default(),
             goto_line: None,
             goto_focus: false,
@@ -285,15 +294,47 @@ impl DiffTab {
             }
         };
         let (rows, stats) = build_rows(l, r, self.opts.clone());
-        self.diff_rows = rows
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| r.tag != RowTag::Equal)
-            .map(|(i, _)| i)
-            .collect();
+        // P32-B5：忽略行从差异行/统计中排除（会话级）
+        let mut diff_rows: Vec<usize> = Vec::new();
+        let mut ignored_delete = 0usize;
+        let mut ignored_insert = 0usize;
+        let mut ignored_replace = 0usize;
+        for (i, row) in rows.iter().enumerate() {
+            if row.tag == RowTag::Equal {
+                continue;
+            }
+            if self.ignored_rows.contains(&i) {
+                match row.tag {
+                    RowTag::Delete => ignored_delete += 1,
+                    RowTag::Insert => ignored_insert += 1,
+                    RowTag::Replace => ignored_replace += 1,
+                    RowTag::Equal => {}
+                }
+                continue;
+            }
+            diff_rows.push(i);
+        }
+        // P32-A5：差异块 = 连续未忽略差异行分组（起止索引）
+        let mut diff_blocks: Vec<(usize, usize)> = Vec::new();
+        for &i in &diff_rows {
+            match diff_blocks.last_mut() {
+                Some((_, end)) if *end + 1 == i => *end = i,
+                _ => diff_blocks.push((i, i)),
+            }
+        }
+        // 清理失效的折叠块索引
+        self.collapsed_blocks.retain(|&b| b < diff_blocks.len());
+        self.diff_rows = diff_rows;
+        self.diff_blocks = diff_blocks;
         self.diff_pos = None;
         self.rows = rows;
-        self.stats = stats;
+        // 统计：扣除忽略的差异行
+        self.stats = Stats {
+            delete: stats.delete - ignored_delete,
+            insert: stats.insert - ignored_insert,
+            replace: stats.replace - ignored_replace,
+            equal: stats.equal,
+        };
         self.update_search();
     }
 
@@ -1279,12 +1320,74 @@ impl DiffTab {
             // P32-A2：取出行内编辑状态，渲染循环内传入；双击请求在下循环结束后处理
             let mut inline = self.inline_edit.take();
             let mut dbl: Option<(usize, EditSide)> = None;
-            let out = super::show_rows(ui, display_rows.len(), ROW_H, |ui, range| {
+            // P32-A5：构建折叠显示映射 (显示行索引 vi, 折叠占位块)
+            // 折叠块只保留首行 + 一个“N 行已折叠”占位行；块内其余行隐藏
+            let mut view: Vec<(usize, Option<usize>)> = Vec::new();
+            let mut placed_block: std::collections::HashSet<usize> =
+                std::collections::HashSet::new();
+            let mut seen_first: std::collections::HashSet<usize> = std::collections::HashSet::new();
+            for vi in 0..display_rows.len() {
+                let oi = orig_of(vi);
+                // oi 属于哪个差异块？
+                let blk = self
+                    .diff_blocks
+                    .iter()
+                    .position(|&(s, e)| oi >= s && oi <= e);
+                match blk {
+                    Some(bi) if self.collapsed_blocks.contains(&bi) => {
+                        let (s, _e) = self.diff_blocks[bi];
+                        if oi == s && !seen_first.contains(&s) {
+                            // 块首行保留，随后追加占位行
+                            view.push((vi, None));
+                            if !placed_block.contains(&bi) {
+                                view.push((vi, Some(bi)));
+                                placed_block.insert(bi);
+                            }
+                            seen_first.insert(s);
+                        }
+                        // 其余行（含首行的后续视觉行）隐藏
+                    }
+                    _ => view.push((vi, None)),
+                }
+            }
+            let mut fold_toggle: Option<usize> = None;
+            let mut ignore_req: Option<usize> = None;
+            let out = super::show_rows(ui, view.len(), ROW_H, |ui, range| {
                 ui.set_min_width(total_w);
                 // 当前差异行（diff_pos → diff_rows 中的行索引，P31 竖条标记）
                 let cur_diff_orig = self.diff_pos.and_then(|k| self.diff_rows.get(k)).copied();
                 for i in range {
-                    let row = &display_rows[i];
+                    let (vi, placeholder) = view[i];
+                    let oi = orig_of(vi);
+                    if let Some(bi) = placeholder {
+                        // 折叠占位行：点击展开
+                        let (s, e) = self.diff_blocks[bi];
+                        let n = e - s + 1;
+                        let (rect, resp) =
+                            ui.allocate_exact_size(Vec2::new(total_w, ROW_H), egui::Sense::click());
+                        paint_bg(
+                            ui,
+                            rect,
+                            if ui.visuals().dark_mode {
+                                Some(Color32::from_gray(26))
+                            } else {
+                                Some(Color32::from_gray(240))
+                            },
+                        );
+                        let fg = ui.visuals().weak_text_color();
+                        ui.painter().text(
+                            Pos2::new(rect.left() + 10.0, rect.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            format!("⏵ {n} 行已折叠（点击展开）"),
+                            egui::FontId::proportional(12.0),
+                            fg,
+                        );
+                        if resp.clicked() {
+                            fold_toggle = Some(bi);
+                        }
+                        continue;
+                    }
+                    let row = &display_rows[vi];
                     let (bg_l, bg_r) = match row.tag {
                         RowTag::Equal => (None, None),
                         RowTag::Delete => (Some(bg_delete()), None),
@@ -1292,7 +1395,6 @@ impl DiffTab {
                         RowTag::Replace => (Some(bg_replace_l()), Some(bg_replace_r())),
                     };
                     // 搜索命中高亮（按原始行索引映射）
-                    let oi = orig_of(i);
                     let (bg_l, bg_r) = if match_set.contains(&oi) {
                         let c = if current_match == Some(oi) {
                             bg_match_current()
@@ -1309,6 +1411,20 @@ impl DiffTab {
                         RowTag::Insert => (None, Some(hl_insert())),
                         RowTag::Equal => (None, None),
                     };
+                    // P32-B5：忽略行弱化显示（半透明灰）
+                    let ignored = self.ignored_rows.contains(&oi);
+                    let (bg_l, bg_r) = if ignored {
+                        let dim = if ui.visuals().dark_mode {
+                            Color32::from_gray(42)
+                        } else {
+                            Color32::from_gray(226)
+                        };
+                        (Some(dim), Some(dim))
+                    } else {
+                        (bg_l, bg_r)
+                    };
+                    // P32-A5：块首行左侧画折叠箭头 ▾（点击折叠）
+                    let block_start = self.diff_blocks.iter().position(|&(s, _)| s == oi);
                     let hit = paint_diff_row(
                         ui,
                         row,
@@ -1324,12 +1440,34 @@ impl DiffTab {
                         syn_r,
                         cur_diff_orig == Some(oi),
                         inline.as_mut().filter(|ie| ie.row == oi),
+                        block_start,
+                        ignored,
                     );
-                    if let Some(side) = hit {
-                        dbl = Some((oi, side));
+                    match hit {
+                        Some(RowHit::Edit(side)) => dbl = Some((oi, side)),
+                        Some(RowHit::FoldToggle(bi)) => fold_toggle = Some(bi),
+                        Some(RowHit::Ignore(row)) => ignore_req = Some(row),
+                        None => {}
                     }
                 }
             });
+            // P32-A5：处理折叠切换
+            if let Some(bi) = fold_toggle {
+                if !self.collapsed_blocks.remove(&bi) {
+                    self.collapsed_blocks.insert(bi);
+                }
+                self.inline_edit = inline;
+                return;
+            }
+            // P32-B5：右键忽略/取消忽略该行（会话级）
+            if let Some(row) = ignore_req {
+                if !self.ignored_rows.remove(&row) {
+                    self.ignored_rows.insert(row);
+                }
+                self.inline_edit = inline;
+                self.recompute();
+                return;
+            }
             // P32-A2：双击行内容 → 进入行内编辑（buf 取该侧当前行文本）
             if let Some((i, side)) = dbl {
                 let text = match side {
@@ -1430,6 +1568,17 @@ impl DiffTab {
     }
 }
 
+/// P32-A2/A5/B5：行交互命中结果
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RowHit {
+    /// 双击行内容（进入行内编辑）
+    Edit(EditSide),
+    /// 点击折叠箭头（切换差异块折叠）
+    FoldToggle(usize),
+    /// 右键点击行（忽略/取消忽略该行）
+    Ignore(usize),
+}
+
 #[allow(clippy::too_many_arguments)] // egui 行绘制参数较多，保持扁平可读
 fn paint_diff_row(
     ui: &mut egui::Ui,
@@ -1446,7 +1595,9 @@ fn paint_diff_row(
     syn_r: Option<&'static syntect::parsing::SyntaxReference>,
     is_current: bool,
     mut inline: Option<&mut InlineEditState>,
-) -> Option<EditSide> {
+    block_start: Option<usize>,
+    ignored: bool,
+) -> Option<RowHit> {
     let mid_gap = super::theme::MID_GAP;
     let (rect, resp) = ui.allocate_exact_size(
         Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H),
@@ -1454,6 +1605,33 @@ fn paint_diff_row(
     );
     let x = rect.left();
     let y = rect.top();
+
+    // P32-B5：右键点击行 → 忽略/取消忽略该行
+    if resp.secondary_clicked() {
+        return Some(RowHit::Ignore(0));
+    }
+
+    // P32-A5：块首行左侧画折叠箭头 ▾（点击折叠）
+    if let Some(bi) = block_start {
+        let arrow_x = x + super::theme::CURRENT_BAR + 3.0;
+        let arrow_rect = Rect::from_min_size(Pos2::new(arrow_x - 2.0, y), vec2(14.0, ROW_H));
+        let arrow_color = if ignored {
+            ui.visuals().weak_text_color()
+        } else {
+            super::theme::diff_modify()
+        };
+        ui.painter().text(
+            arrow_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "▾",
+            egui::FontId::proportional(11.0),
+            arrow_color,
+        );
+        if resp.clicked() && arrow_rect.contains(resp.interact_pointer_pos().unwrap_or(Pos2::ZERO))
+        {
+            return Some(RowHit::FoldToggle(bi));
+        }
+    }
 
     // BC 风格当前差异行：左侧 3px 竖条（P31）
     if is_current {
@@ -1563,10 +1741,10 @@ fn paint_diff_row(
             let right_zone =
                 Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
             if left_zone.contains(pos) {
-                return Some(EditSide::Left);
+                return Some(RowHit::Edit(EditSide::Left));
             }
             if right_zone.contains(pos) {
-                return Some(EditSide::Right);
+                return Some(RowHit::Edit(EditSide::Right));
             }
         }
     }

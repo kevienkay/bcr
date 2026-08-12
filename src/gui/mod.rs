@@ -60,6 +60,7 @@ pub struct GuiArgs {
 }
 
 /// 标签页
+#[allow(clippy::large_enum_variant)] // DiffTab 含撤销/忽略状态最大，Box 化收益低
 enum Tab {
     Diff(DiffTab),
     Dir(DirTab),

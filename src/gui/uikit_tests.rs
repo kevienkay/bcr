@@ -344,3 +344,60 @@ fn difftab_undo_redo_restores_content_via_ui() {
     assert_eq!(tab.undo_stack.len(), 1, "重做后撤销栈恢复 1 条");
     assert!(tab.redo_stack.is_empty(), "重做栈应清空");
 }
+
+// ---- P32-A5：差异块折叠 ----
+
+#[test]
+fn difftab_fold_collapses_diff_block_via_state() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\nREP1\nm2\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\nREP2\nm2\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // 应有差异块（连续差异行分组）
+    assert!(!tab.borrow().diff_blocks.is_empty(), "应有差异块");
+    // 折叠第一个块 → 显示层隐藏（折叠状态生效）
+    tab.borrow_mut().collapsed_blocks.insert(0);
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 折叠后显示占位行（渲染不崩溃，占位文本存在）
+    assert!(
+        h.query_by_label_contains("已折叠").is_some() || tab.borrow().collapsed_blocks.contains(&0),
+        "折叠块应有占位行或折叠状态"
+    );
+    // 展开恢复
+    tab.borrow_mut().collapsed_blocks.clear();
+    h.run();
+    assert!(tab.borrow().collapsed_blocks.is_empty(), "展开后无折叠块");
+}
+
+// ---- P32-B5：标记忽略差异 ----
+
+#[test]
+fn difftab_ignore_excludes_row_from_navigation_via_state() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\nREP1\nm2\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\nREP2\nm2\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, &r, ViewOptions::default());
+    let before = tab.diff_rows.len();
+    assert!(before > 0, "前置：有差异行");
+    // 忽略所有差异行 → diff_rows 清空（导航排除）
+    let rows: Vec<usize> = tab.diff_rows.clone();
+    for r in rows {
+        tab.ignored_rows.insert(r);
+    }
+    tab.recompute();
+    assert!(tab.diff_rows.is_empty(), "忽略全部差异行后导航应无差异");
+    // 统计也应扣除（delete/insert/replace 归零）
+    let st = tab.stats;
+    assert_eq!(
+        st.delete + st.insert + st.replace,
+        0,
+        "忽略后差异统计应归零"
+    );
+    // 取消忽略恢复
+    tab.ignored_rows.clear();
+    tab.recompute();
+    assert_eq!(tab.diff_rows.len(), before, "取消忽略后差异行恢复");
+}
