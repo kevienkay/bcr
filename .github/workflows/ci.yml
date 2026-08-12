@@ -61,6 +61,15 @@ jobs:
       - name: Build (release)
         run: cargo build --release --locked
 
+      - name: Upload release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: bcr-${{ runner.os }}
+          path: |
+            target/release/bcr
+            target/release/bcr.exe
+          if-no-files-found: warn
+
       - name: Acceptance tests (M1-M4)
         shell: bash
         run: bash tests/acceptance.sh
