@@ -4,3 +4,4 @@
 .bcr-sessions.toml
 .bcr-profiles.toml
 .bcr-gui.toml
+/dist
