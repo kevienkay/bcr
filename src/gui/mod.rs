@@ -11,6 +11,8 @@ mod difftab;
 mod dirtab;
 mod imagetab;
 mod mergetab;
+#[cfg(test)]
+mod uikit_tests;
 
 use crate::sideview::ViewOptions;
 use common::*;
