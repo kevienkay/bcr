@@ -13,6 +13,7 @@ pub mod archive;
 pub mod cab;
 pub mod dropbox;
 pub mod ftp;
+pub mod iso;
 pub mod onedrive;
 pub mod s3;
 pub mod sftp;
@@ -190,6 +191,11 @@ pub fn open(spec: &str) -> io::Result<Box<dyn Vfs>> {
         let c = cab::CabVfs::connect(rest)?;
         return Ok(Box::new(c));
     }
+    // A12 ISO 镜像（只读，外部 7z/bsdtar）
+    if let Some(rest) = spec.strip_prefix("iso://") {
+        let i = iso::IsoVfs::connect(rest)?;
+        return Ok(Box::new(i));
+    }
     if let Some(rest) = spec.strip_prefix("sftp://") {
         let s = sftp::SftpVfs::connect(rest)?;
         return Ok(Box::new(s));
@@ -242,6 +248,7 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("tar://")
         || spec.starts_with("7z://")
         || spec.starts_with("cab://")
+        || spec.starts_with("iso://")
         || spec.starts_with("sftp://")
         || spec.starts_with("sftp+insecure://")
         || spec.starts_with("ftp://")
