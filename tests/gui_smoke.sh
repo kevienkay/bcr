@@ -16,21 +16,28 @@ BIN="${1:?用法: bash tests/gui_smoke.sh <bcr 二进制>}"
 WAIT=3
 OS="$(uname -s)"
 
-# 后台启动 + 等待 + 存活检查（返回 0=存活）
+# 后台启动 + 等待 + 存活检查（返回 0=存活）；失败时打印被丢弃的输出便于诊断
 launch_and_check() {
   local label="$1"; shift
-  "$@" >/dev/null 2>&1 &
+  local logf
+  logf="$(mktemp)"
+  "$@" >"$logf" 2>&1 &
   local pid=$!
   sleep "$WAIT"
   if kill -0 "$pid" 2>/dev/null; then
     echo "✓ $label —— 进程存活（GUI 正常）"
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
+    rm -f "$logf"
     return 0
   else
     wait "$pid"
     local code=$?
     echo "✗ $label —— 进程提前退出 code=$code"
+    echo "── 进程输出 ──"
+    cat "$logf"
+    echo "─────────────"
+    rm -f "$logf"
     return 1
   fi
 }
