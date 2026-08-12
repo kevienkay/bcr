@@ -1,6 +1,64 @@
 # bcr — Beyond Compare 风格的文件对比工具（Rust）
 
-Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（14 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览** + **P27：自动化（JSON 契约 + Python 绑定 bcr.py + 纯数据任务清单 bcr task）** + **P28：全面对标收口（三路文件夹合并/忽略结构/符号链接跟随/转换后比较/替换/缩略图/打印/HTML 模板/通用音频标签/FTPS/SFTP host key 校验/SVN/外部工具/CAB/ISO/7z 可写/大文件 mmap/后台任务）**。
+Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **M2：文件夹对比** + **M3：三路合并** + **M4：同步引擎** + **M5：GUI** + **M6：虚拟文件系统（14 种后端）** + **I18N：多语言** + **P0：编码检测/二进制检测** + **P1：语法高亮 + hex 对比** + **P2：移动检测** + **P3：流式读取** + **P4：HTML 报告与会话** + **P5-P7：同步增强/compare3/CSV** + **P8：图片对比（多帧/差异定位）** + **P9：GUI 同步面板** + **P10：Profile 规则** + **P11-P12：报告/属性** + **P13-P16：hex 编辑/细节/收藏** + **P17-P23：缓存/报告定制/WebDAV/内容过滤/拖放排序** + **P24-P26：MP3 标签比较/版本比较模式/GUI 云盘浏览** + **P27：自动化（JSON 契约 + Python 绑定 bcr.py + 纯数据任务清单 bcr task）** + **P28：全面对标收口（三路文件夹合并/忽略结构/符号链接跟随/转换后比较/替换/缩略图/打印/HTML 模板/通用音频标签/FTPS/SFTP host key 校验/SVN/外部工具/CAB/ISO/7z 可写/大文件 mmap/后台任务）** + **P29：CSV 表格 GUI** + **P30：三平台安装包（dmg/zip/tar.gz/deb）**。
+
+## 安装
+
+### macOS
+
+1. 从 [Releases](https://github.com/kevienkay/bcr/releases) 下载 `bcr-<版本>-macos-arm64.dmg`
+2. 双击打开 dmg，将 `bcr.app` 拖入「应用程序」文件夹
+3. 首次启动若被 Gatekeeper 拦截：右键 bcr.app →「打开」（个人项目未签名，属预期行为）
+4. 命令行工具：`/Applications/bcr.app/Contents/MacOS/bcr --help`（可选：软链到 `~/.local/bin`）
+
+### Windows
+
+1. 下载 `bcr-<版本>-windows-x86_64.zip`，解压到任意目录（如 `C:\bcr`）
+2. 双击 `bcr.exe` 启动 GUI，或打开命令行执行 `bcr.exe --help`
+3. （可选）将目录加入 PATH，即可在任意终端使用 `bcr`
+
+### Linux
+
+**deb（Debian/Ubuntu）**：
+
+```bash
+sudo dpkg -i bcr-<版本>-linux-x86_64.deb
+bcr --help
+```
+
+**tar.gz（通用）**：
+
+```bash
+tar xzf bcr-<版本>-linux-x86_64.tar.gz -C ~/.local/bin
+bcr --help
+```
+
+> 校验完整性：下载后对照 Release 中的 `SHA256SUMS` 执行 `sha256sum -c`。
+
+## 快速开始
+
+### GUI（推荐）
+
+```bash
+bcr gui                      # 打开图形界面
+bcr gui 左侧文件 右侧文件     # 直接对比两个文件
+bcr gui --merge BASE LEFT RIGHT   # 三路合并
+```
+
+### 命令行
+
+```bash
+bcr diff 文件A 文件B          # 文本 diff（退出码 0=无差异 1=有差异 2=错误）
+bcr compare 目录A 目录B       # 文件夹对比
+bcr sync 目录A 目录B          # 目录同步（--dry-run 预览）
+bcr merge3 BASE LEFT RIGHT -o OUT   # 三路文件夹合并
+bcr csv 表A.csv 表B.csv       # CSV 表格对比
+bcr compare 目录A 目录B --json # JSON 契约输出（自动化用）
+```
+
+常用选项：`--ignore-whitespace` 忽略空白、`--ignore-case` 忽略大小写、
+`--compare-content` 内容比较、`--max-size` 大文件上限、`--lang zh|en|de|ja|...` 切换语言。
+完整命令参考：`bcr --help` 与 `docs/automation.md`（自动化/JSON 契约）。
 
 ## 功能
 
@@ -427,7 +485,6 @@ src/i18n_tables.rs I18N 翻译表（10 语言 × 全量 Key，宏保证穷尽）
 ## 已知限制
 
 - 文本 diff 整文件读入内存，超过 `--max-size` 上限（默认 256MB，C1 mmap 优化）报错；超大文件内容比较走 P3 流式哈希
-- 不处理 "No newline at end of file" 标记
 - 二进制文件已做检测：CLI diff/merge 报错 exit 2；GUI 自动切 hex 视图
 - M5 目录对比的 glob 过滤在 GUI 中以逗号分隔输入；拖放仅支持本地文件
 - M6 tar.bz2 后端只读（无纯 Rust 编码器）；tar/7z 全量解压进内存，超大归档建议 zip 或本地；FTP 无标准 mtime 设置命令（已用 MFMT 扩展，服务器不支持时静默降级，同步建议 `--compare-content`）；SVN/ISO/RAR 走外部命令（7z/bsdtar/svn），未安装时友好报错

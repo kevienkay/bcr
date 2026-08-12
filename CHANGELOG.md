@@ -4,6 +4,14 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式，
 版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 文档（P30 收尾）
+
+- **README 新增「安装」章节**：macOS dmg（拖入应用程序/未签名说明）、Windows zip（解压+PATH）、Linux deb/tar.gz（dpkg -i / 解压到 ~/.local/bin），含 SHA256SUMS 校验指引
+- **README 新增「快速开始」章节**：GUI 与命令行常用用法（diff/compare/sync/merge3/csv/--json），常用选项说明
+- **README 已知限制修正**：删除“不处理 No newline 标记”过期条目（P16 已实现 `\ No newline at end of file`，与功能列表矛盾）
+
 ## [0.1.0] - 2026-08-11
 
 首个里程碑版本：完整对标 Beyond Compare 核心场景的对比/合并/同步工具。
