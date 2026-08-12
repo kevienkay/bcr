@@ -32,8 +32,22 @@ rm -rf "$STRIP_DIR"
 
 # 2) deb：dpkg-deb 组装
 DEB_ROOT="$(mktemp -d)"
-mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT/usr/bin" "$DEB_ROOT/usr/share/doc/bcr"
+mkdir -p "$DEB_ROOT/DEBIAN" "$DEB_ROOT/usr/bin" "$DEB_ROOT/usr/share/doc/bcr" "$DEB_ROOT/usr/share/icons/hicolor/256x256/apps" "$DEB_ROOT/usr/share/applications"
 cp "$BIN" "$DEB_ROOT/usr/bin/bcr"
+# 图标 + 桌面入口（存在时）
+if [ -f "assets/icon.png" ]; then
+  cp "assets/icon.png" "$DEB_ROOT/usr/share/icons/hicolor/256x256/apps/bcr.png"
+fi
+cat > "$DEB_ROOT/usr/share/applications/bcr.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=bcr
+Comment=Beyond Compare style file comparison tool
+Exec=bcr gui
+Icon=bcr
+Terminal=false
+Categories=Utility;Development;
+EOF
 cat > "$DEB_ROOT/DEBIAN/control" <<EOF
 Package: bcr
 Version: ${VER}

@@ -15,9 +15,16 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ### 文档（P30 收尾）
 
-- **README 新增「安装」章节**：macOS dmg（拖入应用程序/未签名说明）、Windows zip（解压+PATH）、Linux deb/tar.gz（dpkg -i / 解压到 ~/.local/bin），含 SHA256SUMS 校验指引
+- **README 新增「安装」章节**：macOS dmg（拖入应用程序/未签名说明）、Windows zip（解压+PATH）、Linux deb/tar.gz（dpkg -i / 解压到 ~/.local/bin），含 SHA256SUMS 校验指引；补充 cargo install（git tag）与 Python 绑定 pip 安装方式
 - **README 新增「快速开始」章节**：GUI 与命令行常用用法（diff/compare/sync/merge3/csv/--json），常用选项说明
 - **README 已知限制修正**：删除“不处理 No newline 标记”过期条目（P16 已实现 `\ No newline at end of file`，与功能列表矛盾）
+
+### 分发（P30 扩展）
+
+- **应用图标**：新增 `assets/icon.png`（1024px，PIL 生成“双面板差异条”设计）+ `bcr.icns`（iconutil，macOS）+ `bcr.ico`（多尺寸，Windows）
+- **macOS 打包**：Info.plist 加 CFBundleIconFile，icns 拷入 Resources
+- **Linux 打包**：deb 含 256px 图标（/usr/share/icons/hicolor）+ bcr.desktop 桌面入口（Exec=bcr gui）
+- **Windows 打包**：zip 内含 bcr.ico
 
 ## [0.1.0] - 2026-08-11
 

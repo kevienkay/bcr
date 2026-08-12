@@ -45,6 +45,8 @@ cat > "$APP/Contents/Info.plist" <<EOF
   <string>bcr</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>CFBundleIconFile</key>
+  <string>bcr</string>
   <key>LSMinimumSystemVersion</key>
   <string>11.0</string>
   <key>NSHighResolutionCapable</key>
@@ -55,6 +57,11 @@ EOF
 
 cp "$BIN" "$APP/Contents/MacOS/bcr"
 chmod +x "$APP/Contents/MacOS/bcr"
+
+# 应用图标（存在时拷贝 icns 到 Resources）
+if [ -f "assets/bcr.icns" ]; then
+  cp "assets/bcr.icns" "$APP/Contents/Resources/bcr.icns"
+fi
 
 # 链接动态库（本机 rustls/aws-lc 通常静态链接，无需 dylib 拷贝；若依赖外部 dylib 会失败时提示）
 if otool -L "$APP/Contents/MacOS/bcr" 2>/dev/null | grep -qE '^\s+/[^/]*(lib|\.dylib)' &&

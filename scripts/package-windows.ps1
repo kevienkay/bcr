@@ -30,6 +30,10 @@ $Zip = Join-Path $OutDir "$Base.zip"
 $Stage = Join-Path $env:TEMP "bcr-stage-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 Copy-Item $Bin (Join-Path $Stage "bcr.exe")
+# 图标（存在时一并打包）
+if (Test-Path "assets\bcr.ico") {
+  Copy-Item "assets\bcr.ico" (Join-Path $Stage "bcr.ico")
+}
 @"
 bcr $Ver — Beyond Compare 风格的文件对比工具
 用法: bcr --help

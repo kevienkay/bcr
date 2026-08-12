@@ -35,6 +35,24 @@ bcr --help
 
 > 校验完整性：下载后对照 Release 中的 `SHA256SUMS` 执行 `sha256sum -c`。
 
+### 源码 / Cargo
+
+```bash
+cargo install --git https://github.com/kevienkay/bcr --tag v0.1.0
+bcr --help
+```
+
+### Python 绑定（自动化）
+
+```bash
+pip install bcr            # PyPI（发布后）
+# 或本地安装：
+pip install ./bindings
+```
+
+Python 绑定 `bcr.py` 纯标准库，提供 `bcr.compare()/sync()/compare3()/csv()/merge()/mp3tag()/imgcmp()`
+等类型化 API（详见 `docs/automation.md`）。
+
 ## 快速开始
 
 ### GUI（推荐）
