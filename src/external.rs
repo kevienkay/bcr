@@ -105,14 +105,29 @@ mod tests {
     #[test]
     fn render_replaces_placeholders() {
         let cmd = ExternalTools::render("soffice --diff {left} {right}", "/a/b.docx", "/c/d.docx");
-        assert!(cmd.contains("'/a/b.docx'"));
-        assert!(cmd.contains("'/c/d.docx'"));
+        #[cfg(windows)]
+        {
+            assert!(cmd.contains("\"/a/b.docx\""));
+            assert!(cmd.contains("\"/c/d.docx\""));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(cmd.contains("'/a/b.docx'"));
+            assert!(cmd.contains("'/c/d.docx'"));
+        }
     }
 
     #[test]
     fn shell_quote_escapes_single_quote() {
         let q = shell_quote("it's here");
-        assert!(q.contains("it'\\''s here"));
+        #[cfg(windows)]
+        {
+            assert!(q.contains("\"it's here\""));
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(q.contains("it'\\''s here"));
+        }
     }
 
     #[test]
