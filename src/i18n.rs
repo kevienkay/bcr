@@ -267,6 +267,8 @@ pub enum Key {
     StatsPanel,
     /// 忽略空白
     IgnoreWs,
+    /// 显示空白符（P35-A4：空格→·、制表符→→）
+    VisibleWs,
     /// 忽略行尾空白
     IgnoreTrailing,
     /// 忽略大小写

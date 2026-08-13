@@ -901,3 +901,14 @@ fn difftab_swap_sides_exchanges_files() {
     assert_eq!(tab.borrow().left.as_ref().unwrap().path, r);
     assert_eq!(tab.borrow().right.as_ref().unwrap().path, l);
 }
+
+// ---- P35-A4：显示空白符 ----------------
+
+#[test]
+fn visible_ws_replaces_space_and_tab() {
+    use crate::gui::common::visible_ws;
+    assert_eq!(visible_ws("a b\tc"), "a·b→c");
+    assert_eq!(visible_ws(""), "");
+    assert_eq!(visible_ws("普通文本"), "普通文本");
+    assert_eq!(visible_ws("  \t"), "··→");
+}

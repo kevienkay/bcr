@@ -52,9 +52,24 @@ pub fn paint_bg(ui: &egui::Ui, rect: Rect, bg: Option<Color32>) {
     }
 }
 
+/// 把空白符替换为可见符号（P35-A4）：空格 → ·，制表符 → →
+pub fn visible_ws(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            ' ' => out.push('·'),
+            '\t' => out.push('→'),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// 在单元格内绘制带行内高亮的文本（LayoutJob 分段着色）
 /// syntax 非空时叠加语法前景色（diff 语义管背景，语法管前景）
 /// x_off：横向滚动偏移（P33 长行栏内滑动查看），文本 x -= x_off，clip 保持栏内
+/// show_ws：显示空白符（P35-A4，此时禁用语法高亮避免字节偏移错位）
+#[allow(clippy::too_many_arguments)]
 pub fn paint_cell(
     ui: &egui::Ui,
     rect: Rect,
@@ -63,10 +78,15 @@ pub fn paint_cell(
     hl: Option<Color32>,
     syntax: Option<&'static syntect::parsing::SyntaxReference>,
     x_off: f32,
+    show_ws: bool,
 ) {
     let Some(cell) = cell else { return };
-    // 语法分段：字节偏移 -> (r,g,b)
-    let syntax_segs = syntax.map(|s| crate::highlight::highlight_line(&cell.text, s));
+    // 语法分段：字节偏移 -> (r,g,b)（show_ws 时禁用，避免空白符号替换错位）
+    let syntax_segs = if show_ws {
+        None
+    } else {
+        syntax.map(|s| crate::highlight::highlight_line(&cell.text, s))
+    };
     let mut job = egui::text::LayoutJob::default();
     let mut off = 0usize; // 当前字节偏移（cell.text 内）
     for (seg, changed) in &cell.segments {
@@ -80,8 +100,13 @@ pub fn paint_cell(
                     .map(|(_, _, rgb)| Color32::from_rgb(rgb.0, rgb.1, rgb.2))
             })
             .unwrap_or(fg);
+        let display = if show_ws {
+            visible_ws(seg)
+        } else {
+            seg.clone()
+        };
         job.append(
-            seg,
+            &display,
             0.0,
             egui::TextFormat {
                 font_id: FontId::monospace(FONT_SIZE),

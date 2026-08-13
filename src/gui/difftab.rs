@@ -106,6 +106,8 @@ pub struct DiffTab {
     pub show_overview: bool,
     /// P33：长行横向滚动偏移（两栏固定半屏，超长行栏内左右滑动查看）
     pub h_scroll: f32,
+    /// P35-A4：显示空白符（空格→·、制表符→→）
+    pub show_whitespace: bool,
 }
 
 /// 编辑窗口状态
@@ -163,6 +165,7 @@ impl DiffTab {
             wrap: false,
             show_overview: true,
             h_scroll: 0.0,
+            show_whitespace: false,
         }
     }
 
@@ -1060,6 +1063,9 @@ impl DiffTab {
                 // A8 自动换行（BC5 word wrapping，仅影响显示）
                 ui.checkbox(&mut self.wrap, t(I18nKey::WordWrap))
                     .on_hover_text("长行按窗口宽度折行显示");
+                // P35-A4：显示空白符
+                ui.checkbox(&mut self.show_whitespace, t(I18nKey::VisibleWs))
+                    .on_hover_text("空格显示为 ·，制表符显示为 →");
                 // A11 缩略图总览开关
                 ui.checkbox(&mut self.show_overview, "缩略图")
                     .on_hover_text("右侧迷你差异地图，点击跳转");
@@ -1873,6 +1879,7 @@ impl DiffTab {
                         block_start,
                         ignored,
                         self.h_scroll,
+                        self.show_whitespace,
                     );
                     match hit {
                         Some(RowHit::Edit(side)) => dbl = Some((oi, side)),
@@ -2093,6 +2100,8 @@ fn paint_diff_row(
     ignored: bool,
     // P33：横向滚动偏移（长行栏内左右滑动查看）
     h_scroll: f32,
+    // P35-A4：显示空白符
+    show_ws: bool,
 ) -> (Option<RowHit>, egui::Response) {
     let mid_gap = super::theme::MID_GAP;
     let (rect, resp) = ui.allocate_exact_size(
@@ -2165,6 +2174,7 @@ fn paint_diff_row(
                 hl_l,
                 syn_l,
                 h_scroll,
+                show_ws,
             );
         }
     }
@@ -2237,6 +2247,7 @@ fn paint_diff_row(
                 hl_r,
                 syn_r,
                 h_scroll,
+                show_ws,
             );
         }
     }
