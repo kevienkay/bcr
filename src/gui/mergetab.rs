@@ -230,6 +230,21 @@ impl MergeTab {
                 if ui.button(format!("B {}", t(I18nKey::TakeBase))).clicked() {
                     self.resolve_current(Resolution::Base);
                 }
+                // P37-1：顺序合并（BC 采用左边然后右边/采用右边然后左边）
+                if ui
+                    .button(format!("⇉ {}", t(I18nKey::TakeLeftThenRight)))
+                    .on_hover_text("先采用左边内容，再追加右边内容")
+                    .clicked()
+                {
+                    self.resolve_current(Resolution::LeftThenRight);
+                }
+                if ui
+                    .button(format!("⇇ {}", t(I18nKey::TakeRightThenLeft)))
+                    .on_hover_text("先采用右边内容，再追加左边内容")
+                    .clicked()
+                {
+                    self.resolve_current(Resolution::RightThenLeft);
+                }
                 // 显示当前冲突块的解决状态（P31：已解决 ✓ 绿标）
                 if let Some(bi) = self.current_conflict_block() {
                     if let Some(blk) = self.view.blocks.get(bi) {
@@ -239,7 +254,11 @@ impl MergeTab {
                                 t(I18nKey::ResAuto).to_string(),
                                 Color32::from_rgb(240, 180, 60),
                             ),
-                            Resolution::Left | Resolution::Right | Resolution::Base => (
+                            Resolution::Left
+                            | Resolution::Right
+                            | Resolution::Base
+                            | Resolution::LeftThenRight
+                            | Resolution::RightThenLeft => (
                                 format!("✓ {}", t(I18nKey::Resolved)),
                                 Color32::from_rgb(110, 230, 120),
                             ),

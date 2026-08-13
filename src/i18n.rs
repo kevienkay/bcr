@@ -363,6 +363,10 @@ pub enum Key {
     TakeRight,
     /// 取 BASE
     TakeBase,
+    /// 采用左边然后右边（顺序合并，P37-1）
+    TakeLeftThenRight,
+    /// 采用右边然后左边（顺序合并，P37-1）
+    TakeRightThenLeft,
     /// 未解决（默认取左）
     ResAuto,
     /// 已解决

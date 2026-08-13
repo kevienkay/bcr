@@ -35,6 +35,10 @@ pub enum Resolution {
     Right,
     /// 取 base
     Base,
+    /// 采用左边然后右边（顺序合并，P37-1）
+    LeftThenRight,
+    /// 采用右边然后左边（顺序合并，P37-1）
+    RightThenLeft,
 }
 
 /// 三路合并视图的一行（三栏对齐）
@@ -232,6 +236,14 @@ pub fn render_merged(view: &MergeView, label_l: &str, label_r: &str) -> (Vec<Str
                 Resolution::Left => out.extend(blk.left.iter().cloned()),
                 Resolution::Right => out.extend(blk.right.iter().cloned()),
                 Resolution::Base => out.extend(blk.base.iter().cloned()),
+                Resolution::LeftThenRight => {
+                    out.extend(blk.left.iter().cloned());
+                    out.extend(blk.right.iter().cloned());
+                }
+                Resolution::RightThenLeft => {
+                    out.extend(blk.right.iter().cloned());
+                    out.extend(blk.left.iter().cloned());
+                }
                 Resolution::Auto => {
                     unresolved += 1;
                     out.push(format!("<<<<<<< {label_l}"));
@@ -367,6 +379,25 @@ mod tests {
         v.blocks[1].resolution = Resolution::Base;
         let (out, _) = render_merged(&v, "LEFT", "RIGHT");
         assert_eq!(out, vec!["l1", "X", "l3"]);
+    }
+
+    #[test]
+    fn render_merged_resolved_take_left_then_right() {
+        // 两侧都新增了行：顺序合并 = 左行在前、右行在后
+        let mut v = build_merge_view("l1\nl3\n", "l1\nL2\nl3\n", "l1\nR2\nl3\n");
+        v.blocks[1].resolution = Resolution::LeftThenRight;
+        let (out, unresolved) = render_merged(&v, "LEFT", "RIGHT");
+        assert_eq!(unresolved, 0);
+        assert_eq!(out, vec!["l1", "L2", "R2", "l3"]);
+    }
+
+    #[test]
+    fn render_merged_resolved_take_right_then_left() {
+        let mut v = build_merge_view("l1\nl3\n", "l1\nL2\nl3\n", "l1\nR2\nl3\n");
+        v.blocks[1].resolution = Resolution::RightThenLeft;
+        let (out, unresolved) = render_merged(&v, "LEFT", "RIGHT");
+        assert_eq!(unresolved, 0);
+        assert_eq!(out, vec!["l1", "R2", "L2", "l3"]);
     }
 
     #[test]
