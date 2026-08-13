@@ -942,3 +942,21 @@ fn difftab_view_filter_diff_and_context() {
     assert!(t.row_visible(3, &diff_set)); // 距差异行 1 <= 3
     assert!(t.row_visible(4, &diff_set));
 }
+
+// ---- P36-D1：DirTab 交换两边 ----------------
+
+#[test]
+fn dirtab_swap_sides_exchanges_paths() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "a.txt", "x");
+    write(d2.path(), "a.txt", "y");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    assert_eq!(tab.borrow().left, p1);
+    assert_eq!(tab.borrow().right, p2);
+    tab.borrow_mut().swap_sides();
+    assert_eq!(tab.borrow().left, p2);
+    assert_eq!(tab.borrow().right, p1);
+}

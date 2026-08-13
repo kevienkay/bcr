@@ -277,6 +277,12 @@ impl DirTab {
         });
     }
 
+    /// P36-D1：交换左右两侧目录（BC 会话菜单「交换两边」）
+    pub fn swap_sides(&mut self) {
+        std::mem::swap(&mut self.left, &mut self.right);
+        self.refresh();
+    }
+
     /// P34：打开左侧目录（空会话填充）
     pub fn open_left_dir(&mut self) {
         if let Some(p) = super::pick_dir() {
@@ -856,6 +862,14 @@ impl DirTab {
                     .clicked()
                 {
                     self.refresh();
+                }
+                // P36-D1：交换左右两侧（BC 会话菜单「交换两边」）
+                if ui
+                    .button(format!("⇄ {}", t(I18nKey::SwapSides)))
+                    .on_hover_text("交换左右两侧目录")
+                    .clicked()
+                {
+                    self.swap_sides();
                 }
                 // B2：过滤/显示面板开关（左侧 SidePanel）
                 if ui
