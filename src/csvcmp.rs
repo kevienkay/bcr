@@ -117,6 +117,47 @@ pub(crate) fn parse_csv(text: &str, delim: char) -> Vec<Vec<String>> {
     rows
 }
 
+/// P37-1c：RFC 4180 序列化表格（表头 + 数据行）。
+///
+/// 字段含分隔符 / 双引号 / 换行时加引号并转义 `"`。
+pub(crate) fn serialize_csv(table: &Table, delim: char) -> String {
+    fn quote(field: &str, delim: char) -> String {
+        if field.contains(delim)
+            || field.contains('"')
+            || field.contains('\n')
+            || field.contains('\r')
+        {
+            format!("\"{}\"", field.replace('"', "\"\""))
+        } else {
+            field.to_string()
+        }
+    }
+    let mut out = String::new();
+    let cols = table
+        .headers
+        .len()
+        .max(table.rows.iter().map(|r| r.len()).max().unwrap_or(0));
+    if !table.headers.is_empty() {
+        out.push_str(
+            &table
+                .headers
+                .iter()
+                .map(|h| quote(h, delim))
+                .collect::<Vec<_>>()
+                .join(&delim.to_string()),
+        );
+        out.push('\n');
+    }
+    for row in &table.rows {
+        let cells: Vec<String> = (0..cols)
+            .map(|i| quote(row.get(i).map(|s| s.as_str()).unwrap_or(""), delim))
+            .collect();
+        out.push_str(&cells.join(&delim.to_string()));
+        out.push('\n');
+    }
+    out
+}
+
 impl Table {
     pub(crate) fn new(text: &str, delim: char, no_header: bool) -> Self {
         let parsed = parse_csv(text, delim);
@@ -639,5 +680,43 @@ mod tests {
         // parse_csv 也需 pub(crate) 供 GUI 复用
         let parsed = parse_csv("x,y\n1,2\n", ',');
         assert_eq!(parsed.len(), 2);
+    }
+
+    #[test]
+    fn serialize_roundtrip_basic() {
+        // P37-1c：普通字段往返一致
+        let t = Table::new("a,b\n1,2\n3,4\n", ',', false);
+        let s = serialize_csv(&t, ',');
+        assert_eq!(s, "a,b\n1,2\n3,4\n");
+        let back = Table::new(&s, ',', false);
+        assert_eq!(back.headers, t.headers);
+        assert_eq!(back.rows, t.rows);
+    }
+
+    #[test]
+    fn serialize_quotes_special_fields() {
+        // P37-1c：含分隔符/引号/换行的字段需加引号转义并往返一致
+        let t = Table::new(
+            "k,v\n1,\"x,y\"\n2,\"say \"\"hi\"\"\"\n3,\"line1\nline2\"\n",
+            ',',
+            false,
+        );
+        let s = serialize_csv(&t, ',');
+        // 字段含逗号/引号/换行时必须被引号包裹
+        assert!(s.contains("\"x,y\""));
+        assert!(s.contains("\"say \"\"hi\"\"\""));
+        assert!(s.contains("\"line1\nline2\""));
+        // 往返一致
+        let back = Table::new(&s, ',', false);
+        assert_eq!(back.headers, t.headers);
+        assert_eq!(back.rows, t.rows);
+    }
+
+    #[test]
+    fn serialize_handles_uneven_rows() {
+        // P37-1c：行长度不足时补空字段（补齐到最大列宽）
+        let t = Table::new("a,b\n1\n2,3,4\n", ',', false);
+        let s = serialize_csv(&t, ',');
+        assert_eq!(s, "a,b\n1,,\n2,3,4\n");
     }
 }

@@ -207,6 +207,53 @@ fn csvtab_header_sort_via_ui() {
     );
 }
 
+// ---- P37-1c：CsvTab 复制单元格至右侧 / 隐藏相同列 ----------------
+
+#[test]
+fn csvtab_copy_cell_via_toolbar() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.csv", "id,name\n1,alice\n2,bob\n");
+    let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n2,BOB\n");
+    let tab = RefCell::new(CsvTab::new(&l, &r));
+    {
+        let mut t = tab.borrow_mut();
+        t.show_same = true;
+        t.filter = crate::gui::csvtab::CsvFilter::All;
+        // 模拟用户点击选中第 0 行 name 列（对齐下标 0, 列 1）
+        t.selected = Some((0, 1));
+    }
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 工具栏「→ 复制单元格至右侧」
+    h.get_by_label_contains("复制单元格至右侧").click();
+    h.run();
+    // 右侧文件已更新为左侧值
+    let content = std::fs::read_to_string(&r).unwrap();
+    assert!(content.contains("alice"), "右侧第 1 行 name 应更新为 alice");
+}
+
+#[test]
+fn csvtab_hide_same_cols_toggle() {
+    let d = tempdir().unwrap();
+    // id 两列相同、name 不同
+    let l = write(d.path(), "l.csv", "id,name\n1,alice\n");
+    let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n");
+    let tab = RefCell::new(CsvTab::new(&l, &r));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert!(!tab.borrow().hide_same_cols, "默认不隐藏相同列");
+    // 点击「隐藏相同列」checkbox
+    h.get_by_label_contains("隐藏相同列").click();
+    h.run();
+    assert!(tab.borrow().hide_same_cols, "勾选后应开启隐藏相同列");
+    // 开启后只有差异列保留（name 列）
+    let vc = tab.borrow().visible_cols().unwrap();
+    assert!(
+        vc.contains(&1) && !vc.contains(&0),
+        "应隐藏 id 列保留 name 列"
+    );
+}
+
 // ---- MergeTab：冲突解决 ----------------
 
 #[test]

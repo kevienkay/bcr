@@ -29,6 +29,10 @@ pub fn bg_match() -> Color32 {
 pub fn bg_match_current() -> Color32 {
     super::theme::bg_current()
 }
+/// 选中单元格底色（P37-1c）
+pub fn bg_select() -> Color32 {
+    super::theme::bg_select()
+}
 /// 行内高亮（变更段背景）
 pub fn hl_delete() -> Color32 {
     super::theme::hl_delete()

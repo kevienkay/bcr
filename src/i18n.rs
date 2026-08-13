@@ -207,6 +207,12 @@ pub enum Key {
     CsvFilterModified,
     /// 仅相同
     CsvFilterSame,
+    /// 复制单元格至右侧（P37-1c）
+    CopyCellRight,
+    /// 隐藏相同列（P37-1c）
+    HideSameCols,
+    /// 列宽自适应（P37-1c）
+    FitColumns,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}

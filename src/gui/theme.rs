@@ -57,6 +57,10 @@ pub fn bg_match() -> Color32 {
 pub fn bg_current() -> Color32 {
     Color32::from_rgba_unmultiplied(240, 200, 60, 90)
 }
+/// 选中单元格底色（P37-1c：CSV 表格单元格选中）
+pub fn bg_select() -> Color32 {
+    Color32::from_rgba_unmultiplied(120, 170, 250, 70)
+}
 /// 行内变更段高亮
 pub fn hl_delete() -> Color32 {
     Color32::from_rgba_unmultiplied(224, 96, 96, 150)

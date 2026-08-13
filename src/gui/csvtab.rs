@@ -7,7 +7,7 @@
 //! - 表头点击排序（纯显示排序，不改对齐数据）
 
 use super::common::*;
-use crate::csvcmp::{align_tables, RowStats, RowStatus, Table};
+use crate::csvcmp::{align_tables, serialize_csv, RowStats, RowStatus, Table};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
 
@@ -55,10 +55,16 @@ pub(crate) struct CsvTab {
     key: String,
     /// 分隔符显示值（"," / "\\t"）
     delimiter: String,
-    show_same: bool,
-    filter: CsvFilter,
+    pub(crate) show_same: bool,
+    pub(crate) filter: CsvFilter,
     sort: Option<SortKey>,
     error: Option<String>,
+    /// P37-1c：当前选中单元格（对齐行下标, 列号）
+    pub(crate) selected: Option<(usize, usize)>,
+    /// P37-1c：隐藏所有行都相同的列（BC Hide Same Columns）
+    pub(crate) hide_same_cols: bool,
+    /// P37-1c：列宽自适应（BC Adjust Column Sizes to Fit）
+    pub(crate) auto_fit: bool,
 }
 
 impl CsvTab {
@@ -76,6 +82,9 @@ impl CsvTab {
             filter: CsvFilter::Diff,
             sort: None,
             error: None,
+            selected: None,
+            hide_same_cols: false,
+            auto_fit: false,
         };
         t.reload();
         t
@@ -237,6 +246,136 @@ impl CsvTab {
         self.aligned.len()
     }
 
+    /// P37-1c：隐藏相同列时，返回「需要显示的列索引列表」（None = 全部显示）
+    pub(crate) fn visible_cols(&self) -> Option<Vec<usize>> {
+        if !self.hide_same_cols {
+            return None;
+        }
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return None;
+        };
+        let ncols = a.headers.len().max(b.headers.len());
+        if ncols == 0 {
+            return None;
+        }
+        // 每列：所有对齐行（两侧都有）该列值都相等 → 相同列
+        let mut same_col = vec![true; ncols];
+        for ar in &self.aligned {
+            let (Some(ai), Some(bi)) = (ar.a_no, ar.b_no) else {
+                // 仅一侧存在的行：该行所有列都视为不同（避免隐藏差异）
+                for c in same_col.iter_mut() {
+                    *c = false;
+                }
+                break;
+            };
+            let (Some(a_row), Some(b_row)) = (a.rows.get(ai), b.rows.get(bi)) else {
+                continue;
+            };
+            for (ci, same) in same_col.iter_mut().enumerate() {
+                let av = a_row.get(ci).map(|s| s.as_str()).unwrap_or("");
+                let bv = b_row.get(ci).map(|s| s.as_str()).unwrap_or("");
+                if av != bv {
+                    *same = false;
+                }
+            }
+        }
+        let vis: Vec<usize> = (0..ncols).filter(|&c| !same_col[c]).collect();
+        if vis.is_empty() {
+            None
+        } else {
+            Some(vis)
+        }
+    }
+
+    /// P37-1c：列宽自适应（按表头 + 可见单元格最大宽度；上限 320px，下限 60px）
+    fn col_widths(&self, vis_cols: Option<&Vec<usize>>) -> Vec<f32> {
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return vec![110.0];
+        };
+        let ncols = a.headers.len().max(b.headers.len());
+        let mut widths: Vec<f32> = vec![60.0; ncols];
+        let mut update = |ci: usize, s: &str| {
+            if let Some(v) = vis_cols {
+                if !v.contains(&ci) {
+                    return;
+                }
+            }
+            let w = (s.chars().count() as f32) * 8.0 + 16.0;
+            if w > widths[ci] {
+                widths[ci] = w.min(320.0);
+            }
+        };
+        for (ci, h) in a.headers.iter().enumerate() {
+            update(ci, h);
+        }
+        for (ci, h) in b.headers.iter().enumerate() {
+            update(ci, h);
+        }
+        for ar in &self.aligned {
+            for (side, no) in [(true, ar.a_no), (false, ar.b_no)] {
+                let t = if side { a } else { b };
+                if let Some(n) = no {
+                    if let Some(row) = t.rows.get(n) {
+                        for (ci, cell) in row.iter().enumerate() {
+                            update(ci, cell);
+                        }
+                    }
+                }
+            }
+        }
+        widths
+    }
+
+    /// P37-1c：复制左侧单元格到右侧（BC Copy Cell to Right Side）
+    ///
+    /// 从对齐行取左侧值 → 写入右侧表对应行同列 → 序列化写回右侧文件（备份 .bak）→ 重新加载。
+    /// 返回是否成功。
+    pub(crate) fn copy_cell_right(&mut self) -> bool {
+        let Some((aligned_idx, col)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let Some(ar) = self.aligned.get(aligned_idx) else {
+            return false;
+        };
+        // 需要左侧有值、右侧有对应行
+        let (Some(ai), Some(bi)) = (ar.a_no, ar.b_no) else {
+            return false;
+        };
+        let Some(a_row) = a.rows.get(ai) else {
+            return false;
+        };
+        let Some(v) = a_row.get(col) else {
+            return false;
+        };
+        // b 是 & 引用不能 get_mut：克隆右侧行做修改
+        let mut b_rows = b.rows.clone();
+        let Some(b_row) = b_rows.get_mut(bi) else {
+            return false;
+        };
+        if b_row.len() <= col {
+            b_row.resize(col + 1, String::new());
+        }
+        b_row[col] = v.clone();
+        let delim = self.delim_char();
+        let out = serialize_csv(
+            &Table {
+                headers: b.headers.clone(),
+                rows: b_rows,
+            },
+            delim,
+        );
+        // A2 模式：写回前备份 .bak
+        let _ = std::fs::copy(&self.right, format!("{}.bak", self.right));
+        if std::fs::write(&self.right, out).is_err() {
+            return false;
+        }
+        self.reload();
+        true
+    }
+
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("csvtab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -321,6 +460,19 @@ impl CsvTab {
                 if ui.button(t(I18nKey::Reload)).clicked() {
                     self.reload();
                 }
+                // P37-1c：隐藏相同列 / 列宽自适应
+                ui.separator();
+                ui.checkbox(&mut self.hide_same_cols, t(I18nKey::HideSameCols));
+                ui.checkbox(&mut self.auto_fit, t(I18nKey::FitColumns));
+                // P37-1c：复制单元格至右侧（需先选中单元格）
+                ui.separator();
+                if ui
+                    .button(format!("→ {}", t(I18nKey::CopyCellRight)))
+                    .on_hover_text("把左侧单元格复制到右侧对应位置（需先点击选中单元格）")
+                    .clicked()
+                {
+                    self.copy_cell_right();
+                }
                 // 统计
                 let s = self.stats;
                 ui.separator();
@@ -371,6 +523,13 @@ impl CsvTab {
         let ncols = self.col_count();
         let visible = self.visible_rows();
         let total = visible.len();
+        // P37-1c：隐藏相同列 + 列宽（auto_fit 时按内容计算）
+        let vis_cols = self.visible_cols();
+        let widths: Vec<f32> = if self.auto_fit {
+            self.col_widths(vis_cols.as_ref())
+        } else {
+            vec![110.0; ncols]
+        };
 
         // 表头行（固定，不随行滚动）：左侧列名 | 右侧列名（点击排序）
         egui::Panel::top("csvtab_header").show(ui, |ui| {
@@ -394,16 +553,23 @@ impl CsvTab {
                         ui.separator();
                     }
                     for (ci, h) in t.headers.iter().enumerate() {
+                        // P37-1c：跳过隐藏的相同列
+                        if let Some(vc) = &vis_cols {
+                            if !vc.contains(&ci) {
+                                continue;
+                            }
+                        }
+                        let w = widths.get(ci).copied().unwrap_or(110.0);
                         let mut text = h.clone();
                         if let Some(sk) = &self.sort {
                             if sk.side == side && sk.col == ci {
                                 text.push_str(if sk.asc { " ▲" } else { " ▼" });
                             }
                         }
-                        if ui.button(text).clicked() {
+                        if ui.add_sized([w, 20.0], egui::Button::new(text)).clicked() {
                             click = Some((side, ci));
                         }
-                        ui.add_space(4.0);
+                        ui.add_space(2.0);
                     }
                     let _ = fg;
                 }
@@ -421,6 +587,9 @@ impl CsvTab {
         let show_same = self.show_same;
         let filter = self.filter;
         let sort = self.sort;
+        // P37-1c：请求收集（借用安全：闭包内只设标志，闭包外执行）
+        let mut click_cell: Option<(usize, usize)> = None;
+        let mut copy_cell_req = false;
         ui.columns(2, |cols| {
             for (ci, side) in [(0usize, true), (1, false)].into_iter() {
                 let ui = &mut cols[ci];
@@ -445,7 +614,7 @@ impl CsvTab {
                             Vec2::new(ui.available_width().max(200.0), ROW_H),
                             egui::Sense::click(),
                         );
-                        // P32-A4：行右键菜单（复制路径/打开文件）
+                        // P32-A4：行右键菜单（复制路径/打开文件）+ P37-1c 复制单元格至右侧
                         let (lp, rp) = (self.left.clone(), self.right.clone());
                         resp.context_menu(|ui| {
                             if ui.button("复制左侧路径").clicked() {
@@ -454,6 +623,11 @@ impl CsvTab {
                             }
                             if ui.button("复制右侧路径").clicked() {
                                 ui.ctx().copy_text(rp.clone());
+                                ui.close();
+                            }
+                            ui.separator();
+                            if ui.button(t(I18nKey::CopyCellRight)).clicked() {
+                                copy_cell_req = true;
                                 ui.close();
                             }
                             ui.separator();
@@ -504,15 +678,33 @@ impl CsvTab {
                             egui::FontId::monospace(12.0),
                             sc,
                         );
-                        // 单元格
-                        let col_w = 110.0;
+                        // 单元格（P37-1c：隐藏相同列过滤 + 自适应宽度 + 点击选中）
+                        let mut x0 = rect.left() + gutter_width(total) + 24.0;
                         for (col_idx, cell) in
                             row.map(|r| r.iter().enumerate()).into_iter().flatten()
                         {
-                            let x0 =
-                                rect.left() + gutter_width(total) + 24.0 + col_idx as f32 * col_w;
+                            // 隐藏相同列时跳过
+                            if let Some(vc) = &vis_cols {
+                                if !vc.contains(&col_idx) {
+                                    continue;
+                                }
+                            }
+                            let col_w = widths.get(col_idx).copied().unwrap_or(110.0);
                             let crect =
                                 Rect::from_min_size(Pos2::new(x0, rect.top()), vec2(col_w, ROW_H));
+                            // 单元格点击选中（P37-1c）
+                            let cell_resp = ui.interact(
+                                crect,
+                                ui.id().with(("csvcell", aligned_idx, col_idx)),
+                                egui::Sense::click(),
+                            );
+                            if cell_resp.clicked() {
+                                click_cell = Some((aligned_idx, col_idx));
+                            }
+                            // 选中高亮（浅蓝）
+                            if self.selected == Some((aligned_idx, col_idx)) {
+                                paint_bg(ui, crect, Some(bg_select()));
+                            }
                             // 修改列高亮：左侧红、右侧黄
                             let hl = if ar.status == RowStatus::Modified
                                 && ar.changed_cols.contains(&col_idx)
@@ -531,6 +723,7 @@ impl CsvTab {
                                 egui::FontId::monospace(FONT_SIZE),
                                 fg,
                             );
+                            x0 += col_w;
                         }
                         let _ = ncols;
                         let _ = show_same;
@@ -541,6 +734,13 @@ impl CsvTab {
                 let _ = out;
             }
         });
+        // P37-1c：闭包外处理单元格点击选中 / 复制请求（借用安全）
+        if let Some(cell) = click_cell {
+            self.selected = Some(cell);
+        }
+        if copy_cell_req {
+            self.copy_cell_right();
+        }
     }
 }
 
@@ -652,5 +852,60 @@ mod tests {
             })
             .collect();
         assert_eq!(vals, vec!["2", "1"]);
+    }
+
+    // ---- P37-1c：隐藏相同列 / 复制单元格至右侧 ----------------
+
+    #[test]
+    fn hide_same_cols_filters_identical_columns() {
+        let d = tempdir().unwrap();
+        // id 两列相同、name 不同 → 隐藏 id 列，保留 name 列
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n2,bob\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n2,BOB\n");
+        let mut t = CsvTab::new(&l, &r);
+        assert!(t.error.is_none());
+        t.show_same = true;
+        t.filter = CsvFilter::All;
+        // 默认不隐藏：两列都可见
+        assert!(
+            t.visible_cols().is_none(),
+            "未开隐藏时返回 None（全部显示）"
+        );
+        t.hide_same_cols = true;
+        let vc = t.visible_cols().unwrap();
+        // name 列（索引 1）有差异，必须保留；id 列（索引 0）全部相同被隐藏
+        assert!(vc.contains(&1), "有差异的列必须保留: {:?}", vc);
+        assert!(!vc.contains(&0), "相同列应被隐藏: {:?}", vc);
+    }
+
+    #[test]
+    fn copy_cell_right_writes_file_and_reloads() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n2,bob\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n2,BOB\n");
+        let mut t = CsvTab::new(&l, &r);
+        t.show_same = true;
+        t.filter = CsvFilter::All;
+        // 选中第 0 行（aligned 下标）的 name 列（索引 1）
+        t.selected = Some((0, 1));
+        assert!(t.copy_cell_right(), "复制应成功");
+        // 右侧文件已被更新为左侧值
+        let content = fs::read_to_string(&r).unwrap();
+        assert!(content.contains("alice"), "右侧第 1 行 name 应更新为 alice");
+        // 备份 .bak 存在
+        assert!(fs::metadata(format!("{r}.bak")).is_ok(), "应有 .bak 备份");
+        // reload 后 stats 更新：第 1 行不再是修改
+        let t2 = CsvTab::new(&l, &r);
+        assert_eq!(t2.stats.modified, 1, "剩余 1 处修改（第 2 行）");
+    }
+
+    #[test]
+    fn copy_cell_right_requires_selection() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n");
+        let mut t = CsvTab::new(&l, &r);
+        // 未选中 → 返回 false
+        assert!(!t.copy_cell_right());
     }
 }
