@@ -1021,3 +1021,33 @@ fn dirtab_exclude_hides_file() {
         "keep.txt 应仍在树中"
     );
 }
+
+// ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
+
+#[test]
+fn dirtab_view_filter_hotkeys_1_2_3() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "same.txt", "x");
+    write(d1.path(), "only_left.txt", "L");
+    write(d2.path(), "same.txt", "x");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().compare_content = true; // 内容比较：same.txt 两侧内容相同 → 判 Same（避免 mtime 差异误判）
+    tab.borrow_mut().refresh_sync();
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run_steps(4);
+    // 按 2 → 仅差异
+    h.key_press(eframe::egui::Key::Num2);
+    h.run_steps(2);
+    assert_eq!(tab.borrow().view_filter, ViewFilter::Diff);
+    // 按 3 → 仅相同
+    h.key_press(eframe::egui::Key::Num3);
+    h.run_steps(2);
+    assert_eq!(tab.borrow().view_filter, ViewFilter::Same);
+    // 按 1 → 全部
+    h.key_press(eframe::egui::Key::Num1);
+    h.run_steps(2);
+    assert_eq!(tab.borrow().view_filter, ViewFilter::All);
+}

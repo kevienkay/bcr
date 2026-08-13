@@ -816,6 +816,25 @@ impl DirTab {
 
     /// 键盘导航：上下选择、左右折叠、回车打开
     fn handle_keys(&mut self, ui: &egui::Ui) {
+        // P36-D3：视图过滤快捷键（BC 显示全部/差异/相同 = 1/2/3；输入框聚焦时不触发）
+        // 放在 flat 空检查之前：过滤可能让列表为空，用户需能切回 All
+        if !ui.ctx().egui_wants_keyboard_input() {
+            let num = if ui.input(|i| i.key_pressed(Key::Num1)) {
+                Some(ViewFilter::All)
+            } else if ui.input(|i| i.key_pressed(Key::Num2)) {
+                Some(ViewFilter::Diff)
+            } else if ui.input(|i| i.key_pressed(Key::Num3)) {
+                Some(ViewFilter::Same)
+            } else {
+                None
+            };
+            if let Some(vf) = num {
+                if self.view_filter != vf {
+                    self.view_filter = vf;
+                    self.rebuild_tree();
+                }
+            }
+        }
         if self.flat.is_empty() {
             return;
         }
