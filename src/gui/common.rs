@@ -161,12 +161,17 @@ pub fn show_rows_offset<R>(
     out
 }
 
-/// 状态色（目录对比/合并视图用）
+/// 状态色（目录对比/合并视图用，P33 对齐 BC 语义）
+/// BC 5.2.5 实测：孤儿（仅一侧）= 紫 rgb(83,44,199)；差异/较新 = 红 rgb(246,39,16)；相同 = 黑；未知/未扫 = 灰
 pub fn status_color(ui: &egui::Ui, letter: char) -> Color32 {
     match letter {
-        'L' => super::theme::diff_delete(),
-        'R' => Color32::from_rgb(110, 150, 240),
-        'C' | 'M' => super::theme::diff_modify(),
+        // 仅左侧/仅右侧 = 孤儿（BC 紫）
+        'L' | 'R' => Color32::from_rgb(83, 44, 199),
+        // 内容不同/移动 = 差异（BC 红）
+        'C' | 'M' => Color32::from_rgb(246, 39, 16),
+        // 相同 = 默认文本色（BC 黑）
+        'S' => ui.visuals().text_color(),
+        // 未知/其他 = 弱色（BC 灰）
         _ => ui.visuals().weak_text_color(),
     }
 }

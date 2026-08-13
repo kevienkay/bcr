@@ -1381,6 +1381,45 @@ impl DirTab {
             self.scroll_to_selected = false;
             let selected = self.selected;
 
+            // P33：BC 式列头（名称 | 大小 | 修改时间，两侧对齐），固定不随行滚动
+            {
+                let head_h = 22.0;
+                let head_bg = if ui.visuals().dark_mode {
+                    Color32::from_gray(42)
+                } else {
+                    Color32::from_rgb(251, 252, 252)
+                };
+                let (h_rect, _) =
+                    ui.allocate_exact_size(Vec2::new(ui.available_width(), head_h), egui::Sense::hover());
+                paint_bg(ui, h_rect, Some(head_bg));
+                let head_fg = ui.visuals().weak_text_color();
+                let font = egui::FontId::proportional(12.0);
+                // 左列：名称（BC: Name）
+                ui.painter().text(
+                    Pos2::new(h_rect.left() + 8.0, h_rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    "名称",
+                    font.clone(),
+                    head_fg,
+                );
+                // 右列：大小 / 修改时间（BC: Size / Modified）
+                ui.painter().text(
+                    Pos2::new(h_rect.right() - 150.0, h_rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    "大小",
+                    font.clone(),
+                    head_fg,
+                );
+                ui.painter().text(
+                    Pos2::new(h_rect.right() - 8.0, h_rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    "修改时间",
+                    font,
+                    head_fg,
+                );
+                ui.separator();
+            }
+
             let out = super::show_rows(ui, self.flat.len(), ROW_H, |ui, range| {
                 for idx in range {
                     let row = &self.flat[idx];
