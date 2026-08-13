@@ -4,6 +4,26 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式，
 版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 交互模型对齐（P34，对标 BC 空会话 + 拖拽导入）
+
+- **空会话入口**：首页卡片/菜单 Session 直接进空会话（Diff/Dir/Merge/Image/Csv），空面板分别打开左右侧（BASE/LEFT/RIGHT），不再强制一次选满文件
+- **拖拽导入填充**：空会话中拖文件/目录自动填充对应侧（新增 `fill_empty_session`），空面板显示拖拽提示（DragHint）
+
+### 文本对比核心交互（P35，对标 BC 命令参考）
+
+- **复制差异块到另一侧（Copy to Other Side）**：工具栏 →/← 按钮 + 右键菜单置顶，重建目标侧全文 + 按原编码写回 + 撤销快照 + .bak 备份
+- **交换左右两侧（Swap Sides）**：工具栏 ⇄ 按钮，支持双边/单侧/hex，撤销栈清空
+- **视图过滤（Show All/Diff/Same/Context）**：工具栏下拉，渲染层过滤（差异行集合 + Context 上下文行）
+- **显示空白符（Visible Whitespace）**：空格→·、制表符→→，语法高亮自动降级避免字节错位
+
+### 文件夹对比交互补齐（P36，实测 BC 5.2.5）
+
+- **交换两边（Swap Sides）**：工具栏 ⇄ 按钮（BC 会话菜单「交换两边」）
+- **逐文件操作**：右键菜单复制到右侧/复制到左侧/删除右侧/删除左侧/排除（复用 SyncOp + execute_op；排除 = 会话级隐藏集合）
+- **视图过滤快捷键**：1/2/3 切换显示全部/差异/相同（输入框聚焦不触发，不受列表空影响）
+
 ## [0.3.0] - 2026-08-13
 
 ### UI 重构（P33，对标 Beyond Compare 5.2.5 真实界面）
