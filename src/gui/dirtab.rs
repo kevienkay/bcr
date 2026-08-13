@@ -223,6 +223,13 @@ impl DirTab {
     }
 
     pub fn refresh(&mut self) {
+        // P34：空路径守卫（空会话）——两侧均为空时不扫描，交由空状态 UI 处理
+        if self.left.is_empty() && self.right.is_empty() {
+            self.result = None;
+            self.error = None;
+            self.flat.clear();
+            return;
+        }
         // B2：后台线程执行对比，UI 不卡顿（大目录）
         if self.bg.is_some() {
             return;
@@ -268,6 +275,22 @@ impl DirTab {
             done,
             total: 0,
         });
+    }
+
+    /// P34：打开左侧目录（空会话填充）
+    pub fn open_left_dir(&mut self) {
+        if let Some(p) = super::pick_dir() {
+            self.left = p;
+            self.refresh();
+        }
+    }
+
+    /// P34：打开右侧目录（空会话填充）
+    pub fn open_right_dir(&mut self) {
+        if let Some(p) = super::pick_dir() {
+            self.right = p;
+            self.refresh();
+        }
     }
 
     /// B2：每帧轮询后台任务结果，完成后应用
@@ -1362,6 +1385,28 @@ impl DirTab {
         egui::CentralPanel::default().show(ui, |ui| {
             if self.result.is_none() && self.error.is_none() {
                 self.refresh();
+            }
+            // P34：空会话（两侧均未选择目录）→ 显示打开入口 + 拖拽提示
+            if self.left.is_empty() && self.right.is_empty() {
+                ui.centered_and_justified(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DirEmpty))
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                        ui.add_space(12.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("📂 打开左侧目录").clicked() {
+                                self.open_left_dir();
+                            }
+                            if ui.button("📂 打开右侧目录").clicked() {
+                                self.open_right_dir();
+                            }
+                        });
+                    });
+                });
+                return;
             }
             if self.flat.is_empty() {
                 ui.centered_and_justified(|ui| {

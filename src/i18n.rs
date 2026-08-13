@@ -323,6 +323,8 @@ pub enum Key {
     DirStats,
     /// 无差异文件（或目录为空）\n↑↓ 选择 · ← → 折叠/展开 · Enter 打开
     NoDiff,
+    /// 选择左右两个目录开始对比（或拖入目录）
+    DirEmpty,
 
     // ---- MergeTab ----
     /// 合并: {} ↔ {} ↔ {}

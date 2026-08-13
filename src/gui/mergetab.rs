@@ -52,6 +52,13 @@ impl MergeTab {
     }
 
     pub fn reload(&mut self) {
+        // P34：空路径守卫（空会话）
+        if self.base_path.is_empty() && self.left_path.is_empty() && self.right_path.is_empty() {
+            self.view = MergeView::default();
+            self.conflict_idx = None;
+            self.error = None;
+            return;
+        }
         let (b, l, r) = match (
             std::fs::read_to_string(&self.base_path),
             std::fs::read_to_string(&self.left_path),
@@ -152,6 +159,30 @@ impl MergeTab {
                 self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
                 false
             }
+        }
+    }
+
+    /// P34：打开 BASE 文件（空会话填充）
+    pub fn open_base(&mut self) {
+        if let Some(p) = super::pick_file() {
+            self.base_path = p;
+            self.reload();
+        }
+    }
+
+    /// P34：打开 LEFT 文件（空会话填充）
+    pub fn open_left(&mut self) {
+        if let Some(p) = super::pick_file() {
+            self.left_path = p;
+            self.reload();
+        }
+    }
+
+    /// P34：打开 RIGHT 文件（空会话填充）
+    pub fn open_right(&mut self) {
+        if let Some(p) = super::pick_file() {
+            self.right_path = p;
+            self.reload();
         }
     }
 
@@ -298,11 +329,26 @@ impl MergeTab {
         egui::CentralPanel::default().show(ui, |ui| {
             if self.view.rows.is_empty() && self.view.conflicts == 0 {
                 ui.centered_and_justified(|ui| {
-                    ui.label(
-                        egui::RichText::new(t(I18nKey::MergeEmpty))
-                            .size(16.0)
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::MergeEmpty))
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                        ui.add_space(12.0);
+                        // P34：分别打开 BASE/LEFT/RIGHT（BC 式：不强求一次选满三个）
+                        ui.horizontal(|ui| {
+                            if ui.button("B BASE").clicked() {
+                                self.open_base();
+                            }
+                            if ui.button("← LEFT").clicked() {
+                                self.open_left();
+                            }
+                            if ui.button("→ RIGHT").clicked() {
+                                self.open_right();
+                            }
+                        });
+                    });
                 });
                 return;
             }

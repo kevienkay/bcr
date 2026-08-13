@@ -378,6 +378,7 @@ impl DiffApp {
     }
 
     /// P32-A7：强制图片对比会话（选两个图片文件 → ImageTab）
+    #[allow(dead_code)]
     fn open_image_compare(&mut self) {
         let Some(l) = pick_file() else { return };
         let Some(r) = pick_file() else { return };
@@ -385,6 +386,7 @@ impl DiffApp {
     }
 
     /// P32-A7：强制 CSV 表格对比会话（选两个 CSV/TSV → CsvTab）
+    #[allow(dead_code)]
     fn open_csv_compare(&mut self) {
         let Some(l) = pick_file() else { return };
         let Some(r) = pick_file() else { return };
@@ -396,6 +398,28 @@ impl DiffApp {
         let Some(l) = pick_file() else { return };
         let Some(r) = pick_file() else { return };
         self.add_tab(Tab::Merge(MergeTab::new(&b, &l, &r)));
+    }
+
+    // ---- P34：空会话入口（BC 式：点会话类型 → 直接进入空面板，再分别打开/拖拽两侧）----
+    /// 空文本对比会话
+    fn open_empty_diff(&mut self) {
+        self.new_diff_tab();
+    }
+    /// 空文件夹对比会话
+    fn open_empty_dir(&mut self) {
+        self.add_tab(Tab::Dir(DirTab::new("", "")));
+    }
+    /// 空三路合并会话
+    fn open_empty_merge(&mut self) {
+        self.add_tab(Tab::Merge(MergeTab::new("", "", "")));
+    }
+    /// 空图片对比会话
+    fn open_empty_image(&mut self) {
+        self.add_tab(Tab::Image(ImageTab::new("", "")));
+    }
+    /// 空 CSV 表格对比会话
+    fn open_empty_csv(&mut self) {
+        self.add_tab(Tab::Csv(CsvTab::new("", "")));
     }
 
     /// P32-A7：欢迎页 — 大标题 + 会话类型网格卡片（文本/文件夹/三路合并/图片/CSV）
@@ -577,16 +601,16 @@ impl DiffApp {
                             }
                         });
                     match card_click {
-                        Some(0) => self.open_diff_files(),
-                        Some(1) => self.open_dir_compare(),
-                        Some(2) => self.open_merge(),
-                        Some(3) => self.open_image_compare(),
-                        Some(4) => self.open_csv_compare(),
-                        // Hex：打开文件对比（二进制自动切 hex）
-                        Some(5) => self.open_diff_files(),
-                        // 文件夹合并/同步：复用目录对比 + 对应 tab（合并语义）
-                        Some(6) => self.open_dir_compare(),
-                        Some(7) => self.open_merge(),
+                        Some(0) => self.open_empty_diff(),
+                        Some(1) => self.open_empty_dir(),
+                        Some(2) => self.open_empty_merge(),
+                        Some(3) => self.open_empty_image(),
+                        Some(4) => self.open_empty_csv(),
+                        // Hex：空文本对比会话（二进制自动切 hex）
+                        Some(5) => self.open_empty_diff(),
+                        // 文件夹合并/同步：空目录对比
+                        Some(6) => self.open_empty_dir(),
+                        Some(7) => self.open_empty_merge(),
                         _ => {}
                     }
                     ui.add_space(10.0);

@@ -1421,11 +1421,23 @@ impl DiffTab {
 
             if self.rows.is_empty() {
                 ui.centered_and_justified(|ui| {
-                    ui.label(
-                        egui::RichText::new(t(I18nKey::DiffEmptyHint))
-                            .size(18.0)
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DiffEmptyHint))
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                        ui.add_space(12.0);
+                        // P34：分别打开左右两侧（BC 式：不强求一次选满两个）
+                        ui.horizontal(|ui| {
+                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                                self.open_left_dialog();
+                            }
+                            if ui.button(t(I18nKey::OpenRight)).clicked() {
+                                self.open_right_dialog();
+                            }
+                        });
+                    });
                 });
                 return;
             }

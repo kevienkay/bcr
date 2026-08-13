@@ -101,6 +101,13 @@ impl CsvTab {
     /// 重新加载：读文件 → 解析 → 对齐
     fn reload(&mut self) {
         self.error = None;
+        // P34：空路径守卫（空会话）
+        if self.left.is_empty() && self.right.is_empty() {
+            self.table_a = None;
+            self.table_b = None;
+            self.aligned.clear();
+            return;
+        }
         let delim = self.delim_char();
         let mut read = |p: &str| -> Option<String> {
             match std::fs::read_to_string(p) {

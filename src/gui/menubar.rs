@@ -34,28 +34,28 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuSession), |ui| {
         if ui.button(t(I18nKey::MenuNewText)).clicked() {
             ui.close();
-            app.open_diff_files();
+            app.open_empty_diff();
         }
         if ui.button(t(I18nKey::MenuNewDir)).clicked() {
             ui.close();
-            app.open_dir_compare();
+            app.open_empty_dir();
         }
         if ui.button(t(I18nKey::MenuNewMerge)).clicked() {
             ui.close();
-            app.open_merge();
+            app.open_empty_merge();
         }
         if ui.button(t(I18nKey::MenuNewImage)).clicked() {
             ui.close();
-            app.open_image_compare();
+            app.open_empty_image();
         }
         if ui.button(t(I18nKey::MenuNewCsv)).clicked() {
             ui.close();
-            app.open_csv_compare();
+            app.open_empty_csv();
         }
-        // Hex 会话：打开文件对比（二进制文件自动切 hex 视图）
+        // Hex 会话：空文本对比会话（二进制文件自动切 hex 视图）
         if ui.button(t(I18nKey::MenuNewHex)).clicked() {
             ui.close();
-            app.open_diff_files();
+            app.open_empty_diff();
         }
         ui.separator();
         // 保存会话：打开会话中心（GUI 内管理已保存会话）
