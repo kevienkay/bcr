@@ -4,7 +4,7 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 格式，
 版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.0] - 2026-08-13
 
 ### UI 重构（P33，对标 Beyond Compare 5.2.5 真实界面）
 
