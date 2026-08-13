@@ -261,6 +261,8 @@ pub enum Key {
     CopyToRight,
     /// 复制到左侧（P35-A1：把当前差异块右侧内容复制到左侧）
     CopyToLeft,
+    /// 交换左右两侧（P35-A2：BC Swap Sides）
+    SwapSides,
     /// 统计栏
     StatsPanel,
     /// 忽略空白

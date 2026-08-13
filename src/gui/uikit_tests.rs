@@ -887,3 +887,17 @@ fn difftab_copy_block_to_other_side() {
     );
     assert_eq!(fs::read_to_string(&l2).unwrap(), "a\nQ\nc\n");
 }
+
+#[test]
+fn difftab_swap_sides_exchanges_files() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\n");
+    let r = write(d.path(), "r.txt", "a\nX\nc\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    assert_eq!(tab.borrow().left.as_ref().unwrap().path, l);
+    assert_eq!(tab.borrow().right.as_ref().unwrap().path, r);
+    tab.borrow_mut().swap_sides();
+    assert_eq!(tab.borrow().left.as_ref().unwrap().path, r);
+    assert_eq!(tab.borrow().right.as_ref().unwrap().path, l);
+}

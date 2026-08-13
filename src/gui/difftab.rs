@@ -766,6 +766,32 @@ impl DiffTab {
         true
     }
 
+    // ---- P35-A2：交换左右两侧（BC Swap Sides）----
+
+    /// 交换左右两侧文件（重新加载，撤销栈清空，含单侧/hex 情况）
+    pub fn swap_sides(&mut self) {
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        let l = self.left.as_ref().map(|f| f.path.clone());
+        let r = self.right.as_ref().map(|f| f.path.clone());
+        let opts = self.opts.clone();
+        match (l, r) {
+            (Some(l), Some(r)) => self.load_pair(&r, &l, opts),
+            (Some(l), None) => {
+                self.left = None;
+                self.right = None;
+                self.load_right(&l, opts);
+            }
+            (None, Some(r)) => {
+                self.left = None;
+                self.right = None;
+                self.load_left(&r, opts);
+            }
+            (None, None) => {}
+        }
+        self.error = Some(fmt(I18nKey::Saved, &["已交换左右"]));
+    }
+
     // ---- 搜索 ----
 
     pub fn update_search(&mut self) {
@@ -1105,6 +1131,14 @@ impl DiffTab {
                     .clicked()
                 {
                     self.reload();
+                }
+                // P35-A2：交换左右两侧（BC Swap Sides）
+                if ui
+                    .button(format!("⇄ {}", t(I18nKey::SwapSides)))
+                    .on_hover_text("交换左右两侧文件")
+                    .clicked()
+                {
+                    self.swap_sides();
                 }
                 ui.separator();
                 // ---- 差异导航（BC: Next Section/Prev Section 组）----
