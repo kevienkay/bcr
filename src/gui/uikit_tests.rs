@@ -158,12 +158,28 @@ fn dirtab_filter_dropdown_changes_view() {
     // ComboBox 的选中文本在 value（非 label），用 role 定位点击打开
     h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
         .click();
-    h.run_steps(4);
-    // 下拉展开后选「仅左侧」（选项是 selectable_label，label 可查）
-    h.get_by_label("仅左侧").click();
-    h.run_steps(4);
+    // 跨平台 headless 渲染时序差异：菜单展开后轮询重试点击「仅左侧」
+    let mut clicked = false;
+    for _ in 0..12 {
+        h.run_steps(2);
+        if let Some(node) = h.query_by_label("仅左侧") {
+            node.click();
+            clicked = true;
+            break;
+        }
+    }
+    assert!(clicked, "下拉菜单应展开并出现「仅左侧」选项");
+    // 轮询等待过滤生效（Windows CI 偶发时序：点击后多帧才应用）
+    let mut applied = false;
+    for _ in 0..15 {
+        h.run_steps(2);
+        if tab.borrow().view_filter == ViewFilter::LeftOnly {
+            applied = true;
+            break;
+        }
+    }
+    assert!(applied, "点击「仅左侧」后 view_filter 应变为 LeftOnly");
     let t = tab.borrow();
-    assert_eq!(t.view_filter, ViewFilter::LeftOnly);
     assert!(t
         .flat
         .iter()
