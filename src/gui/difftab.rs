@@ -456,6 +456,54 @@ impl DiffTab {
         }
     }
 
+    // ---- P33 菜单栏转发：打开左/右对话框、剪贴板加载、聚焦搜索 ----
+    /// 打开左侧文件（文件对话框）
+    pub fn open_left_dialog(&mut self) {
+        if let Some(p) = super::pick_file() {
+            self.load_left(&p, self.opts.clone());
+        }
+    }
+
+    /// 打开右侧文件（文件对话框）
+    pub fn open_right_dialog(&mut self) {
+        if let Some(p) = super::pick_file() {
+            self.load_right(&p, self.opts.clone());
+        }
+    }
+
+    /// 剪贴板 → 左侧（读系统剪贴板文本 → 临时文件 → 加载）
+    pub fn load_clipboard_left(&mut self) {
+        match read_clipboard_text() {
+            Some(txt) => {
+                if let Some(p) = write_clipboard_temp(&txt) {
+                    self.load_left(&p, self.opts.clone());
+                } else {
+                    self.error = Some("写入剪贴板临时文件失败".to_string());
+                }
+            }
+            None => self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string()),
+        }
+    }
+
+    /// 剪贴板 → 右侧
+    pub fn load_clipboard_right(&mut self) {
+        match read_clipboard_text() {
+            Some(txt) => {
+                if let Some(p) = write_clipboard_temp(&txt) {
+                    self.load_right(&p, self.opts.clone());
+                } else {
+                    self.error = Some("写入剪贴板临时文件失败".to_string());
+                }
+            }
+            None => self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string()),
+        }
+    }
+
+    /// 聚焦搜索框（菜单 Search>Find）
+    pub fn focus_search(&mut self) {
+        self.search.focus = true;
+    }
+
     // ---- P32-A2/A6：行内编辑提交 + 撤销/重做 ----
 
     /// 提交行内编辑：修改对应侧文件对应行 → 按原编码写回 → 重新加载 → 入撤销栈

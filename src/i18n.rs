@@ -384,6 +384,68 @@ pub enum Key {
     /// 语言:
     Language,
 
+    // ---- P33：标准菜单栏（对标 BC Session/File/Edit/Search/View/Tools/Help）----
+    /// 会话
+    MenuSession,
+    /// 文件
+    MenuFile,
+    /// 编辑
+    MenuEdit,
+    /// 搜索
+    MenuSearch,
+    /// 视图
+    MenuView,
+    /// 工具
+    MenuTools,
+    /// 帮助
+    MenuHelp,
+    /// 新建文本对比
+    MenuNewText,
+    /// 新建文件夹对比
+    MenuNewDir,
+    /// 新建三路合并
+    MenuNewMerge,
+    /// 新建图片对比
+    MenuNewImage,
+    /// 新建 CSV 表格
+    MenuNewCsv,
+    /// 新建 Hex 对比
+    MenuNewHex,
+    /// 保存会话
+    MenuSaveSession,
+    /// 打开左侧
+    MenuOpenLeft,
+    /// 打开右侧
+    MenuOpenRight,
+    /// 打开云盘
+    MenuOpenCloud,
+    /// 剪贴板→左
+    MenuClipLeft,
+    /// 剪贴板→右
+    MenuClipRight,
+    /// 撤销
+    MenuUndo,
+    /// 重做
+    MenuRedo,
+    /// 查找
+    MenuFind,
+    /// 下一差异
+    MenuNextDiff,
+    /// 上一差异
+    MenuPrevDiff,
+    /// 重新加载
+    MenuReload,
+    /// 统计栏
+    MenuStats,
+    /// 缩略图
+    MenuThumb,
+    /// 外部工具
+    MenuExternal,
+    /// 关于
+    MenuAbout,
+    /// 快捷键
+    MenuShortcuts,
+
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比
     SessionText,

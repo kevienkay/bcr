@@ -10,6 +10,7 @@ mod csvtab;
 mod difftab;
 mod dirtab;
 mod imagetab;
+mod menubar;
 mod mergetab;
 mod theme;
 #[cfg(test)]
@@ -165,6 +166,12 @@ struct DiffApp {
     cloud_err: Option<String>,
     /// B6 标签拖拽：当前被拖拽的标签索引
     drag_tab: Option<usize>,
+    /// P33：外部工具说明弹窗开关
+    show_external: bool,
+    /// P33：快捷键说明弹窗开关
+    show_shortcuts: bool,
+    /// P33：关于弹窗开关
+    show_about: bool,
 }
 
 impl DiffApp {
@@ -183,6 +190,9 @@ impl DiffApp {
             cloud_right_entries: None,
             cloud_err: None,
             drag_tab: None,
+            show_external: false,
+            show_shortcuts: false,
+            show_about: false,
         }
     }
 
@@ -590,49 +600,14 @@ impl eframe::App for DiffApp {
             self.close_tab(self.active);
         }
 
-        // 顶部菜单栏
+        // 顶部菜单栏（P33：BC 式标准菜单，替代扁平按钮排）
         egui::Panel::top("menu").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .button(crate::i18n::t(crate::i18n::Key::MenuOpenFiles))
-                    .clicked()
-                {
-                    self.open_diff_files();
-                }
-                if ui
-                    .button(crate::i18n::t(crate::i18n::Key::MenuOpenDir))
-                    .clicked()
-                {
-                    self.open_dir_compare();
-                }
-                if ui
-                    .button("☁ 云盘")
-                    .on_hover_text("打开远程/云存储目录（webdav:// s3:// onedrive:// dropbox:// sftp:// ftp://）")
-                    .clicked()
-                {
-                    self.show_cloud = !self.show_cloud;
-                }
-                if ui
-                    .button(crate::i18n::t(crate::i18n::Key::MenuOpenMerge))
-                    .clicked()
-                {
-                    self.open_merge();
-                }
-                ui.separator();
-                if ui
-                    .button(crate::i18n::t(crate::i18n::Key::MenuGit))
-                    .clicked()
-                {
-                    self.show_git_help = !self.show_git_help;
-                }
-                if ui.button("💬 会话中心").clicked() {
-                    self.show_sessions = !self.show_sessions;
-                }
-                if ui.button("⚙ 规则").clicked() {
-                    self.show_profiles = !self.show_profiles;
-                }
-                ui.separator();
+            menubar::menu_bar(self, ui);
+        });
 
+        // 标签栏（P33：菜单栏之下独立一行，BC 观感）
+        egui::Panel::top("tabbar").show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
                 // 标签栏
                 let mut close: Option<usize> = None;
                 let mut activate: Option<usize> = None;
@@ -699,61 +674,6 @@ impl eframe::App for DiffApp {
                 {
                     self.new_diff_tab();
                 }
-
-                ui.separator();
-                // 语言切换（下拉选择，避免一排按钮占位）
-                let mut lang_changed = false;
-                let mut new_lang = crate::i18n::current();
-                ui.horizontal(|ui| {
-                    ui.label(crate::i18n::t(crate::i18n::Key::Language));
-                    egui::ComboBox::from_id_salt("lang_select")
-                        .selected_text(new_lang.native_name())
-                        .show_ui(ui, |ui| {
-                            for l in crate::i18n::Lang::ALL {
-                                if ui
-                                    .selectable_label(new_lang == l, l.native_name())
-                                    .clicked()
-                                {
-                                    new_lang = l;
-                                    lang_changed = true;
-                                }
-                            }
-                        });
-                });
-                if lang_changed {
-                    self.settings.lang = new_lang.code().to_string();
-                    self.settings.save();
-                    crate::i18n::set_lang(new_lang);
-                }
-                ui.separator();
-                // 主题切换
-                let mut pref = self.settings.theme_pref();
-                let mut changed = false;
-                ui.horizontal(|ui| {
-                    ui.label(crate::i18n::t(crate::i18n::Key::Theme));
-                    for (key, p) in [
-                        (crate::i18n::Key::ThemeSystem, ThemePreference::System),
-                        (crate::i18n::Key::ThemeDark, ThemePreference::Dark),
-                        (crate::i18n::Key::ThemeLight, ThemePreference::Light),
-                    ] {
-                        if ui
-                            .selectable_label(pref == p, crate::i18n::t(key))
-                            .clicked()
-                        {
-                            pref = p;
-                            changed = true;
-                        }
-                    }
-                });
-                if changed {
-                    self.settings.theme = match pref {
-                        ThemePreference::Dark => "dark".to_string(),
-                        ThemePreference::Light => "light".to_string(),
-                        _ => "system".to_string(),
-                    };
-                    self.settings.save();
-                    ui.ctx().set_theme(pref);
-                }
             });
         });
 
@@ -799,6 +719,88 @@ impl eframe::App for DiffApp {
                     ui.monospace("git mergetool --tool=bcr");
                     ui.label(crate::i18n::t(crate::i18n::Key::GitExit));
                 });
+        }
+
+        // P33：快捷键说明弹窗（Help > Shortcuts）
+        if self.show_shortcuts {
+            let mut keep = true;
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuShortcuts))
+                .collapsible(false)
+                .default_size([420.0, 380.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    let rows = [
+                        ("F5", "重新加载 / 刷新"),
+                        ("F6", "下一差异"),
+                        ("F7", "上一差异"),
+                        ("F2", "重命名（目录对比）"),
+                        ("Ctrl+F", "查找"),
+                        ("Ctrl+G", "跳转到行"),
+                        ("Ctrl+Z", "撤销"),
+                        ("Ctrl+Y", "重做"),
+                        ("Ctrl+W", "关闭当前标签"),
+                        ("Enter", "打开选中文件对比（目录）"),
+                        ("双击行", "内联编辑"),
+                    ];
+                    egui::Grid::new("shortcut_grid")
+                        .num_columns(2)
+                        .striped(true)
+                        .show(ui, |ui| {
+                            for (k, v) in rows {
+                                ui.monospace(k);
+                                ui.label(v);
+                                ui.end_row();
+                            }
+                        });
+                });
+            if !keep {
+                self.show_shortcuts = false;
+            }
+        }
+
+        // P33：关于弹窗（Help > About）
+        if self.show_about {
+            let mut keep = true;
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuAbout))
+                .collapsible(false)
+                .default_size([400.0, 260.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(RichText::new("bcr").size(26.0).strong());
+                    ui.label(format!(
+                        "v{} — Beyond Compare 风格文件对比工具",
+                        env!("CARGO_PKG_VERSION")
+                    ));
+                    ui.separator();
+                    ui.label("Rust + egui 实现");
+                    ui.label("文本 / 文件夹 / 三路合并 / 图片 / CSV / Hex 对比");
+                    ui.add_space(6.0);
+                    ui.label("GitHub: github.com/kevienkay/bcr");
+                });
+            if !keep {
+                self.show_about = false;
+            }
+        }
+
+        // P33：外部工具说明弹窗（Tools > 外部工具）
+        if self.show_external {
+            let mut keep = true;
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuExternal))
+                .collapsible(false)
+                .default_size([520.0, 300.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label("通过 ~/.bcr-external.toml 把扩展名映射到第三方对比工具：");
+                    ui.monospace("[external]");
+                    ui.monospace(".docx = \"wps\"");
+                    ui.monospace(".pdf  = \"open\"");
+                    ui.add_space(6.0);
+                    ui.label("CLI 用法：bcr diff a.docx b.docx --external");
+                    ui.label("GUI 目录对比：右键文件 → 外部工具对比");
+                });
+            if !keep {
+                self.show_external = false;
+            }
         }
 
         // 会话中心弹窗：列出已保存会话，点击打开目录对比（收藏优先 + 最近使用排序）
