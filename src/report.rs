@@ -194,7 +194,11 @@ fn format_entry_line(e: &crate::compare::FileEntry, fields: &[ReportField]) -> S
     if fields.contains(&ReportField::Mtime) {
         let m = match (&e.left, &e.right) {
             (Some(l), Some(r)) => {
-                format!("  [{} ↔ {}]", fmt_mtime_pub(l.mtime), fmt_mtime_pub(r.mtime))
+                format!(
+                    "  [{} ↔ {}]",
+                    fmt_mtime_pub(l.mtime),
+                    fmt_mtime_pub(r.mtime)
+                )
             }
             (Some(l), None) => format!("  [{}]", fmt_mtime_pub(l.mtime)),
             (None, Some(r)) => format!("  [{}]", fmt_mtime_pub(r.mtime)),

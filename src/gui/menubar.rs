@@ -182,7 +182,10 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         let mut new_lang = i18n::current();
         let mut lang_changed = false;
         for l in i18n::Lang::ALL {
-            if ui.selectable_label(new_lang == l, l.native_name()).clicked() {
+            if ui
+                .selectable_label(new_lang == l, l.native_name())
+                .clicked()
+            {
                 new_lang = l;
                 lang_changed = true;
             }

@@ -1499,18 +1499,14 @@ impl DiffTab {
                 };
                 let detail_fg = ui.visuals().weak_text_color();
                 // 每侧头部信息：文件名 + 详情行
-                let l_info = self.left.as_ref().map(|f| {
-                    (
-                        basename(&f.path),
-                        file_detail_line(f),
-                    )
-                });
-                let r_info = self.right.as_ref().map(|f| {
-                    (
-                        basename(&f.path),
-                        file_detail_line(f),
-                    )
-                });
+                let l_info = self
+                    .left
+                    .as_ref()
+                    .map(|f| (basename(&f.path), file_detail_line(f)));
+                let r_info = self
+                    .right
+                    .as_ref()
+                    .map(|f| (basename(&f.path), file_detail_line(f)));
                 let l_name = l_info
                     .as_ref()
                     .map(|(n, _)| n.clone())

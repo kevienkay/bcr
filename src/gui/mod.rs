@@ -419,9 +419,11 @@ impl DiffApp {
                             let sessions = crate::session::load();
                             if sessions.sessions.is_empty() {
                                 ui.label(
-                                    RichText::new("暂无会话\n用 bcr session save <name> <left> <right> 保存")
-                                        .size(12.0)
-                                        .color(ui.visuals().weak_text_color()),
+                                    RichText::new(
+                                        "暂无会话\n用 bcr session save <name> <left> <right> 保存",
+                                    )
+                                    .size(12.0)
+                                    .color(ui.visuals().weak_text_color()),
                                 );
                             } else {
                                 let mut open_req: Option<(String, String)> = None;
@@ -436,7 +438,10 @@ impl DiffApp {
                                                     format!(
                                                         "{} … {}",
                                                         s.left.chars().take(22).collect::<String>(),
-                                                        s.right.chars().take(22).collect::<String>()
+                                                        s.right
+                                                            .chars()
+                                                            .take(22)
+                                                            .collect::<String>()
                                                     )
                                                 } else {
                                                     format!("{} ↔ {}", s.left, s.right)
@@ -444,10 +449,7 @@ impl DiffApp {
                                             );
                                             if ui
                                                 .button(RichText::new(label).size(12.0))
-                                                .on_hover_text(format!(
-                                                    "{} ↔ {}",
-                                                    s.left, s.right
-                                                ))
+                                                .on_hover_text(format!("{} ↔ {}", s.left, s.right))
                                                 .clicked()
                                             {
                                                 open_req = Some((s.left.clone(), s.right.clone()));
@@ -463,16 +465,13 @@ impl DiffApp {
                 ui.add_space(12.0);
                 // ---- 主区：会话类型大按钮（BC 式竖排/网格 + 拖放提示）----
                 ui.vertical(|ui| {
-                    ui.label(
-                        RichText::new("bcr")
-                            .size(34.0)
-                            .strong()
-                            .color(if ui.visuals().dark_mode {
-                                egui::Color32::from_rgb(140, 180, 235)
-                            } else {
-                                egui::Color32::from_rgb(60, 110, 190)
-                            }),
-                    );
+                    ui.label(RichText::new("bcr").size(34.0).strong().color(
+                        if ui.visuals().dark_mode {
+                            egui::Color32::from_rgb(140, 180, 235)
+                        } else {
+                            egui::Color32::from_rgb(60, 110, 190)
+                        },
+                    ));
                     ui.label(
                         RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
                             .size(13.0)
@@ -734,17 +733,13 @@ impl eframe::App for DiffApp {
                     // 关闭按钮（hover 变色）
                     let close_resp = ui
                         .add(
-                            egui::Button::new(
-                                RichText::new("✕").color(if resp.hovered() {
-                                    theme::diff_delete()
-                                } else {
-                                    ui.visuals().weak_text_color()
-                                }),
-                            )
+                            egui::Button::new(RichText::new("✕").color(if resp.hovered() {
+                                theme::diff_delete()
+                            } else {
+                                ui.visuals().weak_text_color()
+                            }))
                             .small()
-                            .corner_radius(eframe::egui::CornerRadius::same(
-                                theme::CORNER as u8,
-                            )),
+                            .corner_radius(eframe::egui::CornerRadius::same(theme::CORNER as u8)),
                         )
                         .on_hover_text(crate::i18n::t(crate::i18n::Key::CloseTab));
                     if close_resp.clicked() {

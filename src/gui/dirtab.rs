@@ -1389,8 +1389,10 @@ impl DirTab {
                 } else {
                     Color32::from_rgb(251, 252, 252)
                 };
-                let (h_rect, _) =
-                    ui.allocate_exact_size(Vec2::new(ui.available_width(), head_h), egui::Sense::hover());
+                let (h_rect, _) = ui.allocate_exact_size(
+                    Vec2::new(ui.available_width(), head_h),
+                    egui::Sense::hover(),
+                );
                 paint_bg(ui, h_rect, Some(head_bg));
                 let head_fg = ui.visuals().weak_text_color();
                 let font = egui::FontId::proportional(12.0);
