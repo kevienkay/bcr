@@ -9,7 +9,7 @@
 //! 运行：cargo test gui::uikit_tests
 
 use crate::gui::csvtab::CsvTab;
-use crate::gui::difftab::DiffTab;
+use crate::gui::difftab::{DiffTab, EditSide};
 use crate::gui::dirtab::{DirTab, ViewFilter};
 use crate::gui::imagetab::ImageTab;
 use crate::gui::mergetab::MergeTab;
@@ -855,4 +855,35 @@ fn fill_empty_session_populates_empty_tabs() {
             _ => panic!("应为 MergeTab"),
         }
     }
+}
+
+// ---- P35-A1：复制差异块到另一侧 ----------------
+
+#[test]
+fn difftab_copy_block_to_other_side() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\n");
+    let r = write(d.path(), "r.txt", "a\nX\nc\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    assert!(!tab.borrow().diff_blocks.is_empty(), "应有差异块");
+    tab.borrow_mut().diff_pos = Some(0);
+    assert!(
+        tab.borrow_mut().copy_block_to(EditSide::Right),
+        "复制左→右应成功"
+    );
+    assert_eq!(fs::read_to_string(&r).unwrap(), "a\nb\nc\n");
+
+    // 反向：复制右→左
+    let l2 = write(d.path(), "l2.txt", "a\nP\nc\n");
+    let r2 = write(d.path(), "r2.txt", "a\nQ\nc\n");
+    let tab2 = RefCell::new(DiffTab::new());
+    tab2.borrow_mut()
+        .load_pair(&l2, &r2, ViewOptions::default());
+    tab2.borrow_mut().diff_pos = Some(0);
+    assert!(
+        tab2.borrow_mut().copy_block_to(EditSide::Left),
+        "复制右→左应成功"
+    );
+    assert_eq!(fs::read_to_string(&l2).unwrap(), "a\nQ\nc\n");
 }

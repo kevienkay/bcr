@@ -257,6 +257,10 @@ pub enum Key {
     OpenLeft,
     /// 打开右侧…
     OpenRight,
+    /// 复制到右侧（P35-A1：把当前差异块左侧内容复制到右侧）
+    CopyToRight,
+    /// 复制到左侧（P35-A1：把当前差异块右侧内容复制到左侧）
+    CopyToLeft,
     /// 统计栏
     StatsPanel,
     /// 忽略空白

@@ -671,6 +671,101 @@ impl DiffTab {
         self.error = Some(fmt(I18nKey::Saved, &["已重做"]));
     }
 
+    // ---- P35-A1：复制差异块到另一侧（BC Copy to Other Side）----
+
+    /// 把当前差异块的内容复制到目标侧（覆盖目标侧该块），入撤销栈。
+    /// `target` 是被覆盖的一侧：Right = 左侧→右侧，Left = 右侧→左侧。
+    pub fn copy_block_to(&mut self, target: EditSide) -> bool {
+        // 定位当前差异块（diff_pos → diff_rows → 所在块）
+        let Some(pos) = self.diff_pos else {
+            return false;
+        };
+        let Some(&cur_row) = self.diff_rows.get(pos) else {
+            return false;
+        };
+        self.copy_block_at(cur_row, target)
+    }
+
+    /// 复制指定行所在的差异块到目标侧（`row` 为 self.rows 的行索引）。
+    /// `target` 是被覆盖的一侧：Right = 左侧→右侧，Left = 右侧→左侧。
+    pub fn copy_block_at(&mut self, row: usize, target: EditSide) -> bool {
+        let Some(&(s, e)) = self
+            .diff_blocks
+            .iter()
+            .find(|&&(s, e)| s <= row && row <= e)
+        else {
+            return false;
+        };
+        let src_is_left = target == EditSide::Right;
+        // 目标侧文件信息（路径 + 编码 + BOM + 原文）
+        let (dst_path, dst_enc, dst_bom, dst_orig) = match target {
+            EditSide::Right => match &self.right {
+                Some(f) => (f.path.clone(), f.encoding, f.had_bom, f.content.clone()),
+                None => return false,
+            },
+            EditSide::Left => match &self.left {
+                Some(f) => (f.path.clone(), f.encoding, f.had_bom, f.content.clone()),
+                None => return false,
+            },
+        };
+        // 重建目标侧全文：块内取源侧，块外保持目标侧原样
+        let mut new_lines: Vec<String> = Vec::new();
+        for (i, row) in self.rows.iter().enumerate() {
+            let in_block = i >= s && i <= e;
+            let (src_cell, dst_cell) = if src_is_left {
+                (&row.left, &row.right)
+            } else {
+                (&row.right, &row.left)
+            };
+            let keep = if in_block {
+                src_cell.as_ref().map(|c| c.text.clone())
+            } else {
+                dst_cell.as_ref().map(|c| c.text.clone())
+            };
+            if let Some(text) = keep {
+                new_lines.push(text);
+            }
+        }
+        let mut new_content = new_lines.join("\n");
+        // 保留原末尾换行特征
+        if dst_orig.ends_with('\n') && !new_content.is_empty() {
+            new_content.push('\n');
+        }
+        if dst_orig == new_content {
+            return false;
+        }
+        // 备份 + 按原编码写回
+        let _ = std::fs::copy(&dst_path, format!("{dst_path}.bak"));
+        let bytes = crate::encoding::encode_back(
+            &crate::encoding::TextFile {
+                text: String::new(),
+                encoding: dst_enc,
+                had_bom: dst_bom,
+                is_binary: false,
+            },
+            &new_content,
+        );
+        if let Err(e) = std::fs::write(&dst_path, bytes) {
+            self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
+            return false;
+        }
+        // 入撤销栈（重做栈清空）
+        self.undo_stack.push(EditSnapshot {
+            side: target,
+            path: dst_path.clone(),
+            before: dst_orig,
+            after: new_content,
+        });
+        self.redo_stack.clear();
+        // 重新加载目标侧并重算
+        match target {
+            EditSide::Right => self.load_right(&dst_path, self.opts.clone()),
+            EditSide::Left => self.load_left(&dst_path, self.opts.clone()),
+        }
+        self.error = Some(fmt(I18nKey::Saved, &["已复制到另一侧"]));
+        true
+    }
+
     // ---- 搜索 ----
 
     pub fn update_search(&mut self) {
@@ -980,7 +1075,30 @@ impl DiffTab {
                     self.redo();
                 }
                 ui.separator();
-                // ---- 操作（BC: Swap/Reload 组）----
+                ui.separator();
+                // ---- 操作（BC: Copy/Swap/Reload 组）----
+                // P35-A1：复制差异块到另一侧（BC Copy to Other Side）
+                let has_diff = self.diff_pos.is_some();
+                if ui
+                    .add_enabled(
+                        has_diff,
+                        egui::Button::new(format!("→ {}", t(I18nKey::CopyToRight))),
+                    )
+                    .on_hover_text("复制当前差异块左侧内容到右侧")
+                    .clicked()
+                {
+                    self.copy_block_to(EditSide::Right);
+                }
+                if ui
+                    .add_enabled(
+                        has_diff,
+                        egui::Button::new(format!("← {}", t(I18nKey::CopyToLeft))),
+                    )
+                    .on_hover_text("复制当前差异块右侧内容到左侧")
+                    .clicked()
+                {
+                    self.copy_block_to(EditSide::Left);
+                }
                 if ui
                     .button(format!("⟳ {}", t(I18nKey::Reload)))
                     .on_hover_text("重新加载 (F5)")
@@ -1547,6 +1665,8 @@ impl DiffTab {
             }
             let mut fold_toggle: Option<usize> = None;
             let mut ignore_req: Option<usize> = None;
+            // P35-A1：右键复制差异块到另一侧请求 (行索引, 目标侧)
+            let mut copy_req: Option<(usize, EditSide)> = None;
 
             // BC 式左右两页：顶部文件名头部（固定视口宽度，不随内容横向滚动移动）
             // P33：两行结构 — 第一行文件名，第二行详情（时间 | 大小 | 编码），对标 BC 5
@@ -1727,11 +1847,28 @@ impl DiffTab {
                     }
                     // P32-A4：行右键菜单（复制路径/打开文件/忽略）——闭包内只收集请求
                     let row_idx = oi;
+                    // P35-A1：该行是否属于某个差异块（决定是否显示“复制到另一侧”）
+                    let row_in_diff = self
+                        .diff_blocks
+                        .iter()
+                        .any(|&(s, e)| s <= row_idx && row_idx <= e);
                     let (lp, rp) = (
                         self.left.as_ref().map(|f| f.path.clone()),
                         self.right.as_ref().map(|f| f.path.clone()),
                     );
                     resp.context_menu(|ui| {
+                        // P35-A1：复制差异块到另一侧（最核心操作，置顶）
+                        if row_in_diff {
+                            if ui.button(t(I18nKey::CopyToRight)).clicked() {
+                                copy_req = Some((row_idx, EditSide::Right));
+                                ui.close();
+                            }
+                            if ui.button(t(I18nKey::CopyToLeft)).clicked() {
+                                copy_req = Some((row_idx, EditSide::Left));
+                                ui.close();
+                            }
+                            ui.separator();
+                        }
                         if let Some(p) = &lp {
                             if ui.button("复制左侧路径").clicked() {
                                 ui.ctx().copy_text(p.clone());
@@ -1785,6 +1922,12 @@ impl DiffTab {
                 }
                 self.inline_edit = inline;
                 self.recompute();
+                return;
+            }
+            // P35-A1：右键复制差异块到另一侧（改变文件内容，清空行内编辑）
+            if let Some((row, side)) = copy_req {
+                self.copy_block_at(row, side);
+                self.inline_edit = None;
                 return;
             }
             // P32-A2：双击行内容 → 进入行内编辑（buf 取该侧当前行文本）
