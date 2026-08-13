@@ -104,6 +104,8 @@ pub struct DiffTab {
     pub wrap: bool,
     /// A11 缩略图总览（右侧迷你差异地图，点击跳转）
     pub show_overview: bool,
+    /// P33：长行横向滚动偏移（两栏固定半屏，超长行栏内左右滑动查看）
+    pub h_scroll: f32,
 }
 
 /// 编辑窗口状态
@@ -160,6 +162,7 @@ impl DiffTab {
             hex_diff_pos: None,
             wrap: false,
             show_overview: true,
+            h_scroll: 0.0,
         }
     }
 
@@ -1081,6 +1084,48 @@ impl DiffTab {
                 {
                     self.replace_all();
                 }
+                // P33：长行横向滚动条（两栏固定各半屏，超长行栏内左右滑动查看）
+                if !self.rows.is_empty() && self.hex.is_none() {
+                    let max_chars = self
+                        .rows
+                        .iter()
+                        .flat_map(|r| [r.left.as_ref(), r.right.as_ref()])
+                        .flatten()
+                        .map(|c| c.text.chars().count())
+                        .max()
+                        .unwrap_or(0);
+                    let max_line_w = max_chars as f32 * 9.0 + 24.0;
+                    let avail = ui.available_width();
+                    let max_no_l = self
+                        .rows
+                        .iter()
+                        .filter_map(|r| r.left_no)
+                        .max()
+                        .unwrap_or(0);
+                    let max_no_r = self
+                        .rows
+                        .iter()
+                        .filter_map(|r| r.right_no)
+                        .max()
+                        .unwrap_or(0);
+                    let gutter_l = crate::gui::common::gutter_width(max_no_l);
+                    let gutter_r = crate::gui::common::gutter_width(max_no_r);
+                    let mid_gap = super::theme::MID_GAP;
+                    let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
+                    let h_max = (max_line_w - half).max(0.0);
+                    if h_max > 0.0 {
+                        ui.separator();
+                        ui.label("↔")
+                            .on_hover_text("长行横向滚动：拖动查看超宽内容");
+                        ui.add(
+                            egui::Slider::new(&mut self.h_scroll, 0.0..=h_max)
+                                .show_value(false)
+                                .custom_formatter(|v, _| format!("{:.0}px", v)),
+                        );
+                    } else {
+                        self.h_scroll = 0.0;
+                    }
+                }
             });
         });
 
@@ -1399,10 +1444,12 @@ impl DiffTab {
                 .unwrap_or(0);
             let gutter_l = gutter_width(max_no_l);
             let gutter_r = gutter_width(max_no_r);
-            // 内容宽度：两栏至少各占半屏；长行不截断，按最长行扩展（超宽时水平拖动查看）
+            // P33：两栏固定各占半屏（BC 式等分），长行栏内横向滚动查看；随窗口缩放自适应
             let avail = ui.available_width();
             let mid_gap = super::theme::MID_GAP;
             let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
+            let content_w = half;
+            // 最长行所需宽度（供横向滚动条范围计算）
             let max_chars = self
                 .rows
                 .iter()
@@ -1411,10 +1458,10 @@ impl DiffTab {
                 .map(|c| c.text.chars().count())
                 .max()
                 .unwrap_or(0);
-            // 9.0px/字符略宽于等宽实际值，确保长行完整显示不被截断
-            let content_w = half.max(max_chars as f32 * 9.0 + 24.0);
+            let max_line_w = max_chars as f32 * 9.0 + 24.0;
             // P32-A1：左右面板之间留空隙画差异连接线（BC 观感）
             let total_w = gutter_l + content_w + mid_gap + gutter_r + content_w;
+            let _ = max_line_w; // P33：横向滚动条范围在工具栏计算（栏宽固定半屏）
             let fg = text_color(ui);
 
             // 匹配行集合（搜索高亮）
@@ -1653,6 +1700,7 @@ impl DiffTab {
                         inline.as_mut().filter(|ie| ie.row == oi),
                         block_start,
                         ignored,
+                        self.h_scroll,
                     );
                     match hit {
                         Some(RowHit::Edit(side)) => dbl = Some((oi, side)),
@@ -1848,6 +1896,8 @@ fn paint_diff_row(
     mut inline: Option<&mut InlineEditState>,
     block_start: Option<usize>,
     ignored: bool,
+    // P33：横向滚动偏移（长行栏内左右滑动查看）
+    h_scroll: f32,
 ) -> (Option<RowHit>, egui::Response) {
     let mid_gap = super::theme::MID_GAP;
     let (rect, resp) = ui.allocate_exact_size(
@@ -1912,7 +1962,15 @@ fn paint_diff_row(
             }
         }
         _ => {
-            paint_cell(ui, content_rect, row.left.as_ref(), fg, hl_l, syn_l);
+            paint_cell(
+                ui,
+                content_rect,
+                row.left.as_ref(),
+                fg,
+                hl_l,
+                syn_l,
+                h_scroll,
+            );
         }
     }
 
@@ -1976,7 +2034,15 @@ fn paint_diff_row(
             }
         }
         _ => {
-            paint_cell(ui, content_rect, row.right.as_ref(), fg, hl_r, syn_r);
+            paint_cell(
+                ui,
+                content_rect,
+                row.right.as_ref(),
+                fg,
+                hl_r,
+                syn_r,
+                h_scroll,
+            );
         }
     }
 

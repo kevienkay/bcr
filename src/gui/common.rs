@@ -54,6 +54,7 @@ pub fn paint_bg(ui: &egui::Ui, rect: Rect, bg: Option<Color32>) {
 
 /// 在单元格内绘制带行内高亮的文本（LayoutJob 分段着色）
 /// syntax 非空时叠加语法前景色（diff 语义管背景，语法管前景）
+/// x_off：横向滚动偏移（P33 长行栏内滑动查看），文本 x -= x_off，clip 保持栏内
 pub fn paint_cell(
     ui: &egui::Ui,
     rect: Rect,
@@ -61,6 +62,7 @@ pub fn paint_cell(
     fg: Color32,
     hl: Option<Color32>,
     syntax: Option<&'static syntect::parsing::SyntaxReference>,
+    x_off: f32,
 ) {
     let Some(cell) = cell else { return };
     // 语法分段：字节偏移 -> (r,g,b)
@@ -98,7 +100,8 @@ pub fn paint_cell(
     let y = rect.center().y - galley.size().y / 2.0;
     // 裁剪到单元格内：长行在栏内截断（BC 式左右两页，不溢出到中线/对侧）
     let painter = ui.painter().with_clip_rect(rect);
-    painter.galley(Pos2::new(rect.left() + 4.0, y), galley, fg);
+    // P33：文本按横向滚动偏移平移（栏内滑动查看长行）
+    painter.galley(Pos2::new(rect.left() + 4.0 - x_off, y), galley, fg);
 }
 
 /// 绘制行号（右对齐在 gutter 内）

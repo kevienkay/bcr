@@ -1469,18 +1469,25 @@ impl eframe::App for DiffApp {
 /// 加载系统中文字体作为 fallback（egui 默认字体不含 CJK，三端中文 UI 都需要）。
 /// 按平台探测常见中文字体路径，找到第一个存在的加载。
 fn install_cjk_fonts(ctx: &egui::Context) {
+    // 每平台候选字体（按优先级），全部存在的都加载为 fallback：
+    // 中/日文（CJK）+ 韩文 + 阿拉伯文，保证 10 语言全部可显示
     let candidates: &[&str] = if cfg!(target_os = "windows") {
         &[
-            "C:\\Windows\\Fonts\\msyh.ttc",   // 微软雅黑
-            "C:\\Windows\\Fonts\\simhei.ttf", // 黑体
-            "C:\\Windows\\Fonts\\simsun.ttc", // 宋体
+            "C:\\Windows\\Fonts\\msyh.ttc",     // 微软雅黑（中日韩）
+            "C:\\Windows\\Fonts\\simhei.ttf",   // 黑体
+            "C:\\Windows\\Fonts\\simsun.ttc",   // 宋体
+            "C:\\Windows\\Fonts\\malgun.ttf",   // Malgun Gothic（韩文）
+            "C:\\Windows\\Fonts\\seguiemj.ttf", // Segoe UI（阿拉伯文）
         ]
     } else if cfg!(target_os = "macos") {
         &[
-            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/PingFang.ttc", // 中日韩
             "/System/Library/Fonts/STHeiti Light.ttc",
             "/System/Library/Fonts/Hiragino Sans GB.ttc",
-            "/Library/Fonts/Arial Unicode.ttf",
+            "/System/Library/Fonts/AppleSDGothicNeo.ttc", // 韩文
+            "/System/Library/Fonts/GeezaPro.ttc",         // 阿拉伯文
+            "/System/Library/Fonts/SFArabic.ttf",         // 阿拉伯文（SF Arabic）
+            "/Library/Fonts/Arial Unicode.ttf",           // 全字符集保底
         ]
     } else {
         &[
@@ -1488,27 +1495,30 @@ fn install_cjk_fonts(ctx: &egui::Context) {
             "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
             "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
             "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            "/usr/share/fonts/opentype/noto/NotoSansKR-Regular.otf", // 韩文（若有）
+            "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", // 阿拉伯（若有）
         ]
     };
-    let Some(path) = candidates.iter().find(|p| std::path::Path::new(p).exists()) else {
-        return;
-    };
-    let Ok(bytes) = std::fs::read(path) else {
-        return;
-    };
     let mut fonts = egui::FontDefinitions::default();
-    fonts
-        .font_data
-        .insert("cjk".to_owned(), egui::FontData::from_owned(bytes).into());
-    // 追加到比例字体与等宽字体末尾作为 fallback，保留默认拉丁字体
-    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        fonts
-            .families
-            .entry(family)
-            .or_default()
-            .push("cjk".to_owned());
+    let mut loaded_any = false;
+    for (i, p) in candidates.iter().enumerate() {
+        if std::path::Path::new(p).exists() {
+            if let Ok(bytes) = std::fs::read(p) {
+                let name = format!("fallback_{i}");
+                fonts
+                    .font_data
+                    .insert(name.clone(), egui::FontData::from_owned(bytes).into());
+                // 追加到比例字体与等宽字体末尾作为 fallback，保留默认拉丁字体
+                for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+                    fonts.families.entry(family).or_default().push(name.clone());
+                }
+                loaded_any = true;
+            }
+        }
     }
-    ctx.set_fonts(fonts);
+    if loaded_any {
+        ctx.set_fonts(fonts);
+    }
 }
 
 /// 运行 GUI 事件循环，返回进程退出码

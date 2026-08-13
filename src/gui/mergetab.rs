@@ -453,7 +453,7 @@ fn paint_merge_row(
     paint_line_no(ui, g, row.base_no);
     let c = Rect::from_min_size(Pos2::new(x + gutter, y), vec2(col_w, ROW_H));
     paint_bg(ui, c, bg_b);
-    paint_cell(ui, c, row.base.as_ref(), fg, None, syn_b);
+    paint_cell(ui, c, row.base.as_ref(), fg, None, syn_b, 0.0);
 
     // LEFT 列
     let xl = x + gutter + col_w;
@@ -462,7 +462,7 @@ fn paint_merge_row(
     paint_line_no(ui, g, None);
     let c = Rect::from_min_size(Pos2::new(xl + gutter, y), vec2(col_w, ROW_H));
     paint_bg(ui, c, bg_l);
-    paint_cell(ui, c, row.left.as_ref(), fg, hl_l, syn_l);
+    paint_cell(ui, c, row.left.as_ref(), fg, hl_l, syn_l, 0.0);
 
     // RIGHT 列
     let xr = xl + gutter + col_w;
@@ -471,7 +471,7 @@ fn paint_merge_row(
     paint_line_no(ui, g, None);
     let c = Rect::from_min_size(Pos2::new(xr + gutter, y), vec2(col_w, ROW_H));
     paint_bg(ui, c, bg_r);
-    paint_cell(ui, c, row.right.as_ref(), fg, hl_r, syn_r);
+    paint_cell(ui, c, row.right.as_ref(), fg, hl_r, syn_r, 0.0);
     resp
 }
 
