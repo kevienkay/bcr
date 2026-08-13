@@ -1005,7 +1005,8 @@ fn dirtab_exclude_hides_file() {
     let d2 = tempdir().unwrap();
     write(d1.path(), "keep.txt", "k");
     write(d1.path(), "hide.txt", "h");
-    write(d2.path(), "keep.txt", "k");
+    // 两侧不同尺寸（k vs kk）：Windows 低精度 mtime 下快速模式必判 Differ，避免被 only_diff 过滤
+    write(d2.path(), "keep.txt", "kk");
     let p1 = d1.path().to_str().unwrap().to_string();
     let p2 = d2.path().to_str().unwrap().to_string();
     let tab = RefCell::new(DirTab::new(&p1, &p2));
