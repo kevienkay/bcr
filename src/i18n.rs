@@ -289,6 +289,8 @@ pub enum Key {
     PrevDiff,
     /// 打开两个文件开始并排对比\n...
     DiffEmptyHint,
+    /// 或拖入文件/目录到对应侧（空会话）
+    DragHint,
     /// 相同 {}
     StatSame,
     /// 删除 {}
@@ -325,6 +327,10 @@ pub enum Key {
     NoDiff,
     /// 选择左右两个目录开始对比（或拖入目录）
     DirEmpty,
+    /// 打开左侧目录…
+    OpenLeftDir,
+    /// 打开右侧目录…
+    OpenRightDir,
 
     // ---- MergeTab ----
     /// 合并: {} ↔ {} ↔ {}
@@ -357,6 +363,8 @@ pub enum Key {
     MergeUnresolved,
     /// ✓ 全部冲突已解决
     MergeAllResolved,
+    /// 打开 BASE…
+    OpenBase,
     /// bcr gui --merge BASE LEFT RIGHT\n或打开三路合并
     MergeEmpty,
     /// 已保存 {}（未解决冲突 {} 处，输出 git 风格冲突标记）

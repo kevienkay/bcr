@@ -98,6 +98,34 @@ impl CsvTab {
         }
     }
 
+    /// P34：打开左侧文件（空会话填充）
+    pub(crate) fn open_left(&mut self) {
+        if let Some(p) = super::pick_file() {
+            self.left = p;
+            self.reload();
+        }
+    }
+
+    /// P34：打开右侧文件（空会话填充）
+    pub(crate) fn open_right(&mut self) {
+        if let Some(p) = super::pick_file() {
+            self.right = p;
+            self.reload();
+        }
+    }
+
+    /// P34：直接填充两侧并重新加载（拖拽/程序化填充）
+    pub(crate) fn load_pair(&mut self, l: &str, r: &str) {
+        self.left = l.to_string();
+        self.right = r.to_string();
+        self.reload();
+    }
+
+    /// P34：是否为空会话（两侧均未选择文件）
+    pub(crate) fn is_empty(&self) -> bool {
+        self.left.is_empty() && self.right.is_empty()
+    }
+
     /// 重新加载：读文件 → 解析 → 对齐
     fn reload(&mut self) {
         self.error = None;
@@ -311,6 +339,33 @@ impl CsvTab {
             return;
         }
         let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            // P34：空会话（两侧均未选择文件）→ 显示打开入口 + 拖拽提示
+            egui::CentralPanel::default().show(ui, |ui| {
+                ui.centered_and_justified(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DiffEmptyHint))
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                        ui.add_space(12.0);
+                        ui.horizontal(|ui| {
+                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                                self.open_left();
+                            }
+                            if ui.button(t(I18nKey::OpenRight)).clicked() {
+                                self.open_right();
+                            }
+                        });
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DragHint))
+                                .size(11.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    });
+                });
+            });
             return;
         };
         let ncols = self.col_count();

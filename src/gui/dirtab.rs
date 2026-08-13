@@ -1397,13 +1397,19 @@ impl DirTab {
                         );
                         ui.add_space(12.0);
                         ui.horizontal(|ui| {
-                            if ui.button("📂 打开左侧目录").clicked() {
+                            if ui.button(t(I18nKey::OpenLeftDir)).clicked() {
                                 self.open_left_dir();
                             }
-                            if ui.button("📂 打开右侧目录").clicked() {
+                            if ui.button(t(I18nKey::OpenRightDir)).clicked() {
                                 self.open_right_dir();
                             }
                         });
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DragHint))
+                                .size(11.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
                     });
                 });
                 return;

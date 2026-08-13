@@ -273,6 +273,11 @@ impl DiffApp {
             .map(|p| p.to_string_lossy().into_owned())
             .collect();
 
+        // P34：空会话优先填充（拖入内容填充当前空会话对应侧，而非新建）
+        if self.fill_empty_session(&dirs, &files) {
+            return;
+        }
+
         match (dirs.as_slice(), files.as_slice()) {
             (_, [..]) if files.len() >= 3 => {
                 // 多个文件：尝试三路合并（前三个）
@@ -307,6 +312,68 @@ impl DiffApp {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// P34：拖入文件/目录时，优先填充当前空会话对应侧（BC 式），成功返回 true
+    fn fill_empty_session(&mut self, dirs: &[String], files: &[String]) -> bool {
+        let Some(tab) = self.tabs.get_mut(self.active) else {
+            return false;
+        };
+        match tab {
+            Tab::Dir(t) if t.left.is_empty() && t.right.is_empty() && !dirs.is_empty() => {
+                t.left = dirs[0].clone();
+                if dirs.len() >= 2 {
+                    t.right = dirs[1].clone();
+                }
+                t.refresh();
+                true
+            }
+            Tab::Merge(t)
+                if t.base_path.is_empty()
+                    && t.left_path.is_empty()
+                    && t.right_path.is_empty()
+                    && !files.is_empty() =>
+            {
+                let mut i = 0;
+                if i < files.len() {
+                    t.base_path = files[i].clone();
+                    i += 1;
+                }
+                if i < files.len() {
+                    t.left_path = files[i].clone();
+                    i += 1;
+                }
+                if i < files.len() {
+                    t.right_path = files[i].clone();
+                }
+                t.reload();
+                true
+            }
+            Tab::Csv(t) if t.is_empty() && !files.is_empty() => {
+                let l = files[0].clone();
+                let r = files.get(1).cloned().unwrap_or_default();
+                t.load_pair(&l, &r);
+                true
+            }
+            Tab::Image(t) if t.left.is_empty() && t.right.is_empty() && !files.is_empty() => {
+                let l = files[0].clone();
+                let r = files.get(1).cloned().unwrap_or_default();
+                t.load_pair(&l, &r);
+                true
+            }
+            Tab::Diff(t)
+                if t.left.is_none()
+                    && t.right.is_none()
+                    && !files.is_empty()
+                    && files.len() < 3 =>
+            {
+                let l = files[0].clone();
+                let r = files.get(1).cloned().unwrap_or_default();
+                t.load_pair(&l, &r, t.opts.clone());
+                true
+            }
+            _ => false,
         }
     }
 

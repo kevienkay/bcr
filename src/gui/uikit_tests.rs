@@ -773,3 +773,86 @@ fn difftab_hex_diff_navigation_via_keys() {
         "hex 跳转应设置滚动偏移"
     );
 }
+
+// ---- P34：空会话入口 + 拖拽填充 ----------------
+
+#[test]
+fn empty_diff_tab_shows_open_buttons() {
+    let tab = RefCell::new(DiffTab::new());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 空文本对比会话：显示分别打开左右侧按钮（BC 式，不强求一次选满两个）
+    assert!(h.query_all_by_label_contains("打开左侧").next().is_some());
+    assert!(h.query_all_by_label_contains("打开右侧").next().is_some());
+}
+
+#[test]
+fn empty_csv_tab_shows_open_buttons() {
+    let tab = RefCell::new(CsvTab::new("", ""));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert!(h.query_all_by_label_contains("打开左侧").next().is_some());
+    assert!(h.query_all_by_label_contains("打开右侧").next().is_some());
+}
+
+#[test]
+fn fill_empty_session_populates_empty_tabs() {
+    let d = tempdir().unwrap();
+    let f1 = write(d.path(), "a.txt", "a\n");
+    let f2 = write(d.path(), "b.txt", "b\n");
+    let dir1 = d.path().join("d1");
+    let dir2 = d.path().join("d2");
+    fs::create_dir_all(&dir1).unwrap();
+    fs::create_dir_all(&dir2).unwrap();
+
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+
+    // 空 DirTab：拖目录 → 填充左右两侧
+    app.borrow_mut()
+        .add_tab(super::Tab::Dir(DirTab::new("", "")));
+    let dirs = vec![
+        dir1.to_string_lossy().into_owned(),
+        dir2.to_string_lossy().into_owned(),
+    ];
+    assert!(app.borrow_mut().fill_empty_session(&dirs, &[]));
+    {
+        let app = app.borrow();
+        match &app.tabs[app.active] {
+            super::Tab::Dir(t) => {
+                assert!(!t.left.is_empty());
+                assert!(!t.right.is_empty());
+            }
+            _ => panic!("应为 DirTab"),
+        }
+    }
+
+    // 空 CsvTab：拖文件 → 填充左右两侧并加载
+    app.borrow_mut()
+        .add_tab(super::Tab::Csv(CsvTab::new("", "")));
+    let files = vec![f1.clone(), f2.clone()];
+    assert!(app.borrow_mut().fill_empty_session(&[], &files));
+    {
+        let app = app.borrow();
+        match &app.tabs[app.active] {
+            super::Tab::Csv(t) => assert!(!t.is_empty()),
+            _ => panic!("应为 CsvTab"),
+        }
+    }
+
+    // 空 MergeTab：拖 3 文件 → 填充 BASE/LEFT/RIGHT
+    app.borrow_mut()
+        .add_tab(super::Tab::Merge(MergeTab::new("", "", "")));
+    let files3 = vec![f1.clone(), f2.clone(), f1.clone()];
+    assert!(app.borrow_mut().fill_empty_session(&[], &files3));
+    {
+        let app = app.borrow();
+        match &app.tabs[app.active] {
+            super::Tab::Merge(t) => {
+                assert!(!t.base_path.is_empty());
+                assert!(!t.left_path.is_empty());
+                assert!(!t.right_path.is_empty());
+            }
+            _ => panic!("应为 MergeTab"),
+        }
+    }
+}

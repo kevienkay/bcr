@@ -338,16 +338,22 @@ impl MergeTab {
                         ui.add_space(12.0);
                         // P34：分别打开 BASE/LEFT/RIGHT（BC 式：不强求一次选满三个）
                         ui.horizontal(|ui| {
-                            if ui.button("B BASE").clicked() {
+                            if ui.button(t(I18nKey::OpenBase)).clicked() {
                                 self.open_base();
                             }
-                            if ui.button("← LEFT").clicked() {
+                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
                                 self.open_left();
                             }
-                            if ui.button("→ RIGHT").clicked() {
+                            if ui.button(t(I18nKey::OpenRight)).clicked() {
                                 self.open_right();
                             }
                         });
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DragHint))
+                                .size(11.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
                     });
                 });
                 return;

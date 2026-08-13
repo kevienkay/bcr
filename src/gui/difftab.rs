@@ -1437,6 +1437,12 @@ impl DiffTab {
                                 self.open_right_dialog();
                             }
                         });
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new(t(I18nKey::DragHint))
+                                .size(11.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
                     });
                 });
                 return;

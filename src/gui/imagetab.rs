@@ -3,6 +3,7 @@
 //! 打开流程：`open_diff_files` / 目录双击 / 拖放时检测两侧文件魔数，
 //! 若均为图片则创建 `ImageTab` 而非 `DiffTab`。
 
+use crate::i18n::{t, Key as I18nKey};
 use crate::imgcmp::ImgPair;
 use eframe::egui::{self, Color32, RichText};
 use image::RgbaImage;
@@ -83,6 +84,22 @@ impl ImageTab {
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_else(|| self.right.clone())
         )
+    }
+
+    /// P34：打开左侧图片（空会话填充）
+    pub fn open_left(&mut self) {
+        if let Some(p) = super::pick_file() {
+            let r = self.right.clone();
+            self.load_pair(&p, &r);
+        }
+    }
+
+    /// P34：打开右侧图片（空会话填充）
+    pub fn open_right(&mut self) {
+        if let Some(p) = super::pick_file() {
+            let l = self.left.clone();
+            self.load_pair(&l, &p);
+        }
     }
 
     /// 加载两侧图片全部帧并计算差异（失败时 error 置位，pair 清空）
@@ -355,7 +372,29 @@ impl ImageTab {
         if self.pair.is_none() && self.left.is_empty() {
             egui::CentralPanel::default().show(ui, |ui| {
                 ui.centered_and_justified(|ui| {
-                    ui.label(RichText::new("拖入或选择右侧图片").size(16.0));
+                    ui.vertical(|ui| {
+                        ui.label(
+                            RichText::new(t(I18nKey::DiffEmptyHint))
+                                .size(16.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                        ui.add_space(12.0);
+                        // P34：分别打开左右图片（BC 式）
+                        ui.horizontal(|ui| {
+                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                                self.open_left();
+                            }
+                            if ui.button(t(I18nKey::OpenRight)).clicked() {
+                                self.open_right();
+                            }
+                        });
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new(t(I18nKey::DragHint))
+                                .size(11.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                    });
                 });
             });
             return;
