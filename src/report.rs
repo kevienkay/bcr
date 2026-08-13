@@ -194,10 +194,10 @@ fn format_entry_line(e: &crate::compare::FileEntry, fields: &[ReportField]) -> S
     if fields.contains(&ReportField::Mtime) {
         let m = match (&e.left, &e.right) {
             (Some(l), Some(r)) => {
-                format!("  [{} ↔ {}]", fmt_mtime(l.mtime), fmt_mtime(r.mtime))
+                format!("  [{} ↔ {}]", fmt_mtime_pub(l.mtime), fmt_mtime_pub(r.mtime))
             }
-            (Some(l), None) => format!("  [{}]", fmt_mtime(l.mtime)),
-            (None, Some(r)) => format!("  [{}]", fmt_mtime(r.mtime)),
+            (Some(l), None) => format!("  [{}]", fmt_mtime_pub(l.mtime)),
+            (None, Some(r)) => format!("  [{}]", fmt_mtime_pub(r.mtime)),
             (None, None) => String::new(),
         };
         line.push_str(&m);
@@ -271,13 +271,13 @@ pub fn render_csv_opts(
                     cols.push(
                         e.left
                             .as_ref()
-                            .map(|m| fmt_mtime(m.mtime))
+                            .map(|m| fmt_mtime_pub(m.mtime))
                             .unwrap_or_default(),
                     );
                     cols.push(
                         e.right
                             .as_ref()
-                            .map(|m| fmt_mtime(m.mtime))
+                            .map(|m| fmt_mtime_pub(m.mtime))
                             .unwrap_or_default(),
                     );
                 }
@@ -315,7 +315,7 @@ pub fn render_csv(left: &str, right: &str, result: &CompareResult) -> String {
 }
 
 /// SystemTime → 可读时间串（%Y-%m-%d %H:%M:%S UTC）
-fn fmt_mtime(t: std::time::SystemTime) -> String {
+pub fn fmt_mtime_pub(t: std::time::SystemTime) -> String {
     let secs = t
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

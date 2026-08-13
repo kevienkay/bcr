@@ -15,6 +15,10 @@ pub struct LoadedFile {
     pub had_bom: bool,
     /// 按路径解析的语法（无匹配 = None，纯文本）
     pub syntax: Option<&'static syntect::parsing::SyntaxReference>,
+    /// P33：文件大小（详情行显示）
+    pub size: u64,
+    /// P33：修改时间可读串（详情行显示）
+    pub mtime: String,
 }
 
 /// 搜索状态
@@ -225,6 +229,8 @@ impl DiffTab {
                     encoding: lf.encoding,
                     had_bom: lf.had_bom,
                     syntax: crate::highlight::syntax_for(l),
+                    size: file_size(l),
+                    mtime: file_mtime_str(l),
                 });
                 self.right = Some(LoadedFile {
                     path: r.to_string(),
@@ -232,6 +238,8 @@ impl DiffTab {
                     encoding: rf.encoding,
                     had_bom: rf.had_bom,
                     syntax: crate::highlight::syntax_for(r),
+                    size: file_size(r),
+                    mtime: file_mtime_str(r),
                 });
                 self.recompute();
                 self.error = None;
@@ -255,6 +263,8 @@ impl DiffTab {
                     encoding: tf.encoding,
                     had_bom: tf.had_bom,
                     syntax: crate::highlight::syntax_for(path),
+                    size: file_size(path),
+                    mtime: file_mtime_str(path),
                 });
                 self.recompute();
                 self.error = None;
@@ -277,6 +287,8 @@ impl DiffTab {
                     encoding: tf.encoding,
                     had_bom: tf.had_bom,
                     syntax: crate::highlight::syntax_for(path),
+                    size: file_size(path),
+                    mtime: file_mtime_str(path),
                 });
                 self.recompute();
                 self.error = None;
@@ -1472,42 +1484,64 @@ impl DiffTab {
             let mut ignore_req: Option<usize> = None;
 
             // BC 式左右两页：顶部文件名头部（固定视口宽度，不随内容横向滚动移动）
+            // P33：两行结构 — 第一行文件名，第二行详情（时间 | 大小 | 编码），对标 BC 5
             {
-                let head_h = 26.0;
+                let head_h = 42.0;
                 let head_bg = if ui.visuals().dark_mode {
                     Some(Color32::from_gray(38))
                 } else {
                     Some(Color32::from_gray(230))
                 };
-                let l_name = self
-                    .left
-                    .as_ref()
-                    .map(|f| basename(&f.path))
-                    .unwrap_or_else(|| t(I18nKey::OpenLeft).to_string());
-                let r_name = self
-                    .right
-                    .as_ref()
-                    .map(|f| basename(&f.path))
-                    .unwrap_or_else(|| t(I18nKey::OpenRight).to_string());
                 let head_fg = if ui.visuals().dark_mode {
                     Color32::from_rgb(150, 190, 240)
                 } else {
                     Color32::from_rgb(60, 110, 190)
                 };
+                let detail_fg = ui.visuals().weak_text_color();
+                // 每侧头部信息：文件名 + 详情行
+                let l_info = self.left.as_ref().map(|f| {
+                    (
+                        basename(&f.path),
+                        file_detail_line(f),
+                    )
+                });
+                let r_info = self.right.as_ref().map(|f| {
+                    (
+                        basename(&f.path),
+                        file_detail_line(f),
+                    )
+                });
+                let l_name = l_info
+                    .as_ref()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_else(|| t(I18nKey::OpenLeft).to_string());
+                let r_name = r_info
+                    .as_ref()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_else(|| t(I18nKey::OpenRight).to_string());
+                let l_detail = l_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
+                let r_detail = r_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
                 // 头部两栏各占视口半宽（gutter + half），长行内容超宽时头部不跟随滚动
                 let head_l_w = gutter_l + half;
                 let head_r_w = gutter_r + half;
                 ui.horizontal(|ui| {
-                    // 左头部
+                    // 左头部：两行（文件名 13px + 详情 11px）
                     let (l_rect, _) =
                         ui.allocate_exact_size(Vec2::new(head_l_w, head_h), egui::Sense::hover());
                     paint_bg(ui, l_rect, head_bg);
                     ui.painter().text(
-                        Pos2::new(l_rect.left() + 10.0, l_rect.center().y),
+                        Pos2::new(l_rect.left() + 10.0, l_rect.top() + 11.0),
                         egui::Align2::LEFT_CENTER,
                         l_name,
                         egui::FontId::proportional(13.0),
                         head_fg,
+                    );
+                    ui.painter().text(
+                        Pos2::new(l_rect.left() + 10.0, l_rect.top() + 30.0),
+                        egui::Align2::LEFT_CENTER,
+                        l_detail,
+                        egui::FontId::proportional(11.0),
+                        detail_fg,
                     );
                     // 中间空隙
                     ui.allocate_exact_size(Vec2::new(mid_gap, head_h), egui::Sense::hover());
@@ -1516,11 +1550,18 @@ impl DiffTab {
                         ui.allocate_exact_size(Vec2::new(head_r_w, head_h), egui::Sense::hover());
                     paint_bg(ui, r_rect, head_bg);
                     ui.painter().text(
-                        Pos2::new(r_rect.left() + 10.0, r_rect.center().y),
+                        Pos2::new(r_rect.left() + 10.0, r_rect.top() + 11.0),
                         egui::Align2::LEFT_CENTER,
                         r_name,
                         egui::FontId::proportional(13.0),
                         head_fg,
+                    );
+                    ui.painter().text(
+                        Pos2::new(r_rect.left() + 10.0, r_rect.top() + 30.0),
+                        egui::Align2::LEFT_CENTER,
+                        r_detail,
+                        egui::FontId::proportional(11.0),
+                        detail_fg,
                     );
                 });
                 ui.separator();
@@ -1975,6 +2016,48 @@ fn basename(p: &str) -> String {
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| p.to_string())
+}
+
+/// P33：文件大小（详情行显示，BC 式 "12,345 bytes"）
+fn file_size(p: &str) -> u64 {
+    std::fs::metadata(p).map(|m| m.len()).unwrap_or(0)
+}
+
+/// P33：修改时间可读串（详情行显示，BC 式 "2026-08-13 08:09:20"）
+fn file_mtime_str(p: &str) -> String {
+    let meta = match std::fs::metadata(p) {
+        Ok(m) => m,
+        Err(_) => return String::new(),
+    };
+    let t = match meta.modified() {
+        Ok(t) => t,
+        Err(_) => return String::new(),
+    };
+    crate::report::fmt_mtime_pub(t)
+}
+
+/// P33：文件详情行（BC 式 "时间 | 大小 bytes | 编码"）
+fn file_detail_line(f: &LoadedFile) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !f.mtime.is_empty() {
+        parts.push(f.mtime.clone());
+    }
+    if f.size > 0 {
+        parts.push(format!("{} bytes", f.size));
+    }
+    // 编码 + BOM 标记
+    let mut enc = f.encoding.name().to_string();
+    if f.had_bom {
+        enc.push_str(" BOM");
+    }
+    parts.push(enc);
+    // 语法名（如 Python/JavaScript），BC 的 "Delphi Source" 语义
+    if let Some(syn) = f.syntax {
+        if !syn.name.is_empty() {
+            parts.push(syn.name.clone());
+        }
+    }
+    parts.join("  |  ")
 }
 
 /// A4：替换 content 中指定行（1-based）里的第一个匹配。返回是否替换。
