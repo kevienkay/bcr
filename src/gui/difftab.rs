@@ -5,6 +5,15 @@ use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::sideview::{build_rows, RowTag, SideRow, Stats, ViewOptions};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
 
+/// P35-A3：文本对比视图过滤（BC Show All/Differences/Same/Context）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffViewFilter {
+    All,
+    Diff,
+    Same,
+    Context,
+}
+
 /// 加载的文件
 #[derive(Clone)]
 pub struct LoadedFile {
@@ -108,6 +117,10 @@ pub struct DiffTab {
     pub h_scroll: f32,
     /// P35-A4：显示空白符（空格→·、制表符→→）
     pub show_whitespace: bool,
+    /// P35-A3：视图过滤（All/Diff/Same/Context）
+    pub view_filter: DiffViewFilter,
+    /// P35-A3：Context 模式上下文行数
+    pub context_lines: usize,
 }
 
 /// 编辑窗口状态
@@ -166,6 +179,8 @@ impl DiffTab {
             show_overview: true,
             h_scroll: 0.0,
             show_whitespace: false,
+            view_filter: DiffViewFilter::All,
+            context_lines: 3,
         }
     }
 
@@ -795,6 +810,29 @@ impl DiffTab {
         self.error = Some(fmt(I18nKey::Saved, &["已交换左右"]));
     }
 
+    /// P35-A3：判断原始行 oi 是否应显示（视图过滤 All/Diff/Same/Context）
+    pub(crate) fn row_visible(
+        &self,
+        oi: usize,
+        diff_set: &std::collections::HashSet<usize>,
+    ) -> bool {
+        match self.view_filter {
+            DiffViewFilter::All => true,
+            DiffViewFilter::Diff => diff_set.contains(&oi),
+            DiffViewFilter::Same => !diff_set.contains(&oi),
+            DiffViewFilter::Context => {
+                if diff_set.contains(&oi) {
+                    return true;
+                }
+                let ctx = self.context_lines as isize;
+                let oi_i = oi as isize;
+                self.diff_rows
+                    .iter()
+                    .any(|&d| (d as isize - oi_i).abs() <= ctx)
+            }
+        }
+    }
+
     // ---- 搜索 ----
 
     pub fn update_search(&mut self) {
@@ -1040,6 +1078,31 @@ impl DiffTab {
                 }
                 ui.separator();
                 // ---- 显示选项（BC: 显示过滤/规则组）----
+                // P35-A3：视图过滤下拉（Show All/Diff/Same/Context）
+                {
+                    let filters = [
+                        (DiffViewFilter::All, t(I18nKey::ShowAll)),
+                        (DiffViewFilter::Diff, t(I18nKey::OnlyDiff)),
+                        (DiffViewFilter::Same, t(I18nKey::ShowSame)),
+                        (DiffViewFilter::Context, t(I18nKey::ShowContext)),
+                    ];
+                    let cur = self.view_filter;
+                    egui::ComboBox::from_id_salt("diff_view_filter")
+                        .selected_text(
+                            filters
+                                .iter()
+                                .find(|(v, _)| *v == cur)
+                                .map(|(_, l)| *l)
+                                .unwrap_or(""),
+                        )
+                        .show_ui(ui, |ui| {
+                            for (v, l) in &filters {
+                                if ui.selectable_label(cur == *v, *l).clicked() {
+                                    self.view_filter = *v;
+                                }
+                            }
+                        });
+                }
                 ui.checkbox(&mut self.show_stats, t(I18nKey::StatsPanel))
                     .changed();
                 if ui
@@ -1679,8 +1742,15 @@ impl DiffTab {
             let mut placed_block: std::collections::HashSet<usize> =
                 std::collections::HashSet::new();
             let mut seen_first: std::collections::HashSet<usize> = std::collections::HashSet::new();
+            // P35-A3：差异行集合（视图过滤用）
+            let diff_set: std::collections::HashSet<usize> =
+                self.diff_rows.iter().copied().collect();
             for vi in 0..display_rows.len() {
                 let oi = orig_of(vi);
+                // P35-A3：视图过滤（All/Diff/Same/Context）
+                if !self.row_visible(oi, &diff_set) {
+                    continue;
+                }
                 // oi 属于哪个差异块？
                 let blk = self
                     .diff_blocks

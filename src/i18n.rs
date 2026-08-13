@@ -319,10 +319,14 @@ pub enum Key {
     Refresh,
     /// 内容比对(哈希)
     ContentHash,
+    /// 显示所有（P35-A3：视图过滤）
+    ShowAll,
     /// 仅显示差异
     OnlyDiff,
     /// 显示相同
     ShowSame,
+    /// 显示上下文（P35-A3：差异行+前后 N 行）
+    ShowContext,
     /// 包含 glob（逗号分隔）
     IncludeGlob,
     /// 排除 glob（逗号分隔）

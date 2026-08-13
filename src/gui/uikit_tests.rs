@@ -9,7 +9,7 @@
 //! 运行：cargo test gui::uikit_tests
 
 use crate::gui::csvtab::CsvTab;
-use crate::gui::difftab::{DiffTab, EditSide};
+use crate::gui::difftab::{DiffTab, DiffViewFilter, EditSide};
 use crate::gui::dirtab::{DirTab, ViewFilter};
 use crate::gui::imagetab::ImageTab;
 use crate::gui::mergetab::MergeTab;
@@ -911,4 +911,34 @@ fn visible_ws_replaces_space_and_tab() {
     assert_eq!(visible_ws(""), "");
     assert_eq!(visible_ws("普通文本"), "普通文本");
     assert_eq!(visible_ws("  \t"), "··→");
+}
+
+// ---- P35-A3：视图过滤 ----------------
+
+#[test]
+fn difftab_view_filter_diff_and_context() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\nd\ne\n");
+    let r = write(d.path(), "r.txt", "a\nX\nc\nd\nY\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // diff_rows = [1, 4]（第 2/5 行差异）
+    let t = tab.borrow();
+    let diff_set: std::collections::HashSet<usize> = t.diff_rows.iter().copied().collect();
+    drop(t);
+    // Diff 过滤：差异行显示，相同行不显示
+    tab.borrow_mut().view_filter = DiffViewFilter::Diff;
+    let t = tab.borrow();
+    assert!(t.row_visible(1, &diff_set));
+    assert!(t.row_visible(4, &diff_set));
+    assert!(!t.row_visible(0, &diff_set));
+    drop(t);
+    // Context 过滤（默认 3 行上下文）：相同行靠近差异行也显示
+    tab.borrow_mut().view_filter = DiffViewFilter::Context;
+    let t = tab.borrow();
+    assert!(t.row_visible(1, &diff_set));
+    assert!(t.row_visible(0, &diff_set)); // 距差异行 1 <= 3
+    assert!(t.row_visible(2, &diff_set)); // 距差异行 1 <= 3
+    assert!(t.row_visible(3, &diff_set)); // 距差异行 1 <= 3
+    assert!(t.row_visible(4, &diff_set));
 }
