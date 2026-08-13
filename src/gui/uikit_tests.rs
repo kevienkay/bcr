@@ -239,6 +239,73 @@ fn mergetab_take_left_resolves_conflict() {
     );
 }
 
+// ---- P37-1b：三路合并导航（BC Clear Conflict Section, Next / Taken 导航） ----------------
+
+#[test]
+fn mergetab_clear_conflict_next_resolves_and_advances() {
+    // 两个冲突块：Clear Conflict Section, Next 应解决当前（默认取左）并跳到下一冲突
+    let d = tempdir().unwrap();
+    let base = write(d.path(), "base.txt", "l1\nX2\nl3\nl4\nX5\nl6\n");
+    let left = write(d.path(), "left.txt", "l1\nL2\nl3\nl4\nL5\nl6\n");
+    let right = write(d.path(), "right.txt", "l1\nR2\nl3\nl4\nR5\nl6\n");
+    let tab = RefCell::new(MergeTab::new(&base, &left, &right));
+    {
+        let t = tab.borrow();
+        assert_eq!(t.view.conflicts, 2, "前置：两个冲突块");
+    }
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 点击「清除冲突并跳下一」
+    h.get_by_label_contains("清除冲突并跳下一").click();
+    h.run();
+    let t = tab.borrow();
+    // 第一个冲突块已解决为 Left
+    let bi0 = t.view.conflict_block_indices[0];
+    assert_eq!(
+        t.view.blocks[bi0].resolution,
+        crate::mergeview::Resolution::Left,
+        "清除后第一块应默认取左"
+    );
+    // 已跳到第二个冲突块（conflict_idx 前进）
+    assert_eq!(t.conflict_idx, Some(1), "应跳到下一冲突区段");
+}
+
+#[test]
+fn mergetab_taken_nav_jumps_to_resolved_blocks() {
+    // 三个冲突块（用相同行隔开避免块合并）：第 1 个取左、第 3 个取右 → 采用左导航应落在第 1 个
+    let d = tempdir().unwrap();
+    let base = write(d.path(), "base.txt", "X1\nk2\nY3\nk4\nZ5\nk6\n");
+    let left = write(d.path(), "left.txt", "L1\nk2\nL3\nk4\nL5\nk6\n");
+    let right = write(d.path(), "right.txt", "R1\nk2\nR3\nk4\nR5\nk6\n");
+    let tab = RefCell::new(MergeTab::new(&base, &left, &right));
+    {
+        let mut t = tab.borrow_mut();
+        assert_eq!(t.view.conflicts, 3, "前置：三个冲突块");
+        // 第 1 个取左、第 3 个取右（先拷贝索引避免借用冲突）
+        let bi0 = t.view.conflict_block_indices[0];
+        let bi2 = t.view.conflict_block_indices[2];
+        t.view.blocks[bi0].resolution = crate::mergeview::Resolution::Left;
+        t.view.blocks[bi2].resolution = crate::mergeview::Resolution::Right;
+    }
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 下一采用左：应跳到第 1 个冲突块
+    h.get_by_label_contains("下一采用左").click();
+    h.run();
+    {
+        let t = tab.borrow();
+        assert_eq!(t.conflict_idx, Some(0), "采用左导航应落在第 1 块");
+        assert_eq!(t.scroll.y, 0.0, "应滚到第一个块顶部");
+    }
+    // 下一采用右：应跳到第 3 个冲突块
+    h.get_by_label_contains("下一采用右").click();
+    h.run();
+    {
+        let t = tab.borrow();
+        assert_eq!(t.conflict_idx, Some(2), "采用右导航应落在第 3 块");
+    }
+}
+
 // ---- P32-A1：差异连接线（mid_gap 布局） -------------
 
 #[test]

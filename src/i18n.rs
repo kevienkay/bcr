@@ -367,6 +367,20 @@ pub enum Key {
     TakeLeftThenRight,
     /// 采用右边然后左边（顺序合并，P37-1）
     TakeRightThenLeft,
+    /// 清除当前冲突并跳下一冲突区段（BC Clear Conflict Section, Next）
+    ClearConflictNext,
+    /// 下一差异（MergeTab，区别于 DiffTab 的 NextDiff）
+    MergeNextDiff,
+    /// 上一差异（MergeTab）
+    MergePrevDiff,
+    /// 下一处采用左侧
+    NextLeftTaken,
+    /// 上一处采用左侧
+    PrevLeftTaken,
+    /// 下一处采用右侧
+    NextRightTaken,
+    /// 上一处采用右侧
+    PrevRightTaken,
     /// 未解决（默认取左）
     ResAuto,
     /// 已解决

@@ -29,6 +29,13 @@ fn with_diff_tab(app: &mut DiffApp, f: impl FnOnce(&mut super::difftab::DiffTab)
     }
 }
 
+/// P37-1b：对当前标签为 MergeTab 时执行操作（三路合并导航转发）
+fn with_merge_tab(app: &mut DiffApp, f: impl FnOnce(&mut super::mergetab::MergeTab)) {
+    if let Some(Tab::Merge(t)) = app.tabs.get_mut(app.active) {
+        f(t);
+    }
+}
+
 /// Session：新建各类会话 + 保存会话
 fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuSession), |ui| {
@@ -127,8 +134,54 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
 }
 
 /// Search：查找 / 下一差异 / 上一差异（转发当前标签）
+///
+/// P37-1b：DiffTab 转发差异导航；MergeTab 转发差异/冲突/采用导航（BC Text Merge 搜索菜单）
 fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuSearch), |ui| {
+        // MergeTab：三路合并导航（BC Text Merge 搜索菜单）
+        if matches!(app.tabs.get(app.active), Some(Tab::Merge(_))) {
+            if ui.button(t(I18nKey::ClearConflictNext)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.clear_conflict_next());
+            }
+            ui.separator();
+            if ui.button(t(I18nKey::NextConflict)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.next_conflict());
+            }
+            if ui.button(t(I18nKey::PrevConflict)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.prev_conflict());
+            }
+            ui.separator();
+            if ui.button(t(I18nKey::NextDiff)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.next_diff());
+            }
+            if ui.button(t(I18nKey::PrevDiff)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.prev_diff());
+            }
+            ui.separator();
+            if ui.button(t(I18nKey::NextLeftTaken)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.next_taken_left());
+            }
+            if ui.button(t(I18nKey::PrevLeftTaken)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.prev_taken_left());
+            }
+            if ui.button(t(I18nKey::NextRightTaken)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.next_taken_right());
+            }
+            if ui.button(t(I18nKey::PrevRightTaken)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.prev_taken_right());
+            }
+            return;
+        }
+        // DiffTab：查找 / 差异导航 / 重载
         if ui.button(t(I18nKey::MenuFind)).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_search());

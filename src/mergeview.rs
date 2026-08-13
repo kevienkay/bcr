@@ -75,6 +75,10 @@ pub struct MergeView {
     pub conflict_rows: Vec<usize>,
     /// 每个冲突块在 blocks 中的索引（与 conflict_rows 一一对应）
     pub conflict_block_indices: Vec<usize>,
+    /// 每个非 Context 块（LeftOnly/RightOnly/Same/Conflict）起始行索引（rows 内，P37-1b）
+    pub diff_rows: Vec<usize>,
+    /// 每个非 Context 块在 blocks 中的索引（与 diff_rows 一一对应，P37-1b）
+    pub diff_block_indices: Vec<usize>,
 }
 
 /// 构建三路合并视图
@@ -102,6 +106,11 @@ pub fn build_merge_view(base: &str, left: &str, right: &str) -> MergeView {
             view.conflict_rows.push(view.rows.len());
             // blocks 尚未 push，当前长度即本块在 blocks 中的下标
             view.conflict_block_indices.push(view.blocks.len());
+        }
+        // P37-1b：非 Context 块都纳入差异导航
+        if kind != BlockKind::Context {
+            view.diff_rows.push(view.rows.len());
+            view.diff_block_indices.push(view.blocks.len());
         }
         expand_block(blk, &base_lines, kind, &mut view);
         view.blocks.push(info);
@@ -477,5 +486,50 @@ mod tests {
         // 该行属于冲突块（in_conflict 标记一致）
         assert!(v.rows[row].in_conflict);
         assert_eq!(v.blocks[bi].kind, BlockKind::Conflict);
+    }
+
+    #[test]
+    fn diff_rows_cover_all_non_context_blocks() {
+        // P37-1b：LeftOnly + RightOnly + Conflict 都应进入 diff_rows（间隔远避免块合并）
+        let v = build_merge_view(
+            "l1\nl2\nl3\nl4\nl5\nl6\n",
+            "L1\nl2\nl3\nl4\nl5\nL6\n",
+            "l1\nl2\nl3\nR4\nl5\nR6\n",
+        );
+        // 第 1 行左改 → LeftOnly；第 4 行右改 → RightOnly；第 6 行两侧不同改动 → Conflict
+        assert!(
+            v.diff_rows.len() >= 3,
+            "应覆盖所有非 Context 块: {}",
+            v.diff_rows.len()
+        );
+        for &bi in &v.diff_block_indices {
+            assert_ne!(v.blocks[bi].kind, BlockKind::Context);
+        }
+        // diff_block_indices 与 diff_rows 一一对应，且均落在 rows 范围内
+        for (&row, &bi) in v.diff_rows.iter().zip(v.diff_block_indices.iter()) {
+            assert!(row < v.rows.len());
+            assert!(bi < v.blocks.len());
+        }
+    }
+
+    #[test]
+    fn diff_rows_include_same_change() {
+        // P37-1b：Same（两侧相同改动）也是差异，应进 diff_rows
+        let v = build_merge_view("l1\nX\nl3\n", "l1\nZ\nl3\n", "l1\nZ\nl3\n");
+        assert_eq!(v.conflicts, 0);
+        assert!(
+            v.blocks.iter().any(|b| b.kind == BlockKind::Same),
+            "前置：应有 Same 块"
+        );
+        assert!(
+            !v.diff_rows.is_empty(),
+            "Same 块应计入 diff_rows: {}",
+            v.diff_rows.len()
+        );
+        assert_eq!(
+            v.blocks[v.diff_block_indices[0]].kind,
+            BlockKind::Same,
+            "第一个差异块应为 Same"
+        );
     }
 }

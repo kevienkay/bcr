@@ -122,6 +122,144 @@ impl MergeTab {
         }
     }
 
+    /// P37-1b：下一差异（非 Context 块循环跳转）
+    pub fn next_diff(&mut self) {
+        let n = self.view.diff_rows.len();
+        if n == 0 {
+            return;
+        }
+        // 从当前冲突位置向后找最近的差异块；无冲突时从 0 开始
+        let cur = self
+            .conflict_idx
+            .and_then(|k| self.view.conflict_block_indices.get(k).copied());
+        let start = cur
+            .and_then(|bi| self.view.diff_block_indices.iter().position(|&b| b == bi))
+            .unwrap_or(usize::MAX);
+        let next = if start == usize::MAX {
+            0
+        } else {
+            (start + 1) % n
+        };
+        if let Some(&row) = self.view.diff_rows.get(next) {
+            self.jump_to_row(row);
+        }
+    }
+
+    /// P37-1b：上一差异（非 Context 块循环跳转）
+    pub fn prev_diff(&mut self) {
+        let n = self.view.diff_rows.len();
+        if n == 0 {
+            return;
+        }
+        let cur = self
+            .conflict_idx
+            .and_then(|k| self.view.conflict_block_indices.get(k).copied());
+        let start = cur
+            .and_then(|bi| self.view.diff_block_indices.iter().position(|&b| b == bi))
+            .unwrap_or(usize::MAX);
+        let prev = if start == usize::MAX {
+            n - 1
+        } else {
+            (start + n - 1) % n
+        };
+        if let Some(&row) = self.view.diff_rows.get(prev) {
+            self.jump_to_row(row);
+        }
+    }
+
+    /// P37-1b：跳到下一处「采用了左侧」的块（Left / LeftThenRight）
+    pub fn next_taken_left(&mut self) {
+        self.taken_nav(true, true, true);
+    }
+
+    /// P37-1b：跳到上一处「采用了左侧」的块
+    pub fn prev_taken_left(&mut self) {
+        self.taken_nav(false, true, true);
+    }
+
+    /// P37-1b：跳到下一处「采用了右侧」的块（Right / RightThenLeft）
+    pub fn next_taken_right(&mut self) {
+        self.taken_nav(true, false, false);
+    }
+
+    /// P37-1b：跳到上一处「采用了右侧」的块
+    pub fn prev_taken_right(&mut self) {
+        self.taken_nav(false, false, false);
+    }
+
+    /// 采用导航通用实现：循环遍历已解决的块
+    fn taken_nav(&mut self, forward: bool, left: bool, _unused: bool) {
+        use crate::mergeview::Resolution;
+        // 收集匹配 resolution 的块在 diff_block_indices 中的下标
+        let matched: Vec<usize> = self
+            .view
+            .diff_block_indices
+            .iter()
+            .enumerate()
+            .filter(|(_, &bi)| {
+                let r = self.view.blocks[bi].resolution;
+                if left {
+                    matches!(r, Resolution::Left | Resolution::LeftThenRight)
+                } else {
+                    matches!(r, Resolution::Right | Resolution::RightThenLeft)
+                }
+            })
+            .map(|(i, _)| i)
+            .collect();
+        if matched.is_empty() {
+            return;
+        }
+        // 当前位置：从当前冲突块往后找
+        let cur = self
+            .conflict_idx
+            .and_then(|k| self.view.conflict_block_indices.get(k).copied())
+            .and_then(|bi| self.view.diff_block_indices.iter().position(|&b| b == bi))
+            .unwrap_or(usize::MAX);
+        let next = if forward {
+            match cur {
+                usize::MAX => matched[0],
+                c => {
+                    let p = matched.iter().position(|&m| m > c);
+                    match p {
+                        Some(p) => matched[p],
+                        None => matched[0],
+                    }
+                }
+            }
+        } else {
+            match cur {
+                usize::MAX => *matched.last().unwrap(),
+                c => {
+                    let p = matched.iter().rposition(|&m| m < c);
+                    match p {
+                        Some(p) => matched[p],
+                        None => *matched.last().unwrap(),
+                    }
+                }
+            }
+        };
+        if let Some(&row) = self.view.diff_rows.get(next) {
+            self.conflict_idx = self.view.conflict_rows.iter().position(|&r| r == row);
+            self.jump_to_row(row);
+        }
+    }
+
+    /// P37-1b：清除当前冲突（未解决时默认取左）并跳到下一冲突区段（BC Clear Conflict Section, Next）
+    pub fn clear_conflict_next(&mut self) {
+        // 未定位到冲突时，先定位到第一个冲突（BC 语义：当前区段=当前位置）
+        if self.conflict_idx.is_none() {
+            self.next_conflict();
+        }
+        if let Some(bi) = self.current_conflict_block() {
+            if let Some(blk) = self.view.blocks.get_mut(bi) {
+                if blk.resolution == Resolution::Auto {
+                    blk.resolution = Resolution::Left;
+                }
+            }
+        }
+        self.next_conflict();
+    }
+
     pub fn jump_to_row(&mut self, row: usize) {
         self.scroll.y = (row as f32 * ROW_H - 4.0 * ROW_H).max(0.0);
         self.scroll.x = 0.0;
@@ -219,6 +357,46 @@ impl MergeTab {
                     .clicked()
                 {
                     self.prev_conflict();
+                }
+                // P37-1b：清除冲突区段并跳下一（BC Clear Conflict Section, Next）
+                if ui
+                    .button(format!("✖ {}", t(I18nKey::ClearConflictNext)))
+                    .on_hover_text("清除当前冲突（未解决默认取左）并跳到下一冲突区段")
+                    .clicked()
+                {
+                    self.clear_conflict_next();
+                }
+                ui.separator();
+                // P37-1b：差异导航（非 Context 块，BC Next/Previous Difference）
+                if ui
+                    .button(format!("↡ {}", t(I18nKey::MergeNextDiff)))
+                    .on_hover_text("下一差异")
+                    .clicked()
+                {
+                    self.next_diff();
+                }
+                if ui
+                    .button(format!("↟ {}", t(I18nKey::MergePrevDiff)))
+                    .on_hover_text("上一差异")
+                    .clicked()
+                {
+                    self.prev_diff();
+                }
+                ui.separator();
+                // P37-1b：左/右采用导航（BC Next/Previous Left/Right Taken）
+                if ui
+                    .button(format!("◀ {}", t(I18nKey::NextLeftTaken)))
+                    .on_hover_text("下一处采用左侧的区段")
+                    .clicked()
+                {
+                    self.next_taken_left();
+                }
+                if ui
+                    .button(format!("▶ {}", t(I18nKey::NextRightTaken)))
+                    .on_hover_text("下一处采用右侧的区段")
+                    .clicked()
+                {
+                    self.next_taken_right();
                 }
                 ui.separator();
                 if ui.button(format!("← {}", t(I18nKey::TakeLeft))).clicked() {
