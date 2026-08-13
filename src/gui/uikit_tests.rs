@@ -960,3 +960,64 @@ fn dirtab_swap_sides_exchanges_paths() {
     assert_eq!(tab.borrow().left, p2);
     assert_eq!(tab.borrow().right, p1);
 }
+
+// ---- P36-D2：逐文件操作（复制到边/删除/排除）----------------
+
+#[test]
+fn dirtab_copy_single_to_other_side() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "only_left.txt", "L");
+    write(d2.path(), "a.txt", "x");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().refresh_sync();
+    // 复制仅左侧文件 → 右侧
+    tab.borrow_mut().copy_single("only_left.txt", true);
+    assert!(
+        d2.path().join("only_left.txt").exists(),
+        "复制后右侧应出现 only_left.txt"
+    );
+}
+
+#[test]
+fn dirtab_delete_single_removes_file() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "a.txt", "x");
+    write(d2.path(), "right_only.txt", "R");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().refresh_sync();
+    // 删除右侧仅右侧文件
+    tab.borrow_mut().delete_single("right_only.txt", true);
+    assert!(
+        !d2.path().join("right_only.txt").exists(),
+        "删除后右侧不应再有 right_only.txt"
+    );
+}
+
+#[test]
+fn dirtab_exclude_hides_file() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "keep.txt", "k");
+    write(d1.path(), "hide.txt", "h");
+    write(d2.path(), "keep.txt", "k");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().refresh_sync();
+    // 排除 hide.txt 后，重建树不再显示
+    tab.borrow_mut().exclude("hide.txt");
+    assert!(
+        !tab.borrow().flat.iter().any(|r| r.name.contains("hide")),
+        "排除后树中不应有 hide.txt"
+    );
+    assert!(
+        tab.borrow().flat.iter().any(|r| r.name.contains("keep")),
+        "keep.txt 应仍在树中"
+    );
+}

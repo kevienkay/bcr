@@ -88,6 +88,8 @@ pub struct DirTab {
     pub(crate) mtime_to: String,
     /// B2 后台任务（对比/同步在独立线程执行，UI 不卡顿）
     pub bg: Option<BgTask>,
+    /// P36-D2：右键「排除」的文件相对路径集合（会话级）
+    pub(crate) hidden: HashSet<String>,
 }
 
 /// B2 后台任务：线程 + 结果通道 + 暂停/取消标志 + 进度
@@ -205,6 +207,7 @@ impl DirTab {
             show_align: false,
             rename_target: None,
             rename_buf: String::new(),
+            hidden: HashSet::new(),
             show_filter_panel: false,
             ext_filter: String::new(),
             min_size: String::new(),
@@ -281,6 +284,54 @@ impl DirTab {
     pub fn swap_sides(&mut self) {
         std::mem::swap(&mut self.left, &mut self.right);
         self.refresh();
+    }
+
+    // ---- P36-D2：逐文件操作（BC 操作菜单「复制到边/删除/排除」）----
+
+    /// 复制单个文件到另一侧（to_right=true：左→右；false：右→左）
+    pub fn copy_single(&mut self, rel: &str, to_right: bool) {
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return,
+        };
+        let op = SyncOp::Copy {
+            rel: rel.to_string(),
+            src_rel: None,
+            from_src: to_right,
+        };
+        let err = execute_op(&op, l.as_ref(), r.as_ref());
+        self.sync_msg = Some(match err {
+            Some(e) => format!("复制失败: {}", e),
+            None => format!("已复制: {}", basename(rel)),
+        });
+        self.refresh_sync();
+    }
+
+    /// 删除单个文件（delete_right=true：删右侧；false：删左侧）
+    pub fn delete_single(&mut self, rel: &str, delete_right: bool) {
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return,
+        };
+        let op = SyncOp::Delete {
+            rel: rel.to_string(),
+        };
+        let err = if delete_right {
+            execute_op(&op, l.as_ref(), r.as_ref())
+        } else {
+            execute_op(&op, r.as_ref(), l.as_ref())
+        };
+        self.sync_msg = Some(match err {
+            Some(e) => format!("删除失败: {}", e),
+            None => format!("已删除: {}", basename(rel)),
+        });
+        self.refresh_sync();
+    }
+
+    /// 从视图排除该文件（会话级，rebuild_tree 时过滤）
+    pub fn exclude(&mut self, rel: &str) {
+        self.hidden.insert(rel.to_string());
+        self.rebuild_tree();
     }
 
     /// P34：打开左侧目录（空会话填充）
@@ -391,6 +442,10 @@ impl DirTab {
             ViewFilter::Same => {
                 visible.retain(|e| e.status == FileStatus::Same);
             }
+        }
+        // P36-D2：右键「排除」的文件（会话级，重建时过滤）
+        if !self.hidden.is_empty() {
+            visible.retain(|e| !self.hidden.contains(&e.rel));
         }
         // B2：扩展名过滤（逗号分隔，如 "txt,rs"）
         let exts: Vec<String> = self
@@ -1442,6 +1497,10 @@ impl DirTab {
             let fg = text_color(ui);
             let mut pending_open: Option<String> = None;
             let mut pending_toggle: Option<String> = None;
+            // P36-D2：逐文件操作请求（右键菜单收集，闭包外执行）
+            let mut copy_req: Option<(String, bool)> = None; // (rel, to_right)
+            let mut delete_req: Option<(String, bool)> = None; // (rel, delete_right)
+            let mut exclude_req: Option<String> = None;
             let mut scroll_to_sel = self.scroll_to_selected;
             self.scroll_to_selected = false;
             let selected = self.selected;
@@ -1621,6 +1680,34 @@ impl DirTab {
                                     pending_open = Some(e.rel.clone());
                                     ui.close();
                                 }
+                                // P36-D2：逐文件操作（BC 操作菜单「复制到边/删除/排除」）
+                                ui.separator();
+                                let rel = e.rel.clone();
+                                let st = e.status;
+                                if matches!(st, FileStatus::LeftOnly | FileStatus::Differ)
+                                    && ui.button("→ 复制到右侧").clicked()
+                                {
+                                    copy_req = Some((rel.clone(), true));
+                                    ui.close();
+                                }
+                                if matches!(st, FileStatus::RightOnly | FileStatus::Differ)
+                                    && ui.button("← 复制到左侧").clicked()
+                                {
+                                    copy_req = Some((rel.clone(), false));
+                                    ui.close();
+                                }
+                                if e.right.is_some() && ui.button("🗑 删除右侧").clicked() {
+                                    delete_req = Some((rel.clone(), true));
+                                    ui.close();
+                                }
+                                if e.left.is_some() && ui.button("🗑 删除左侧").clicked() {
+                                    delete_req = Some((rel.clone(), false));
+                                    ui.close();
+                                }
+                                if ui.button("🙈 排除").clicked() {
+                                    exclude_req = Some(rel.clone());
+                                    ui.close();
+                                }
                             });
                         }
                     }
@@ -1637,6 +1724,16 @@ impl DirTab {
             }
             if pending_open.is_some() {
                 self.open_diff = pending_open;
+            }
+            // P36-D2：逐文件操作（复制到边/删除/排除）
+            if let Some((rel, to_right)) = copy_req {
+                self.copy_single(&rel, to_right);
+            }
+            if let Some((rel, dr)) = delete_req {
+                self.delete_single(&rel, dr);
+            }
+            if let Some(rel) = exclude_req {
+                self.exclude(&rel);
             }
         });
     }
