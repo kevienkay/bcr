@@ -877,51 +877,32 @@ impl DiffTab {
         // 搜索/跳转工具条
         egui::Panel::top("difftab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
+                // ---- 打开（BC: Open 按钮组）----
                 if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                    if let Some(p) = super::pick_file() {
-                        self.load_left(&p, self.opts.clone());
-                    }
+                    self.open_left_dialog();
                 }
                 if ui.button(t(I18nKey::OpenRight)).clicked() {
-                    if let Some(p) = super::pick_file() {
-                        self.load_right(&p, self.opts.clone());
-                    }
+                    self.open_right_dialog();
                 }
-                // A3 剪贴板对比：读系统剪贴板文本 → 临时文件 → 作为左侧/右侧加载
+                // A3 剪贴板对比（复用 P33 菜单栏转发方法）
                 if ui
                     .button("📋 剪贴板→左")
                     .on_hover_text("用系统剪贴板文本作为左侧对比（若左侧已打开则替换）")
                     .clicked()
                 {
-                    if let Some(txt) = read_clipboard_text() {
-                        if let Some(p) = write_clipboard_temp(&txt) {
-                            self.load_left(&p, self.opts.clone());
-                        } else {
-                            self.error = Some("写入剪贴板临时文件失败".to_string());
-                        }
-                    } else {
-                        self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string());
-                    }
+                    self.load_clipboard_left();
                 }
                 if ui
                     .button("📋 剪贴板→右")
                     .on_hover_text("用系统剪贴板文本作为右侧对比（若右侧已打开则替换）")
                     .clicked()
                 {
-                    if let Some(txt) = read_clipboard_text() {
-                        if let Some(p) = write_clipboard_temp(&txt) {
-                            self.load_right(&p, self.opts.clone());
-                        } else {
-                            self.error = Some("写入剪贴板临时文件失败".to_string());
-                        }
-                    } else {
-                        self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string());
-                    }
+                    self.load_clipboard_right();
                 }
                 ui.separator();
+                // ---- 显示选项（BC: 显示过滤/规则组）----
                 ui.checkbox(&mut self.show_stats, t(I18nKey::StatsPanel))
                     .changed();
-                ui.separator();
                 if ui
                     .checkbox(&mut self.opts.ignore_whitespace, t(I18nKey::IgnoreWs))
                     .changed()
@@ -940,7 +921,6 @@ impl DiffTab {
                 {
                     self.recompute();
                 }
-                ui.separator();
                 // A8 自动换行（BC5 word wrapping，仅影响显示）
                 ui.checkbox(&mut self.wrap, t(I18nKey::WordWrap))
                     .on_hover_text("长行按窗口宽度折行显示");
@@ -948,6 +928,7 @@ impl DiffTab {
                 ui.checkbox(&mut self.show_overview, "缩略图")
                     .on_hover_text("右侧迷你差异地图，点击跳转");
                 ui.separator();
+                // ---- 编辑（BC: Copy/编辑组）----
                 if ui.button(t(I18nKey::EditLeft)).clicked() {
                     if let Some(l) = &self.left {
                         self.editing = Some(EditState {
@@ -966,7 +947,6 @@ impl DiffTab {
                         });
                     }
                 }
-                ui.separator();
                 // P32-A6：撤销/重做按钮
                 let can_undo = !self.undo_stack.is_empty();
                 let can_redo = !self.redo_stack.is_empty();
@@ -985,6 +965,7 @@ impl DiffTab {
                     self.redo();
                 }
                 ui.separator();
+                // ---- 操作（BC: Swap/Reload 组）----
                 if ui
                     .button(format!("⟳ {}", t(I18nKey::Reload)))
                     .on_hover_text("重新加载 (F5)")
@@ -993,8 +974,54 @@ impl DiffTab {
                     self.reload();
                 }
                 ui.separator();
+                // ---- 差异导航（BC: Next Section/Prev Section 组）----
+                ui.label(fmt(
+                    I18nKey::DiffCount,
+                    &[
+                        &self.diff_rows.len().to_string(),
+                        &self.rows.len().to_string(),
+                    ],
+                ));
+                if ui
+                    .button(format!("⬇ {}", t(I18nKey::NextDiff)))
+                    .on_hover_text("下一差异 (F6)")
+                    .clicked()
+                {
+                    self.next_diff();
+                }
+                if ui
+                    .button(format!("⬆ {}", t(I18nKey::PrevDiff)))
+                    .on_hover_text("上一差异 (F7)")
+                    .clicked()
+                {
+                    self.prev_diff();
+                }
+                // 跳转行
+                let mut goto_text = self.goto_line.map(|l| l.to_string()).unwrap_or_default();
+                let resp = ui.add(
+                    egui::TextEdit::singleline(&mut goto_text)
+                        .hint_text(t(I18nKey::GotoHint))
+                        .desired_width(70.0),
+                );
+                if self.goto_focus {
+                    resp.request_focus();
+                    self.goto_focus = false;
+                }
+                self.goto_line = goto_text.parse().ok();
+                if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
+                    || ui.button(format!("🎯 {}", t(I18nKey::Goto))).clicked()
+                {
+                    if let Some(line) = self.goto_line {
+                        if line >= 1 {
+                            self.jump_to_row(line - 1);
+                        }
+                    }
+                }
+                ui.separator();
+                // ---- 搜索/替换（BC: 搜索组）----
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut self.search.query)
+                        .id(egui::Id::new("diff_search"))
                         .hint_text(t(I18nKey::SearchHint))
                         .desired_width(220.0),
                 );
@@ -1041,49 +1068,6 @@ impl DiffTab {
                     .clicked()
                 {
                     self.replace_all();
-                }
-                ui.separator();
-                let mut goto_text = self.goto_line.map(|l| l.to_string()).unwrap_or_default();
-                let resp = ui.add(
-                    egui::TextEdit::singleline(&mut goto_text)
-                        .hint_text(t(I18nKey::GotoHint))
-                        .desired_width(70.0),
-                );
-                if self.goto_focus {
-                    resp.request_focus();
-                    self.goto_focus = false;
-                }
-                self.goto_line = goto_text.parse().ok();
-                if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                    || ui.button(format!("🎯 {}", t(I18nKey::Goto))).clicked()
-                {
-                    if let Some(line) = self.goto_line {
-                        if line >= 1 {
-                            self.jump_to_row(line - 1);
-                        }
-                    }
-                }
-                ui.separator();
-                ui.label(fmt(
-                    I18nKey::DiffCount,
-                    &[
-                        &self.diff_rows.len().to_string(),
-                        &self.rows.len().to_string(),
-                    ],
-                ));
-                if ui
-                    .button(format!("⬇ {}", t(I18nKey::NextDiff)))
-                    .on_hover_text("下一差异 (F6)")
-                    .clicked()
-                {
-                    self.next_diff();
-                }
-                if ui
-                    .button(format!("⬆ {}", t(I18nKey::PrevDiff)))
-                    .on_hover_text("上一差异 (F7)")
-                    .clicked()
-                {
-                    self.prev_diff();
                 }
             });
         });

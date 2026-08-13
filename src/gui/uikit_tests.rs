@@ -52,15 +52,15 @@ fn difftab_search_finds_matches_via_ui() {
     tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run();
-    // 搜索框是第一个 TextInput（搜索 + 替换 + 行号 三个输入框）
+    // 搜索框（P33 重排后 TextInput 顺序：行号框 → 搜索框 → 替换框，取第 2 个）
     h.query_all_by_role(eframe::egui::accesskit::Role::TextInput)
-        .next()
-        .unwrap()
+        .nth(1)
+        .expect("搜索框")
         .focus();
     h.run();
     h.query_all_by_role(eframe::egui::accesskit::Role::TextInput)
-        .next()
-        .unwrap()
+        .nth(1)
+        .expect("搜索框")
         .type_text("beta");
     h.run();
     // 内部匹配状态更新（不区分大小写 → BETA 命中）
