@@ -401,25 +401,93 @@ impl DiffApp {
     /// P32-A7：欢迎页 — 大标题 + 会话类型网格卡片（文本/文件夹/三路合并/图片/CSV）
     fn welcome_ui(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.centered_and_justified(|ui| {
+            ui.horizontal(|ui| {
+                // ---- 左侧：Sessions 管理面板（BC 主页布局）----
+                egui::Frame::group(ui.style())
+                    .corner_radius(6.0)
+                    .inner_margin(egui::Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.set_min_width(240.0);
+                        ui.set_max_width(300.0);
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(crate::i18n::t(crate::i18n::Key::MenuSaveSession))
+                                    .strong()
+                                    .size(14.0),
+                            );
+                            ui.add_space(4.0);
+                            let sessions = crate::session::load();
+                            if sessions.sessions.is_empty() {
+                                ui.label(
+                                    RichText::new("暂无会话\n用 bcr session save <name> <left> <right> 保存")
+                                        .size(12.0)
+                                        .color(ui.visuals().weak_text_color()),
+                                );
+                            } else {
+                                let mut open_req: Option<(String, String)> = None;
+                                egui::ScrollArea::vertical()
+                                    .max_height(320.0)
+                                    .show(ui, |ui| {
+                                        for (name, s) in &sessions.sessions {
+                                            let label = format!(
+                                                "▶ {}\n{}",
+                                                name,
+                                                if s.left.len() + s.right.len() > 60 {
+                                                    format!(
+                                                        "{} … {}",
+                                                        s.left.chars().take(22).collect::<String>(),
+                                                        s.right.chars().take(22).collect::<String>()
+                                                    )
+                                                } else {
+                                                    format!("{} ↔ {}", s.left, s.right)
+                                                }
+                                            );
+                                            if ui
+                                                .button(RichText::new(label).size(12.0))
+                                                .on_hover_text(format!(
+                                                    "{} ↔ {}",
+                                                    s.left, s.right
+                                                ))
+                                                .clicked()
+                                            {
+                                                open_req = Some((s.left.clone(), s.right.clone()));
+                                            }
+                                        }
+                                    });
+                                if let Some((l, r)) = open_req {
+                                    self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
+                                }
+                            }
+                        });
+                    });
+                ui.add_space(12.0);
+                // ---- 主区：会话类型大按钮（BC 式竖排/网格 + 拖放提示）----
                 ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 8.0;
-                    // P31/P32-A7 欢迎页：大标题 + 副标题 + 会话类型网格卡片（BC 观感）
-                    ui.label(RichText::new("bcr").size(42.0).strong().color(
-                        if ui.visuals().dark_mode {
-                            egui::Color32::from_rgb(140, 180, 235)
-                        } else {
-                            egui::Color32::from_rgb(60, 110, 190)
-                        },
-                    ));
+                    ui.label(
+                        RichText::new("bcr")
+                            .size(34.0)
+                            .strong()
+                            .color(if ui.visuals().dark_mode {
+                                egui::Color32::from_rgb(140, 180, 235)
+                            } else {
+                                egui::Color32::from_rgb(60, 110, 190)
+                            }),
+                    );
                     ui.label(
                         RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
-                            .size(14.0)
+                            .size(13.0)
                             .color(ui.visuals().weak_text_color()),
                     );
-                    ui.add_space(16.0);
-                    // P32-A7：会话类型选择卡片（网格布局）
-                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 5] = [
+                    ui.add_space(4.0);
+                    // BC 提示语：将文件夹或文件拖放到会话图标上
+                    ui.label(
+                        RichText::new("将文件夹或文件拖放到会话图标上")
+                            .size(12.0)
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                    ui.add_space(12.0);
+                    // 会话类型卡片（8 类，BC 主页语义）
+                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 8] = [
                         (
                             "📄",
                             crate::i18n::Key::SessionText,
@@ -450,29 +518,50 @@ impl DiffApp {
                             crate::i18n::Key::SessionCsvDesc,
                             4,
                         ),
+                        // P33：补齐 BC 会话类型入口
+                        (
+                            "🔢",
+                            crate::i18n::Key::MenuNewHex,
+                            crate::i18n::Key::MenuNewHex,
+                            5,
+                        ),
+                        (
+                            "🔄",
+                            crate::i18n::Key::MenuNewDir,
+                            crate::i18n::Key::SessionDirDesc,
+                            6,
+                        ),
+                        (
+                            "🗂",
+                            crate::i18n::Key::MenuNewMerge,
+                            crate::i18n::Key::SessionMergeDesc,
+                            7,
+                        ),
                     ];
-                    let card_w = 190.0;
-                    let card_h = 88.0;
+                    let card_w = 170.0;
+                    let card_h = 76.0;
                     let mut card_click: Option<u32> = None;
                     egui::Grid::new("session-cards")
-                        .spacing([12.0, 12.0])
+                        .spacing([10.0, 10.0])
                         .show(ui, |ui| {
                             for (i, (icon, title, desc, id)) in cards.iter().enumerate() {
                                 let resp = egui::Frame::group(ui.style())
                                     .corner_radius(8.0)
-                                    .inner_margin(egui::Margin::same(12))
+                                    .inner_margin(egui::Margin::same(10))
                                     .show(ui, |ui| {
                                         ui.set_min_size(egui::vec2(card_w, card_h));
                                         ui.vertical(|ui| {
-                                            ui.label(RichText::new(*icon).size(26.0));
-                                            ui.label(
-                                                RichText::new(crate::i18n::t(*title))
-                                                    .size(15.0)
-                                                    .strong(),
-                                            );
+                                            ui.horizontal(|ui| {
+                                                ui.label(RichText::new(*icon).size(22.0));
+                                                ui.label(
+                                                    RichText::new(crate::i18n::t(*title))
+                                                        .size(14.0)
+                                                        .strong(),
+                                                );
+                                            });
                                             ui.label(
                                                 RichText::new(crate::i18n::t(*desc))
-                                                    .size(12.0)
+                                                    .size(11.0)
                                                     .color(ui.visuals().weak_text_color()),
                                             );
                                         });
@@ -482,8 +571,8 @@ impl DiffApp {
                                 if resp.clicked() {
                                     card_click = Some(*id);
                                 }
-                                // 每行最多 3 张卡片（5 张 → 3+2）
-                                if i % 3 == 2 {
+                                // 每行 4 张卡片（8 张 → 4+4）
+                                if i % 4 == 3 {
                                     ui.end_row();
                                 }
                             }
@@ -494,9 +583,14 @@ impl DiffApp {
                         Some(2) => self.open_merge(),
                         Some(3) => self.open_image_compare(),
                         Some(4) => self.open_csv_compare(),
+                        // Hex：打开文件对比（二进制自动切 hex）
+                        Some(5) => self.open_diff_files(),
+                        // 文件夹合并/同步：复用目录对比 + 对应 tab（合并语义）
+                        Some(6) => self.open_dir_compare(),
+                        Some(7) => self.open_merge(),
                         _ => {}
                     }
-                    ui.add_space(12.0);
+                    ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         if ui
                             .button(format!(
