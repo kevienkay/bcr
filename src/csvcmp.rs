@@ -51,6 +51,7 @@ pub struct CsvArgs {
 }
 
 /// 解析后的表格：表头 + 数据行
+#[derive(Clone)]
 pub(crate) struct Table {
     /// 列名（无表头时用 "col0/col1/..." 代替）
     pub(crate) headers: Vec<String>,
@@ -170,6 +171,11 @@ impl Table {
             (headers, parsed[1..].to_vec())
         };
         Table { headers, rows }
+    }
+
+    /// 克隆表格（行列操作用）
+    pub(crate) fn clone_table(&self) -> Self {
+        self.clone()
     }
 
     /// 取主键值：--key 指定列名或列号；返回 (key, 行内是否可用)

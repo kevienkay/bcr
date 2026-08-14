@@ -213,6 +213,16 @@ pub enum Key {
     HideSameCols,
     /// 列宽自适应（P37-1c）
     FitColumns,
+    /// 删除行（P37-1l）
+    CsvDeleteRow,
+    /// 插入行（P37-1l）
+    CsvInsertRow,
+    /// 删除列（P37-1l）
+    CsvDeleteCol,
+    /// 插入列（P37-1l）
+    CsvInsertCol,
+    /// 修改单元格（P37-1l）
+    CsvEditCell,
     /// 统计: {} 复制, {} 删除, {} 跳过, {} 冲突, {} 错误
     SummarySync,
     /// [COPY]   {} -> {}

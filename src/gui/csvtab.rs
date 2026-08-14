@@ -65,6 +65,10 @@ pub(crate) struct CsvTab {
     pub(crate) hide_same_cols: bool,
     /// P37-1c：列宽自适应（BC Adjust Column Sizes to Fit）
     pub(crate) auto_fit: bool,
+    /// P37-1l：修改单元格弹窗开关
+    show_cell_edit: bool,
+    /// P37-1l：修改单元格输入缓冲
+    cell_edit_buf: String,
 }
 
 impl CsvTab {
@@ -85,6 +89,8 @@ impl CsvTab {
             selected: None,
             hide_same_cols: false,
             auto_fit: false,
+            show_cell_edit: false,
+            cell_edit_buf: String::new(),
         };
         t.reload();
         t
@@ -376,6 +382,182 @@ impl CsvTab {
         true
     }
 
+    // ---- P37-1l：行列操作（BC 编辑菜单 删除/插入行列、修改单元格） ----
+
+    /// 写回一侧文件（A2 模式 .bak 备份），side=true 左侧
+    fn write_side(&self, side: bool, table: &Table) -> bool {
+        let path = if side { &self.left } else { &self.right };
+        let delim = self.delim_char();
+        let out = serialize_csv(table, delim);
+        let _ = std::fs::copy(path, format!("{path}.bak"));
+        std::fs::write(path, out).is_ok()
+    }
+
+    /// 删除选中行（两侧原始行同步删除，写回存在侧的文件）
+    pub(crate) fn delete_row(&mut self) -> bool {
+        let Some((aligned_idx, _)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let Some(ar) = self.aligned.get(aligned_idx) else {
+            return false;
+        };
+        let mut a_t = a.clone_table();
+        let mut b_t = b.clone_table();
+        let mut ok = true;
+        if let Some(ai) = ar.a_no {
+            if ai < a_t.rows.len() {
+                a_t.rows.remove(ai);
+                ok &= self.write_side(true, &a_t);
+            }
+        }
+        if let Some(bi) = ar.b_no {
+            if bi < b_t.rows.len() {
+                b_t.rows.remove(bi);
+                ok &= self.write_side(false, &b_t);
+            }
+        }
+        if ok {
+            self.reload();
+        }
+        ok
+    }
+
+    /// 在选中行前插入空行（两侧同步插入）
+    pub(crate) fn insert_row(&mut self) -> bool {
+        let Some((aligned_idx, _)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let Some(ar) = self.aligned.get(aligned_idx) else {
+            return false;
+        };
+        let ncols = self.col_count();
+        let mut a_t = a.clone_table();
+        let mut b_t = b.clone_table();
+        if let Some(ai) = ar.a_no {
+            if ai <= a_t.rows.len() {
+                a_t.rows.insert(ai, vec![String::new(); ncols]);
+            }
+        }
+        if let Some(bi) = ar.b_no {
+            if bi <= b_t.rows.len() {
+                b_t.rows.insert(bi, vec![String::new(); ncols]);
+            }
+        }
+        let ok = self.write_side(true, &a_t) & self.write_side(false, &b_t);
+        if ok {
+            self.reload();
+        }
+        ok
+    }
+
+    /// 删除选中列（两侧表头与数据同步删除）
+    pub(crate) fn delete_col(&mut self) -> bool {
+        let Some((_, col)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let mut a_t = a.clone_table();
+        let mut b_t = b.clone_table();
+        let mut ok = true;
+        if col < a_t.headers.len() {
+            a_t.headers.remove(col);
+            for r in &mut a_t.rows {
+                if col < r.len() {
+                    r.remove(col);
+                }
+            }
+            ok &= self.write_side(true, &a_t);
+        }
+        if col < b_t.headers.len() {
+            b_t.headers.remove(col);
+            for r in &mut b_t.rows {
+                if col < r.len() {
+                    r.remove(col);
+                }
+            }
+            ok &= self.write_side(false, &b_t);
+        }
+        if ok {
+            self.reload();
+        }
+        ok
+    }
+
+    /// 在选中列前插入空列（两侧同步插入）
+    pub(crate) fn insert_col(&mut self) -> bool {
+        let Some((_, col)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let mut a_t = a.clone_table();
+        let mut b_t = b.clone_table();
+        if col <= a_t.headers.len() {
+            a_t.headers.insert(col, format!("col{col}"));
+            for r in &mut a_t.rows {
+                r.insert(col.min(r.len()), String::new());
+            }
+        }
+        if col <= b_t.headers.len() {
+            b_t.headers.insert(col, format!("col{col}"));
+            for r in &mut b_t.rows {
+                r.insert(col.min(r.len()), String::new());
+            }
+        }
+        let ok = self.write_side(true, &a_t) & self.write_side(false, &b_t);
+        if ok {
+            self.reload();
+        }
+        ok
+    }
+
+    /// 修改选中单元格（写回选中侧——有右侧行改右侧，否则改左侧）
+    pub(crate) fn set_cell(&mut self, value: String) -> bool {
+        let Some((aligned_idx, col)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let Some(ar) = self.aligned.get(aligned_idx) else {
+            return false;
+        };
+        let mut ok = true;
+        // 优先修改右侧（BC 编辑当前单元格；右侧为常用编辑目标）
+        if let Some(bi) = ar.b_no {
+            let mut b_t = b.clone_table();
+            if let Some(r) = b_t.rows.get_mut(bi) {
+                if r.len() <= col {
+                    r.resize(col + 1, String::new());
+                }
+                r[col] = value.clone();
+                ok &= self.write_side(false, &b_t);
+            }
+        } else if let Some(ai) = ar.a_no {
+            let mut a_t = a.clone_table();
+            if let Some(r) = a_t.rows.get_mut(ai) {
+                if r.len() <= col {
+                    r.resize(col + 1, String::new());
+                }
+                r[col] = value.clone();
+                ok &= self.write_side(true, &a_t);
+            }
+        }
+        if ok {
+            self.reload();
+        }
+        ok
+    }
+
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("csvtab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -590,6 +772,12 @@ impl CsvTab {
         // P37-1c：请求收集（借用安全：闭包内只设标志，闭包外执行）
         let mut click_cell: Option<(usize, usize)> = None;
         let mut copy_cell_req = false;
+        // P37-1l：行列操作请求
+        let mut delete_row_req = false;
+        let mut insert_row_req = false;
+        let mut delete_col_req = false;
+        let mut insert_col_req = false;
+        let mut edit_cell_req = false;
         ui.columns(2, |cols| {
             for (ci, side) in [(0usize, true), (1, false)].into_iter() {
                 let ui = &mut cols[ci];
@@ -628,6 +816,28 @@ impl CsvTab {
                             ui.separator();
                             if ui.button(t(I18nKey::CopyCellRight)).clicked() {
                                 copy_cell_req = true;
+                                ui.close();
+                            }
+                            // P37-1l：行列操作（BC 编辑菜单 删除/插入行列、修改单元格）
+                            ui.separator();
+                            if ui.button(t(I18nKey::CsvDeleteRow)).clicked() {
+                                delete_row_req = true;
+                                ui.close();
+                            }
+                            if ui.button(t(I18nKey::CsvInsertRow)).clicked() {
+                                insert_row_req = true;
+                                ui.close();
+                            }
+                            if ui.button(t(I18nKey::CsvDeleteCol)).clicked() {
+                                delete_col_req = true;
+                                ui.close();
+                            }
+                            if ui.button(t(I18nKey::CsvInsertCol)).clicked() {
+                                insert_col_req = true;
+                                ui.close();
+                            }
+                            if ui.button(t(I18nKey::CsvEditCell)).clicked() {
+                                edit_cell_req = true;
                                 ui.close();
                             }
                             ui.separator();
@@ -740,6 +950,57 @@ impl CsvTab {
         }
         if copy_cell_req {
             self.copy_cell_right();
+        }
+        // P37-1l：行列操作（闭包外执行）
+        if delete_row_req {
+            self.delete_row();
+        }
+        if insert_row_req {
+            self.insert_row();
+        }
+        if delete_col_req {
+            self.delete_col();
+        }
+        if insert_col_req {
+            self.insert_col();
+        }
+        if edit_cell_req {
+            self.show_cell_edit = true;
+        }
+        // P37-1l：修改单元格弹窗
+        if self.show_cell_edit {
+            let mut keep = true;
+            let mut apply = false;
+            let mut close_req = false;
+            egui::Window::new(t(I18nKey::CsvEditCell))
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(format!(
+                        "行 {} / 列 {}：",
+                        self.selected.map(|(r, _)| r).unwrap_or(0),
+                        self.selected.map(|(_, c)| c).unwrap_or(0)
+                    ));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.cell_edit_buf).desired_width(200.0),
+                    );
+                    ui.horizontal(|ui| {
+                        if ui.button(t(I18nKey::Save)).clicked() {
+                            apply = true;
+                        }
+                        if ui.button(t(I18nKey::Cancel)).clicked() {
+                            close_req = true;
+                        }
+                    });
+                });
+            if apply {
+                let v = std::mem::take(&mut self.cell_edit_buf);
+                self.set_cell(v);
+                self.show_cell_edit = false;
+            } else if close_req || !keep {
+                self.show_cell_edit = false;
+            }
         }
     }
 }
@@ -907,5 +1168,96 @@ mod tests {
         let mut t = CsvTab::new(&l, &r);
         // 未选中 → 返回 false
         assert!(!t.copy_cell_right());
+    }
+
+    // ---- P37-1l：行列操作（删除/插入行列、修改单元格） ----
+
+    #[test]
+    fn delete_row_removes_both_sides() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n2,bob\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,alice\n2,BOB\n");
+        let mut t = CsvTab::new(&l, &r);
+        t.show_same = true;
+        t.filter = CsvFilter::All;
+        // 选中第 0 行（对齐下标 0）
+        t.selected = Some((0, 0));
+        assert!(t.delete_row(), "删除行应成功");
+        // 两侧文件都只剩第 2 行
+        let lc = fs::read_to_string(&l).unwrap();
+        let rc = fs::read_to_string(&r).unwrap();
+        assert!(!lc.contains("1,alice"), "左侧第 1 行应删除: {lc}");
+        assert!(lc.contains("2,bob"), "左侧第 2 行应保留: {lc}");
+        assert!(!rc.contains("1,alice"), "右侧第 1 行应删除: {rc}");
+        assert!(rc.contains("2,BOB"), "右侧第 2 行应保留: {rc}");
+        // 备份存在
+        assert!(fs::metadata(format!("{l}.bak")).is_ok());
+        assert!(fs::metadata(format!("{r}.bak")).is_ok());
+    }
+
+    #[test]
+    fn insert_row_adds_empty_both_sides() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n");
+        let mut t = CsvTab::new(&l, &r);
+        t.show_same = true;
+        t.filter = CsvFilter::All;
+        t.selected = Some((0, 0));
+        assert!(t.insert_row(), "插入行应成功");
+        let lc = fs::read_to_string(&l).unwrap();
+        let rows: Vec<&str> = lc.lines().collect();
+        assert_eq!(rows.len(), 3, "表头 + 空行 + 原行: {lc}");
+        // 第 2 行为空行（2 列空字段序列化为单个逗号）
+        assert_eq!(rows[1], ",", "插入行应为空: {lc}");
+    }
+
+    #[test]
+    fn delete_col_removes_from_both_sides() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n");
+        let mut t = CsvTab::new(&l, &r);
+        t.show_same = true;
+        t.filter = CsvFilter::All;
+        // 选中 name 列（列 1）
+        t.selected = Some((0, 1));
+        assert!(t.delete_col(), "删除列应成功");
+        let lc = fs::read_to_string(&l).unwrap();
+        assert!(!lc.contains("name"), "表头应删除 name 列: {lc}");
+        assert!(!lc.contains("alice"), "数据应删除 name 列: {lc}");
+        assert!(lc.contains("id"), "id 列应保留: {lc}");
+    }
+
+    #[test]
+    fn insert_col_adds_empty_both_sides() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n");
+        let mut t = CsvTab::new(&l, &r);
+        t.show_same = true;
+        t.filter = CsvFilter::All;
+        t.selected = Some((0, 0));
+        assert!(t.insert_col(), "插入列应成功");
+        let lc = fs::read_to_string(&l).unwrap();
+        assert!(lc.contains("col0"), "新列头应为 col0: {lc}");
+    }
+
+    #[test]
+    fn set_cell_modifies_right_side() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.csv", "id,name\n1,alice\n");
+        let r = write(d.path(), "r.csv", "id,name\n1,ALICE\n");
+        let mut t = CsvTab::new(&l, &r);
+        t.show_same = true;
+        t.filter = CsvFilter::All;
+        // 选中第 0 行 name 列（列 1）→ 修改右侧
+        t.selected = Some((0, 1));
+        assert!(t.set_cell("Alice2".to_string()), "修改单元格应成功");
+        let rc = fs::read_to_string(&r).unwrap();
+        assert!(rc.contains("Alice2"), "右侧 name 应更新: {rc}");
+        // 左侧不变
+        let lc = fs::read_to_string(&l).unwrap();
+        assert!(lc.contains("alice"), "左侧不应变: {lc}");
     }
 }
