@@ -1122,6 +1122,38 @@ fn text_edit_tab_save_button_writes_file() {
     );
 }
 
+// ---- P37-1n：在文件中查找（BC Find in Files） ----------------
+
+#[test]
+fn text_edit_find_in_files_window_renders() {
+    let d = tempdir().unwrap();
+    let p = write(d.path(), "a.txt", "needle here\n");
+    let tab = RefCell::new(TextEditTab::new(&p));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 打开查找/替换栏 → 「在文件中查找…」按钮可见
+    h.get_by_label_contains("查找/替换").click();
+    h.run();
+    assert!(
+        h.query_all_by_label_contains("在文件中查找")
+            .next()
+            .is_some(),
+        "查找栏应显示在文件中查找按钮"
+    );
+    // 打开弹窗并执行搜索 → 结果列表渲染不 panic
+    {
+        let mut t = tab.borrow_mut();
+        t.search = "needle".to_string();
+    }
+    h.get_by_label_contains("在文件中查找…").click();
+    h.run();
+    h.get_by_label_contains("搜索").click();
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(tab.borrow().file_hits_total >= 1, "应命中当前文件至少 1 处");
+}
+
 // ---- P37-1h：补丁视图（BC Text Patch） ----------------
 
 #[test]

@@ -19,7 +19,7 @@ pub struct TextEditTab {
     /// 重做栈（整文件快照）
     redo_stack: Vec<String>,
     /// 查找词
-    search: String,
+    pub(crate) search: String,
     /// 替换词
     replace: String,
     /// 查找/替换栏是否展开
@@ -36,6 +36,17 @@ pub struct TextEditTab {
     scroll: Vec2,
     /// 保存请求（Ctrl+S 或按钮）
     save_req: bool,
+    // P37-1n：在文件中查找（BC Find in Files）
+    /// 搜索目录
+    search_dir: String,
+    /// 在文件中查找弹窗开关
+    show_file_search: bool,
+    /// 搜索结果（path, 行号 1-based, 行文本）
+    file_hits: Vec<(String, usize, String)>,
+    /// 搜索结果总数（截断提示用）
+    pub(crate) file_hits_total: usize,
+    /// 跳转行（点击结果后打开文件并滚动）
+    jump_to_line: Option<usize>,
 }
 
 impl TextEditTab {
@@ -55,6 +66,11 @@ impl TextEditTab {
             had_bom: false,
             scroll: Vec2::ZERO,
             save_req: false,
+            search_dir: String::new(),
+            show_file_search: false,
+            file_hits: Vec::new(),
+            file_hits_total: 0,
+            jump_to_line: None,
         };
         t.open(path);
         t
@@ -219,6 +235,83 @@ impl TextEditTab {
         n
     }
 
+    /// P37-1n：在目录中查找（BC Find in Files）。
+    /// 递归扫描 `dir`（跳过隐藏目录/.git/target/node_modules），逐文件逐行匹配，
+    /// 收集 (path, 行号 1-based, 行文本)，最多 MAX_HITS 条防爆炸。
+    pub fn search_files(&mut self, dir: &str, needle: &str) -> usize {
+        const MAX_HITS: usize = 500;
+        self.file_hits.clear();
+        self.file_hits_total = 0;
+        if dir.trim().is_empty() || needle.is_empty() {
+            return 0;
+        }
+        let mut total = 0usize;
+        let mut stack = vec![dir.to_string()];
+        while let Some(d) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&d) else {
+                continue;
+            };
+            for ent in entries.flatten() {
+                let p = ent.path();
+                if p.is_dir() {
+                    let name = ent.file_name().to_string_lossy().to_string();
+                    // 跳过隐藏目录与常见依赖/构建目录
+                    if name.starts_with('.')
+                        || matches!(name.as_str(), "target" | "node_modules" | "dist" | "build")
+                    {
+                        continue;
+                    }
+                    stack.push(p.to_string_lossy().to_string());
+                    continue;
+                }
+                // 仅文本文件（按扩展名粗筛 + 大小上限 5MB）
+                let Ok(meta) = p.metadata() else { continue };
+                if meta.len() > 5 * 1024 * 1024 {
+                    continue;
+                }
+                let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase());
+                if let Some(e) = &ext {
+                    if matches!(
+                        e.as_str(),
+                        "png"
+                            | "jpg"
+                            | "jpeg"
+                            | "gif"
+                            | "bmp"
+                            | "ico"
+                            | "exe"
+                            | "dll"
+                            | "so"
+                            | "dylib"
+                            | "zip"
+                            | "gz"
+                            | "bin"
+                            | "class"
+                    ) {
+                        continue;
+                    }
+                }
+                let Ok(content) = std::fs::read_to_string(&p) else {
+                    continue;
+                };
+                for (i, line) in content.lines().enumerate() {
+                    if line.contains(needle) {
+                        total += 1;
+                        if self.file_hits.len() < MAX_HITS {
+                            self.file_hits.push((
+                                p.to_string_lossy().to_string(),
+                                i + 1,
+                                line.to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        self.file_hits_total = total;
+        self.file_hits.len()
+    }
+
     /// 行数（状态栏）
     pub fn line_count(&self) -> usize {
         if self.content.is_empty() {
@@ -342,8 +435,107 @@ impl TextEditTab {
                         let n = self.replace_all();
                         self.error = Some(format!("已替换 {} 处", n));
                     }
+                    ui.separator();
+                    // P37-1n：在文件中查找（BC Find in Files）
+                    if ui.button("在文件中查找…").clicked() {
+                        if self.search_dir.is_empty() {
+                            // 默认当前文件所在目录
+                            if let Some(p) = std::path::Path::new(&self.path).parent() {
+                                self.search_dir = p.to_string_lossy().to_string();
+                            }
+                        }
+                        self.show_file_search = true;
+                    }
                 });
             });
+        }
+
+        // P37-1n：在文件中查找结果弹窗
+        if self.show_file_search {
+            let mut keep = true;
+            let mut run_search = false;
+            let mut close_req = false;
+            let mut open_hit: Option<(String, usize)> = None;
+            egui::Window::new("在文件中查找")
+                .collapsible(false)
+                .resizable(true)
+                .default_size(Vec2::new(560.0, 320.0))
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("目录");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.search_dir).desired_width(300.0),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("查找");
+                        ui.add(egui::TextEdit::singleline(&mut self.search).desired_width(200.0));
+                        if ui.button("搜索").clicked() {
+                            run_search = true;
+                        }
+                        if ui.button("关闭").clicked() {
+                            close_req = true;
+                        }
+                    });
+                    ui.separator();
+                    if self.file_hits_total > 0 {
+                        ui.label(format!(
+                            "{} 处匹配（显示前 {} 条）",
+                            self.file_hits_total,
+                            self.file_hits.len()
+                        ));
+                    }
+                    egui::ScrollArea::vertical()
+                        .max_height(220.0)
+                        .show(ui, |ui| {
+                            for (i, (path, line_no, text)) in self.file_hits.iter().enumerate() {
+                                let label = format!(
+                                    "{}:{}: {}",
+                                    path.rsplit('/').next().unwrap_or(path),
+                                    line_no,
+                                    if text.chars().count() > 80 {
+                                        let s: String = text.chars().take(80).collect();
+                                        format!("{s}…")
+                                    } else {
+                                        text.clone()
+                                    }
+                                );
+                                if ui
+                                    .add(
+                                        egui::Button::new(label)
+                                            .wrap_mode(egui::TextWrapMode::Extend),
+                                    )
+                                    .on_hover_text(path)
+                                    .clicked()
+                                {
+                                    open_hit = Some((path.clone(), *line_no));
+                                }
+                                // 分隔线（除最后一条）
+                                if i + 1 < self.file_hits.len() {
+                                    ui.separator();
+                                }
+                            }
+                        });
+                });
+            if run_search {
+                let dir = self.search_dir.clone();
+                let needle = self.search.clone();
+                self.search_files(&dir, &needle);
+            }
+            if let Some((p, line_no)) = open_hit {
+                // 打开文件并跳到匹配行
+                self.open(&p);
+                self.jump_to_line = Some(line_no);
+            }
+            if close_req || !keep {
+                self.show_file_search = false;
+            }
+        }
+
+        // P37-1n：点击结果后滚动到匹配行
+        if let Some(line) = self.jump_to_line.take() {
+            self.scroll.y = (line as f32 - 1.0) * ROW_H;
         }
 
         // 快捷键：Ctrl+S 保存 / Ctrl+Z 撤销 / Ctrl+Y 重做
@@ -528,5 +720,58 @@ mod tests {
         let mut t2 = TextEditTab::new(&p);
         t2.search = "missing".to_string();
         assert_eq!(t2.find_next(), None);
+    }
+
+    // ---- P37-1n：在文件中查找（BC Find in Files） ----
+
+    #[test]
+    fn search_files_finds_across_directory() {
+        let d = tempdir().unwrap();
+        // 两个子目录 + 一个应被跳过的隐藏目录
+        let sub1 = d.path().join("src");
+        let sub2 = d.path().join("doc");
+        fs::create_dir_all(&sub1).unwrap();
+        fs::create_dir_all(&sub2).unwrap();
+        fs::create_dir_all(d.path().join(".git")).unwrap();
+        write(d.path(), "root.txt", "no match here\n");
+        write(&sub1, "a.rs", "fn main() { println!(\"needle\"); }\n");
+        write(&sub2, "b.md", "line1\nneedle found\n");
+        write(&sub1, "c.bin", "binary needle\n");
+        // 隐藏目录里的文件不应被搜到
+        write(&d.path().join(".git"), "cfg", "needle hidden\n");
+
+        let mut t = TextEditTab::new(&write(d.path(), "tmp.txt", "\n"));
+        let hits = t.search_files(d.path().to_str().unwrap(), "needle");
+        assert_eq!(
+            hits, 2,
+            "应命中 src/a.rs 与 doc/b.md（.bin/.git 跳过）: {:?}",
+            t.file_hits
+        );
+        let paths: Vec<&str> = t
+            .file_hits
+            .iter()
+            .map(|(p, _, _)| p.rsplit('/').next().unwrap_or(p))
+            .collect();
+        assert!(paths.contains(&"a.rs"), "应命中 a.rs: {paths:?}");
+        assert!(paths.contains(&"b.md"), "应命中 b.md: {paths:?}");
+        // 行号正确（1-based）
+        let md = t
+            .file_hits
+            .iter()
+            .find(|(p, _, _)| p.ends_with("b.md"))
+            .unwrap();
+        assert_eq!(md.1, 2, "b.md 第 2 行命中");
+        // 无匹配
+        t.search_files(d.path().to_str().unwrap(), "zzzmissing");
+        assert_eq!(t.file_hits_total, 0);
+    }
+
+    #[test]
+    fn search_files_empty_input_no_panic() {
+        let d = tempdir().unwrap();
+        let mut t = TextEditTab::new(&write(d.path(), "a.txt", "x\n"));
+        assert_eq!(t.search_files("", "x"), 0);
+        assert_eq!(t.search_files(d.path().to_str().unwrap(), ""), 0);
+        assert_eq!(t.file_hits_total, 0);
     }
 }
