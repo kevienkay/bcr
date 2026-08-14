@@ -24,6 +24,18 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **逐文件操作**：右键菜单复制到右侧/复制到左侧/删除右侧/删除左侧/排除（复用 SyncOp + execute_op；排除 = 会话级隐藏集合）
 - **视图过滤快捷键**：1/2/3 切换显示全部/差异/相同（输入框聚焦不触发，不受列表空影响）
 
+### 全视图对标补齐（P37，实测 BC 5.2.5 各视图菜单）
+
+- **三路合并顺序合并（1a）**：Resolution 加 LeftThenRight/RightThenLeft（BC「采用左边然后右边/右边然后左边」），工具栏 ⇉/⇇ 按钮 + 解决状态绿标
+- **三路合并导航（1b）**：清除冲突区段并跳下一（未解决默认取左）、差异导航（非 Context 块）、左/右采用导航（Next/Previous Left/Right Taken）；Search 菜单 MergeTab 分支
+- **表格视图（1c）**：复制单元格至右侧（点击选中 + 写回右侧文件 + .bak 备份）、隐藏相同列、列宽自适应（RFC 4180 serialize_csv）
+- **hex 地址与字节序格式（1d）**：地址列 hex/dec 切换与隐藏、值显示 逐字节/小尾/大端（4 字节分组 u32 解释）
+- **图片视图（1e）**：旋转 90/180/270 + 水平/垂直翻转 + 重置变换；差异模式 精确/容差/不匹配范围/混合（RGB 曼哈顿距离 + 4 邻接孤立块过滤）
+- **文件夹同步操作集（1f）**：立即同步（⚡ 一键生成计划并执行）、独自离开（Leave Alone 跳过同步、再点取消）、批量复制→左/批量删除左侧（镜像 →右/删右侧）
+- **文本编辑视图（1g）**：独立单文件编辑器（BC Text Edit）——打开/保存（编码回写 + .bak）、撤销/重做、查找/替换、转换文件（Trim 行尾空白 / Tabs→空格 / CRLF↔LF 逐行保留行尾）、语法高亮预览 + 行号；CLI `--edit`
+- **补丁视图（1h）**：unified diff 解析（---/+++/@@ hunk）→ 旧 vs 新双栏对比 + added/removed 统计 + 应用补丁写回目标（.bak 备份）；CLI `--patch`
+- **文件夹合并 GUI（1i）**：三目录 BASE/LEFT/RIGHT + 输出（BC Folder Merge）——生成计划（build_merge3_plan）列表展示 copy/merge/conflict/delete 徽标 + 冲突红标，执行写输出并自动建目录；CLI `--merge-dir BASE LEFT RIGHT OUT`
+
 ## [0.3.0] - 2026-08-13
 
 ### UI 重构（P33，对标 Beyond Compare 5.2.5 真实界面）
