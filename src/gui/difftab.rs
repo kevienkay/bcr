@@ -864,6 +864,107 @@ impl DiffTab {
         true
     }
 
+    /// P38-1c：缩进调整（BC Increase/Decrease Indent）。
+    /// 对 `row` 所在差异块内两侧存在的行整体 ±4 空格（仅行首空白）。
+    /// `delta > 0` 增加缩进，`delta < 0` 减少（最多去掉 |delta| 个前导空格）。
+    pub fn indent_block(&mut self, row: usize, delta: isize) -> bool {
+        let Some(&(s, e)) = self
+            .diff_blocks
+            .iter()
+            .find(|&&(s, e)| s <= row && row <= e)
+        else {
+            return false;
+        };
+        if delta == 0 {
+            return false;
+        }
+        let pad = 4usize;
+        let adjust = |text: &str| -> String {
+            if delta > 0 {
+                format!("{}{}", " ".repeat(pad), text)
+            } else {
+                let n = text.len() - text.trim_start_matches(' ').len();
+                let cut = n.min(pad);
+                text[cut..].to_string()
+            }
+        };
+        // 两侧文件信息
+        let left_info = self
+            .left
+            .as_ref()
+            .map(|f| (f.path.clone(), f.encoding, f.had_bom, f.content.clone()));
+        let right_info = self
+            .right
+            .as_ref()
+            .map(|f| (f.path.clone(), f.encoding, f.had_bom, f.content.clone()));
+        let mut changed = false;
+        for side in [EditSide::Left, EditSide::Right] {
+            let Some((path, enc, bom, orig)) = (match side {
+                EditSide::Left => left_info.clone(),
+                EditSide::Right => right_info.clone(),
+            }) else {
+                continue;
+            };
+            // 重建该侧全文：块内该侧存在的行 ± 缩进
+            let mut new_lines: Vec<String> = Vec::new();
+            for (i, r) in self.rows.iter().enumerate() {
+                let in_block = i >= s && i <= e;
+                let cell = match side {
+                    EditSide::Left => &r.left,
+                    EditSide::Right => &r.right,
+                };
+                let keep = if in_block {
+                    cell.as_ref().map(|c| adjust(&c.text))
+                } else {
+                    cell.as_ref().map(|c| c.text.clone())
+                };
+                if let Some(text) = keep {
+                    new_lines.push(text);
+                }
+            }
+            let mut new_content = new_lines.join("\n");
+            if orig.ends_with('\n') && !new_content.is_empty() {
+                new_content.push('\n');
+            }
+            if orig == new_content {
+                continue;
+            }
+            // 备份 + 按原编码写回
+            let _ = std::fs::copy(&path, format!("{path}.bak"));
+            let bytes = crate::encoding::encode_back(
+                &crate::encoding::TextFile {
+                    text: String::new(),
+                    encoding: enc,
+                    had_bom: bom,
+                    is_binary: false,
+                },
+                &new_content,
+            );
+            if let Err(e) = std::fs::write(&path, bytes) {
+                self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
+                return false;
+            }
+            // 入撤销栈（重做栈清空）
+            self.undo_stack.push(EditSnapshot {
+                side,
+                path: path.clone(),
+                before: orig,
+                after: new_content,
+            });
+            self.redo_stack.clear();
+            changed = true;
+            // 重新加载该侧并重算
+            match side {
+                EditSide::Left => self.load_left(&path, self.opts.clone()),
+                EditSide::Right => self.load_right(&path, self.opts.clone()),
+            }
+        }
+        if changed {
+            self.error = Some(fmt(I18nKey::Saved, &["已调整缩进"]));
+        }
+        changed
+    }
+
     /// P37-1m：复制单行到目标侧（BC Copy Line to Right/Left，行级替换该行）。
     /// `target` 是被覆盖的一侧：Right = 左侧→右侧，Left = 右侧→左侧。
     pub fn copy_line_at(&mut self, row: usize, target: EditSide) -> bool {
@@ -2048,6 +2149,8 @@ impl DiffTab {
             let mut clear_align_req = false;
             let mut align_target_click: Option<usize> = None;
             let mut align_cancel = false;
+            // P38-1c：缩进调整请求（行索引, delta）
+            let mut indent_req: Option<(usize, isize)> = None;
             // P35-A1：右键复制差异块到另一侧请求 (行索引, 目标侧)
             let mut copy_req: Option<(usize, EditSide)> = None;
             // P37-1m：右键复制行到另一侧请求 (行索引, 目标侧)
@@ -2358,6 +2461,18 @@ impl DiffTab {
                             clear_align_req = true;
                             ui.close();
                         }
+                        // P38-1c：缩进调整（BC Increase/Decrease Indent，整块 ±4 空格）
+                        if row_in_diff {
+                            ui.separator();
+                            if ui.button("↦ 增加缩进").clicked() {
+                                indent_req = Some((row_idx, 1));
+                                ui.close();
+                            }
+                            if ui.button("↤ 减少缩进").clicked() {
+                                indent_req = Some((row_idx, -1));
+                                ui.close();
+                            }
+                        }
                         // P35-A1：复制差异块到另一侧（最核心操作，置顶）
                         if row_in_diff {
                             if ui.button(t(I18nKey::CopyToRight)).clicked() {
@@ -2484,6 +2599,12 @@ impl DiffTab {
             }
             if let Some(target_no) = align_target_click {
                 self.finish_align(target_no);
+                self.inline_edit = inline;
+                return;
+            }
+            // P38-1c：缩进调整（闭包外执行）
+            if let Some((row, delta)) = indent_req {
+                self.indent_block(row, delta);
                 self.inline_edit = inline;
                 return;
             }

@@ -645,6 +645,40 @@ fn difftab_align_pick_finish_via_ui() {
     );
 }
 
+// ---- P38-1c：缩进调整（BC Increase/Decrease Indent） ----------------
+
+#[test]
+fn difftab_indent_block_adjusts_both_sides() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nDEL\nb\n");
+    let r = write(d.path(), "r.txt", "a\nb\nINS\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    assert!(!tab.borrow().diff_blocks.is_empty(), "应有差异块");
+    // 对第 2 行（块内）增加缩进
+    tab.borrow_mut().diff_pos = Some(0);
+    assert!(tab.borrow_mut().indent_block(1, 1), "增加缩进应成功");
+    // 左侧 DEL 行与右侧对应行 +4 空格（两侧不同尺寸避免快速模式误判）
+    let lc = fs::read_to_string(&l).unwrap();
+    assert!(lc.contains("    DEL"), "左侧块行应 +4 空格: {lc}");
+    assert!(!lc.contains("    a\n"), "块外行不应缩进: {lc}");
+    // 减少缩进
+    tab.borrow_mut().indent_block(1, -1);
+    let lc2 = fs::read_to_string(&l).unwrap();
+    assert!(lc2.contains("DEL\n"), "减少后恢复: {lc2}");
+}
+
+#[test]
+fn difftab_indent_block_outside_block_returns_false() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "same\nDEL\n");
+    let r = write(d.path(), "r.txt", "same\nINS\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, &r, ViewOptions::default());
+    // 第 0 行（相同行）不在差异块内 → false
+    assert!(!tab.indent_block(0, 1), "非差异块行应返回 false");
+}
+
 #[test]
 fn difftab_ignore_excludes_row_from_navigation_via_state() {
     let d = tempdir().unwrap();
