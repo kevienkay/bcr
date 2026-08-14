@@ -18,6 +18,7 @@ mod merge;
 mod merge3;
 mod mergeview;
 mod mp3tag;
+mod patchview;
 mod profile;
 mod render;
 mod report;

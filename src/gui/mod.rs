@@ -12,6 +12,7 @@ mod dirtab;
 mod imagetab;
 mod menubar;
 mod mergetab;
+mod patchtab;
 mod textedit;
 mod theme;
 #[cfg(test)]
@@ -25,6 +26,7 @@ use dirtab::DirTab;
 use eframe::egui::{self, Color32, RichText, ThemePreference};
 use imagetab::ImageTab;
 use mergetab::MergeTab;
+use patchtab::PatchTab;
 use std::path::PathBuf;
 use textedit::TextEditTab;
 
@@ -64,6 +66,10 @@ pub struct GuiArgs {
     /// P37-1g：文本编辑（单文件，BC `-edit` 等价）
     #[arg(long = "edit")]
     pub edit: Option<String>,
+
+    /// P37-1h：补丁视图（单 .patch/.diff 文件，BC Text Patch）
+    #[arg(long = "patch")]
+    pub patch: Option<String>,
 }
 
 /// 标签页
@@ -75,6 +81,7 @@ enum Tab {
     Image(ImageTab),
     Csv(CsvTab),
     TextEdit(TextEditTab),
+    Patch(PatchTab),
 }
 
 impl Tab {
@@ -86,6 +93,7 @@ impl Tab {
             Tab::Image(t) => t.title(),
             Tab::Csv(t) => t.title(),
             Tab::TextEdit(t) => t.title(),
+            Tab::Patch(t) => t.title(),
         }
     }
 }
@@ -368,6 +376,10 @@ impl DiffApp {
                 t.open(&files[0]);
                 true
             }
+            Tab::Patch(t) if t.is_empty() && !files.is_empty() => {
+                t.open(&files[0]);
+                true
+            }
             Tab::Image(t) if t.left.is_empty() && t.right.is_empty() && !files.is_empty() => {
                 let l = files[0].clone();
                 let r = files.get(1).cloned().unwrap_or_default();
@@ -398,6 +410,11 @@ impl DiffApp {
     }
 
     fn drop_single_file(&mut self, path: &str) {
+        // 补丁文件：打开补丁视图（BC Text Patch）
+        if crate::patchview::is_patch_file(path) {
+            self.add_tab(Tab::Patch(PatchTab::new(path)));
+            return;
+        }
         // 图片：若当前是图片标签且有一侧空 → 填充；否则新建图片标签
         if crate::imgcmp::is_image_file(path) {
             if let Some(Tab::Image(t)) = self.tabs.get_mut(self.active) {
@@ -1401,6 +1418,7 @@ impl eframe::App for DiffApp {
                 Tab::Image(t) => t.ui(ui),
                 Tab::Csv(t) => t.ui(ui),
                 Tab::TextEdit(t) => t.ui(ui),
+                Tab::Patch(t) => t.ui(ui),
             }
         }
 
@@ -1519,6 +1537,19 @@ impl eframe::App for DiffApp {
                                 t.char_count(),
                                 crate::i18n::t(crate::i18n::Key::OpenFile),
                             ));
+                        }
+                        Tab::Patch(t) => {
+                            if let Some(p) = &t.parsed {
+                                ui.label(format!(
+                                    "{} {}  {} {}",
+                                    crate::i18n::t(crate::i18n::Key::PatchAdded),
+                                    p.added,
+                                    crate::i18n::t(crate::i18n::Key::PatchRemoved),
+                                    p.removed,
+                                ));
+                            } else {
+                                ui.label(crate::i18n::t(crate::i18n::Key::PatchTitle));
+                            }
                         }
                     }
                 } else {
@@ -1676,6 +1707,9 @@ pub fn run(args: &GuiArgs) -> i32 {
     } else if let Some(f) = &args.edit {
         // P37-1g：文本编辑（BC -edit 单文件）
         app.add_tab(Tab::TextEdit(TextEditTab::new(f)));
+    } else if let Some(f) = &args.patch {
+        // P37-1h：补丁视图（BC Text Patch 单文件）
+        app.add_tab(Tab::Patch(PatchTab::new(f)));
     } else {
         match (&args.left, &args.right) {
             (Some(l), Some(r)) => {

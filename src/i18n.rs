@@ -315,6 +315,16 @@ pub enum Key {
     TextEditSyntax,
     /// P37-1g：状态栏 {} | {} 行 | {} 字符
     TextEditStatus,
+    /// P37-1h：补丁标题
+    PatchTitle,
+    /// P37-1h：应用补丁
+    ApplyPatch,
+    /// P37-1h：已应用补丁到 {}
+    PatchApplied,
+    /// P37-1h：新增 {}
+    PatchAdded,
+    /// P37-1h：删除 {}
+    PatchRemoved,
     /// 忽略行尾空白
     IgnoreTrailing,
     /// 忽略大小写

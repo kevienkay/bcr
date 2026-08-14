@@ -13,6 +13,7 @@ use crate::gui::difftab::{DiffTab, DiffViewFilter, EditSide};
 use crate::gui::dirtab::{DirTab, ViewFilter};
 use crate::gui::imagetab::ImageTab;
 use crate::gui::mergetab::MergeTab;
+use crate::gui::patchtab::PatchTab;
 use crate::gui::textedit::TextEditTab;
 use crate::sideview::ViewOptions;
 use egui_kittest::{kittest::Queryable, Harness};
@@ -1116,6 +1117,47 @@ fn text_edit_tab_save_button_writes_file() {
     assert!(
         fs::metadata(format!("{p}.bak")).is_ok(),
         "保存应生成 .bak 备份"
+    );
+}
+
+// ---- P37-1h：补丁视图（BC Text Patch） ----------------
+
+#[test]
+fn patch_tab_renders_diff_and_applies() {
+    let d = tempdir().unwrap();
+    // 目标文件与补丁同目录
+    write(d.path(), "a.txt", "line1\nold line\nline3\n");
+    let p = write(
+        d.path(),
+        "a.patch",
+        "--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,3 @@\n line1\n-old line\n+new line\n line3\n",
+    );
+    let tab = RefCell::new(PatchTab::new(&p));
+    assert!(tab.borrow().error.is_none(), "解析不应出错");
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 工具栏有「应用补丁」按钮
+    assert!(
+        h.query_all_by_label_contains("应用补丁").next().is_some(),
+        "应有应用补丁按钮"
+    );
+    // 点击应用补丁 → 目标文件被更新
+    h.get_by_label_contains("应用补丁").click();
+    h.run();
+    assert_eq!(
+        fs::read_to_string(d.path().join("a.txt")).unwrap(),
+        "line1\nnew line\nline3"
+    );
+}
+
+#[test]
+fn empty_patch_tab_shows_open_button() {
+    let tab = RefCell::new(PatchTab::new(""));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert!(
+        h.query_all_by_label_contains("打开文件").next().is_some(),
+        "空补丁会话应显示打开文件按钮"
     );
 }
 
