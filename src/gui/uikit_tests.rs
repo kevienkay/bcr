@@ -679,6 +679,50 @@ fn difftab_indent_block_outside_block_returns_false() {
     assert!(!tab.indent_block(0, 1), "非差异块行应返回 false");
 }
 
+// ---- P38-1d：编辑导航（BC Next/Previous Edit） ----------------
+
+#[test]
+fn difftab_edit_nav_marks_and_jumps() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\nREP1\nm2\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\nREP2\nm2\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, &r, ViewOptions::default());
+    // 复制一个差异块 → 该块行被标记为已编辑
+    tab.diff_pos = Some(0);
+    assert!(tab.copy_block_to(EditSide::Right), "复制应成功");
+    let edited = tab.edited_rows();
+    assert!(!edited.is_empty(), "复制后应有已编辑行: {edited:?}");
+    // 编辑导航循环前进/后退（单条编辑：next→Some(0)，prev 循环回 Some(0)）
+    tab.next_edit();
+    assert_eq!(tab.edit_pos, Some(0), "next 后应定位到唯一编辑");
+    tab.prev_edit();
+    assert_eq!(tab.edit_pos, Some(0), "prev 循环回到唯一编辑");
+}
+
+#[test]
+fn difftab_edit_nav_context_menu_via_ui() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    tab.borrow_mut().diff_pos = Some(0);
+    assert!(
+        tab.borrow_mut().copy_block_to(EditSide::Right),
+        "复制应成功"
+    );
+    // 渲染不 panic（编辑行圆点标记）
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(
+        !tab.borrow().edited_rows().is_empty(),
+        "UI 渲染后仍保留已编辑标记"
+    );
+}
+
 #[test]
 fn difftab_ignore_excludes_row_from_navigation_via_state() {
     let d = tempdir().unwrap();

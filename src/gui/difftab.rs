@@ -103,6 +103,10 @@ pub struct DiffTab {
     pub manual_aligns: Vec<(usize, usize)>,
     /// P38-1b：对齐模式（源侧 + 源行号，等待点击目标行）
     pub align_pick: Option<(EditSide, usize)>,
+    /// P38-1d：已编辑行锚点（left_no, right_no），recompute 后重映射为行索引
+    pub edited_anchors: Vec<(Option<usize>, Option<usize>)>,
+    /// P38-1d：当前编辑导航位置（edited_rows 索引）
+    pub edit_pos: Option<usize>,
     pub search: SearchState,
     /// 待跳转行号（1-based）
     pub goto_line: Option<usize>,
@@ -180,6 +184,8 @@ impl DiffTab {
             isolated: None,
             manual_aligns: Vec::new(),
             align_pick: None,
+            edited_anchors: Vec::new(),
+            edit_pos: None,
             search: SearchState::default(),
             goto_line: None,
             goto_focus: false,
@@ -855,6 +861,19 @@ impl DiffTab {
             after: new_content,
         });
         self.redo_stack.clear();
+        // P38-1d：标记块内已编辑行（重载前收集锚点，避免借用冲突）
+        let anchors: Vec<(Option<usize>, Option<usize>)> = self
+            .rows
+            .iter()
+            .take(e + 1)
+            .skip(s)
+            .map(|r| (r.left_no, r.right_no))
+            .collect();
+        for a in anchors {
+            if !self.edited_anchors.contains(&a) {
+                self.edited_anchors.push(a);
+            }
+        }
         // 重新加载目标侧并重算
         match target {
             EditSide::Right => self.load_right(&dst_path, self.opts.clone()),
@@ -877,6 +896,19 @@ impl DiffTab {
         };
         if delta == 0 {
             return false;
+        }
+        // P38-1d：标记块内已编辑行（重载前收集锚点，避免借用冲突）
+        let anchors: Vec<(Option<usize>, Option<usize>)> = self
+            .rows
+            .iter()
+            .take(e + 1)
+            .skip(s)
+            .map(|r| (r.left_no, r.right_no))
+            .collect();
+        for a in anchors {
+            if !self.edited_anchors.contains(&a) {
+                self.edited_anchors.push(a);
+            }
         }
         let pad = 4usize;
         let adjust = |text: &str| -> String {
@@ -1035,6 +1067,12 @@ impl DiffTab {
             after: new_content,
         });
         self.redo_stack.clear();
+        // P38-1d：标记该行已编辑（重载前取锚点，避免借用冲突）
+        if let Some(anchor) = self.rows.get(row).map(|r| (r.left_no, r.right_no)) {
+            if !self.edited_anchors.contains(&anchor) {
+                self.edited_anchors.push(anchor);
+            }
+        }
         // 重新加载目标侧并重算
         match target {
             EditSide::Right => self.load_right(&dst_path, self.opts.clone()),
@@ -1195,6 +1233,51 @@ impl DiffTab {
             .copied()
             .filter(|&r| self.in_isolated(r))
             .collect()
+    }
+
+    /// P38-1d：当前已编辑行索引（锚点 → 当前 rows 重映射，含隔离过滤）。
+    /// 锚点任一侧行号命中即视为已编辑（复制后行结构可能从 Delete/Insert 变 Equal）。
+    pub fn edited_rows(&self) -> Vec<usize> {
+        self.rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| {
+                self.edited_anchors.iter().any(|&(al, ar)| {
+                    (al.is_some() && al == r.left_no) || (ar.is_some() && ar == r.right_no)
+                }) && self.in_isolated(r.left_no.unwrap_or(0).saturating_sub(1))
+            })
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// P38-1d：下一个编辑（相对当前编辑位置循环前进）
+    pub fn next_edit(&mut self) {
+        let rows = self.edited_rows();
+        if rows.is_empty() {
+            return;
+        }
+        let n = rows.len();
+        let next = match self.edit_pos {
+            Some(p) => (p + 1) % n,
+            None => 0,
+        };
+        self.edit_pos = Some(next);
+        self.jump_to_row(rows[next]);
+    }
+
+    /// P38-1d：上一个编辑（相对当前编辑位置循环后退）
+    pub fn prev_edit(&mut self) {
+        let rows = self.edited_rows();
+        if rows.is_empty() {
+            return;
+        }
+        let n = rows.len();
+        let prev = match self.edit_pos {
+            Some(p) => (p + n - 1) % n,
+            None => n - 1,
+        };
+        self.edit_pos = Some(prev);
+        self.jump_to_row(rows[prev]);
     }
 
     // ---- 差异跳转 ----
@@ -2067,6 +2150,9 @@ impl DiffTab {
             // 匹配行集合（搜索高亮）
             let match_set: std::collections::HashSet<usize> =
                 self.search.matches.iter().copied().collect();
+            // P38-1d：已编辑行集合（渲染小圆点标记）
+            let edited_set: std::collections::HashSet<usize> =
+                self.edited_rows().into_iter().collect();
             let current_match = self
                 .search
                 .current
@@ -2401,6 +2487,15 @@ impl DiffTab {
                         Some(RowHit::Edit(side)) => dbl = Some((oi, side)),
                         Some(RowHit::FoldToggle(bi)) => fold_toggle = Some(bi),
                         None => {}
+                    }
+                    // P38-1d：已编辑行小圆点标记（右上角）
+                    if edited_set.contains(&oi) {
+                        let rect = resp.rect;
+                        ui.painter().circle_filled(
+                            Pos2::new(rect.right() - 8.0, rect.top() + 8.0),
+                            3.0,
+                            crate::gui::theme::diff_modify(),
+                        );
                     }
                     // P38-1b：对齐模式下点击行 → 记录目标行号（另一侧行号）
                     if resp.clicked() && self.align_pick.is_some() {

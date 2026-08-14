@@ -581,6 +581,10 @@ pub enum Key {
     MenuNextDiff,
     /// 上一差异
     MenuPrevDiff,
+    /// P38-1d：下一个编辑（编辑导航）
+    MenuNextEdit,
+    /// P38-1d：上一个编辑（编辑导航）
+    MenuPrevEdit,
     /// 重新加载
     MenuReload,
     /// 统计栏

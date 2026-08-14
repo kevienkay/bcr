@@ -195,6 +195,15 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.prev_diff());
         }
+        // P38-1d：编辑导航（BC Next/Previous Edit）
+        if ui.button(t(I18nKey::MenuNextEdit)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.next_edit());
+        }
+        if ui.button(t(I18nKey::MenuPrevEdit)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.prev_edit());
+        }
         ui.separator();
         if ui.button(t(I18nKey::MenuReload)).clicked() {
             ui.close();
