@@ -747,13 +747,24 @@ mod tests {
             "应命中 src/a.rs 与 doc/b.md（.bin/.git 跳过）: {:?}",
             t.file_hits
         );
-        let paths: Vec<&str> = t
+        let paths: Vec<String> = t
             .file_hits
             .iter()
-            .map(|(p, _, _)| p.rsplit('/').next().unwrap_or(p))
+            .map(|(p, _, _)| {
+                std::path::Path::new(p)
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_else(|| p.clone())
+            })
             .collect();
-        assert!(paths.contains(&"a.rs"), "应命中 a.rs: {paths:?}");
-        assert!(paths.contains(&"b.md"), "应命中 b.md: {paths:?}");
+        assert!(
+            paths.contains(&"a.rs".to_string()),
+            "应命中 a.rs: {paths:?}"
+        );
+        assert!(
+            paths.contains(&"b.md".to_string()),
+            "应命中 b.md: {paths:?}"
+        );
         // 行号正确（1-based）
         let md = t
             .file_hits
