@@ -173,12 +173,36 @@ fn dirtab_filter_dropdown_changes_view() {
     }
     assert!(clicked, "下拉菜单应展开并出现「仅左侧」选项");
     // 轮询等待过滤生效（Windows/macOS CI 偶发时序：点击后多帧才应用；并发测试下需真实 sleep）
+    // 加固（P40-2 CI 第 4 次撞 flaky）：首次点击可能因菜单自动关闭时序未命中 → 整轮重试最多 3 次
     let mut applied = false;
-    for _ in 0..60 {
-        h.run_steps(2);
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        if tab.borrow().view_filter == ViewFilter::LeftOnly {
-            applied = true;
+    for attempt in 0..3 {
+        if attempt > 0 {
+            // 重新打开下拉再点（上一轮点击可能落在已关闭的菜单上）
+            h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
+                .click();
+            h.run_steps(4);
+            let mut reclicked = false;
+            for _ in 0..30 {
+                h.run_steps(2);
+                if let Some(node) = h.query_by_label("仅左侧") {
+                    node.click();
+                    reclicked = true;
+                    break;
+                }
+            }
+            if !reclicked {
+                continue;
+            }
+        }
+        for _ in 0..60 {
+            h.run_steps(2);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            if tab.borrow().view_filter == ViewFilter::LeftOnly {
+                applied = true;
+                break;
+            }
+        }
+        if applied {
             break;
         }
     }
