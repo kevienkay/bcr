@@ -637,6 +637,30 @@ pub enum Key {
     SessionSaveCurrent,
     /// P39-2c：会话名
     SessionName,
+    /// P39-2d：细节（视图菜单子菜单）
+    MenuDetail,
+    /// P39-2d：文本细节
+    DetailText,
+    /// P39-2d：16进制细节
+    DetailHex,
+    /// P39-2d：对齐方式细节
+    DetailAlign,
+    /// P39-2d：布局
+    MenuLayout,
+    /// P39-2d：边并排
+    LayoutSideBySide,
+    /// P39-2d：上-下
+    LayoutTopBottom,
+    /// P39-2d：网页
+    LayoutWeb,
+    /// P39-2d：书签
+    MenuBookmark,
+    /// P39-2d：切换书签
+    MenuToggleBookmark,
+    /// P39-2d：转到书签
+    MenuGotoBookmark,
+    /// P39-2d：清除书签
+    MenuClearBookmarks,
 
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比

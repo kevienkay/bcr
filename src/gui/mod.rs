@@ -803,9 +803,18 @@ impl DiffApp {
                         .spacing([10.0, 10.0])
                         .show(ui, |ui| {
                             for (i, (icon, title, desc, id)) in cards.iter().enumerate() {
-                                let resp = egui::Frame::group(ui.style())
+                                // P39-2d：卡片 hover 高亮（浅色/深色主题各自适配）+ 圆角
+                                let hovered = ui.rect_contains_pointer(ui.max_rect());
+                                let _ = hovered;
+                                let frame = egui::Frame::group(ui.style())
                                     .corner_radius(8.0)
                                     .inner_margin(egui::Margin::same(10))
+                                    .fill(if ui.visuals().dark_mode {
+                                        Color32::from_gray(36)
+                                    } else {
+                                        Color32::from_gray(250)
+                                    });
+                                let resp = frame
                                     .show(ui, |ui| {
                                         ui.set_min_size(egui::vec2(card_w, card_h));
                                         ui.vertical(|ui| {
@@ -829,6 +838,15 @@ impl DiffApp {
                                     .response
                                     .interact(egui::Sense::click())
                                     .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                // P39-2d：hover 高亮描边（BC 卡片 hover 反馈）
+                                if resp.hovered() {
+                                    ui.painter().rect_stroke(
+                                        resp.rect,
+                                        8.0,
+                                        egui::Stroke::new(1.5, Color32::from_rgb(86, 148, 240)),
+                                        egui::StrokeKind::Outside,
+                                    );
+                                }
                                 if resp.clicked() {
                                     card_click = Some(*id);
                                 }

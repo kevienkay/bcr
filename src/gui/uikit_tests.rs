@@ -9,7 +9,7 @@
 //! 运行：cargo test gui::uikit_tests
 
 use crate::gui::csvtab::CsvTab;
-use crate::gui::difftab::{DiffTab, DiffViewFilter, EditSide};
+use crate::gui::difftab::{DiffDetailMode, DiffLayout, DiffTab, DiffViewFilter, EditSide};
 use crate::gui::dirtab::{DirTab, ViewFilter};
 use crate::gui::foldermergetab::FolderMergeTab;
 use crate::gui::imagetab::ImageTab;
@@ -2137,6 +2137,77 @@ fn session_center_save_current_and_report_preview() {
     };
     assert!(preview.contains("统计"), "报告预览应含统计行");
     assert!(preview.contains("bcr 文本对比报告"), "报告预览应含标题");
+}
+
+// ---- P39-2d：书签 0-9 / 细节三模式 / 布局 -------------
+
+#[test]
+fn difftab_bookmarks_toggle_goto_clear() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\nd\ne\n");
+    let r = write(d.path(), "r.txt", "a\nb\nX\nd\ne\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // 方法级：切换书签（绑定当前 scroll 顶部行）
+    tab.borrow_mut().toggle_bookmark(1);
+    assert!(
+        tab.borrow().bookmarks().contains_key(&1),
+        "toggle 应绑定书签 1"
+    );
+    // 再 toggle → 取消
+    tab.borrow_mut().toggle_bookmark(1);
+    assert!(
+        !tab.borrow().bookmarks().contains_key(&1),
+        "再次 toggle 应取消书签"
+    );
+    // 绑定 + 跳转（不 panic、集合保留）
+    tab.borrow_mut().toggle_bookmark(3);
+    tab.borrow_mut().goto_bookmark(3);
+    assert!(tab.borrow().bookmarks().contains_key(&3));
+    // 清除全部
+    tab.borrow_mut().clear_bookmarks();
+    assert!(tab.borrow().bookmarks().is_empty());
+    // 键盘：⌘⌥⌃1 切换书签（Harness 渲染后触发）
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    h.key_combination_modifiers(
+        eframe::egui::Modifiers::COMMAND
+            | eframe::egui::Modifiers::ALT
+            | eframe::egui::Modifiers::CTRL,
+        &[eframe::egui::Key::Num1],
+    );
+    h.run();
+    assert_eq!(tab.borrow().bookmarks().len(), 1, "⌘⌥⌃1 应切换出 1 个书签");
+}
+
+#[test]
+fn difftab_detail_mode_hex_and_layout() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nB\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    assert_eq!(tab.borrow().detail_mode, DiffDetailMode::Text);
+    // 16进制细节：文本文件也构建 hex 数据
+    tab.borrow_mut().set_detail_mode(DiffDetailMode::Hex);
+    assert_eq!(tab.borrow().detail_mode, DiffDetailMode::Hex);
+    assert!(tab.borrow().hex.is_some(), "Hex 细节模式应构建字节网格");
+    // 切回文本
+    tab.borrow_mut().set_detail_mode(DiffDetailMode::Text);
+    assert!(tab.borrow().hex.is_none() || tab.borrow().detail_mode == DiffDetailMode::Text);
+    // 布局切换
+    tab.borrow_mut().set_layout(DiffLayout::TopBottom);
+    assert_eq!(
+        tab.borrow().row_h(),
+        super::theme::ROW_H * 2.0,
+        "上-下布局行高应为 2 倍"
+    );
+    tab.borrow_mut().set_layout(DiffLayout::SideBySide);
+    assert_eq!(
+        tab.borrow().row_h(),
+        super::theme::ROW_H,
+        "并排布局行高应为 1 倍"
+    );
 }
 
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------

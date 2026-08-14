@@ -318,6 +318,69 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
         }
+        ui.separator();
+        // P39-2d：细节三模式（BC 视图菜单「细节」）
+        ui.label(t(I18nKey::MenuDetail));
+        let cur_detail = app.tabs.get(app.active).and_then(|t| match t {
+            super::Tab::Diff(tab) => Some(tab.detail_mode),
+            _ => None,
+        });
+        if let Some(cur) = cur_detail {
+            for (mode, key) in [
+                (super::difftab::DiffDetailMode::Text, I18nKey::DetailText),
+                (super::difftab::DiffDetailMode::Hex, I18nKey::DetailHex),
+                (super::difftab::DiffDetailMode::Align, I18nKey::DetailAlign),
+            ] {
+                if ui.selectable_label(cur == mode, t(key)).clicked() {
+                    if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                        tab.set_detail_mode(mode);
+                    }
+                    ui.close();
+                }
+            }
+        }
+        ui.separator();
+        // P39-2d：布局（BC 视图菜单「布局」）
+        ui.label(t(I18nKey::MenuLayout));
+        let cur_layout = app.tabs.get(app.active).and_then(|t| match t {
+            super::Tab::Diff(tab) => Some(tab.layout),
+            _ => None,
+        });
+        if let Some(cur) = cur_layout {
+            for (layout, key) in [
+                (
+                    super::difftab::DiffLayout::SideBySide,
+                    I18nKey::LayoutSideBySide,
+                ),
+                (
+                    super::difftab::DiffLayout::TopBottom,
+                    I18nKey::LayoutTopBottom,
+                ),
+                (super::difftab::DiffLayout::Web, I18nKey::LayoutWeb),
+            ] {
+                if ui.selectable_label(cur == layout, t(key)).clicked() {
+                    if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                        tab.set_layout(layout);
+                    }
+                    ui.close();
+                }
+            }
+        }
+        ui.separator();
+        // P39-2d：书签（BC 书签 0-9，⌘⌥⌃0-9 切换 / ⌘0-9 跳转）
+        ui.label(t(I18nKey::MenuBookmark));
+        if ui.button(t(I18nKey::MenuToggleBookmark)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.toggle_bookmark(0));
+        }
+        if ui.button(t(I18nKey::MenuGotoBookmark)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.goto_bookmark(0));
+        }
+        if ui.button(t(I18nKey::MenuClearBookmarks)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.clear_bookmarks());
+        }
     });
 }
 

@@ -14,6 +14,30 @@ pub enum DiffViewFilter {
     Context,
 }
 
+/// P39-2d：细节三模式（BC 视图菜单「细节」）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiffDetailMode {
+    /// 文本细节（默认行渲染）
+    #[default]
+    Text,
+    /// 16进制细节（字节网格）
+    Hex,
+    /// 对齐方式细节（手动对齐行标记）
+    Align,
+}
+
+/// P39-2d：布局（BC 视图菜单「布局」）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiffLayout {
+    /// 边并排（默认）
+    #[default]
+    SideBySide,
+    /// 上-下
+    TopBottom,
+    /// 网页（单栏）
+    Web,
+}
+
 /// 加载的文件
 #[derive(Clone)]
 pub struct LoadedFile {
@@ -137,6 +161,12 @@ pub struct DiffTab {
     pub view_filter: DiffViewFilter,
     /// P35-A3：Context 模式上下文行数
     pub context_lines: usize,
+    /// P39-2d：细节三模式（文本/16进制/对齐方式）
+    pub detail_mode: DiffDetailMode,
+    /// P39-2d：布局（边并排/上-下/网页）
+    pub layout: DiffLayout,
+    /// P39-2d：书签（编号 0-9 → 渲染行索引）
+    pub bookmarks: std::collections::HashMap<u8, usize>,
 }
 
 /// 编辑窗口状态
@@ -202,6 +232,9 @@ impl DiffTab {
             show_whitespace: false,
             view_filter: DiffViewFilter::All,
             context_lines: 3,
+            detail_mode: DiffDetailMode::Text,
+            layout: DiffLayout::SideBySide,
+            bookmarks: std::collections::HashMap::new(),
         }
     }
 
@@ -773,6 +806,83 @@ impl DiffTab {
         }
         self.undo_stack.push(snap);
         self.error = Some(fmt(I18nKey::Saved, &["已重做"]));
+    }
+
+    /// P39-2d：切换书签（当前可见顶部行绑定编号 0-9，已存在则取消）
+    pub fn toggle_bookmark(&mut self, no: u8) {
+        if no > 9 {
+            return;
+        }
+        let top = (self.scroll.y / ROW_H).max(0.0) as usize;
+        if self.bookmarks.get(&no) == Some(&top) {
+            self.bookmarks.remove(&no);
+        } else {
+            self.bookmarks.insert(no, top);
+        }
+    }
+
+    /// P39-2d：转到书签（0-9）
+    pub fn goto_bookmark(&mut self, no: u8) {
+        if let Some(&row) = self.bookmarks.get(&no) {
+            self.scroll.y = row as f32 * ROW_H;
+            // 同步 diff_pos：书签行若是差异行则高亮
+            if let Some(p) = self.diff_rows.iter().position(|&r| r == row) {
+                self.diff_pos = Some(p);
+            }
+        }
+    }
+
+    /// P39-2d：清除全部书签
+    pub fn clear_bookmarks(&mut self) {
+        self.bookmarks.clear();
+    }
+
+    /// P39-2d：细节三模式切换（文本/16进制/对齐方式）
+    /// 16进制细节：对文本文件也构建字节网格（复用 hex 数据）
+    pub fn set_detail_mode(&mut self, mode: DiffDetailMode) {
+        self.detail_mode = mode;
+        if mode == DiffDetailMode::Hex && self.hex.is_none() {
+            // 文本文件强制 hex：读取两侧字节构建 hex rows
+            let l = self.left.as_ref().map(|f| f.path.clone());
+            let r = self.right.as_ref().map(|f| f.path.clone());
+            if let (Some(lp), Some(rp)) = (&l, &r) {
+                let rows = match (std::fs::read(lp), std::fs::read(rp)) {
+                    (Ok(lb), Ok(rb)) => Some(crate::hexview::build_hex_rows(&lb, &rb)),
+                    _ => None,
+                };
+                if let Some(rows) = rows {
+                    self.hex = Some(HexTabData {
+                        left: lp.clone(),
+                        right: rp.clone(),
+                        rows,
+                        left_bytes: std::fs::read(lp).unwrap_or_default(),
+                        right_bytes: std::fs::read(rp).unwrap_or_default(),
+                        addr_hex: true,
+                        value_mode: crate::hexview::HexValueMode::Raw,
+                        show_addr: true,
+                    });
+                }
+            }
+        }
+    }
+
+    /// P39-2d：布局切换
+    pub fn set_layout(&mut self, layout: DiffLayout) {
+        self.layout = layout;
+    }
+
+    /// P39-2d：当前布局的行高（上-下布局每数据行占 2 行）
+    pub(crate) fn row_h(&self) -> f32 {
+        match self.layout {
+            DiffLayout::TopBottom => ROW_H * 2.0,
+            DiffLayout::SideBySide | DiffLayout::Web => ROW_H,
+        }
+    }
+
+    /// P39-2d：书签（测试用）
+    #[cfg(test)]
+    pub(crate) fn bookmarks(&self) -> &std::collections::HashMap<u8, usize> {
+        &self.bookmarks
     }
 
     // ---- P35-A1：复制差异块到另一侧（BC Copy to Other Side）----
@@ -1574,6 +1684,31 @@ impl DiffTab {
                     self.view_filter = vf;
                 }
             }
+            // P39-2d：⌘⌥⌃0-9 切换书签 / ⌘0-9 转到书签（BC 书签快捷键）
+            let cmd = ui.input(|i| i.modifiers.command);
+            let alt = ui.input(|i| i.modifiers.alt);
+            let ctrl = ui.input(|i| i.modifiers.ctrl);
+            for d in 0..=9u8 {
+                let key = match d {
+                    0 => Key::Num0,
+                    1 => Key::Num1,
+                    2 => Key::Num2,
+                    3 => Key::Num3,
+                    4 => Key::Num4,
+                    5 => Key::Num5,
+                    6 => Key::Num6,
+                    7 => Key::Num7,
+                    8 => Key::Num8,
+                    _ => Key::Num9,
+                };
+                if ui.input(|i| i.key_pressed(key)) {
+                    if cmd && alt && ctrl {
+                        self.toggle_bookmark(d);
+                    } else if cmd {
+                        self.goto_bookmark(d);
+                    }
+                }
+            }
         }
         // B1：F6 下一差异 / F7 上一差异（hex 模式下走 hex 差异导航）
         if ui.input(|i| i.key_pressed(Key::F6)) {
@@ -2303,10 +2438,19 @@ impl DiffTab {
             let gutter_l = gutter_width(max_no_l);
             let gutter_r = gutter_width(max_no_r);
             // P33：两栏固定各占半屏（BC 式等分），长行栏内横向滚动查看；随窗口缩放自适应
+            // P39-2d：布局切换 —— SideBySide 左右并排各半宽；TopBottom/Web 单栏全宽上下堆叠
             let avail = ui.available_width();
             let mid_gap = super::theme::MID_GAP;
-            let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
-            let content_w = half;
+            let (content_w, total_w, half) = match self.layout {
+                DiffLayout::SideBySide => {
+                    let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
+                    (half, gutter_l + half + mid_gap + gutter_r + half, half)
+                }
+                DiffLayout::TopBottom | DiffLayout::Web => {
+                    let w = (avail - gutter_l.max(gutter_r)).max(200.0);
+                    (w, avail, w)
+                }
+            };
             // 最长行所需宽度（供横向滚动条范围计算）
             let max_chars = self
                 .rows
@@ -2317,8 +2461,6 @@ impl DiffTab {
                 .max()
                 .unwrap_or(0);
             let max_line_w = max_chars as f32 * 9.0 + 24.0;
-            // P32-A1：左右面板之间留空隙画差异连接线（BC 观感）
-            let total_w = gutter_l + content_w + mid_gap + gutter_r + content_w;
             let _ = max_line_w; // P33：横向滚动条范围在工具栏计算（栏宽固定半屏）
             let fg = text_color(ui);
 
@@ -2567,7 +2709,7 @@ impl DiffTab {
                 ui.separator();
             }
 
-            let out = super::show_rows(ui, view.len(), ROW_H, |ui, range| {
+            let out = super::show_rows(ui, view.len(), self.row_h(), |ui, range| {
                 ui.set_min_width(total_w);
                 // 当前差异行（diff_pos → diff_rows 中的行索引，P31 竖条标记）
                 let cur_diff_orig = self.diff_pos.and_then(|k| self.diff_rows.get(k)).copied();
@@ -2578,8 +2720,10 @@ impl DiffTab {
                         // 折叠占位行：点击展开
                         let (s, e) = self.diff_blocks[bi];
                         let n = e - s + 1;
-                        let (rect, resp) =
-                            ui.allocate_exact_size(Vec2::new(total_w, ROW_H), egui::Sense::click());
+                        let (rect, resp) = ui.allocate_exact_size(
+                            Vec2::new(total_w, self.row_h()),
+                            egui::Sense::click(),
+                        );
                         paint_bg(
                             ui,
                             rect,
@@ -2659,6 +2803,7 @@ impl DiffTab {
                         ignored,
                         self.h_scroll,
                         self.show_whitespace,
+                        self.layout,
                     );
                     match hit {
                         Some(RowHit::Edit(side)) => dbl = Some((oi, side)),
@@ -3043,7 +3188,16 @@ fn paint_diff_row(
     h_scroll: f32,
     // P35-A4：显示空白符
     show_ws: bool,
+    // P39-2d：布局（SideBySide 左右并排；TopBottom/Web 上下堆叠）
+    layout: DiffLayout,
 ) -> (Option<RowHit>, egui::Response) {
+    // P39-2d：上-下/网页布局 → 垂直堆叠（左内容上半、右内容下半，行高 2*ROW_H）
+    if layout != DiffLayout::SideBySide {
+        return paint_diff_row_v(
+            ui, row, gutter_l, gutter_r, content_w, bg_l, bg_r, hl_l, hl_r, fg, syn_l, syn_r,
+            is_current, inline, ignored, h_scroll, show_ws,
+        );
+    }
     let mid_gap = super::theme::MID_GAP;
     let (rect, resp) = ui.allocate_exact_size(
         Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H),
@@ -3206,6 +3360,132 @@ fn paint_diff_row(
             if right_zone.contains(pos) {
                 return (Some(RowHit::Edit(EditSide::Right)), resp);
             }
+        }
+    }
+    (None, resp)
+}
+
+/// P39-2d：上-下 / 网页布局的行绘制（左内容上半、右内容下半，行高 2*ROW_H）
+#[allow(clippy::too_many_arguments)]
+fn paint_diff_row_v(
+    ui: &mut egui::Ui,
+    row: &SideRow,
+    gutter_l: f32,
+    gutter_r: f32,
+    content_w: f32,
+    bg_l: Option<Color32>,
+    bg_r: Option<Color32>,
+    hl_l: Option<Color32>,
+    hl_r: Option<Color32>,
+    fg: Color32,
+    syn_l: Option<&'static syntect::parsing::SyntaxReference>,
+    syn_r: Option<&'static syntect::parsing::SyntaxReference>,
+    is_current: bool,
+    mut inline: Option<&mut InlineEditState>,
+    ignored: bool,
+    h_scroll: f32,
+    show_ws: bool,
+) -> (Option<RowHit>, egui::Response) {
+    let row_h = ROW_H * 2.0;
+    let (rect, resp) = ui.allocate_exact_size(
+        Vec2::new(gutter_l.max(gutter_r) + content_w, row_h),
+        egui::Sense::click(),
+    );
+    let x = rect.left();
+    let y = rect.top();
+    // 忽略行弱化色
+    let dim = if ui.visuals().dark_mode {
+        Color32::from_gray(42)
+    } else {
+        Color32::from_gray(226)
+    };
+    let gutter_bg = if ui.visuals().dark_mode {
+        Color32::from_gray(38)
+    } else {
+        Color32::from_gray(238)
+    };
+    // BC 风格当前差异行：左侧 3px 竖条（整行高）
+    if is_current {
+        ui.painter().rect_filled(
+            Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, row_h)),
+            0.0,
+            super::theme::current_bar(),
+        );
+    }
+    // ---- 上半：左 gutter + 左内容 ----
+    let l_bg = if ignored { Some(dim) } else { bg_l };
+    {
+        let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H));
+        paint_bg(ui, gutter_rect, Some(gutter_bg));
+        paint_line_no(ui, gutter_rect, row.left_no);
+        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
+        paint_bg(ui, content_rect, l_bg);
+        let editing_side = inline.as_ref().map(|ie| ie.side);
+        match editing_side {
+            Some(EditSide::Left) => {
+                if let Some(ie) = inline.as_mut() {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut ie.buf)
+                            .font(egui::TextStyle::Monospace)
+                            .desired_width(content_w - 8.0),
+                    );
+                }
+            }
+            _ => {
+                paint_cell(
+                    ui,
+                    content_rect,
+                    row.left.as_ref(),
+                    fg,
+                    hl_l,
+                    syn_l,
+                    h_scroll,
+                    show_ws,
+                );
+            }
+        }
+    }
+    // ---- 下半：右 gutter + 右内容 ----
+    let r_bg = if ignored { Some(dim) } else { bg_r };
+    {
+        let y2 = y + ROW_H;
+        let gutter_rect = Rect::from_min_size(Pos2::new(x, y2), vec2(gutter_r, ROW_H));
+        paint_bg(ui, gutter_rect, Some(gutter_bg));
+        paint_line_no(ui, gutter_rect, row.right_no);
+        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_r, y2), vec2(content_w, ROW_H));
+        paint_bg(ui, content_rect, r_bg);
+        let editing_side = inline.as_ref().map(|ie| ie.side);
+        match editing_side {
+            Some(EditSide::Right) => {
+                if let Some(ie) = inline.as_mut() {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut ie.buf)
+                            .font(egui::TextStyle::Monospace)
+                            .desired_width(content_w - 8.0),
+                    );
+                }
+            }
+            _ => {
+                paint_cell(
+                    ui,
+                    content_rect,
+                    row.right.as_ref(),
+                    fg,
+                    hl_r,
+                    syn_r,
+                    h_scroll,
+                    show_ws,
+                );
+            }
+        }
+    }
+    // 双击 → 编辑（上半=左，下半=右）
+    if resp.double_clicked() {
+        if let Some(pos) = resp.interact_pointer_pos() {
+            if pos.y < y + ROW_H {
+                return (Some(RowHit::Edit(EditSide::Left)), resp);
+            }
+            return (Some(RowHit::Edit(EditSide::Right)), resp);
         }
     }
     (None, resp)
