@@ -85,6 +85,13 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             app.clear_active_tab();
         }
+        ui.separator();
+        // P39-2c：报告生成（⌘P）
+        if ui.button(t(I18nKey::MenuReport)).clicked() {
+            ui.close();
+            app.show_report = true;
+            app.report_error = None;
+        }
     });
 }
 
@@ -223,6 +230,15 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if ui.button(t(I18nKey::MenuPrevDiff)).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.prev_diff());
+        }
+        // P39-2c：差异部分导航（区块级跳转，BC ⇧⌃↓/↑）
+        if ui.button(t(I18nKey::MenuNextSection)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.next_diff_section());
+        }
+        if ui.button(t(I18nKey::MenuPrevSection)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.prev_diff_section());
         }
         // P38-1d：编辑导航（BC Next/Previous Edit）
         if ui.button(t(I18nKey::MenuNextEdit)).clicked() {

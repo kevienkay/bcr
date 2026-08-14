@@ -1392,6 +1392,62 @@ impl DiffTab {
         self.jump_to_row(rows[prev]);
     }
 
+    /// P39-2c：下一差异部分（区块级跳转，BC ⇧⌃↓）
+    pub fn next_diff_section(&mut self) {
+        if self.diff_blocks.is_empty() {
+            return;
+        }
+        let n = self.diff_blocks.len();
+        // 无当前位置 → 从第一块开始；有 → 跳到所在块的下一个
+        let cur = match self.diff_pos {
+            None => None,
+            Some(p) => {
+                let cur_row = self.diff_rows.get(p).copied().unwrap_or(0);
+                self.diff_blocks
+                    .iter()
+                    .position(|&(s, e)| s <= cur_row && cur_row <= e)
+            }
+        };
+        let next = match cur {
+            None => 0,
+            Some(c) => (c + 1) % n,
+        };
+        let (s, _e) = self.diff_blocks[next];
+        self.jump_to_section_row(s);
+    }
+
+    /// P39-2c：上一差异部分（区块级跳转，BC ⇧⌃↑）
+    pub fn prev_diff_section(&mut self) {
+        if self.diff_blocks.is_empty() {
+            return;
+        }
+        let n = self.diff_blocks.len();
+        // 无当前位置 → 从最后一块开始；有 → 跳到所在块的上一个
+        let cur = match self.diff_pos {
+            None => None,
+            Some(p) => {
+                let cur_row = self.diff_rows.get(p).copied().unwrap_or(0);
+                self.diff_blocks
+                    .iter()
+                    .position(|&(s, e)| s <= cur_row && cur_row <= e)
+            }
+        };
+        let prev = match cur {
+            None => n - 1,
+            Some(c) => (c + n - 1) % n,
+        };
+        let (s, _e) = self.diff_blocks[prev];
+        self.jump_to_section_row(s);
+    }
+
+    /// P39-2c：跳转到区块起始行（同步 diff_pos 到对应 diff_rows 索引）
+    fn jump_to_section_row(&mut self, row: usize) {
+        if let Some(p) = self.diff_rows.iter().position(|&r| r == row) {
+            self.diff_pos = Some(p);
+        }
+        self.jump_to_row(row);
+    }
+
     /// 滚动到指定行索引（虚拟化：设置 scroll.y）
     pub fn jump_to_row(&mut self, row: usize) {
         let y = row as f32 * ROW_H;
@@ -1532,6 +1588,18 @@ impl DiffTab {
                 self.hex_prev_diff();
             } else {
                 self.prev_diff();
+            }
+        }
+        // P39-2c：⇧⌃↓/↑ 差异部分导航（BC 区块级跳转；输入框聚焦时不触发）
+        if !ui.ctx().egui_wants_keyboard_input() {
+            if ui.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(Key::ArrowDown))
+            {
+                self.next_diff_section();
+                return;
+            }
+            if ui.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(Key::ArrowUp)) {
+                self.prev_diff_section();
+                return;
             }
         }
         // B7：F5 重新加载

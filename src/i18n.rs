@@ -625,6 +625,18 @@ pub enum Key {
     MenuFindNext,
     /// P39-2a：查找上一
     MenuFindPrev,
+    /// P39-2c：报告…（⌘P）
+    MenuReport,
+    /// P39-2c：下一差异部分（区块级跳转）
+    MenuNextSection,
+    /// P39-2c：上一差异部分
+    MenuPrevSection,
+    /// P39-2c：报告已保存: {}
+    ReportSaved,
+    /// P39-2c：保存当前会话
+    SessionSaveCurrent,
+    /// P39-2c：会话名
+    SessionName,
 
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比

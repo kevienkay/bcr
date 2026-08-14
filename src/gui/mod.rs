@@ -207,6 +207,14 @@ struct DiffApp {
     show_about: bool,
     /// P39-2a：设置对话框开关
     show_settings: bool,
+    /// P39-2c：报告生成弹窗开关
+    show_report: bool,
+    /// P39-2c：报告格式（"txt" / "html"）
+    report_format: String,
+    /// P39-2c：报告错误提示
+    report_error: Option<String>,
+    /// P39-2c：会话中心「保存当前会话」名称输入
+    session_save_name: String,
 }
 
 impl DiffApp {
@@ -229,6 +237,10 @@ impl DiffApp {
             show_shortcuts: false,
             show_about: false,
             show_settings: false,
+            show_report: false,
+            report_format: "txt".to_string(),
+            report_error: None,
+            session_save_name: String::new(),
         }
     }
 
@@ -300,6 +312,11 @@ impl DiffApp {
             // ⌘N 新建窗口（新进程 GUI）
             Self::open_new_window();
         }
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::P)) {
+            // ⌘P 报告生成（当前标签）
+            self.show_report = true;
+            self.report_error = None;
+        }
         if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::S)) {
             // ⌥⌘S 保存会话（会话中心）
             self.show_sessions = true;
@@ -323,6 +340,10 @@ impl DiffApp {
         }
         if cmd && ui.input(|i| i.key_pressed(egui::Key::T)) {
             self.new_tab_like_current();
+        }
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::P)) {
+            self.show_report = true;
+            self.report_error = None;
         }
         if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::S)) {
             self.show_sessions = true;
@@ -932,6 +953,47 @@ fn pick_dir() -> Option<String> {
     Some(p.to_string_lossy().into_owned())
 }
 
+/// P39-2c：从标签提取左右路径（会话保存用）
+fn session_paths(t: &Tab) -> Option<(String, String)> {
+    match t {
+        Tab::Dir(d) => Some((d.left.clone(), d.right.clone())),
+        Tab::Diff(d) => match (&d.left, &d.right) {
+            (Some(l), Some(r)) => Some((l.path.clone(), r.path.clone())),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// P39-2c：DiffTab 文本报告预览（统计 + 差异行摘要）
+fn diff_report_preview(t: &crate::gui::difftab::DiffTab) -> String {
+    let mut out = String::new();
+    let s = &t.stats;
+    out.push_str("bcr 文本对比报告\n");
+    out.push_str(&format!(
+        "统计: {} 相同, {} 仅左侧, {} 仅右侧, {} 修改\n",
+        s.equal, s.delete, s.insert, s.replace
+    ));
+    out.push_str("----------------------------------------\n");
+    for (i, row) in t.rows.iter().enumerate() {
+        let tag = match row.tag {
+            crate::sideview::RowTag::Equal => "=",
+            crate::sideview::RowTag::Delete => "<",
+            crate::sideview::RowTag::Insert => ">",
+            crate::sideview::RowTag::Replace => "<",
+        };
+        let l = row.left.as_ref().map(|c| c.text.as_str()).unwrap_or("");
+        let r = row.right.as_ref().map(|c| c.text.as_str()).unwrap_or("");
+        if row.tag != crate::sideview::RowTag::Equal {
+            out.push_str(&format!("{} {:>4} | {}\n", tag, i + 1, l));
+            if row.tag == crate::sideview::RowTag::Replace {
+                out.push_str(&format!("> {:>4} | {}\n", i + 1, r));
+            }
+        }
+    }
+    out
+}
+
 impl eframe::App for DiffApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // 记录窗口大小用于退出时持久化
@@ -1227,6 +1289,66 @@ impl eframe::App for DiffApp {
             }
         }
 
+        // P39-2c：报告生成弹窗（⌘P）——当前标签生成文本/HTML 报告
+        if self.show_report {
+            let mut keep = true;
+            let mut save_req = false;
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuReport))
+                .collapsible(false)
+                .default_size([420.0, 300.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    // 格式选择
+                    ui.horizontal(|ui| {
+                        ui.label("格式:");
+                        for (fmt, label) in [("txt", "文本 TXT"), ("html", "HTML")] {
+                            if ui
+                                .selectable_label(self.report_format == fmt, label)
+                                .clicked()
+                            {
+                                self.report_format = fmt.to_string();
+                            }
+                        }
+                    });
+                    ui.separator();
+                    // 报告预览（当前标签）
+                    let preview = match self.tabs.get(self.active) {
+                        Some(Tab::Dir(t)) => t
+                            .result
+                            .as_ref()
+                            .map(|r| crate::report::render_txt(&t.left, &t.right, r)),
+                        Some(Tab::Diff(t)) => Some(diff_report_preview(t)),
+                        _ => None,
+                    };
+                    match preview {
+                        Some(p) => {
+                            egui::ScrollArea::vertical()
+                                .max_height(160.0)
+                                .show(ui, |ui| {
+                                    ui.monospace(p);
+                                });
+                            ui.separator();
+                            if ui.button("💾 保存报告…").clicked() {
+                                save_req = true;
+                            }
+                        }
+                        None => {
+                            ui.label("当前标签暂不支持报告（需目录对比结果或文本对比）");
+                        }
+                    }
+                    if let Some(err) = &self.report_error {
+                        ui.label(RichText::new(err).color(theme::error_color()).size(12.0));
+                    }
+                });
+            if save_req {
+                self.save_current_report();
+            }
+            if !keep {
+                self.show_report = false;
+                self.report_error = None;
+            }
+        }
+
         // P33：外部工具说明弹窗（Tools > 外部工具）
         if self.show_external {
             let mut keep = true;
@@ -1270,7 +1392,7 @@ impl eframe::App for DiffApp {
                     ui.horizontal(|ui| {
                         ui.label(
                             RichText::new(format!(
-                                "{} 个会话（{}\n保存: bcr session save <name> <left> <right>）",
+                                "{} 个会话（{}）",
                                 sessions.sessions.len(),
                                 crate::session::sessions_path().display()
                             ))
@@ -1278,9 +1400,56 @@ impl eframe::App for DiffApp {
                             .color(ui.visuals().weak_text_color()),
                         );
                     });
+                    // P39-2c：保存当前会话（GUI 入口，替代命令行 bcr session save）
+                    ui.horizontal(|ui| {
+                        ui.label(crate::i18n::t(crate::i18n::Key::SessionName));
+                        let resp = ui.add(
+                            egui::TextEdit::singleline(&mut self.session_save_name)
+                                .hint_text("my-session")
+                                .desired_width(160.0),
+                        );
+                        let save_clicked = ui
+                            .button(crate::i18n::t(crate::i18n::Key::SessionSaveCurrent))
+                            .on_hover_text("保存当前标签（目录或文本对比）的左右路径为会话")
+                            .clicked()
+                            || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+                        if save_clicked {
+                            let name = self.session_save_name.trim().to_string();
+                            let cur = self.tabs.get(self.active).and_then(session_paths);
+                            match (name.as_str(), cur) {
+                                ("", _) => {
+                                    self.report_error = Some("请输入会话名".to_string());
+                                }
+                                (_, Some((l, r))) => {
+                                    let mut all = crate::session::load();
+                                    all.sessions.insert(
+                                        name,
+                                        crate::session::Session {
+                                            left: l,
+                                            right: r,
+                                            compare_content: false,
+                                            detect_moves: true,
+                                            includes: Vec::new(),
+                                            excludes: Vec::new(),
+                                            favorite: false,
+                                            last_used: None,
+                                        },
+                                    );
+                                    let _ = crate::session::save_all(&all);
+                                    // 下一帧重新 load() 自动刷新列表
+                                }
+                                (_, None) => {
+                                    self.report_error = Some("当前标签无可用路径".to_string());
+                                }
+                            }
+                        }
+                    });
+                    if let Some(err) = &self.report_error {
+                        ui.label(RichText::new(err).color(theme::error_color()).size(12.0));
+                    }
                     ui.separator();
                     if sessions.sessions.is_empty() {
-                        ui.label("暂无会话，可在命令行用 bcr session save 保存");
+                        ui.label("暂无会话，可在上方输入名称保存当前对比");
                     }
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         for (name, fav, _last) in &order {
@@ -1853,6 +2022,59 @@ impl eframe::App for DiffApp {
 
     fn on_exit(&mut self) {
         self.settings.save();
+    }
+}
+
+/// P39-2c：保存当前标签报告到用户选择的文件
+impl DiffApp {
+    fn save_current_report(&mut self) {
+        self.report_error = None;
+        let (content, default_name) = match self.tabs.get(self.active) {
+            Some(Tab::Dir(t)) => match &t.result {
+                Some(r) => {
+                    if self.report_format == "html" {
+                        let html = crate::htmlreport::render_html(
+                            &t.left,
+                            &t.right,
+                            r,
+                            &crate::i18n::fmt(crate::i18n::Key::ReportGeneratedAt, &[]),
+                        );
+                        (html, "compare.html".to_string())
+                    } else {
+                        (
+                            crate::report::render_txt(&t.left, &t.right, r),
+                            "compare.txt".to_string(),
+                        )
+                    }
+                }
+                None => {
+                    self.report_error = Some("目录对比尚未完成，请先刷新".to_string());
+                    return;
+                }
+            },
+            Some(Tab::Diff(t)) => (diff_report_preview(t), "diff.txt".to_string()),
+            _ => {
+                self.report_error = Some("当前标签暂不支持报告".to_string());
+                return;
+            }
+        };
+        let Some(path) = rfd::FileDialog::new()
+            .set_file_name(&default_name)
+            .save_file()
+        else {
+            return;
+        };
+        match std::fs::write(&path, content) {
+            Ok(()) => {
+                self.report_error = Some(crate::i18n::fmt(
+                    crate::i18n::Key::ReportSaved,
+                    &[&path.display().to_string()],
+                ));
+            }
+            Err(e) => {
+                self.report_error = Some(format!("保存报告失败: {}", e));
+            }
+        }
     }
 }
 

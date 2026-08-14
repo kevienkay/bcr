@@ -2070,6 +2070,75 @@ fn global_shortcuts_new_tab_settings_clear() {
     );
 }
 
+// ---- P39-2c：差异部分导航（区块级跳转） -------------
+
+#[test]
+fn difftab_diff_section_navigation() {
+    let d = tempdir().unwrap();
+    // 两个差异块：第 1 行块 + 第 4-5 行块
+    let l = write(d.path(), "l.txt", "a\nb\nc\nd\ne\nf\n");
+    let r = write(d.path(), "r.txt", "A\nb\nc\nD\nE\nf\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // diff_blocks 应含 2 个块
+    assert_eq!(tab.borrow().diff_blocks.len(), 2, "应有两处差异块");
+    // 起始：diff_pos None → 跳到第 0 块起始行
+    tab.borrow_mut().next_diff_section();
+    let t = tab.borrow();
+    let first = t.diff_pos.map(|p| t.diff_rows[p]).unwrap_or(usize::MAX);
+    drop(t);
+    assert_eq!(first, 0, "第一块应从第 0 行开始");
+    // 下一块 → 第 3 行（第二块起始）
+    tab.borrow_mut().next_diff_section();
+    let t = tab.borrow();
+    let second = t.diff_pos.map(|p| t.diff_rows[p]).unwrap_or(usize::MAX);
+    drop(t);
+    assert_eq!(second, 3, "第二块应从第 3 行开始");
+    // 上一块 → 回到第 0 块
+    tab.borrow_mut().prev_diff_section();
+    let t = tab.borrow();
+    let back = t.diff_pos.map(|p| t.diff_rows[p]).unwrap_or(usize::MAX);
+    drop(t);
+    assert_eq!(back, 0, "上一块应回到第 0 块");
+}
+
+// ---- P39-2c：会话中心保存当前会话 + 报告预览 -------------
+
+#[test]
+fn session_center_save_current_and_report_preview() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nB\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    {
+        let mut app = app.borrow_mut();
+        app.open_empty_diff();
+        if let super::Tab::Diff(t) = &mut app.tabs[0] {
+            t.load_pair(&l, &r, ViewOptions::default());
+        }
+    }
+    // session_paths：DiffTab 应能提取左右路径
+    let paths = {
+        let app = app.borrow();
+        super::session_paths(&app.tabs[0])
+    };
+    assert!(paths.is_some(), "DiffTab 应能提取会话路径");
+    let (pl, pr) = paths.unwrap();
+    assert_eq!(pl, l);
+    assert_eq!(pr, r);
+    // 报告预览：DiffTab 应有统计文本
+    let preview = {
+        let app = app.borrow();
+        let t = match &app.tabs[0] {
+            super::Tab::Diff(t) => t,
+            _ => panic!("应为 DiffTab"),
+        };
+        super::diff_report_preview(t)
+    };
+    assert!(preview.contains("统计"), "报告预览应含统计行");
+    assert!(preview.contains("bcr 文本对比报告"), "报告预览应含标题");
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]
