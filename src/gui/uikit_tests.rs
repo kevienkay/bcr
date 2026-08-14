@@ -723,6 +723,65 @@ fn difftab_edit_nav_context_menu_via_ui() {
     );
 }
 
+// ---- P38-1e：文件级联动（BC Copy File and Open Next Difference） ----------------
+
+#[test]
+fn difftab_copy_file_to_overwrites_target() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\n");
+    let r = write(d.path(), "r.txt", "x\ny\nz\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, &r, ViewOptions::default());
+    assert!(tab.copy_file_to(EditSide::Right), "复制文件左→右应成功");
+    // 右侧文件 = 左侧内容，左侧不变
+    assert_eq!(fs::read_to_string(&r).unwrap(), "a\nb\nc\n");
+    assert_eq!(fs::read_to_string(&l).unwrap(), "a\nb\nc\n");
+    // 备份存在
+    assert!(fs::metadata(format!("{r}.bak")).is_ok(), "应生成 .bak 备份");
+    // 内容相同后再次复制返回 false
+    assert!(!tab.copy_file_to(EditSide::Right), "无变化应返回 false");
+
+    // 反向：复制右→左
+    let l2 = write(d.path(), "l2.txt", "p\nq\n");
+    let r2 = write(d.path(), "r2.txt", "m\nn\n");
+    let mut tab2 = DiffTab::new();
+    tab2.load_pair(&l2, &r2, ViewOptions::default());
+    assert!(tab2.copy_file_to(EditSide::Left), "复制文件右→左应成功");
+    assert_eq!(fs::read_to_string(&l2).unwrap(), "m\nn\n");
+}
+
+#[test]
+fn difftab_copy_file_to_single_side_returns_false() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, "", ViewOptions::default());
+    // 未加载右侧 → 复制到右侧失败
+    assert!(!tab.copy_file_to(EditSide::Right), "无目标侧应返回 false");
+}
+
+#[test]
+fn difftab_copy_file_context_menu_via_ui() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "x\ny\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    assert!(
+        tab.borrow_mut().copy_file_to(EditSide::Right),
+        "复制文件应成功"
+    );
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert_eq!(
+        fs::read_to_string(&r).unwrap(),
+        "a\nb\n",
+        "UI 渲染后右侧文件已被覆盖"
+    );
+}
+
 #[test]
 fn difftab_ignore_excludes_row_from_navigation_via_state() {
     let d = tempdir().unwrap();

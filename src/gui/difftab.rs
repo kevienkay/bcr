@@ -883,6 +883,87 @@ impl DiffTab {
         true
     }
 
+    /// P38-1e：文件级联动（BC Copy File to Right/Left and Open Next Difference）。
+    /// 源侧整文件内容覆盖目标侧文件，重载后跳转到下一个差异。
+    pub fn copy_file_to(&mut self, target: EditSide) -> bool {
+        let src_is_left = target == EditSide::Right;
+        // 源侧全文 + 目标侧文件信息
+        let src_content = if src_is_left {
+            self.left.as_ref().map(|f| f.content.clone())
+        } else {
+            self.right.as_ref().map(|f| f.content.clone())
+        };
+        let Some(src_content) = src_content else {
+            return false;
+        };
+        let (dst_path, dst_enc, dst_bom, dst_orig) = match target {
+            EditSide::Right => match &self.right {
+                Some(f) => (f.path.clone(), f.encoding, f.had_bom, f.content.clone()),
+                None => return false,
+            },
+            EditSide::Left => match &self.left {
+                Some(f) => (f.path.clone(), f.encoding, f.had_bom, f.content.clone()),
+                None => return false,
+            },
+        };
+        if dst_orig == src_content {
+            return false;
+        }
+        // 备份 + 按目标侧原编码写回源内容
+        let _ = std::fs::copy(&dst_path, format!("{dst_path}.bak"));
+        let bytes = crate::encoding::encode_back(
+            &crate::encoding::TextFile {
+                text: String::new(),
+                encoding: dst_enc,
+                had_bom: dst_bom,
+                is_binary: false,
+            },
+            &src_content,
+        );
+        if let Err(e) = std::fs::write(&dst_path, bytes) {
+            self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
+            return false;
+        }
+        // 入撤销栈（重做栈清空）
+        self.undo_stack.push(EditSnapshot {
+            side: target,
+            path: dst_path.clone(),
+            before: dst_orig,
+            after: src_content,
+        });
+        self.redo_stack.clear();
+        // P38-1d：文件级变更 → 目标侧全部行标记为已编辑（重载前收集锚点）
+        let anchors: Vec<(Option<usize>, Option<usize>)> = self
+            .rows
+            .iter()
+            .map(|r| {
+                if src_is_left {
+                    (r.left_no, r.right_no)
+                } else {
+                    (r.right_no, r.left_no)
+                }
+            })
+            .collect();
+        for a in anchors {
+            if !self.edited_anchors.contains(&a) {
+                self.edited_anchors.push(a);
+            }
+        }
+        // 重新加载目标侧并重算
+        match target {
+            EditSide::Right => self.load_right(&dst_path, self.opts.clone()),
+            EditSide::Left => self.load_left(&dst_path, self.opts.clone()),
+        }
+        // 跳转到下一个差异（若无差异则清空定位）
+        if self.diff_rows.is_empty() {
+            self.diff_pos = None;
+        } else {
+            self.next_diff();
+        }
+        self.error = Some(fmt(I18nKey::Saved, &["已复制文件到另一侧"]));
+        true
+    }
+
     /// P38-1c：缩进调整（BC Increase/Decrease Indent）。
     /// 对 `row` 所在差异块内两侧存在的行整体 ±4 空格（仅行首空白）。
     /// `delta > 0` 增加缩进，`delta < 0` 减少（最多去掉 |delta| 个前导空格）。
@@ -2239,6 +2320,8 @@ impl DiffTab {
             let mut indent_req: Option<(usize, isize)> = None;
             // P35-A1：右键复制差异块到另一侧请求 (行索引, 目标侧)
             let mut copy_req: Option<(usize, EditSide)> = None;
+            // P38-1e：文件级联动请求（目标侧）
+            let mut copy_file_req: Option<EditSide> = None;
             // P37-1m：右键复制行到另一侧请求 (行索引, 目标侧)
             let mut copy_line_req: Option<(usize, EditSide)> = None;
             // P37-1j：右键外部工具对比请求 (左路径, 右路径)
@@ -2521,6 +2604,20 @@ impl DiffTab {
                         self.right.as_ref().map(|f| f.path.clone()),
                     );
                     resp.context_menu(|ui| {
+                        // P38-1e：文件级联动（BC Copy File and Open Next Difference，置顶）
+                        if let (Some(_l), Some(_r)) = (&lp, &rp) {
+                            if ui.button("⇨ 复制文件到右侧并打开下一个差异").clicked()
+                            {
+                                copy_file_req = Some(EditSide::Right);
+                                ui.close();
+                            }
+                            if ui.button("⇦ 复制文件到左侧并打开下一个差异").clicked()
+                            {
+                                copy_file_req = Some(EditSide::Left);
+                                ui.close();
+                            }
+                            ui.separator();
+                        }
                         // P38-1a：隔离（BC Isolate）/ 取消隔离（Show All）
                         if self.isolated.is_some() {
                             if ui.button("显示全部").clicked() {
@@ -2665,6 +2762,12 @@ impl DiffTab {
                 }
                 self.inline_edit = inline;
                 self.recompute();
+                return;
+            }
+            // P38-1e：文件级联动（闭包外执行）
+            if let Some(target) = copy_file_req {
+                self.copy_file_to(target);
+                self.inline_edit = inline;
                 return;
             }
             // P38-1a：右键隔离/取消隔离（请求处理，处理后返回避免借用冲突）
