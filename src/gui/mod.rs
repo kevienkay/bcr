@@ -12,6 +12,7 @@ mod dirtab;
 mod imagetab;
 mod menubar;
 mod mergetab;
+mod textedit;
 mod theme;
 #[cfg(test)]
 mod uikit_tests;
@@ -25,6 +26,7 @@ use eframe::egui::{self, Color32, RichText, ThemePreference};
 use imagetab::ImageTab;
 use mergetab::MergeTab;
 use std::path::PathBuf;
+use textedit::TextEditTab;
 
 /// GUI 子命令参数
 #[derive(clap::Args, Debug, Default)]
@@ -58,6 +60,10 @@ pub struct GuiArgs {
     /// 忽略匹配正则的行（内容过滤：如版本号/时间戳行，可重复）
     #[arg(long = "ignore-lines")]
     pub ignore_lines: Vec<String>,
+
+    /// P37-1g：文本编辑（单文件，BC `-edit` 等价）
+    #[arg(long = "edit")]
+    pub edit: Option<String>,
 }
 
 /// 标签页
@@ -68,6 +74,7 @@ enum Tab {
     Merge(MergeTab),
     Image(ImageTab),
     Csv(CsvTab),
+    TextEdit(TextEditTab),
 }
 
 impl Tab {
@@ -78,6 +85,7 @@ impl Tab {
             Tab::Merge(t) => t.title(),
             Tab::Image(t) => t.title(),
             Tab::Csv(t) => t.title(),
+            Tab::TextEdit(t) => t.title(),
         }
     }
 }
@@ -354,6 +362,10 @@ impl DiffApp {
                 let l = files[0].clone();
                 let r = files.get(1).cloned().unwrap_or_default();
                 t.load_pair(&l, &r);
+                true
+            }
+            Tab::TextEdit(t) if t.is_empty() && !files.is_empty() => {
+                t.open(&files[0]);
                 true
             }
             Tab::Image(t) if t.left.is_empty() && t.right.is_empty() && !files.is_empty() => {
@@ -1388,6 +1400,7 @@ impl eframe::App for DiffApp {
                 Tab::Merge(t) => t.ui(ui),
                 Tab::Image(t) => t.ui(ui),
                 Tab::Csv(t) => t.ui(ui),
+                Tab::TextEdit(t) => t.ui(ui),
             }
         }
 
@@ -1497,6 +1510,14 @@ impl eframe::App for DiffApp {
                                 crate::i18n::t(crate::i18n::Key::StatReplace),
                                 diff_frames,
                                 t.frame_diffs.len(),
+                            ));
+                        }
+                        Tab::TextEdit(t) => {
+                            ui.label(format!(
+                                "{} | {} | {}",
+                                t.line_count(),
+                                t.char_count(),
+                                crate::i18n::t(crate::i18n::Key::OpenFile),
                             ));
                         }
                     }
@@ -1652,6 +1673,9 @@ pub fn run(args: &GuiArgs) -> i32 {
         if m.len() == 3 {
             app.add_tab(Tab::Merge(MergeTab::new(&m[0], &m[1], &m[2])));
         }
+    } else if let Some(f) = &args.edit {
+        // P37-1g：文本编辑（BC -edit 单文件）
+        app.add_tab(Tab::TextEdit(TextEditTab::new(f)));
     } else {
         match (&args.left, &args.right) {
             (Some(l), Some(r)) => {

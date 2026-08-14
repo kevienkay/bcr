@@ -13,6 +13,7 @@ use crate::gui::difftab::{DiffTab, DiffViewFilter, EditSide};
 use crate::gui::dirtab::{DirTab, ViewFilter};
 use crate::gui::imagetab::ImageTab;
 use crate::gui::mergetab::MergeTab;
+use crate::gui::textedit::TextEditTab;
 use crate::sideview::ViewOptions;
 use egui_kittest::{kittest::Queryable, Harness};
 use std::cell::RefCell;
@@ -1082,6 +1083,40 @@ fn empty_csv_tab_shows_open_buttons() {
     h.run();
     assert!(h.query_all_by_label_contains("打开左侧").next().is_some());
     assert!(h.query_all_by_label_contains("打开右侧").next().is_some());
+}
+
+// ---- P37-1g：文本编辑视图（BC Text Edit） ----------------
+
+#[test]
+fn empty_text_edit_tab_shows_open_button() {
+    let tab = RefCell::new(TextEditTab::new(""));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert!(
+        h.query_all_by_label_contains("打开文件").next().is_some(),
+        "空文本编辑会话应显示打开文件按钮"
+    );
+}
+
+#[test]
+fn text_edit_tab_save_button_writes_file() {
+    let d = tempdir().unwrap();
+    let p = write(d.path(), "a.txt", "old\n");
+    let tab = RefCell::new(TextEditTab::new(&p));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 修改内容后点击「保存文件」→ 写回磁盘（A2 备份）
+    {
+        let mut t = tab.borrow_mut();
+        t.content = "new content\n".to_string();
+    }
+    h.get_by_label_contains("保存文件").click();
+    h.run();
+    assert_eq!(fs::read_to_string(&p).unwrap(), "new content\n");
+    assert!(
+        fs::metadata(format!("{p}.bak")).is_ok(),
+        "保存应生成 .bak 备份"
+    );
 }
 
 #[test]

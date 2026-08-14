@@ -297,6 +297,24 @@ pub enum Key {
     IgnoreWs,
     /// 显示空白符（P35-A4：空格→·、制表符→→）
     VisibleWs,
+    /// P37-1g：文本编辑标题
+    TextEditTitle,
+    /// P37-1g：打开文件…
+    OpenFile,
+    /// P37-1g：保存文件
+    SaveFile,
+    /// P37-1g：转换-Trim 行尾空白
+    ConvertTrim,
+    /// P37-1g：转换-Tabs to Spaces
+    ConvertTabs,
+    /// P37-1g：转换-行尾 CRLF
+    ConvertCrlf,
+    /// P37-1g：转换-行尾 LF
+    ConvertLf,
+    /// P37-1g：语法高亮
+    TextEditSyntax,
+    /// P37-1g：状态栏 {} | {} 行 | {} 字符
+    TextEditStatus,
     /// 忽略行尾空白
     IgnoreTrailing,
     /// 忽略大小写
