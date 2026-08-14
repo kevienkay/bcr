@@ -99,6 +99,10 @@ pub struct DiffTab {
     pub ignored_rows: std::collections::HashSet<usize>,
     /// P38-1a：隔离的差异块范围（rows 行索引，None = 未隔离）
     pub isolated: Option<(usize, usize)>,
+    /// P38-1b：手动对齐对（左侧行号 1-based, 右侧行号 1-based）
+    pub manual_aligns: Vec<(usize, usize)>,
+    /// P38-1b：对齐模式（源侧 + 源行号，等待点击目标行）
+    pub align_pick: Option<(EditSide, usize)>,
     pub search: SearchState,
     /// 待跳转行号（1-based）
     pub goto_line: Option<usize>,
@@ -174,6 +178,8 @@ impl DiffTab {
             collapsed_blocks: std::collections::HashSet::new(),
             ignored_rows: std::collections::HashSet::new(),
             isolated: None,
+            manual_aligns: Vec::new(),
+            align_pick: None,
             search: SearchState::default(),
             goto_line: None,
             goto_focus: false,
@@ -341,7 +347,9 @@ impl DiffTab {
                 return;
             }
         };
-        let (rows, stats) = build_rows(l, r, self.opts.clone());
+        let (mut rows, stats) = build_rows(l, r, self.opts.clone());
+        // P38-1b：应用手动对齐（强制左侧/右侧行配对）
+        Self::apply_manual_aligns(&mut rows, &self.manual_aligns);
         // P32-B5：忽略行从差异行/统计中排除（会话级）
         let mut diff_rows: Vec<usize> = Vec::new();
         let mut ignored_delete = 0usize;
@@ -384,6 +392,66 @@ impl DiffTab {
             equal: stats.equal,
         };
         self.update_search();
+    }
+
+    /// P38-1b：应用手动对齐对（left_no, right_no 1-based）。
+    /// 定位两行，若未并排则移除并插入 Replace 行（左=源行内容, 右=目标行内容）。
+    fn apply_manual_aligns(rows: &mut Vec<SideRow>, aligns: &[(usize, usize)]) {
+        for &(ln, rn) in aligns {
+            let l_idx = rows.iter().position(|r| r.left_no == Some(ln));
+            let r_idx = rows.iter().position(|r| r.right_no == Some(rn));
+            let (Some(li), Some(ri)) = (l_idx, r_idx) else {
+                continue;
+            };
+            if li == ri {
+                // 已并排（可能已是 Replace 对），跳过
+                continue;
+            }
+            // 取两行内容，移除，在较前位置插入 Replace 行
+            let l_cell = rows[li].left.clone();
+            let r_cell = rows[ri].right.clone();
+            let pos = li.min(ri);
+            rows.remove(li.max(ri));
+            rows.remove(li.min(ri));
+            rows.insert(
+                pos,
+                SideRow {
+                    left: l_cell,
+                    right: r_cell,
+                    tag: RowTag::Replace,
+                    left_no: Some(ln),
+                    right_no: Some(rn),
+                },
+            );
+        }
+    }
+
+    /// P38-1b：开始对齐（源侧 + 源行号，进入等待点击目标行模式）
+    pub fn start_align(&mut self, side: EditSide, row_no: usize) {
+        self.align_pick = Some((side, row_no));
+    }
+
+    /// P38-1b：完成对齐——记录手动对齐对并重算（`target_row_no` 为目标侧行号）
+    pub fn finish_align(&mut self, target_row_no: usize) -> bool {
+        let Some((side, src_no)) = self.align_pick.take() else {
+            return false;
+        };
+        let (ln, rn) = match side {
+            EditSide::Left => (src_no, target_row_no),
+            EditSide::Right => (target_row_no, src_no),
+        };
+        // 去重后加入
+        if !self.manual_aligns.contains(&(ln, rn)) {
+            self.manual_aligns.push((ln, rn));
+        }
+        self.recompute();
+        true
+    }
+
+    /// P38-1b：清除全部手动对齐
+    pub fn clear_aligns(&mut self) {
+        self.manual_aligns.clear();
+        self.recompute();
     }
 
     // ---- A4 文本替换 ----
@@ -1971,11 +2039,15 @@ impl DiffTab {
             }
             let mut fold_toggle: Option<usize> = None;
             let mut ignore_req: Option<usize> = None;
-            // P38-1a：右键隔离/取消隔离请求
+            // P38-1a：隔离/取消隔离 + 提示条点击取消（借用安全：闭包内只置标志）
             let mut isolate_req = false;
             let mut unisolate_req = false;
-            // P38-1a：隔离提示条点击取消（借用安全：闭包内只置标志）
             let mut banner_unisolate = false;
+            // P38-1b：对齐方式请求（源侧, 源行号）+ 清除对齐 + 目标行点击
+            let mut align_req: Option<(EditSide, usize)> = None;
+            let mut clear_align_req = false;
+            let mut align_target_click: Option<usize> = None;
+            let mut align_cancel = false;
             // P35-A1：右键复制差异块到另一侧请求 (行索引, 目标侧)
             let mut copy_req: Option<(usize, EditSide)> = None;
             // P37-1m：右键复制行到另一侧请求 (行索引, 目标侧)
@@ -2094,6 +2166,41 @@ impl DiffTab {
                 ui.separator();
             }
 
+            // P38-1b：对齐模式提示条（请点击另一侧行完成对齐 [✕ 取消]）
+            if let Some((side, src_no)) = self.align_pick {
+                let (rect, resp) =
+                    ui.allocate_exact_size(Vec2::new(total_w, 26.0), egui::Sense::click());
+                let bg = if ui.visuals().dark_mode {
+                    Color32::from_rgb(22, 46, 42)
+                } else {
+                    Color32::from_rgb(215, 248, 240)
+                };
+                ui.painter().rect_filled(rect, 2.0, bg);
+                let fg = ui.visuals().strong_text_color();
+                let side_name = match side {
+                    EditSide::Left => "左侧",
+                    EditSide::Right => "右侧",
+                };
+                ui.painter().text(
+                    Pos2::new(rect.left() + 10.0, rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    format!("⇋ 对齐方式：{side_name} 行 {src_no}，请点击另一侧行完成对齐"),
+                    egui::FontId::proportional(12.0),
+                    fg,
+                );
+                ui.painter().text(
+                    Pos2::new(rect.right() - 10.0, rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    "✕ 取消",
+                    egui::FontId::proportional(12.0),
+                    fg,
+                );
+                if resp.clicked() {
+                    align_cancel = true;
+                }
+                ui.separator();
+            }
+
             let out = super::show_rows(ui, view.len(), ROW_H, |ui, range| {
                 ui.set_min_width(total_w);
                 // 当前差异行（diff_pos → diff_rows 中的行索引，P31 竖条标记）
@@ -2192,6 +2299,18 @@ impl DiffTab {
                         Some(RowHit::FoldToggle(bi)) => fold_toggle = Some(bi),
                         None => {}
                     }
+                    // P38-1b：对齐模式下点击行 → 记录目标行号（另一侧行号）
+                    if resp.clicked() && self.align_pick.is_some() {
+                        let row = &display_rows[vi];
+                        let target_no = match self.align_pick {
+                            Some((EditSide::Left, _)) => row.right_no,
+                            Some((EditSide::Right, _)) => row.left_no,
+                            None => None,
+                        };
+                        if let Some(no) = target_no {
+                            align_target_click = Some(no);
+                        }
+                    }
                     // P32-A4：行右键菜单（复制路径/打开文件/忽略）——闭包内只收集请求
                     let row_idx = oi;
                     // P35-A1：该行是否属于某个差异块（决定是否显示“复制到另一侧”）
@@ -2212,6 +2331,31 @@ impl DiffTab {
                             }
                         } else if row_in_diff && ui.button("隔离").clicked() {
                             isolate_req = true;
+                            ui.close();
+                        }
+                        // P38-1b：对齐方式（BC Align With）——左侧行与右侧行手动强制对齐
+                        let lno = display_rows[row_idx].left_no;
+                        let rno = display_rows[row_idx].right_no;
+                        if let (Some(ln), Some(_)) = (lno, rno) {
+                            // 两侧都有内容：可直接与另一侧当前行对齐
+                            if ui.button("对齐方式").clicked() {
+                                align_req = Some((EditSide::Left, ln));
+                                ui.close();
+                            }
+                        } else if let Some(ln) = lno {
+                            // 左侧独有：与右侧某行对齐（点击目标行）
+                            if ui.button("对齐方式…").clicked() {
+                                align_req = Some((EditSide::Left, ln));
+                                ui.close();
+                            }
+                        } else if let Some(rn) = rno {
+                            if ui.button("对齐方式…").clicked() {
+                                align_req = Some((EditSide::Right, rn));
+                                ui.close();
+                            }
+                        }
+                        if !self.manual_aligns.is_empty() && ui.button("清除对齐").clicked() {
+                            clear_align_req = true;
                             ui.close();
                         }
                         // P35-A1：复制差异块到另一侧（最核心操作，置顶）
@@ -2321,6 +2465,25 @@ impl DiffTab {
             }
             if unisolate_req || banner_unisolate {
                 self.unisolate();
+                self.inline_edit = inline;
+                return;
+            }
+            // P38-1b：对齐方式（请求处理，处理后返回避免借用冲突）
+            if let Some((side, no)) = align_req {
+                self.start_align(side, no);
+                self.inline_edit = inline;
+                return;
+            }
+            if clear_align_req {
+                self.clear_aligns();
+                self.inline_edit = inline;
+                return;
+            }
+            if align_cancel {
+                self.align_pick = None;
+            }
+            if let Some(target_no) = align_target_click {
+                self.finish_align(target_no);
                 self.inline_edit = inline;
                 return;
             }

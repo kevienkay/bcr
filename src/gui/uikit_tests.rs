@@ -577,6 +577,74 @@ fn difftab_isolate_context_menu_via_ui() {
     assert!(tab.borrow().isolated.is_none(), "取消后无隔离");
 }
 
+// ---- P38-1b：对齐方式（BC Align With） ----------------
+
+#[test]
+fn difftab_align_manual_pair_via_state() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL1\nDEL2\nm\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS1\nINS2\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, &r, ViewOptions::default());
+    let before = tab.rows.len();
+    // 手动对齐：左侧第 2 行 ↔ 右侧第 3 行（自动对齐时不在同一行）
+    tab.manual_aligns.push((2, 3));
+    tab.recompute();
+    // 对齐后应出现一个同时含 left_no=2 与 right_no=3 的 Replace 行
+    let paired = tab
+        .rows
+        .iter()
+        .find(|r| r.left_no == Some(2) && r.right_no == Some(3));
+    assert!(paired.is_some(), "应生成手动对齐行: {:?}", tab.rows);
+    assert_eq!(
+        paired.unwrap().tag,
+        crate::sideview::RowTag::Replace,
+        "对齐行状态为 Replace"
+    );
+    // 行数应减少（两行合并为一行）
+    assert!(
+        tab.rows.len() < before,
+        "合并后行数减少: {} < {}",
+        tab.rows.len(),
+        before
+    );
+    // 清除对齐恢复
+    tab.clear_aligns();
+    let paired2 = tab
+        .rows
+        .iter()
+        .find(|r| r.left_no == Some(2) && r.right_no == Some(3));
+    assert!(paired2.is_none(), "清除后不再有手动对齐行");
+}
+
+#[test]
+fn difftab_align_pick_finish_via_ui() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL1\nDEL2\nm\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS1\nINS2\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // 进入对齐模式（左侧行 2 为源）
+    tab.borrow_mut().start_align(EditSide::Left, 2);
+    assert!(tab.borrow().align_pick.is_some(), "对齐模式已开启");
+    // 完成对齐：目标右侧行 3
+    assert!(tab.borrow_mut().finish_align(3), "完成对齐应成功");
+    assert!(tab.borrow().align_pick.is_none(), "对齐后退出模式");
+    assert_eq!(tab.borrow().manual_aligns, vec![(2, 3)], "记录对齐对");
+    // 渲染不 panic（对齐行显示）
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(
+        tab.borrow()
+            .rows
+            .iter()
+            .any(|r| r.left_no == Some(2) && r.right_no == Some(3)),
+        "UI 渲染后对齐行存在"
+    );
+}
+
 #[test]
 fn difftab_ignore_excludes_row_from_navigation_via_state() {
     let d = tempdir().unwrap();
