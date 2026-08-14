@@ -90,6 +90,8 @@ pub struct DirTab {
     pub bg: Option<BgTask>,
     /// P36-D2：右键「排除」的文件相对路径集合（会话级）
     pub(crate) hidden: HashSet<String>,
+    /// P37-1f：右键「独自离开」的文件相对路径集合（同步计划生成时跳过）
+    pub(crate) leave_alone: HashSet<String>,
 }
 
 /// B2 后台任务：线程 + 结果通道 + 暂停/取消标志 + 进度
@@ -208,6 +210,7 @@ impl DirTab {
             rename_target: None,
             rename_buf: String::new(),
             hidden: HashSet::new(),
+            leave_alone: HashSet::new(),
             show_filter_panel: false,
             ext_filter: String::new(),
             min_size: String::new(),
@@ -612,7 +615,10 @@ impl DirTab {
                 for (i, op) in plan.iter().enumerate() {
                     // 跳过/冲突不可执行，默认不勾选
                     if !matches!(op, SyncOp::Skip { .. } | SyncOp::Conflict { .. }) {
-                        self.sync_checked.insert(i);
+                        // P37-1f：独自离开的文件不参与同步
+                        if !self.leave_alone.contains(op.rel()) {
+                            self.sync_checked.insert(i);
+                        }
                     }
                 }
                 self.sync_plan = Some(plan);
@@ -757,6 +763,41 @@ impl DirTab {
         self.refresh_sync();
     }
 
+    /// P37-1f：批量复制→左（把全部差异/仅右侧文件复制到左侧，镜像 →右）
+    pub fn run_batch_copy_to_left(&mut self) {
+        let Some(r) = self.result.clone() else { return };
+        let rels: Vec<String> = r
+            .entries
+            .iter()
+            .filter(|e| matches!(e.status, FileStatus::Differ | FileStatus::RightOnly))
+            .map(|e| e.rel.clone())
+            .collect();
+        if rels.is_empty() {
+            self.sync_msg = Some("没有可复制的差异文件".to_string());
+            return;
+        }
+        let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return,
+        };
+        let mut ok = 0usize;
+        let mut err = 0usize;
+        for rel in &rels {
+            let op = SyncOp::Copy {
+                rel: rel.clone(),
+                src_rel: None,
+                from_src: false,
+            };
+            if execute_op(&op, l.as_ref(), r.as_ref()).is_some() {
+                err += 1;
+            } else {
+                ok += 1;
+            }
+        }
+        self.sync_msg = Some(format!("批量复制: 成功 {}，失败 {}", ok, err));
+        self.refresh_sync();
+    }
+
     /// 批量操作：删除右侧全部差异/仅右侧文件（镜像清理）
     pub fn run_batch_delete_right(&mut self) {
         let Some(res) = self.result.clone() else {
@@ -788,6 +829,51 @@ impl DirTab {
         }
         self.sync_msg = Some(format!("批量删除: 成功 {}，失败 {}", ok, err));
         self.refresh_sync();
+    }
+
+    /// P37-1f：批量删除左侧全部差异/仅左侧文件（镜像 →右 删除）
+    pub fn run_batch_delete_left(&mut self) {
+        let Some(res) = self.result.clone() else {
+            return;
+        };
+        let rels: Vec<String> = res
+            .entries
+            .iter()
+            .filter(|e| matches!(e.status, FileStatus::Differ | FileStatus::LeftOnly))
+            .map(|e| e.rel.clone())
+            .collect();
+        if rels.is_empty() {
+            self.sync_msg = Some("没有可删除的差异文件".to_string());
+            return;
+        }
+        // 删除左侧 = 把右侧当源、左侧当目标执行 Delete
+        let (l, r) = match (crate::vfs::open(&self.right), crate::vfs::open(&self.left)) {
+            (Ok(src), Ok(dst)) => (src, dst),
+            _ => return,
+        };
+        let mut ok = 0usize;
+        let mut err = 0usize;
+        for rel in &rels {
+            let op = SyncOp::Delete { rel: rel.clone() };
+            if execute_op(&op, l.as_ref(), r.as_ref()).is_some() {
+                err += 1;
+            } else {
+                ok += 1;
+            }
+        }
+        self.sync_msg = Some(format!("批量删除: 成功 {}，失败 {}", ok, err));
+        self.refresh_sync();
+    }
+
+    /// P37-1f：独自离开/取消（BC Leave Alone：同步计划跳过该文件；再点取消）
+    pub fn toggle_leave_alone(&mut self, rel: &str) {
+        if !self.leave_alone.remove(rel) {
+            self.leave_alone.insert(rel.to_string());
+        }
+        // 计划已生成时重新勾选（leave_alone 生效）
+        if self.sync_plan.is_some() {
+            self.gen_sync_plan();
+        }
     }
 
     pub(crate) fn toggle_dir(&mut self, path: &str) {
@@ -1070,12 +1156,40 @@ impl DirTab {
                         {
                             self.run_batch_copy_to_right();
                         }
+                        // P37-1f：批量复制→左（BC 复制右边到左边）
+                        if ui
+                            .button("⧉ 批量复制→左")
+                            .on_hover_text(t(I18nKey::CopyBatchToLeft))
+                            .clicked()
+                        {
+                            self.run_batch_copy_to_left();
+                        }
                         if ui
                             .button("🗑 批量删除右侧")
                             .on_hover_text("删除右侧全部差异文件")
                             .clicked()
                         {
                             self.run_batch_delete_right();
+                        }
+                        // P37-1f：批量删除左侧（BC 删除左边）
+                        if ui
+                            .button("🗑 批量删除左侧")
+                            .on_hover_text(t(I18nKey::DeleteBatchLeft))
+                            .clicked()
+                        {
+                            self.run_batch_delete_left();
+                        }
+                        // P37-1f：立即同步（BC Sync Now：生成计划并直接执行）
+                        ui.separator();
+                        if ui
+                            .button(format!("⚡ {}", t(I18nKey::SyncNow)))
+                            .on_hover_text("生成同步计划并立即执行（update/mirror/two-way）")
+                            .clicked()
+                        {
+                            if self.sync_plan.is_none() {
+                                self.gen_sync_plan();
+                            }
+                            self.run_sync_checked();
                         }
                     }
                 }
@@ -1520,6 +1634,7 @@ impl DirTab {
             let mut copy_req: Option<(String, bool)> = None; // (rel, to_right)
             let mut delete_req: Option<(String, bool)> = None; // (rel, delete_right)
             let mut exclude_req: Option<String> = None;
+            let mut leave_req: Option<String> = None; // P37-1f：独自离开
             let mut scroll_to_sel = self.scroll_to_selected;
             self.scroll_to_selected = false;
             let selected = self.selected;
@@ -1727,6 +1842,22 @@ impl DirTab {
                                     exclude_req = Some(rel.clone());
                                     ui.close();
                                 }
+                                // P37-1f：独自离开（BC Leave Alone：同步跳过，再点取消）
+                                if self.leave_alone.contains(&rel) {
+                                    if ui
+                                        .button(format!("✓ {}", t(I18nKey::LeaveAloneOn)))
+                                        .clicked()
+                                    {
+                                        leave_req = Some(rel.clone());
+                                        ui.close();
+                                    }
+                                } else if ui
+                                    .button(format!("🚫 {}", t(I18nKey::LeaveAlone)))
+                                    .clicked()
+                                {
+                                    leave_req = Some(rel.clone());
+                                    ui.close();
+                                }
                             });
                         }
                     }
@@ -1753,6 +1884,10 @@ impl DirTab {
             }
             if let Some(rel) = exclude_req {
                 self.exclude(&rel);
+            }
+            // P37-1f：独自离开/取消
+            if let Some(rel) = leave_req {
+                self.toggle_leave_alone(&rel);
             }
         });
     }

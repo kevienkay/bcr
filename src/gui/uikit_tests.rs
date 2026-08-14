@@ -1312,6 +1312,157 @@ fn dirtab_exclude_hides_file() {
     );
 }
 
+// ---- P37-1f：文件夹同步操作集（独自离开 / 批量镜像 / 立即同步） ----------------
+
+#[test]
+fn dirtab_leave_alone_skips_in_sync_plan() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    // 三个差异文件（两侧不同尺寸，必判 Differ）
+    for n in ["a.txt", "b.txt", "c.txt"] {
+        write(d1.path(), n, "L");
+        write(d2.path(), n, "RR");
+    }
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let mut tab = DirTab::new(&p1, &p2);
+    // mirror 模式：Differ 无条件生成 Copy（update 模式下 dst 更新会 Skip，干扰断言）
+    tab.sync_mode = "mirror".to_string();
+    tab.refresh_sync();
+    tab.gen_sync_plan();
+    let plan = tab.sync_plan.clone().unwrap();
+    // 前置：三个文件都在计划中（update 模式 → Copy 到右）
+    assert_eq!(
+        plan.iter()
+            .filter(|op| matches!(op, crate::sync::SyncOp::Copy { .. }))
+            .count(),
+        3,
+        "前置：三个差异文件都应生成复制计划"
+    );
+    // 标记 b.txt 独自离开 → 重新生成计划，b.txt 不勾选
+    tab.toggle_leave_alone("b.txt");
+    let checked: Vec<&str> = tab
+        .sync_checked
+        .iter()
+        .filter_map(|&i| {
+            tab.sync_plan
+                .as_ref()
+                .and_then(|p| p.get(i))
+                .map(|op| op.rel())
+        })
+        .collect();
+    assert!(
+        checked.contains(&"a.txt") && checked.contains(&"c.txt"),
+        "a/c 应勾选: {:?}",
+        checked
+    );
+    assert!(
+        !checked.contains(&"b.txt"),
+        "b.txt 独自离开后不应勾选: {:?}",
+        checked
+    );
+    // 再次点击取消独自离开 → 恢复勾选
+    tab.toggle_leave_alone("b.txt");
+    let checked: Vec<&str> = tab
+        .sync_checked
+        .iter()
+        .filter_map(|&i| {
+            tab.sync_plan
+                .as_ref()
+                .and_then(|p| p.get(i))
+                .map(|op| op.rel())
+        })
+        .collect();
+    assert!(checked.contains(&"b.txt"), "取消独自离开后 b.txt 恢复勾选");
+}
+
+#[test]
+fn dirtab_batch_copy_to_left_mirrors() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    // 仅右侧文件（左侧缺失）：批量复制→左应把右侧内容复制到左侧
+    write(d2.path(), "r.txt", "RR");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let mut tab = DirTab::new(&p1, &p2);
+    tab.refresh_sync();
+    // 前置：右侧有 r.txt（RightOnly）
+    assert!(
+        tab.result
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.rel == "r.txt"),
+        "前置：应检测到 r.txt"
+    );
+    tab.run_batch_copy_to_left();
+    // 左侧现在也有 r.txt 且内容一致 → 不再是差异
+    let content = std::fs::read_to_string(d1.path().join("r.txt")).unwrap();
+    assert_eq!(content, "RR", "批量复制→左后左侧应有 r.txt 内容 RR");
+}
+
+#[test]
+fn dirtab_batch_delete_left_mirrors() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    // 仅左侧文件：批量删除左侧应删除它
+    write(d1.path(), "l.txt", "LL");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let mut tab = DirTab::new(&p1, &p2);
+    tab.refresh_sync();
+    assert!(
+        tab.result
+            .as_ref()
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.rel == "l.txt"),
+        "前置：应检测到 l.txt"
+    );
+    tab.run_batch_delete_left();
+    assert!(
+        !d1.path().join("l.txt").exists(),
+        "批量删除左侧后 l.txt 应被删除"
+    );
+}
+
+#[test]
+fn dirtab_sync_now_button_via_ui() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    // 左侧文件 → update 模式应复制到右侧
+    write(d1.path(), "a.txt", "A");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    {
+        let mut t = tab.borrow_mut();
+        t.sync_mode = "update".to_string();
+        t.refresh_sync();
+    }
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run_steps(4);
+    // 点击「⚡ 立即同步」→ 生成计划并执行（后台线程）
+    h.get_by_label_contains("立即同步").click();
+    h.run_steps(6);
+    // 后台执行是异步的：轮询等待右侧出现 a.txt
+    let mut done = false;
+    for _ in 0..30 {
+        h.run_steps(2);
+        if d2.path().join("a.txt").exists() {
+            done = true;
+            break;
+        }
+    }
+    assert!(done, "立即同步后右侧应出现 a.txt");
+    assert_eq!(
+        std::fs::read_to_string(d2.path().join("a.txt")).unwrap(),
+        "A"
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

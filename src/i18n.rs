@@ -281,6 +281,16 @@ pub enum Key {
     CopyToLeft,
     /// 交换左右两侧（P35-A2：BC Swap Sides）
     SwapSides,
+    /// P37-1f：立即同步（BC Sync Now）
+    SyncNow,
+    /// P37-1f：独自离开（BC Leave Alone，同步跳过）
+    LeaveAlone,
+    /// P37-1f：已独自离开（点击取消）
+    LeaveAloneOn,
+    /// P37-1f：批量复制→左
+    CopyBatchToLeft,
+    /// P37-1f：批量删除左侧
+    DeleteBatchLeft,
     /// 统计栏
     StatsPanel,
     /// 忽略空白
