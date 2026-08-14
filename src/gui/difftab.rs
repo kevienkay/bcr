@@ -658,6 +658,25 @@ impl DiffTab {
         self.search.focus = true;
     }
 
+    /// P40-1：打开编辑窗口（菜单 Edit>编辑左侧/右侧）
+    pub fn start_edit(&mut self, side: EditSide) {
+        let path = match side {
+            EditSide::Left => self.left.as_ref().map(|f| f.path.clone()),
+            EditSide::Right => self.right.as_ref().map(|f| f.path.clone()),
+        };
+        let Some(path) = path else { return };
+        let content = match side {
+            EditSide::Left => self.left.as_ref().map(|f| f.content.clone()),
+            EditSide::Right => self.right.as_ref().map(|f| f.content.clone()),
+        }
+        .unwrap_or_default();
+        self.editing = Some(EditState {
+            side,
+            path,
+            content,
+        });
+    }
+
     /// P39-2e：聚焦替换框（菜单 Search>Replace，⇧⌘F）
     pub fn focus_replace(&mut self) {
         self.search.replace_focus = true;
@@ -1777,23 +1796,8 @@ impl DiffTab {
                 if ui.button(t(I18nKey::OpenRight)).clicked() {
                     self.open_right_dialog();
                 }
-                // A3 剪贴板对比（复用 P33 菜单栏转发方法）
-                if ui
-                    .button("⧉ 剪贴板→左")
-                    .on_hover_text("用系统剪贴板文本作为左侧对比（若左侧已打开则替换）")
-                    .clicked()
-                {
-                    self.load_clipboard_left();
-                }
-                if ui
-                    .button("⧉ 剪贴板→右")
-                    .on_hover_text("用系统剪贴板文本作为右侧对比（若右侧已打开则替换）")
-                    .clicked()
-                {
-                    self.load_clipboard_right();
-                }
                 ui.separator();
-                // ---- 显示选项（BC: 显示过滤/规则组）----
+                // ---- 显示过滤（BC: All▾ Diffs Context 组）----
                 // P35-A3：视图过滤下拉（Show All/Diff/Same/Context）
                 {
                     let filters = [
@@ -1819,105 +1823,10 @@ impl DiffTab {
                             }
                         });
                 }
-                ui.checkbox(&mut self.show_stats, t(I18nKey::StatsPanel))
-                    .changed();
-                if ui
-                    .checkbox(&mut self.opts.ignore_whitespace, t(I18nKey::IgnoreWs))
-                    .changed()
-                {
-                    self.recompute();
-                }
-                if ui
-                    .checkbox(&mut self.opts.ignore_trailing, t(I18nKey::IgnoreTrailing))
-                    .changed()
-                {
-                    self.recompute();
-                }
-                if ui
-                    .checkbox(&mut self.opts.ignore_case, t(I18nKey::IgnoreCase))
-                    .changed()
-                {
-                    self.recompute();
-                }
-                // A8 自动换行（BC5 word wrapping，仅影响显示）
-                ui.checkbox(&mut self.wrap, t(I18nKey::WordWrap))
-                    .on_hover_text("长行按窗口宽度折行显示");
-                // P35-A4：显示空白符
-                ui.checkbox(&mut self.show_whitespace, t(I18nKey::VisibleWs))
-                    .on_hover_text("空格显示为 ·，制表符显示为 →");
-                // P37-1d：hex 模式显示选项（字节地址格式 / 值格式）
-                if let Some(h) = self.hex.as_mut() {
-                    ui.separator();
-                    ui.checkbox(&mut h.show_addr, t(I18nKey::HexShowAddr));
-                    {
-                        let cur_addr_hex = h.addr_hex;
-                        egui::ComboBox::from_id_salt("hex_addr_fmt")
-                            .selected_text(if cur_addr_hex {
-                                t(I18nKey::HexAddrHex)
-                            } else {
-                                t(I18nKey::HexAddrDec)
-                            })
-                            .show_ui(ui, |ui| {
-                                if ui
-                                    .selectable_label(cur_addr_hex, t(I18nKey::HexAddrHex))
-                                    .clicked()
-                                {
-                                    h.addr_hex = true;
-                                }
-                                if ui
-                                    .selectable_label(!cur_addr_hex, t(I18nKey::HexAddrDec))
-                                    .clicked()
-                                {
-                                    h.addr_hex = false;
-                                }
-                            });
-                    }
-                    {
-                        use crate::hexview::HexValueMode;
-                        let cur = h.value_mode;
-                        let label = match cur {
-                            HexValueMode::Raw => t(I18nKey::HexValRaw),
-                            HexValueMode::LittleEndian => t(I18nKey::HexValLittle),
-                            HexValueMode::BigEndian => t(I18nKey::HexValBig),
-                        };
-                        egui::ComboBox::from_id_salt("hex_val_fmt")
-                            .selected_text(label)
-                            .show_ui(ui, |ui| {
-                                for (mode, k) in [
-                                    (HexValueMode::Raw, I18nKey::HexValRaw),
-                                    (HexValueMode::LittleEndian, I18nKey::HexValLittle),
-                                    (HexValueMode::BigEndian, I18nKey::HexValBig),
-                                ] {
-                                    if ui.selectable_label(cur == mode, t(k)).clicked() {
-                                        h.value_mode = mode;
-                                    }
-                                }
-                            });
-                    }
-                }
-                // A11 缩略图总览开关
-                ui.checkbox(&mut self.show_overview, "缩略图")
-                    .on_hover_text("右侧迷你差异地图，点击跳转");
+                // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
                 ui.separator();
                 // ---- 编辑（BC: Copy/编辑组）----
-                if ui.button(t(I18nKey::EditLeft)).clicked() {
-                    if let Some(l) = &self.left {
-                        self.editing = Some(EditState {
-                            side: EditSide::Left,
-                            path: l.path.clone(),
-                            content: l.content.clone(),
-                        });
-                    }
-                }
-                if ui.button(t(I18nKey::EditRight)).clicked() {
-                    if let Some(r) = &self.right {
-                        self.editing = Some(EditState {
-                            side: EditSide::Right,
-                            path: r.path.clone(),
-                            content: r.content.clone(),
-                        });
-                    }
-                }
+                // P40-1：编辑左/右收进 Edit 菜单（start_edit）；撤销/重做保留（测试与高频操作依赖）
                 // P32-A6：撤销/重做按钮
                 let can_undo = !self.undo_stack.is_empty();
                 let can_redo = !self.redo_stack.is_empty();

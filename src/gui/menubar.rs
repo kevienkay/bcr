@@ -188,6 +188,16 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             with_diff_tab(app, |tab| tab.redo());
         }
         ui.separator();
+        // P40-1：编辑左/右侧（原工具栏低频按钮，收进菜单）
+        if ui.button(t(I18nKey::EditLeft)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.start_edit(super::difftab::EditSide::Left));
+        }
+        if ui.button(t(I18nKey::EditRight)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.start_edit(super::difftab::EditSide::Right));
+        }
+        ui.separator();
         if ui.button(t(I18nKey::MenuFind)).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_search());
@@ -373,6 +383,96 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     tab.opts.ignore_case = mm;
                     tab.opts.ignore_crlf = mm;
                     tab.recompute();
+                }
+            }
+            // P40-1：单项忽略选项（原工具栏 checkbox，收进 View 菜单）
+            if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                let mut iw = tab.opts.ignore_whitespace;
+                let mut it = tab.opts.ignore_trailing;
+                let mut ic = tab.opts.ignore_case;
+                let mut icr = tab.opts.ignore_crlf;
+                let mut changed = false;
+                if ui.checkbox(&mut iw, t(I18nKey::IgnoreWs)).changed() {
+                    tab.opts.ignore_whitespace = iw;
+                    changed = true;
+                }
+                if ui.checkbox(&mut it, t(I18nKey::IgnoreTrailing)).changed() {
+                    tab.opts.ignore_trailing = it;
+                    changed = true;
+                }
+                if ui.checkbox(&mut ic, t(I18nKey::IgnoreCase)).changed() {
+                    tab.opts.ignore_case = ic;
+                    changed = true;
+                }
+                if ui
+                    .checkbox(&mut icr, t(I18nKey::SettingsIgnoreCrlf))
+                    .changed()
+                {
+                    tab.opts.ignore_crlf = icr;
+                    changed = true;
+                }
+                if changed {
+                    tab.recompute();
+                }
+            }
+            ui.separator();
+            // P40-1：显示选项（原工具栏 checkbox，收进 View 菜单）
+            if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                let mut wrap = tab.wrap;
+                let mut ws = tab.show_whitespace;
+                if ui.checkbox(&mut wrap, t(I18nKey::WordWrap)).changed() {
+                    tab.wrap = wrap;
+                }
+                if ui.checkbox(&mut ws, t(I18nKey::VisibleWs)).changed() {
+                    tab.show_whitespace = ws;
+                }
+            }
+            // P40-1：hex 显示选项（原工具栏 ComboBox，收进 View 菜单）
+            if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                if let Some(h) = tab.hex.as_mut() {
+                    ui.separator();
+                    ui.checkbox(&mut h.show_addr, t(I18nKey::HexShowAddr));
+                    let cur_addr_hex = h.addr_hex;
+                    egui::ComboBox::from_id_salt("view_hex_addr_fmt")
+                        .selected_text(if cur_addr_hex {
+                            t(I18nKey::HexAddrHex)
+                        } else {
+                            t(I18nKey::HexAddrDec)
+                        })
+                        .show_ui(ui, |ui| {
+                            if ui
+                                .selectable_label(cur_addr_hex, t(I18nKey::HexAddrHex))
+                                .clicked()
+                            {
+                                h.addr_hex = true;
+                            }
+                            if ui
+                                .selectable_label(!cur_addr_hex, t(I18nKey::HexAddrDec))
+                                .clicked()
+                            {
+                                h.addr_hex = false;
+                            }
+                        });
+                    use crate::hexview::HexValueMode;
+                    let cur = h.value_mode;
+                    let label = match cur {
+                        HexValueMode::Raw => t(I18nKey::HexValRaw),
+                        HexValueMode::LittleEndian => t(I18nKey::HexValLittle),
+                        HexValueMode::BigEndian => t(I18nKey::HexValBig),
+                    };
+                    egui::ComboBox::from_id_salt("view_hex_val_fmt")
+                        .selected_text(label)
+                        .show_ui(ui, |ui| {
+                            for (mode, k) in [
+                                (HexValueMode::Raw, I18nKey::HexValRaw),
+                                (HexValueMode::LittleEndian, I18nKey::HexValLittle),
+                                (HexValueMode::BigEndian, I18nKey::HexValBig),
+                            ] {
+                                if ui.selectable_label(cur == mode, t(k)).clicked() {
+                                    h.value_mode = mode;
+                                }
+                            }
+                        });
                 }
             }
         }

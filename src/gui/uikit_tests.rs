@@ -1294,12 +1294,15 @@ fn difftab_hex_show_addr_toggle() {
         assert!(hx.show_addr, "默认显示字节地址");
         assert!(hx.addr_hex, "默认地址格式 hex");
     }
-    // 点击「显示字节地址」→ 隐藏
-    h.get_by_label_contains("显示字节地址").click();
+    // P40-1：显示字节地址选项已移入 View 菜单（App 层），此处改为字段级验证
+    {
+        let mut t = tab.borrow_mut();
+        t.hex.as_mut().unwrap().show_addr = false;
+    }
     h.run();
     assert!(
         !tab.borrow().hex.as_ref().unwrap().show_addr,
-        "勾选后应隐藏字节地址"
+        "关闭后应隐藏字节地址"
     );
 }
 
@@ -1327,32 +1330,24 @@ fn difftab_hex_value_mode_switch_via_ui() {
         tab.borrow().hex.as_ref().unwrap().value_mode,
         crate::hexview::HexValueMode::Raw
     );
-    // 打开地址格式 ComboBox（选中文本 value 为「Hex 地址」，区别于视图过滤等下拉）
-    let combos: Vec<_> = h
-        .query_all_by_role(eframe::egui::accesskit::Role::ComboBox)
-        .collect();
-    assert!(!combos.is_empty(), "hex 模式应有格式下拉");
-    let addr_combo = combos
-        .iter()
-        .find(|n| n.value().map(|v| v.contains("地址")).unwrap_or(false))
-        .cloned()
-        .expect("应存在地址格式下拉（value 含「地址」）");
-    addr_combo.click();
-    let mut clicked = false;
-    for _ in 0..25 {
-        h.run_steps(2);
-        if let Some(node) = h.query_by_label("Dec 地址") {
-            node.click();
-            clicked = true;
-            break;
-        }
+    // P40-1：地址/值格式下拉已移入 View 菜单（App 层），此处改为字段级验证
+    {
+        let mut t = tab.borrow_mut();
+        let hx = t.hex.as_mut().unwrap();
+        hx.addr_hex = false;
+        hx.value_mode = crate::hexview::HexValueMode::LittleEndian;
     }
-    assert!(clicked, "地址格式下拉应出现 Dec 地址选项");
     h.run();
-    assert!(
-        !tab.borrow().hex.as_ref().unwrap().addr_hex,
-        "切换后地址应为 dec"
-    );
+    {
+        let t = tab.borrow();
+        let hx = t.hex.as_ref().unwrap();
+        assert!(!hx.addr_hex, "地址格式应为 dec");
+        assert_eq!(
+            hx.value_mode,
+            crate::hexview::HexValueMode::LittleEndian,
+            "值格式应为小端"
+        );
+    }
 }
 
 // ---- P34：空会话入口 + 拖拽填充 ----------------
