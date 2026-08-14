@@ -793,6 +793,84 @@ impl DiffTab {
         true
     }
 
+    /// P37-1m：复制单行到目标侧（BC Copy Line to Right/Left，行级替换该行）。
+    /// `target` 是被覆盖的一侧：Right = 左侧→右侧，Left = 右侧→左侧。
+    pub fn copy_line_at(&mut self, row: usize, target: EditSide) -> bool {
+        let Some(r) = self.rows.get(row) else {
+            return false;
+        };
+        let src_is_left = target == EditSide::Right;
+        // 源侧该行文本
+        let src_text = if src_is_left {
+            r.left.as_ref().map(|c| c.text.clone())
+        } else {
+            r.right.as_ref().map(|c| c.text.clone())
+        };
+        let Some(src_text) = src_text else {
+            return false;
+        };
+        // 目标侧文件信息
+        let (dst_path, dst_enc, dst_bom, dst_orig) = match target {
+            EditSide::Right => match &self.right {
+                Some(f) => (f.path.clone(), f.encoding, f.had_bom, f.content.clone()),
+                None => return false,
+            },
+            EditSide::Left => match &self.left {
+                Some(f) => (f.path.clone(), f.encoding, f.had_bom, f.content.clone()),
+                None => return false,
+            },
+        };
+        // 目标侧该行行号（1-based）
+        let dst_no = if src_is_left { r.right_no } else { r.left_no };
+        let Some(dst_no) = dst_no else {
+            return false;
+        };
+        let mut dst_lines: Vec<&str> = dst_orig.split_terminator('\n').collect();
+        if dst_no == 0 || dst_no > dst_lines.len() {
+            return false;
+        }
+        // 替换目标侧第 dst_no 行
+        let idx = dst_no - 1;
+        dst_lines[idx] = &src_text;
+        let mut new_content = dst_lines.join("\n");
+        // 保留原末尾换行特征
+        if dst_orig.ends_with('\n') && !new_content.is_empty() {
+            new_content.push('\n');
+        }
+        if dst_orig == new_content {
+            return false;
+        }
+        // 备份 + 按原编码写回
+        let _ = std::fs::copy(&dst_path, format!("{dst_path}.bak"));
+        let bytes = crate::encoding::encode_back(
+            &crate::encoding::TextFile {
+                text: String::new(),
+                encoding: dst_enc,
+                had_bom: dst_bom,
+                is_binary: false,
+            },
+            &new_content,
+        );
+        if let Err(e) = std::fs::write(&dst_path, bytes) {
+            self.error = Some(fmt(I18nKey::SaveFailed, &[&e.to_string()]));
+            return false;
+        }
+        // 入撤销栈（重做栈清空）
+        self.undo_stack.push(EditSnapshot {
+            side: target,
+            path: dst_path.clone(),
+            before: dst_orig,
+            after: new_content,
+        });
+        self.redo_stack.clear();
+        // 重新加载目标侧并重算
+        match target {
+            EditSide::Right => self.load_right(&dst_path, self.opts.clone()),
+            EditSide::Left => self.load_left(&dst_path, self.opts.clone()),
+        }
+        true
+    }
+
     // ---- P35-A2：交换左右两侧（BC Swap Sides）----
 
     /// 交换左右两侧文件（重新加载，撤销栈清空，含单侧/hex 情况）
@@ -1836,6 +1914,8 @@ impl DiffTab {
             let mut ignore_req: Option<usize> = None;
             // P35-A1：右键复制差异块到另一侧请求 (行索引, 目标侧)
             let mut copy_req: Option<(usize, EditSide)> = None;
+            // P37-1m：右键复制行到另一侧请求 (行索引, 目标侧)
+            let mut copy_line_req: Option<(usize, EditSide)> = None;
             // P37-1j：右键外部工具对比请求 (左路径, 右路径)
             let mut external_req: Option<(String, String)> = None;
 
@@ -2041,6 +2121,18 @@ impl DiffTab {
                             }
                             ui.separator();
                         }
+                        // P37-1m：行级复制（BC Copy Line to Right/Left）
+                        if row_idx < self.rows.len() {
+                            if ui.button("复制行到右侧").clicked() {
+                                copy_line_req = Some((row_idx, EditSide::Right));
+                                ui.close();
+                            }
+                            if ui.button("复制行到左侧").clicked() {
+                                copy_line_req = Some((row_idx, EditSide::Left));
+                                ui.close();
+                            }
+                            ui.separator();
+                        }
                         if let Some(p) = &lp {
                             if ui.button("复制左侧路径").clicked() {
                                 ui.ctx().copy_text(p.clone());
@@ -2119,6 +2211,12 @@ impl DiffTab {
             // P35-A1：右键复制差异块到另一侧（改变文件内容，清空行内编辑）
             if let Some((row, side)) = copy_req {
                 self.copy_block_at(row, side);
+                self.inline_edit = None;
+                return;
+            }
+            // P37-1m：右键复制行到另一侧（行级替换）
+            if let Some((row, side)) = copy_line_req {
+                self.copy_line_at(row, side);
                 self.inline_edit = None;
                 return;
             }
