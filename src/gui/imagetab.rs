@@ -25,6 +25,8 @@ pub struct ImageTab {
     pub show_overlay: bool,
     /// 是否显示统计
     pub show_stats: bool,
+    /// P37-1k：是否显示元数据（尺寸/格式/文件大小）
+    pub show_meta: bool,
     /// 自适应窗口（fit-to-window）
     pub fit: bool,
     /// 左侧全部帧（多帧动图；静态图为单帧）
@@ -71,6 +73,7 @@ impl ImageTab {
             zoom: 1.0,
             show_overlay: false,
             show_stats: true,
+            show_meta: false,
             fit: false,
             frames_l: Vec::new(),
             frames_r: Vec::new(),
@@ -480,6 +483,8 @@ impl ImageTab {
                 }
                 ui.checkbox(&mut self.show_overlay, "差异叠加");
                 ui.checkbox(&mut self.show_stats, "统计");
+                // P37-1k：元数据展示（尺寸/格式/文件大小）
+                ui.checkbox(&mut self.show_meta, t(I18nKey::ImgMetadata));
                 if let Some(p) = &self.pair {
                     let s = p.stats;
                     let st = if s.has_differences() {
@@ -499,6 +504,18 @@ impl ImageTab {
                         "{}x{} → {}x{}",
                         s.left_w, s.left_h, s.right_w, s.right_h
                     ));
+                    // P37-1k：元数据（尺寸/格式/文件大小）
+                    if self.show_meta {
+                        ui.separator();
+                        let fmt_l = crate::imgcmp::image_format_name(&self.left);
+                        let fmt_r = crate::imgcmp::image_format_name(&self.right);
+                        let sz_l = std::fs::metadata(&self.left).map(|m| m.len()).unwrap_or(0);
+                        let sz_r = std::fs::metadata(&self.right).map(|m| m.len()).unwrap_or(0);
+                        ui.label(format!(
+                            "{} {}x{} · {}B  →  {} {}x{} · {}B",
+                            fmt_l, s.left_w, s.left_h, sz_l, fmt_r, s.right_w, s.right_h, sz_r,
+                        ));
+                    }
                 }
             });
         });

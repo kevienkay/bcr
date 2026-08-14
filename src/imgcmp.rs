@@ -76,6 +76,33 @@ pub fn is_image_file(path: &str) -> bool {
     false
 }
 
+/// P37-1k：图片格式名（魔数嗅探：PNG/JPEG/GIF/WebP/BMP；未知返回 "?"）
+pub fn image_format_name(path: &str) -> String {
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return "?".to_string();
+    };
+    let mut head = [0u8; 12];
+    use std::io::Read;
+    let n = match f.read(&mut head) {
+        Ok(n) => n,
+        Err(_) => return "?".to_string(),
+    };
+    let b = &head[..n];
+    if b.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+        "PNG".to_string()
+    } else if b.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "JPEG".to_string()
+    } else if b.starts_with(b"GIF87a") || b.starts_with(b"GIF89a") {
+        "GIF".to_string()
+    } else if b.len() >= 12 && &b[0..4] == b"RIFF" && &b[8..12] == b"WEBP" {
+        "WebP".to_string()
+    } else if b.starts_with(b"BM") {
+        "BMP".to_string()
+    } else {
+        "?".to_string()
+    }
+}
+
 /// 解码全部帧（GIF/WebP 动图返回多帧；静态图返回单帧）
 pub fn load_frames(data: &[u8], label: &str) -> Result<Vec<RgbaImage>, String> {
     use image::AnimationDecoder;
@@ -787,6 +814,7 @@ mod frame_tests {
 #[cfg(test)]
 mod bounds_tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn diff_bounds_cover_diff_region() {
@@ -811,5 +839,26 @@ mod bounds_tests {
         let b = RgbaImage::from_pixel(3, 3, Rgba([1, 2, 3, 255]));
         let p = compare_images(a, b);
         assert!(p.stats.bounds.is_none());
+    }
+
+    // ---- P37-1k：元数据格式名 ----
+
+    #[test]
+    fn image_format_name_detects_magic() {
+        let d = tempdir().unwrap();
+        // 写一个合法 PNG 魔数
+        let png = d.path().join("a.png");
+        std::fs::write(
+            &png,
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0],
+        )
+        .unwrap();
+        assert_eq!(image_format_name(png.to_str().unwrap()), "PNG".to_string());
+        // 未知内容 → ?
+        let txt = d.path().join("x.bin");
+        std::fs::write(&txt, b"not an image").unwrap();
+        assert_eq!(image_format_name(txt.to_str().unwrap()), "?".to_string());
+        // 不存在文件 → ?
+        assert_eq!(image_format_name("/nonexistent/x.png"), "?".to_string());
     }
 }

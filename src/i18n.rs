@@ -337,6 +337,14 @@ pub enum Key {
     MergeStats,
     /// P37-1i：冲突
     PlanConflict,
+    /// P37-1k：切换书签（编号 0-9）
+    ToggleBookmark,
+    /// P37-1k：转到书签
+    GoToBookmark,
+    /// P37-1k：清除书签
+    ClearBookmarks,
+    /// P37-1k：图片元数据
+    ImgMetadata,
     /// 忽略行尾空白
     IgnoreTrailing,
     /// 忽略大小写

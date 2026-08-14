@@ -25,6 +25,10 @@ pub struct PatchTab {
     open_req: bool,
     /// 应用补丁请求
     apply_req: bool,
+    /// P37-1k：书签（编号 0-9 → 渲染行索引）
+    bookmarks: std::collections::HashMap<u8, usize>,
+    /// P37-1k：书签编号输入框
+    bookmark_no: String,
 }
 
 impl PatchTab {
@@ -38,6 +42,8 @@ impl PatchTab {
             scroll: Vec2::ZERO,
             open_req: false,
             apply_req: false,
+            bookmarks: std::collections::HashMap::new(),
+            bookmark_no: String::new(),
         };
         t.open(path);
         t
@@ -89,6 +95,39 @@ impl PatchTab {
         self.path.is_empty()
     }
 
+    // ---- P37-1k：书签（BC 切换/转到/清除书签） ----
+
+    /// 切换书签：当前可见顶部行绑定编号（0-9），已存在则取消
+    pub fn toggle_bookmark(&mut self, no: u8) {
+        if no > 9 {
+            return;
+        }
+        let top = (self.scroll.y / super::theme::ROW_H) as usize;
+        if self.bookmarks.get(&no) == Some(&top) {
+            self.bookmarks.remove(&no);
+        } else {
+            self.bookmarks.insert(no, top);
+        }
+    }
+
+    /// 转到书签（0-9）：滚动到对应行
+    pub fn goto_bookmark(&mut self, no: u8) {
+        if let Some(&row) = self.bookmarks.get(&no) {
+            self.scroll.y = row as f32 * super::theme::ROW_H;
+        }
+    }
+
+    /// 清除全部书签
+    pub fn clear_bookmarks(&mut self) {
+        self.bookmarks.clear();
+    }
+
+    /// 当前书签（测试用）
+    #[cfg(test)]
+    pub(crate) fn bookmarks(&self) -> &std::collections::HashMap<u8, usize> {
+        &self.bookmarks
+    }
+
     /// 应用补丁：把右侧（新）内容写回 b 侧路径；b 侧路径为空时写回原补丁路径。
     /// A2 模式 .bak 备份。返回 (目标路径, 是否成功)。
     pub fn apply(&mut self) -> Option<(String, bool)> {
@@ -138,6 +177,53 @@ impl PatchTab {
                 if let Some(p) = &self.parsed {
                     ui.label(fmt(I18nKey::PatchAdded, &[&p.added.to_string()]));
                     ui.label(fmt(I18nKey::PatchRemoved, &[&p.removed.to_string()]));
+                }
+                // P37-1k：书签（BC 搜索菜单 切换/转到/清除书签）
+                if !self.path.is_empty() {
+                    ui.separator();
+                    let mut no = self.bookmark_no.clone();
+                    ui.label("#");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut no)
+                            .desired_width(30.0)
+                            .hint_text("0-9"),
+                    );
+                    if no != self.bookmark_no {
+                        self.bookmark_no = no;
+                    }
+                    let parsed_no = self.bookmark_no.trim().parse::<u8>().ok();
+                    if ui
+                        .add_enabled(
+                            parsed_no.is_some(),
+                            egui::Button::new(t(I18nKey::ToggleBookmark)),
+                        )
+                        .on_hover_text("当前顶部行绑定/取消书签编号")
+                        .clicked()
+                    {
+                        if let Some(n) = parsed_no {
+                            self.toggle_bookmark(n);
+                        }
+                    }
+                    if ui
+                        .add_enabled(
+                            parsed_no.is_some(),
+                            egui::Button::new(t(I18nKey::GoToBookmark)),
+                        )
+                        .clicked()
+                    {
+                        if let Some(n) = parsed_no {
+                            self.goto_bookmark(n);
+                        }
+                    }
+                    if ui
+                        .add_enabled(
+                            !self.bookmarks.is_empty(),
+                            egui::Button::new(t(I18nKey::ClearBookmarks)),
+                        )
+                        .clicked()
+                    {
+                        self.clear_bookmarks();
+                    }
                 }
             });
         });
@@ -210,6 +296,9 @@ impl PatchTab {
             let avail = ui.available_width();
             let half = ((avail - gutter * 2.0) / 2.0).max(200.0);
             let fg = text_color(ui);
+            // P37-1k：书签标记（行索引 → 编号集合，渲染用）
+            let bookmark_marks: std::collections::HashMap<usize, u8> =
+                self.bookmarks.iter().map(|(&no, &row)| (row, no)).collect();
             let out = super::show_rows(ui, total, ROW_H, |ui, range| {
                 ui.set_min_width(gutter * 2.0 + half * 2.0);
                 for i in range {
@@ -224,6 +313,16 @@ impl PatchTab {
                         RowTag::Insert => Some(bg_replace_r()),
                         _ => None,
                     };
+                    // P37-1k：书签标记（🔖 + 编号）
+                    if let Some(&no) = bookmark_marks.get(&i) {
+                        ui.painter().text(
+                            Pos2::new(rect.left() + 2.0, rect.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            format!("🔖{}", no),
+                            egui::FontId::monospace(11.0),
+                            Color32::from_rgb(230, 170, 60),
+                        );
+                    }
                     // 左列
                     let lr = Rect::from_min_size(rect.min, vec2(gutter + half, ROW_H));
                     paint_bg(ui, lr, bg);
@@ -352,5 +451,58 @@ mod tests {
         let t = PatchTab::new(&p);
         assert!(t.error.is_some(), "非补丁文件应报错");
         assert!(t.parsed.is_none());
+    }
+
+    // ---- P37-1k：书签（切换/转到/清除） ----
+
+    #[test]
+    fn bookmarks_toggle_goto_clear() {
+        let d = tempdir().unwrap();
+        let p = write(
+            d.path(),
+            "a.patch",
+            "--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,3 @@\n line1\n-old line\n+new line\n line3\n",
+        );
+        let mut t = PatchTab::new(&p);
+        // 初始无书签
+        assert!(t.bookmarks().is_empty());
+        // 滚动到第 2 行后切换书签 0
+        t.scroll.y = 2.0 * crate::gui::theme::ROW_H;
+        t.toggle_bookmark(0);
+        assert_eq!(t.bookmarks().get(&0), Some(&2), "书签 0 应绑定第 2 行");
+        // 再切换同一编号同一行 → 取消
+        t.toggle_bookmark(0);
+        assert!(t.bookmarks().get(&0).is_none(), "再次切换应取消书签");
+        // 重新绑定：当前顶部行（scroll.y 仍为第 2 行）绑定编号 3
+        t.toggle_bookmark(3);
+        assert_eq!(
+            t.bookmarks().get(&3),
+            Some(&2),
+            "书签 3 应绑定当前顶部第 2 行"
+        );
+        // 跳走后再回到书签位置
+        t.scroll.y = 100.0;
+        t.goto_bookmark(3);
+        assert_eq!(
+            t.scroll.y,
+            2.0 * crate::gui::theme::ROW_H,
+            "应回到书签绑定的第 2 行"
+        );
+        // 清除
+        t.clear_bookmarks();
+        assert!(t.bookmarks().is_empty());
+    }
+
+    #[test]
+    fn bookmark_no_out_of_range_ignored() {
+        let d = tempdir().unwrap();
+        let p = write(
+            d.path(),
+            "a.patch",
+            "--- a/a\n+++ b/a\n@@ -1,1 +1,1 @@\n-x\n+y\n",
+        );
+        let mut t = PatchTab::new(&p);
+        t.toggle_bookmark(10); // 超出 0-9 → 忽略
+        assert!(t.bookmarks().is_empty());
     }
 }
