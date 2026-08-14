@@ -156,8 +156,15 @@ mod gui_tests {
     #[test]
     fn render_and_run_no_placeholder_crash() {
         // 渲染命令不 panic；不实际执行（模板用 echo 安全命令）
-        let cmd = ExternalTools::render("echo {left} {right}", "/a b/x.docx", "/c/d.docx");
         #[cfg(not(windows))]
-        assert!(cmd.contains("'/a b/x.docx'"));
+        {
+            let cmd = ExternalTools::render("echo {left} {right}", "/a b/x.docx", "/c/d.docx");
+            assert!(cmd.contains("'/a b/x.docx'"));
+        }
+        #[cfg(windows)]
+        {
+            let cmd = ExternalTools::render("echo {left} {right}", "/a b/x.docx", "/c/d.docx");
+            assert!(cmd.contains("\"/a b/x.docx\""));
+        }
     }
 }
