@@ -521,6 +521,62 @@ fn difftab_fold_collapses_diff_block_via_state() {
 
 // ---- P32-B5：标记忽略差异 ----
 
+// ---- P38-1a：隔离（BC Isolate） ----------------
+
+#[test]
+fn difftab_isolate_limits_navigation_and_view() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\nREP1\nm2\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\nREP2\nm2\n");
+    let mut tab = DiffTab::new();
+    tab.load_pair(&l, &r, ViewOptions::default());
+    assert!(!tab.diff_blocks.is_empty(), "前置：有差异块");
+    // 定位第一个差异行并隔离其所在块
+    tab.diff_pos = Some(0);
+    assert!(tab.isolate_current(), "隔离应成功");
+    let iso = tab.isolated.expect("隔离后应有范围");
+    let block0 = tab.diff_blocks[0];
+    assert_eq!(iso, block0, "隔离范围=当前差异块: {iso:?} vs {block0:?}");
+    // 导航只在隔离范围内循环
+    let nav = tab.nav_diff_rows();
+    assert!(
+        nav.iter().all(|&r| r >= iso.0 && r <= iso.1),
+        "导航行应在隔离范围内: {nav:?}"
+    );
+    // 取消隔离恢复
+    tab.unisolate();
+    assert!(tab.isolated.is_none(), "取消后无隔离");
+    assert_eq!(
+        tab.nav_diff_rows().len(),
+        tab.diff_rows.len(),
+        "恢复全部导航"
+    );
+}
+
+#[test]
+fn difftab_isolate_context_menu_via_ui() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    tab.borrow_mut().diff_pos = Some(0);
+    assert!(tab.borrow_mut().isolate_current(), "隔离应成功");
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    // 隔离提示条出现（渲染不崩溃 + 状态保持）
+    assert!(
+        tab.borrow().isolated.is_some(),
+        "隔离状态应保持（提示条渲染不 panic）"
+    );
+    // 取消隔离
+    tab.borrow_mut().unisolate();
+    h.run();
+    assert!(tab.borrow().isolated.is_none(), "取消后无隔离");
+}
+
 #[test]
 fn difftab_ignore_excludes_row_from_navigation_via_state() {
     let d = tempdir().unwrap();

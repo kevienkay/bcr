@@ -97,6 +97,8 @@ pub struct DiffTab {
     pub collapsed_blocks: std::collections::HashSet<usize>,
     /// P32-B5：已忽略的行（原始行索引），导航/统计排除
     pub ignored_rows: std::collections::HashSet<usize>,
+    /// P38-1a：隔离的差异块范围（rows 行索引，None = 未隔离）
+    pub isolated: Option<(usize, usize)>,
     pub search: SearchState,
     /// 待跳转行号（1-based）
     pub goto_line: Option<usize>,
@@ -171,6 +173,7 @@ impl DiffTab {
             diff_blocks: Vec::new(),
             collapsed_blocks: std::collections::HashSet::new(),
             ignored_rows: std::collections::HashSet::new(),
+            isolated: None,
             search: SearchState::default(),
             goto_line: None,
             goto_focus: false,
@@ -920,6 +923,47 @@ impl DiffTab {
         }
     }
 
+    /// P38-1a：隔离当前差异块（BC Isolate）。
+    /// 根据 diff_pos → diff_rows → 所在 diff_block 设置 isolated。
+    pub fn isolate_current(&mut self) -> bool {
+        let Some(pos) = self.diff_pos else {
+            return false;
+        };
+        let Some(&cur_row) = self.diff_rows.get(pos) else {
+            return false;
+        };
+        let Some(&(s, e)) = self
+            .diff_blocks
+            .iter()
+            .find(|&&(s, e)| s <= cur_row && cur_row <= e)
+        else {
+            return false;
+        };
+        self.isolated = Some((s, e));
+        // 隔离后 diff_pos 重置，导航从块首开始
+        let start = self.diff_rows.iter().position(|&r| r >= s);
+        self.diff_pos = start;
+        if let Some(p) = start {
+            self.jump_to_row(self.diff_rows[p]);
+        } else {
+            self.jump_to_row(s);
+        }
+        true
+    }
+
+    /// P38-1a：取消隔离（BC Show All）
+    pub fn unisolate(&mut self) {
+        self.isolated = None;
+    }
+
+    /// P38-1a：判断原始行 oi 是否在隔离范围内
+    fn in_isolated(&self, oi: usize) -> bool {
+        match self.isolated {
+            Some((s, e)) => oi >= s && oi <= e,
+            None => true,
+        }
+    }
+
     // ---- 搜索 ----
 
     pub fn update_search(&mut self) {
@@ -975,33 +1019,44 @@ impl DiffTab {
         self.goto_match(prev);
     }
 
+    /// P38-1a：导航可用的差异行（隔离时只取范围内的行）
+    pub fn nav_diff_rows(&self) -> Vec<usize> {
+        self.diff_rows
+            .iter()
+            .copied()
+            .filter(|&r| self.in_isolated(r))
+            .collect()
+    }
+
     // ---- 差异跳转 ----
 
     pub fn next_diff(&mut self) {
-        if self.diff_rows.is_empty() {
+        let rows = self.nav_diff_rows();
+        if rows.is_empty() {
             return;
         }
-        let n = self.diff_rows.len();
+        let n = rows.len();
         // diff_pos 是 diff_rows 的索引（与 P31 竖条标记一致），循环前进
         let next = match self.diff_pos {
             Some(p) => (p + 1) % n,
             None => 0,
         };
         self.diff_pos = Some(next);
-        self.jump_to_row(self.diff_rows[next]);
+        self.jump_to_row(rows[next]);
     }
 
     pub fn prev_diff(&mut self) {
-        if self.diff_rows.is_empty() {
+        let rows = self.nav_diff_rows();
+        if rows.is_empty() {
             return;
         }
-        let n = self.diff_rows.len();
+        let n = rows.len();
         let prev = match self.diff_pos {
             Some(p) => (p + n - 1) % n,
             None => n - 1,
         };
         self.diff_pos = Some(prev);
-        self.jump_to_row(self.diff_rows[prev]);
+        self.jump_to_row(rows[prev]);
     }
 
     /// 滚动到指定行索引（虚拟化：设置 scroll.y）
@@ -1884,6 +1939,10 @@ impl DiffTab {
                 self.diff_rows.iter().copied().collect();
             for vi in 0..display_rows.len() {
                 let oi = orig_of(vi);
+                // P38-1a：隔离过滤（只显示隔离范围内的行）
+                if !self.in_isolated(oi) {
+                    continue;
+                }
                 // P35-A3：视图过滤（All/Diff/Same/Context）
                 if !self.row_visible(oi, &diff_set) {
                     continue;
@@ -1912,6 +1971,11 @@ impl DiffTab {
             }
             let mut fold_toggle: Option<usize> = None;
             let mut ignore_req: Option<usize> = None;
+            // P38-1a：右键隔离/取消隔离请求
+            let mut isolate_req = false;
+            let mut unisolate_req = false;
+            // P38-1a：隔离提示条点击取消（借用安全：闭包内只置标志）
+            let mut banner_unisolate = false;
             // P35-A1：右键复制差异块到另一侧请求 (行索引, 目标侧)
             let mut copy_req: Option<(usize, EditSide)> = None;
             // P37-1m：右键复制行到另一侧请求 (行索引, 目标侧)
@@ -1996,6 +2060,37 @@ impl DiffTab {
                         detail_fg,
                     );
                 });
+                ui.separator();
+            }
+
+            // P38-1a：隔离提示条（已隔离 行 X–Y [✕ 显示全部]）
+            if let Some((s, e)) = self.isolated {
+                let (rect, resp) =
+                    ui.allocate_exact_size(Vec2::new(total_w, 26.0), egui::Sense::click());
+                let bg = if ui.visuals().dark_mode {
+                    Color32::from_rgb(46, 42, 20)
+                } else {
+                    Color32::from_rgb(255, 248, 210)
+                };
+                ui.painter().rect_filled(rect, 2.0, bg);
+                let fg = ui.visuals().strong_text_color();
+                ui.painter().text(
+                    Pos2::new(rect.left() + 10.0, rect.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    format!("🔍 已隔离 行 {}–{}（仅显示该差异区域）", s + 1, e + 1),
+                    egui::FontId::proportional(12.0),
+                    fg,
+                );
+                ui.painter().text(
+                    Pos2::new(rect.right() - 10.0, rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    "✕ 显示全部",
+                    egui::FontId::proportional(12.0),
+                    fg,
+                );
+                if resp.clicked() {
+                    banner_unisolate = true;
+                }
                 ui.separator();
             }
 
@@ -2109,6 +2204,16 @@ impl DiffTab {
                         self.right.as_ref().map(|f| f.path.clone()),
                     );
                     resp.context_menu(|ui| {
+                        // P38-1a：隔离（BC Isolate）/ 取消隔离（Show All）
+                        if self.isolated.is_some() {
+                            if ui.button("显示全部").clicked() {
+                                unisolate_req = true;
+                                ui.close();
+                            }
+                        } else if row_in_diff && ui.button("隔离").clicked() {
+                            isolate_req = true;
+                            ui.close();
+                        }
                         // P35-A1：复制差异块到另一侧（最核心操作，置顶）
                         if row_in_diff {
                             if ui.button(t(I18nKey::CopyToRight)).clicked() {
@@ -2206,6 +2311,17 @@ impl DiffTab {
                 }
                 self.inline_edit = inline;
                 self.recompute();
+                return;
+            }
+            // P38-1a：右键隔离/取消隔离（请求处理，处理后返回避免借用冲突）
+            if isolate_req {
+                self.isolate_current();
+                self.inline_edit = inline;
+                return;
+            }
+            if unisolate_req || banner_unisolate {
+                self.unisolate();
+                self.inline_edit = inline;
                 return;
             }
             // P35-A1：右键复制差异块到另一侧（改变文件内容，清空行内编辑）
