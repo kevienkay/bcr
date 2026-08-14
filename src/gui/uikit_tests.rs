@@ -11,6 +11,7 @@
 use crate::gui::csvtab::CsvTab;
 use crate::gui::difftab::{DiffTab, DiffViewFilter, EditSide};
 use crate::gui::dirtab::{DirTab, ViewFilter};
+use crate::gui::foldermergetab::FolderMergeTab;
 use crate::gui::imagetab::ImageTab;
 use crate::gui::mergetab::MergeTab;
 use crate::gui::patchtab::PatchTab;
@@ -171,10 +172,11 @@ fn dirtab_filter_dropdown_changes_view() {
         }
     }
     assert!(clicked, "下拉菜单应展开并出现「仅左侧」选项");
-    // 轮询等待过滤生效（Windows/macOS CI 偶发时序：点击后多帧才应用）
+    // 轮询等待过滤生效（Windows/macOS CI 偶发时序：点击后多帧才应用；并发测试下需真实 sleep）
     let mut applied = false;
-    for _ in 0..30 {
+    for _ in 0..60 {
         h.run_steps(2);
+        std::thread::sleep(std::time::Duration::from_millis(10));
         if tab.borrow().view_filter == ViewFilter::LeftOnly {
             applied = true;
             break;
@@ -1158,6 +1160,46 @@ fn empty_patch_tab_shows_open_button() {
     assert!(
         h.query_all_by_label_contains("打开文件").next().is_some(),
         "空补丁会话应显示打开文件按钮"
+    );
+}
+
+// ---- P37-1i：文件夹合并 GUI（BC Folder Merge） ----------------
+
+#[test]
+fn foldermerge_tab_renders_and_generates_plan() {
+    let d = tempdir().unwrap();
+    let base = d.path().join("base");
+    let left = d.path().join("left");
+    let right = d.path().join("right");
+    fs::create_dir_all(&base).unwrap();
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    write(&base, "a.txt", "same\n");
+    write(&left, "a.txt", "same\n");
+    write(&right, "a.txt", "same\n");
+    // 仅左侧文件 → 计划应有 copy from left
+    write(&left, "l.txt", "L\n");
+    let tab = RefCell::new(FolderMergeTab::new(
+        base.to_str().unwrap(),
+        left.to_str().unwrap(),
+        right.to_str().unwrap(),
+        d.path().join("out").to_str().unwrap(),
+    ));
+    assert!(
+        tab.borrow().error.is_none(),
+        "不应出错: {:?}",
+        tab.borrow().error
+    );
+    let plan = tab.borrow().plan.clone().expect("应生成计划");
+    assert!(plan.iter().any(|i| i.rel == "l.txt"), "计划应包含 l.txt");
+    // 渲染多帧不 panic
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    for _ in 0..3 {
+        h.run();
+    }
+    assert!(
+        h.query_all_by_label_contains("生成计划").next().is_some(),
+        "工具栏应有生成计划按钮"
     );
 }
 

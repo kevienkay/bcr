@@ -9,6 +9,7 @@ mod common;
 mod csvtab;
 mod difftab;
 mod dirtab;
+mod foldermergetab;
 mod imagetab;
 mod menubar;
 mod mergetab;
@@ -24,6 +25,7 @@ use csvtab::CsvTab;
 use difftab::DiffTab;
 use dirtab::DirTab;
 use eframe::egui::{self, Color32, RichText, ThemePreference};
+use foldermergetab::FolderMergeTab;
 use imagetab::ImageTab;
 use mergetab::MergeTab;
 use patchtab::PatchTab;
@@ -70,6 +72,10 @@ pub struct GuiArgs {
     /// P37-1h：补丁视图（单 .patch/.diff 文件，BC Text Patch）
     #[arg(long = "patch")]
     pub patch: Option<String>,
+
+    /// P37-1i：文件夹合并（BASE LEFT RIGHT 输出目录，BC Folder Merge）
+    #[arg(long = "merge-dir", num_args = 4, value_names = ["BASE", "LEFT", "RIGHT", "OUT"])]
+    pub merge_dir: Option<Vec<String>>,
 }
 
 /// 标签页
@@ -82,6 +88,7 @@ enum Tab {
     Csv(CsvTab),
     TextEdit(TextEditTab),
     Patch(PatchTab),
+    FolderMerge(FolderMergeTab),
 }
 
 impl Tab {
@@ -94,6 +101,7 @@ impl Tab {
             Tab::Csv(t) => t.title(),
             Tab::TextEdit(t) => t.title(),
             Tab::Patch(t) => t.title(),
+            Tab::FolderMerge(t) => t.title(),
         }
     }
 }
@@ -1419,6 +1427,7 @@ impl eframe::App for DiffApp {
                 Tab::Csv(t) => t.ui(ui),
                 Tab::TextEdit(t) => t.ui(ui),
                 Tab::Patch(t) => t.ui(ui),
+                Tab::FolderMerge(t) => t.ui(ui),
             }
         }
 
@@ -1550,6 +1559,16 @@ impl eframe::App for DiffApp {
                             } else {
                                 ui.label(crate::i18n::t(crate::i18n::Key::PatchTitle));
                             }
+                        }
+                        Tab::FolderMerge(t) => {
+                            let s = t.stats;
+                            ui.label(format!(
+                                "{} | {} | {} | {}",
+                                crate::i18n::t(crate::i18n::Key::MergeStats),
+                                s.copied,
+                                s.merged,
+                                s.conflicts,
+                            ));
                         }
                     }
                 } else {
@@ -1710,6 +1729,13 @@ pub fn run(args: &GuiArgs) -> i32 {
     } else if let Some(f) = &args.patch {
         // P37-1h：补丁视图（BC Text Patch 单文件）
         app.add_tab(Tab::Patch(PatchTab::new(f)));
+    } else if let Some(m) = &args.merge_dir {
+        // P37-1i：文件夹合并（BASE LEFT RIGHT OUT）
+        if m.len() == 4 {
+            app.add_tab(Tab::FolderMerge(FolderMergeTab::new(
+                &m[0], &m[1], &m[2], &m[3],
+            )));
+        }
     } else {
         match (&args.left, &args.right) {
             (Some(l), Some(r)) => {

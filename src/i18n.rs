@@ -325,6 +325,18 @@ pub enum Key {
     PatchAdded,
     /// P37-1h：删除 {}
     PatchRemoved,
+    /// P37-1i：文件夹合并标题
+    FolderMergeTitle,
+    /// P37-1i：生成计划
+    GeneratePlan,
+    /// P37-1i：执行合并
+    ExecuteMerge,
+    /// P37-1i：选择输出目录…
+    MergeOut,
+    /// P37-1i：复制 {} / 合并 {} / 删除 {} / 冲突 {}（统计）
+    MergeStats,
+    /// P37-1i：冲突
+    PlanConflict,
     /// 忽略行尾空白
     IgnoreTrailing,
     /// 忽略大小写
