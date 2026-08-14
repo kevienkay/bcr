@@ -36,6 +36,30 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **补丁视图（1h）**：unified diff 解析（---/+++/@@ hunk）→ 旧 vs 新双栏对比 + added/removed 统计 + 应用补丁写回目标（.bak 备份）；CLI `--patch`
 - **文件夹合并 GUI（1i）**：三目录 BASE/LEFT/RIGHT + 输出（BC Folder Merge）——生成计划（build_merge3_plan）列表展示 copy/merge/conflict/delete 徽标 + 冲突红标，执行写输出并自动建目录；CLI `--merge-dir BASE LEFT RIGHT OUT`
 
+### 文本对比深化（P38，实测 BC 5.2.5 文本菜单）
+
+- **隔离 Isolate（1a）**：右键隔离当前差异块（仅显示该区域），提示条点击显示全部；next/prev 导航限定隔离范围
+- **对齐方式 Align With（1b）**：右键启动手动强制行对齐（选一侧行 → 点击另一侧行配对合并为 Replace 行），支持清除对齐
+- **缩进调整（1c）**：增加/减少缩进 ±4 空格（仅行首空白，备份 + 编码回写 + 撤销快照 + 重载）
+- **编辑导航 Next/Prev Edit（1d）**：已编辑行锚点（左/右行号重映射）+ 循环跳转 + 右上角圆点标记
+- **复制文件并打开下一差异（1e）**：右键复制整个文件到另一侧并跳转下一差异（BC Copy File and Open Next Difference）
+- **修复**：macOS 双击裸二进制弹出命令行即退出（无参数一律启动 GUI）；主页会话卡片点击不跳转（Frame::show 默认无 click Sense）
+
+### 全视图对标收口（P39，BC 5.2.5 实机扫描 2668 行菜单树 + 12 实机截图）
+
+- **设置对话框（2a，⌘,）**：忽略选项（空白/行尾/大小写/CRLF）+ 编码 + 大小上限集中管理，`apply_settings_env` 写 BCR_ENCODING/BCR_MAX_SIZE；启动时应用
+- **新建标签/窗口（2a）**：⌘T 新建当前类型标签（new_tab_like_current）、⌘N 新建窗口（新进程 GUI）、⌥⌘S 会话中心、⌥⌘C 清除会话（重置当前标签）
+- **快捷键系统化（2a）**：⌘L 转到行 / ⌘G-⇧⌘G 查找下一上一 / 1-2-3 视图过滤（DiffTab）；快捷键帮助弹窗更新为 BC 式 ⌘ 列表
+- **UI 精修（2b）**：等宽字体优先（JetBrains Mono/系统等宽）+ CJK fallback；diff 配色对齐 BC 柔和色调（淡红/淡绿/淡黄）；当前差异行竖条改蓝色 current_bar；工具栏 emoji→矢量符号（⧉ 剪贴板/⚙ 外部工具）；gutter 行号 128/深色底 38
+- **会话中心保存当前会话（2c）**：名称输入 + 保存按钮，从 DirTab/DiffTab 提取左右路径写 ~/.bcr-sessions.toml
+- **报告生成（2c，⌘P）**：TXT/HTML 格式选择 + 实时预览 + rfd 保存；DirTab 接 report/htmlreport，DiffTab 文本报告（统计 + 差异行摘要）
+- **差异部分导航（2c，⇧⌃↓↑）**：按 diff_blocks 区块级跳转（无当前位置→首/末块，有→相邻块），同步 diff_pos 竖条
+- **细节三模式（2d）**：文本/16进制（文本文件强制构建字节网格）/对齐方式，View 菜单「细节」子菜单
+- **布局（2d）**：边并排/上-下（行高 2x，paint_diff_row_v 垂直堆叠）/网页，View 菜单「布局」子菜单
+- **主页卡片精修（2d）**：hover 蓝色描边高亮（1.5px rgb(86,148,240)）+ 圆角 + PointingHand
+- **书签（2d）**：⌘⌥⌃0-9 切换书签 / ⌘0-9 跳转（当前顶部行绑定，diff_pos 同步高亮）
+- **替换菜单（2e，⇧⌘F）**：Search 菜单「替换…」聚焦替换框（修复 ⌘F 分支抢先）；View 菜单「忽略不重要差异」四忽略开关一键同步；Tools「保存快照」；Session「比较文件使用」子菜单（文本/16进制/图片/表格视图切换 reopen_as_*）
+
 ## [0.3.0] - 2026-08-13
 
 ### UI 重构（P33，对标 Beyond Compare 5.2.5 真实界面）
