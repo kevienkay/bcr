@@ -1948,6 +1948,128 @@ fn dirtab_sync_now_button_via_ui() {
     );
 }
 
+// ---- P39-2a：快捷键系统化 -------------
+
+#[test]
+fn difftab_view_filter_hotkeys_1_2_3() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\nd\ne\n");
+    let r = write(d.path(), "r.txt", "a\nX\nc\nd\nY\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 按 2 → 仅差异
+    h.key_press(eframe::egui::Key::Num2);
+    h.run();
+    assert_eq!(tab.borrow().view_filter, DiffViewFilter::Diff);
+    // 按 3 → 仅相同
+    h.key_press(eframe::egui::Key::Num3);
+    h.run();
+    assert_eq!(tab.borrow().view_filter, DiffViewFilter::Same);
+    // 按 1 → 全部
+    h.key_press(eframe::egui::Key::Num1);
+    h.run();
+    assert_eq!(tab.borrow().view_filter, DiffViewFilter::All);
+}
+
+#[test]
+fn difftab_cmd_l_goto_focus() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nb\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert!(!tab.borrow().goto_focus);
+    h.key_combination_modifiers(eframe::egui::Modifiers::COMMAND, &[eframe::egui::Key::L]);
+    h.run();
+    // goto_focus 渲染时被消费（request_focus 后置 false）→ 检查行号输入框实际获得焦点
+    assert!(
+        h.query_all_by_role(eframe::egui::accesskit::Role::TextInput)
+            .next()
+            .is_some_and(|n| n.is_focused()),
+        "⌘L 后行号输入框应获得焦点"
+    );
+}
+
+#[test]
+fn difftab_cmd_g_next_prev_match() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "alpha\nbeta\n");
+    let r = write(d.path(), "r.txt", "ALPHA\nbeta\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // 构造两条匹配（不区分大小写）
+    tab.borrow_mut().search.query = "a".to_string();
+    tab.borrow_mut().update_search();
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert!(
+        tab.borrow().search.matches.len() >= 2,
+        "搜索 a 应有 ≥2 匹配"
+    );
+    assert_eq!(tab.borrow().search.current, None);
+    // ⌘G 下一匹配 → current = 0
+    h.key_combination_modifiers(eframe::egui::Modifiers::COMMAND, &[eframe::egui::Key::G]);
+    h.run();
+    assert_eq!(tab.borrow().search.current, Some(0));
+    // ⌘G 再按 → current = 1（循环）
+    h.key_combination_modifiers(eframe::egui::Modifiers::COMMAND, &[eframe::egui::Key::G]);
+    h.run();
+    assert_eq!(tab.borrow().search.current, Some(1));
+    // ⇧⌘G 上一匹配 → 回到 0
+    h.key_combination_modifiers(
+        eframe::egui::Modifiers::COMMAND | eframe::egui::Modifiers::SHIFT,
+        &[eframe::egui::Key::G],
+    );
+    h.run();
+    assert_eq!(tab.borrow().search.current, Some(0));
+}
+
+// ---- P39-2a：全局快捷键（⌘T 新建标签 / ⌘, 设置 / ⌥⌘S 会话 / ⌥⌘C 清除） -------------
+
+#[test]
+fn global_shortcuts_new_tab_settings_clear() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    // 先建一个文本对比标签
+    app.borrow_mut().open_empty_diff();
+    assert_eq!(app.borrow().tabs.len(), 1);
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().handle_global_shortcuts_safe(ui));
+    h.run();
+    // ⌘T 新建标签页 → 2 个标签
+    h.key_combination_modifiers(eframe::egui::Modifiers::COMMAND, &[eframe::egui::Key::T]);
+    h.run();
+    assert_eq!(app.borrow().tabs.len(), 2, "⌘T 应新建标签页");
+    // ⌘, 打开设置
+    h.key_combination_modifiers(
+        eframe::egui::Modifiers::COMMAND,
+        &[eframe::egui::Key::Comma],
+    );
+    h.run();
+    assert!(app.borrow().show_settings, "⌘, 应打开设置对话框");
+    // ⌥⌘S 会话中心
+    h.key_combination_modifiers(
+        eframe::egui::Modifiers::COMMAND | eframe::egui::Modifiers::ALT,
+        &[eframe::egui::Key::S],
+    );
+    h.run();
+    assert!(app.borrow().show_sessions, "⌥⌘S 应打开会话中心");
+    // ⌥⌘C 清除会话 → 当前标签重置为空（左右清空）
+    h.key_combination_modifiers(
+        eframe::egui::Modifiers::COMMAND | eframe::egui::Modifiers::ALT,
+        &[eframe::egui::Key::C],
+    );
+    h.run();
+    let app = app.borrow();
+    assert_eq!(app.tabs.len(), 2, "清除会话不关闭标签");
+    assert!(
+        matches!(&app.tabs[app.active], super::Tab::Diff(t) if t.left.is_none() && t.right.is_none()),
+        "⌥⌘C 应把当前标签重置为空会话"
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

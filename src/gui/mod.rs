@@ -121,6 +121,15 @@ struct Settings {
     ignore_trailing: bool,
     #[serde(default)]
     ignore_case: bool,
+    /// P39-2a：忽略行尾 CR/LF 差异
+    #[serde(default)]
+    ignore_crlf: bool,
+    /// P39-2a：强制编码（空 = 自动检测）
+    #[serde(default)]
+    encoding: String,
+    /// P39-2a：文本大小上限（MB，None = 默认）
+    #[serde(default)]
+    max_size: Option<u64>,
     #[serde(default)]
     window_size: Option<[f32; 2]>,
 }
@@ -196,6 +205,8 @@ struct DiffApp {
     show_shortcuts: bool,
     /// P33：关于弹窗开关
     show_about: bool,
+    /// P39-2a：设置对话框开关
+    show_settings: bool,
 }
 
 impl DiffApp {
@@ -217,6 +228,7 @@ impl DiffApp {
             show_external: false,
             show_shortcuts: false,
             show_about: false,
+            show_settings: false,
         }
     }
 
@@ -260,11 +272,64 @@ impl DiffApp {
             ignore_whitespace: self.settings.ignore_whitespace,
             ignore_trailing: self.settings.ignore_trailing,
             ignore_case: self.settings.ignore_case,
-            ignore_crlf: false,
+            ignore_crlf: self.settings.ignore_crlf,
             ignore_lines: Vec::new(),
         };
         t.show_stats = self.settings.show_stats;
         self.add_tab(Tab::Diff(t));
+    }
+
+    /// P39-2a：全局快捷键系统化（对标 BC 菜单快捷键）
+    /// ⌘W 关闭标签 / ⌘, 设置 / ⌘T 新建标签 / ⌘N 新建窗口 / ⌥⌘S 保存会话 / ⌥⌘C 清除会话
+    fn handle_global_shortcuts(&mut self, ui: &egui::Ui) {
+        // B1：Ctrl+W 关闭当前标签（仅在有标签时）
+        if !self.tabs.is_empty() && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::W))
+        {
+            self.close_tab(self.active);
+        }
+        let cmd = ui.input(|i| i.modifiers.command);
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::Comma)) {
+            // ⌘, 设置
+            self.show_settings = true;
+        }
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::T)) {
+            // ⌘T 新建标签页（当前会话类型）
+            self.new_tab_like_current();
+        }
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::N)) {
+            // ⌘N 新建窗口（新进程 GUI）
+            Self::open_new_window();
+        }
+        if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::S)) {
+            // ⌥⌘S 保存会话（会话中心）
+            self.show_sessions = true;
+        }
+        if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
+            // ⌥⌘C 清除会话（重置当前标签为空会话）
+            self.clear_active_tab();
+        }
+    }
+
+    /// P39-2a：全局快捷键测试用（不含 ⌘N 新进程，避免测试误启新实例）
+    #[cfg(test)]
+    fn handle_global_shortcuts_safe(&mut self, ui: &egui::Ui) {
+        if !self.tabs.is_empty() && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::W))
+        {
+            self.close_tab(self.active);
+        }
+        let cmd = ui.input(|i| i.modifiers.command);
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::Comma)) {
+            self.show_settings = true;
+        }
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::T)) {
+            self.new_tab_like_current();
+        }
+        if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::S)) {
+            self.show_sessions = true;
+        }
+        if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
+            self.clear_active_tab();
+        }
     }
 
     fn handle_dropped(&mut self, ctx: &egui::Context) {
@@ -524,6 +589,51 @@ impl DiffApp {
     /// 空 CSV 表格对比会话
     fn open_empty_csv(&mut self) {
         self.add_tab(Tab::Csv(CsvTab::new("", "")));
+    }
+
+    /// P39-2a：新建标签页（⌘T）——复制当前会话类型的新空标签
+    fn new_tab_like_current(&mut self) {
+        match self.tabs.get(self.active) {
+            Some(Tab::Diff(_)) => self.open_empty_diff(),
+            Some(Tab::Dir(_)) => self.open_empty_dir(),
+            Some(Tab::Merge(_)) => self.open_empty_merge(),
+            Some(Tab::Image(_)) => self.open_empty_image(),
+            Some(Tab::Csv(_)) => self.open_empty_csv(),
+            Some(Tab::TextEdit(_)) => self.add_tab(Tab::TextEdit(TextEditTab::new(""))),
+            Some(Tab::Patch(_)) => self.add_tab(Tab::Patch(PatchTab::new(""))),
+            Some(Tab::FolderMerge(_)) => {
+                self.add_tab(Tab::FolderMerge(FolderMergeTab::new("", "", "", "")))
+            }
+            None => self.open_empty_diff(),
+        }
+    }
+
+    /// P39-2a：新建窗口（⌘N）——启动新进程 GUI（对标 BC 新建窗口）
+    fn open_new_window() {
+        if let Ok(exe) = std::env::current_exe() {
+            // 无参数启动 GUI（main.rs 已处理：macOS 无参数一律 GUI，其余平台看 stdin）
+            let _ = std::process::Command::new(exe).spawn();
+        }
+    }
+
+    /// P39-2a：清除会话（⌥⌘C）——把当前标签重置为同类型空会话
+    fn clear_active_tab(&mut self) {
+        if self.tabs.is_empty() {
+            return;
+        }
+        let idx = self.active;
+        match &self.tabs[idx] {
+            Tab::Diff(_) => self.tabs[idx] = Tab::Diff(DiffTab::new()),
+            Tab::Dir(_) => self.tabs[idx] = Tab::Dir(DirTab::new("", "")),
+            Tab::Merge(_) => self.tabs[idx] = Tab::Merge(MergeTab::new("", "", "")),
+            Tab::Image(_) => self.tabs[idx] = Tab::Image(ImageTab::new("", "")),
+            Tab::Csv(_) => self.tabs[idx] = Tab::Csv(CsvTab::new("", "")),
+            Tab::TextEdit(_) => self.tabs[idx] = Tab::TextEdit(TextEditTab::new("")),
+            Tab::Patch(_) => self.tabs[idx] = Tab::Patch(PatchTab::new("")),
+            Tab::FolderMerge(_) => {
+                self.tabs[idx] = Tab::FolderMerge(FolderMergeTab::new("", "", "", ""))
+            }
+        }
     }
 
     /// P32-A7：欢迎页 — 大标题 + 会话类型网格卡片（文本/文件夹/三路合并/图片/CSV）
@@ -804,6 +914,19 @@ fn pick_file() -> Option<String> {
     Some(p.to_string_lossy().into_owned())
 }
 
+/// P39-2a：把设置中的编码 / 大小上限写入环境变量（对标 CLI --encoding/--max-size）
+fn apply_settings_env(s: &Settings) {
+    if s.encoding.is_empty() {
+        std::env::remove_var("BCR_ENCODING");
+    } else {
+        std::env::set_var("BCR_ENCODING", &s.encoding);
+    }
+    match s.max_size {
+        Some(mb) => std::env::set_var("BCR_MAX_SIZE", mb.to_string()),
+        None => std::env::remove_var("BCR_MAX_SIZE"),
+    }
+}
+
 fn pick_dir() -> Option<String> {
     let p = rfd::FileDialog::new().pick_folder()?;
     Some(p.to_string_lossy().into_owned())
@@ -818,11 +941,8 @@ impl eframe::App for DiffApp {
 
         self.handle_dropped(ui.ctx());
 
-        // B1：全局快捷键 Ctrl+W 关闭当前标签（仅在有标签时）
-        if !self.tabs.is_empty() && ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::W))
-        {
-            self.close_tab(self.active);
-        }
+        // B1 + P39-2a：全局快捷键（关闭标签 / 设置 / 新建标签 / 新建窗口 / 会话）
+        self.handle_global_shortcuts(ui);
 
         // 顶部菜单栏（P33：BC 式标准菜单，替代扁平按钮排）
         egui::Panel::top("menu").show(ui, |ui| {
@@ -954,11 +1074,18 @@ impl eframe::App for DiffApp {
                         ("F6", "下一差异"),
                         ("F7", "上一差异"),
                         ("F2", "重命名（目录对比）"),
-                        ("Ctrl+F", "查找"),
-                        ("Ctrl+G", "跳转到行"),
-                        ("Ctrl+Z", "撤销"),
-                        ("Ctrl+Y", "重做"),
-                        ("Ctrl+W", "关闭当前标签"),
+                        ("⌘,", "设置"),
+                        ("⌘T", "新建标签页"),
+                        ("⌘N", "新建窗口"),
+                        ("⌘L", "转到行"),
+                        ("⌘G / ⇧⌘G", "查找下一 / 上一"),
+                        ("⌥⌘S", "保存会话"),
+                        ("⌥⌘C", "清除会话"),
+                        ("1 / 2 / 3", "显示全部 / 差异 / 相同"),
+                        ("⌘F", "查找"),
+                        ("⌘Z", "撤销"),
+                        ("⌘Y", "重做"),
+                        ("⌘W", "关闭当前标签"),
                         ("Enter", "打开选中文件对比（目录）"),
                         ("双击行", "内联编辑"),
                     ];
@@ -999,6 +1126,104 @@ impl eframe::App for DiffApp {
                 });
             if !keep {
                 self.show_about = false;
+            }
+        }
+
+        // P39-2a：设置对话框（⌘,）——忽略选项 / 编码 / 大小上限集中管理
+        if self.show_settings {
+            let mut keep = true;
+            let mut close_req = false;
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::SettingsTitle))
+                .collapsible(false)
+                .default_size([440.0, 420.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(
+                        RichText::new(crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs)).strong(),
+                    );
+                    ui.checkbox(
+                        &mut self.settings.ignore_whitespace,
+                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs),
+                    );
+                    ui.checkbox(
+                        &mut self.settings.ignore_trailing,
+                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreTrail),
+                    );
+                    ui.checkbox(
+                        &mut self.settings.ignore_case,
+                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreCase),
+                    );
+                    ui.checkbox(
+                        &mut self.settings.ignore_crlf,
+                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreCrlf),
+                    );
+                    ui.separator();
+                    // 编码（空 = 自动检测）
+                    ui.horizontal(|ui| {
+                        ui.label(crate::i18n::t(crate::i18n::Key::SettingsEncoding));
+                        let encodings = [
+                            "",
+                            "utf-8",
+                            "utf-16le",
+                            "utf-16be",
+                            "utf-32le",
+                            "utf-32be",
+                            "gbk",
+                            "big5",
+                            "shift_jis",
+                        ];
+                        let mut sel = self.settings.encoding.clone();
+                        egui::ComboBox::from_id_salt("settings_encoding")
+                            .selected_text(if sel.is_empty() {
+                                "auto".to_string()
+                            } else {
+                                sel.clone()
+                            })
+                            .show_ui(ui, |ui| {
+                                for e in encodings {
+                                    let label = if e.is_empty() {
+                                        "auto".to_string()
+                                    } else {
+                                        e.to_string()
+                                    };
+                                    if ui.selectable_label(sel == e, label).clicked() {
+                                        sel = e.to_string();
+                                    }
+                                }
+                            });
+                        self.settings.encoding = sel;
+                    });
+                    // 大小上限（MB，0 = 默认）
+                    ui.horizontal(|ui| {
+                        ui.label(crate::i18n::t(crate::i18n::Key::SettingsMaxSize));
+                        let mut mb = self.settings.max_size.unwrap_or(0);
+                        if ui
+                            .add(egui::DragValue::new(&mut mb).range(0..=65536))
+                            .changed()
+                        {
+                            self.settings.max_size = if mb == 0 { None } else { Some(mb) };
+                        }
+                        ui.label("MB");
+                    });
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        let save = ui
+                            .button(crate::i18n::t(crate::i18n::Key::MenuSaveSession))
+                            .on_hover_text("保存设置到 ~/.bcr-gui.toml")
+                            .clicked();
+                        if save {
+                            // 持久化 + 写入环境变量（编码 / 大小上限对标 CLI 行为）
+                            apply_settings_env(&self.settings);
+                            self.settings.save();
+                            close_req = true;
+                        }
+                        if ui.button(crate::i18n::t(crate::i18n::Key::Close)).clicked() {
+                            close_req = true;
+                        }
+                    });
+                });
+            if close_req || !keep {
+                self.show_settings = false;
             }
         }
 
@@ -1689,6 +1914,8 @@ fn install_cjk_fonts(ctx: &egui::Context) {
 /// 运行 GUI 事件循环，返回进程退出码
 pub fn run(args: &GuiArgs) -> i32 {
     let settings = Settings::load();
+    // P39-2a：启动时把持久化的编码 / 大小上限写入环境变量（对标 CLI 行为）
+    apply_settings_env(&settings);
     let gui_lang = settings.lang();
     crate::i18n::set_lang(gui_lang);
     let win = settings.window_size.unwrap_or([1360.0, 860.0]);

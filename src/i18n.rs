@@ -597,6 +597,34 @@ pub enum Key {
     MenuAbout,
     /// 快捷键
     MenuShortcuts,
+    /// P39-2a：新建标签页
+    MenuNewTab,
+    /// P39-2a：新建窗口
+    MenuNewWindow,
+    /// P39-2a：设置…
+    MenuSettings,
+    /// P39-2a：清除会话
+    MenuClearSession,
+    /// P39-2a：设置对话框标题
+    SettingsTitle,
+    /// P39-2a：忽略空白
+    SettingsIgnoreWs,
+    /// P39-2a：忽略行尾空白
+    SettingsIgnoreTrail,
+    /// P39-2a：忽略大小写
+    SettingsIgnoreCase,
+    /// P39-2a：忽略行尾 CR/LF
+    SettingsIgnoreCrlf,
+    /// P39-2a：编码
+    SettingsEncoding,
+    /// P39-2a：大小上限（MB）
+    SettingsMaxSize,
+    /// P39-2a：转到行…
+    MenuGotoLine,
+    /// P39-2a：查找下一
+    MenuFindNext,
+    /// P39-2a：查找上一
+    MenuFindPrev,
 
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比

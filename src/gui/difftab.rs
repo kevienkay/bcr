@@ -1489,9 +1489,35 @@ impl DiffTab {
             self.search.focus = true;
             return;
         }
-        if ui.input(|i| i.key_pressed(Key::G) && ctrl) {
+        // P39-2a：⌘L 转到行（BC 快捷键）；⌘G / ⇧⌘G 查找下一/上一
+        if ui.input(|i| i.key_pressed(Key::L) && ctrl) {
             self.goto_focus = true;
             return;
+        }
+        if ui.input(|i| i.key_pressed(Key::G) && ctrl) {
+            if ui.input(|i| i.modifiers.shift) {
+                self.prev_match();
+            } else {
+                self.next_match();
+            }
+            return;
+        }
+        // P39-2a：1/2/3 视图过滤（BC 显示全部/差异/相同；输入框聚焦时不触发）
+        if !ui.ctx().egui_wants_keyboard_input() {
+            let vf = if ui.input(|i| i.key_pressed(Key::Num1)) {
+                Some(DiffViewFilter::All)
+            } else if ui.input(|i| i.key_pressed(Key::Num2)) {
+                Some(DiffViewFilter::Diff)
+            } else if ui.input(|i| i.key_pressed(Key::Num3)) {
+                Some(DiffViewFilter::Same)
+            } else {
+                None
+            };
+            if let Some(vf) = vf {
+                if self.view_filter != vf {
+                    self.view_filter = vf;
+                }
+            }
         }
         // B1：F6 下一差异 / F7 上一差异（hex 模式下走 hex 差异导航）
         if ui.input(|i| i.key_pressed(Key::F6)) {

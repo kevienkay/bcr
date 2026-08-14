@@ -65,10 +65,25 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             app.open_empty_diff();
         }
         ui.separator();
+        // P39-2a：新建标签页 / 新建窗口（BC Session 菜单）
+        if ui.button(t(I18nKey::MenuNewTab)).clicked() {
+            ui.close();
+            app.new_tab_like_current();
+        }
+        if ui.button(t(I18nKey::MenuNewWindow)).clicked() {
+            ui.close();
+            super::DiffApp::open_new_window();
+        }
+        ui.separator();
         // 保存会话：打开会话中心（GUI 内管理已保存会话）
         if ui.button(t(I18nKey::MenuSaveSession)).clicked() {
             ui.close();
             app.show_sessions = true;
+        }
+        // P39-2a：清除会话（重置当前标签为空会话）
+        if ui.button(t(I18nKey::MenuClearSession)).clicked() {
+            ui.close();
+            app.clear_active_tab();
         }
     });
 }
@@ -181,10 +196,24 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
             return;
         }
-        // DiffTab：查找 / 差异导航 / 重载
+        // DiffTab：查找 / 差异导航 / 编辑导航 / 重载
         if ui.button(t(I18nKey::MenuFind)).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_search());
+        }
+        // P39-2a：查找下一 / 上一（⌘G / ⇧⌘G）
+        if ui.button(t(I18nKey::MenuFindNext)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.next_match());
+        }
+        if ui.button(t(I18nKey::MenuFindPrev)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.prev_match());
+        }
+        // P39-2a：转到行…（⌘L）
+        if ui.button(t(I18nKey::MenuGotoLine)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.goto_focus = true);
         }
         ui.separator();
         if ui.button(t(I18nKey::MenuNextDiff)).clicked() {
@@ -212,9 +241,15 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     });
 }
 
-/// View：主题 / 语言 / 统计栏 / 缩略图
+/// View：主题 / 语言 / 设置 / 统计栏 / 缩略图
 fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuView), |ui| {
+        // P39-2a：设置…（⌘,）集中管理对话框
+        if ui.button(t(I18nKey::MenuSettings)).clicked() {
+            ui.close();
+            app.show_settings = true;
+        }
+        ui.separator();
         // 主题（系统/深色/浅色）
         ui.label(t(I18nKey::Theme));
         let mut pref = app.settings.theme_pref();
