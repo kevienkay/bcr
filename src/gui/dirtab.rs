@@ -1554,7 +1554,7 @@ impl DirTab {
                             .desired_width(200.0),
                     );
                     if ri.changed() && ri.lost_focus() {
-                        self.includes = inc;
+                        self.includes = inc.clone();
                         self.refresh();
                     }
                     ui.add_space(6.0);
@@ -1566,6 +1566,12 @@ impl DirTab {
                             .desired_width(200.0),
                     );
                     if re.changed() && re.lost_focus() {
+                        self.excludes = exc.clone();
+                        self.refresh();
+                    }
+                    // P40-2：显式应用按钮（Enter 提交外的补充入口）
+                    if ui.button(t(I18nKey::ApplyFilter)).clicked() {
+                        self.includes = inc;
                         self.excludes = exc;
                         self.refresh();
                     }
