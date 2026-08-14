@@ -1086,27 +1086,7 @@ impl DirTab {
                         }
                     });
                 ui.separator();
-                let mut inc = self.includes.clone();
-                let r1 = ui.add(
-                    egui::TextEdit::singleline(&mut inc)
-                        .hint_text(t(I18nKey::IncludeGlob))
-                        .desired_width(150.0),
-                );
-                let mut exc = self.excludes.clone();
-                let r2 = ui.add(
-                    egui::TextEdit::singleline(&mut exc)
-                        .hint_text(t(I18nKey::ExcludeGlob))
-                        .desired_width(150.0),
-                );
-                if (r1.changed() && r1.lost_focus())
-                    || (r2.changed() && r2.lost_focus())
-                    || ui.button(t(I18nKey::ApplyFilter)).clicked()
-                {
-                    self.includes = inc;
-                    self.excludes = exc;
-                    self.refresh();
-                }
-                ui.separator();
+                // P40-2：include/exclude glob 已收进过滤面板（原工具栏输入移除）
                 if let Some(r) = &self.result {
                     let s = r.stats;
                     ui.label(fmt(
@@ -1565,12 +1545,39 @@ impl DirTab {
                         }
                     });
                     ui.add_space(8.0);
+                    // P40-2：include/exclude glob（原工具栏输入，收进过滤面板）
+                    ui.label(t(I18nKey::IncludeGlob));
+                    let mut inc = self.includes.clone();
+                    let ri = ui.add(
+                        egui::TextEdit::singleline(&mut inc)
+                            .hint_text("*.rs,src/**")
+                            .desired_width(200.0),
+                    );
+                    if ri.changed() && ri.lost_focus() {
+                        self.includes = inc;
+                        self.refresh();
+                    }
+                    ui.add_space(6.0);
+                    ui.label(t(I18nKey::ExcludeGlob));
+                    let mut exc = self.excludes.clone();
+                    let re = ui.add(
+                        egui::TextEdit::singleline(&mut exc)
+                            .hint_text("target,node_modules")
+                            .desired_width(200.0),
+                    );
+                    if re.changed() && re.lost_focus() {
+                        self.excludes = exc;
+                        self.refresh();
+                    }
+                    ui.add_space(8.0);
                     if ui.button("清除全部过滤").clicked() {
                         self.ext_filter.clear();
                         self.min_size.clear();
                         self.max_size.clear();
                         self.mtime_from.clear();
                         self.mtime_to.clear();
+                        self.includes.clear();
+                        self.excludes.clear();
                         self.rebuild_tree();
                     }
                     ui.separator();
