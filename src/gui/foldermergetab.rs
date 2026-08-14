@@ -395,9 +395,10 @@ mod tests {
         write(&right, "a.txt", "same\n");
         write(&left, "l.txt", "L\n");
         write(&right, "r.txt", "R\n");
+        // c.txt 两侧都改且不同（两侧均与 base 不同尺寸：Windows 低精度 mtime 下快速模式必判已改）
         write(&base, "c.txt", "base\n");
-        write(&left, "c.txt", "left\n");
-        write(&right, "c.txt", "right\n");
+        write(&left, "c.txt", "leftside\n");
+        write(&right, "c.txt", "rightside\n");
 
         let t = FolderMergeTab::new(
             base.to_str().unwrap(),
