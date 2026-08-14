@@ -225,6 +225,21 @@ pub fn open_with_system_app(path: &str) {
     let _ = std::process::Command::new(cmd).arg(path).spawn();
 }
 
+/// P37-1j：用第三方外部工具对比两侧文件（~/.bcr-external.toml 扩展名映射）。
+///
+/// 任一侧扩展名有映射则执行；返回 None（成功或未配置）或 Some(错误消息)。
+pub fn external_compare(left: &str, right: &str) -> Option<String> {
+    let tools = crate::external::ExternalTools::load();
+    let template = tools.command_for(left).or_else(|| tools.command_for(right));
+    let Some(t) = template else {
+        return None; // 未配置该扩展名：不执行也不报错
+    };
+    match crate::external::ExternalTools::run(t, left, right) {
+        Some(_) => None,
+        None => Some("外部工具启动失败（命令不存在或执行出错）".to_string()),
+    }
+}
+
 /// P32-A4：在文件管理器中定位文件（macOS open -R / Windows explorer /select / Linux xdg-open 父目录）
 pub fn reveal_in_file_manager(path: &str) {
     #[cfg(target_os = "macos")]

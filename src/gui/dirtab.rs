@@ -1635,6 +1635,8 @@ impl DirTab {
             let mut delete_req: Option<(String, bool)> = None; // (rel, delete_right)
             let mut exclude_req: Option<String> = None;
             let mut leave_req: Option<String> = None; // P37-1f：独自离开
+                                                      // P37-1j：右键外部工具对比请求 (左完整路径, 右完整路径)
+            let mut external_req: Option<(String, String)> = None;
             let mut scroll_to_sel = self.scroll_to_selected;
             self.scroll_to_selected = false;
             let selected = self.selected;
@@ -1814,6 +1816,22 @@ impl DirTab {
                                     pending_open = Some(e.rel.clone());
                                     ui.close();
                                 }
+                                // P37-1j：外部工具对比（~/.bcr-external.toml 扩展名映射）
+                                let full_l = std::path::Path::new(&self.left).join(&e.rel);
+                                let full_r = std::path::Path::new(&self.right).join(&e.rel);
+                                if ui
+                                    .button("🔧 外部工具对比")
+                                    .on_hover_text(
+                                        "用 ~/.bcr-external.toml 配置的第三方工具对比该文件两侧",
+                                    )
+                                    .clicked()
+                                {
+                                    external_req = Some((
+                                        full_l.to_string_lossy().into_owned(),
+                                        full_r.to_string_lossy().into_owned(),
+                                    ));
+                                    ui.close();
+                                }
                                 // P36-D2：逐文件操作（BC 操作菜单「复制到边/删除/排除」）
                                 ui.separator();
                                 let rel = e.rel.clone();
@@ -1888,6 +1906,12 @@ impl DirTab {
             // P37-1f：独自离开/取消
             if let Some(rel) = leave_req {
                 self.toggle_leave_alone(&rel);
+            }
+            // P37-1j：外部工具对比（闭包外执行）
+            if let Some((l, r)) = external_req {
+                if let Some(err) = super::common::external_compare(&l, &r) {
+                    self.sync_msg = Some(err);
+                }
             }
         });
     }

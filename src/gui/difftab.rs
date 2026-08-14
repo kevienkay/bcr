@@ -1836,6 +1836,8 @@ impl DiffTab {
             let mut ignore_req: Option<usize> = None;
             // P35-A1：右键复制差异块到另一侧请求 (行索引, 目标侧)
             let mut copy_req: Option<(usize, EditSide)> = None;
+            // P37-1j：右键外部工具对比请求 (左路径, 右路径)
+            let mut external_req: Option<(String, String)> = None;
 
             // BC 式左右两页：顶部文件名头部（固定视口宽度，不随内容横向滚动移动）
             // P33：两行结构 — 第一行文件名，第二行详情（时间 | 大小 | 编码），对标 BC 5
@@ -2065,6 +2067,20 @@ impl DiffTab {
                             }
                         }
                         ui.separator();
+                        // P37-1j：外部工具对比（~/.bcr-external.toml 扩展名映射）
+                        if let (Some(lp2), Some(rp2)) = (&lp, &rp) {
+                            if ui
+                                .button("🔧 外部工具对比")
+                                .on_hover_text(
+                                    "用 ~/.bcr-external.toml 配置的第三方工具对比两侧文件",
+                                )
+                                .clicked()
+                            {
+                                external_req = Some((lp2.clone(), rp2.clone()));
+                                ui.close();
+                            }
+                        }
+                        ui.separator();
                         if ignored {
                             if ui.button("取消忽略此行").clicked() {
                                 ignore_req = Some(row_idx);
@@ -2077,6 +2093,12 @@ impl DiffTab {
                     });
                 }
             });
+            // P37-1j：右键外部工具对比（闭包外执行）
+            if let Some((l, r)) = external_req {
+                if let Some(err) = super::common::external_compare(&l, &r) {
+                    self.error = Some(err);
+                }
+            }
             // P32-A5：处理折叠切换
             if let Some(bi) = fold_toggle {
                 if !self.collapsed_blocks.remove(&bi) {

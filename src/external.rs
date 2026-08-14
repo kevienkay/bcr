@@ -141,3 +141,23 @@ mod tests {
         assert!(t.command_for("/x/noext").is_none());
     }
 }
+
+#[cfg(test)]
+mod gui_tests {
+    use super::*;
+
+    #[test]
+    fn command_for_matches_without_config() {
+        // 未配置扩展名 → None（external_compare 不应报错）
+        let tools = ExternalTools::load();
+        assert!(tools.command_for("/tmp/x.docx").is_none() || tools.tools.is_empty());
+    }
+
+    #[test]
+    fn render_and_run_no_placeholder_crash() {
+        // 渲染命令不 panic；不实际执行（模板用 echo 安全命令）
+        let cmd = ExternalTools::render("echo {left} {right}", "/a b/x.docx", "/c/d.docx");
+        #[cfg(not(windows))]
+        assert!(cmd.contains("'/a b/x.docx'"));
+    }
+}
