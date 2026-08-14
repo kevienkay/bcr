@@ -40,6 +40,18 @@ pub struct ImageTab {
     /// 请求定位差异区域（帧渲染后消费）
     locate_diff_req: bool,
     textures: Option<ImgTextures>,
+    /// P37-1e：顺时针旋转角度（0/90/180/270）
+    pub rotation: u32,
+    /// P37-1e：水平翻转
+    pub flip_h: bool,
+    /// P37-1e：垂直翻转
+    pub flip_v: bool,
+    /// P37-1e：差异判定模式（BC 容差/不匹配范围/混合）
+    pub diff_mode: crate::imgcmp::DiffMode,
+    /// P37-1e：容差阈值（Tolerance/Mixed 生效）
+    pub tolerance: u8,
+    /// P37-1e：最小差异块面积（MismatchRange/Mixed 生效）
+    pub min_diff_area: u32,
 }
 
 /// 三张纹理（左 / 右 / 差异叠加）
@@ -67,6 +79,12 @@ impl ImageTab {
             scroll: egui::Vec2::ZERO,
             locate_diff_req: false,
             textures: None,
+            rotation: 0,
+            flip_h: false,
+            flip_v: false,
+            diff_mode: crate::imgcmp::DiffMode::Exact,
+            tolerance: 8,
+            min_diff_area: 16,
         };
         t.load_pair(left, right);
         t
@@ -221,11 +239,63 @@ impl ImageTab {
             self.pair = None;
             return;
         }
-        self.pair = Some(crate::imgcmp::compare_images(
-            self.frames_l[li].clone(),
-            self.frames_r[ri].clone(),
+        // P37-1e：先应用旋转/翻转变换，再按差异模式比较
+        let l = self.transform(&self.frames_l[li]);
+        let r = self.transform(&self.frames_r[ri]);
+        self.pair = Some(crate::imgcmp::compare_images_opt(
+            l,
+            r,
+            crate::imgcmp::CompareOptions {
+                mode: self.diff_mode,
+                tolerance: self.tolerance,
+                min_diff_area: self.min_diff_area,
+            },
         ));
         self.textures = None;
+    }
+
+    /// P37-1e：对单帧应用旋转/翻转（用于比较与缩略图）
+    fn transform(&self, img: &RgbaImage) -> RgbaImage {
+        let mut out = crate::imgcmp::rotate_image(img, self.rotation);
+        if self.flip_h {
+            out = crate::imgcmp::flip_image(&out, true);
+        }
+        if self.flip_v {
+            out = crate::imgcmp::flip_image(&out, false);
+        }
+        out
+    }
+
+    /// P37-1e：顺时针旋转 90°（BC Rotate Clockwise）
+    pub fn rotate_cw(&mut self) {
+        self.rotation = (self.rotation + 90) % 360;
+        self.recompute_current();
+    }
+
+    /// P37-1e：逆时针旋转 90°（BC Rotate Counter-clockwise）
+    pub fn rotate_ccw(&mut self) {
+        self.rotation = (self.rotation + 270) % 360;
+        self.recompute_current();
+    }
+
+    /// P37-1e：水平翻转（BC Flip Horizontal）
+    pub fn flip_horizontal(&mut self) {
+        self.flip_h = !self.flip_h;
+        self.recompute_current();
+    }
+
+    /// P37-1e：垂直翻转（BC Flip Vertical）
+    pub fn flip_vertical(&mut self) {
+        self.flip_v = !self.flip_v;
+        self.recompute_current();
+    }
+
+    /// P37-1e：重置变换（BC Reset Difference Offset）
+    pub fn reset_transform(&mut self) {
+        self.rotation = 0;
+        self.flip_h = false;
+        self.flip_v = false;
+        self.recompute_current();
     }
 
     /// 跳转到指定帧（越界截断）
@@ -335,6 +405,79 @@ impl ImageTab {
                     self.fit = !self.fit;
                 }
                 ui.separator();
+                // P37-1e：变换（BC 旋转/翻转/重置差异偏移）
+                if ui
+                    .button("↻")
+                    .on_hover_text(t(I18nKey::ImgRotateCw))
+                    .clicked()
+                {
+                    self.rotate_cw();
+                }
+                if ui
+                    .button("↺")
+                    .on_hover_text(t(I18nKey::ImgRotateCcw))
+                    .clicked()
+                {
+                    self.rotate_ccw();
+                }
+                if ui.button("⇋").on_hover_text(t(I18nKey::ImgFlipH)).clicked() {
+                    self.flip_horizontal();
+                }
+                if ui.button("⇵").on_hover_text(t(I18nKey::ImgFlipV)).clicked() {
+                    self.flip_vertical();
+                }
+                if ui
+                    .button("↩")
+                    .on_hover_text(t(I18nKey::ImgResetTransform))
+                    .clicked()
+                {
+                    self.reset_transform();
+                }
+                ui.separator();
+                // P37-1e：差异判定模式（BC 容差/不匹配范围/混合）
+                {
+                    use crate::imgcmp::DiffMode;
+                    let cur = self.diff_mode;
+                    let label = match cur {
+                        DiffMode::Exact => t(I18nKey::ImgModeExact),
+                        DiffMode::Tolerance => t(I18nKey::ImgModeTolerance),
+                        DiffMode::MismatchRange => t(I18nKey::ImgModeMismatch),
+                        DiffMode::Mixed => t(I18nKey::ImgModeMixed),
+                    };
+                    egui::ComboBox::from_id_salt("img_diff_mode")
+                        .selected_text(label)
+                        .show_ui(ui, |ui| {
+                            for (mode, k) in [
+                                (DiffMode::Exact, I18nKey::ImgModeExact),
+                                (DiffMode::Tolerance, I18nKey::ImgModeTolerance),
+                                (DiffMode::MismatchRange, I18nKey::ImgModeMismatch),
+                                (DiffMode::Mixed, I18nKey::ImgModeMixed),
+                            ] {
+                                if ui.selectable_label(cur == mode, t(k)).clicked() {
+                                    self.diff_mode = mode;
+                                }
+                            }
+                        });
+                    // 容差 / 最小差异块滑块（对应模式生效）
+                    if matches!(self.diff_mode, DiffMode::Tolerance | DiffMode::Mixed) {
+                        ui.separator();
+                        ui.label(t(I18nKey::ImgTolerance));
+                        let old = self.tolerance;
+                        ui.add(egui::Slider::new(&mut self.tolerance, 0..=64));
+                        if old != self.tolerance {
+                            self.recompute_current();
+                        }
+                    }
+                    if matches!(self.diff_mode, DiffMode::MismatchRange | DiffMode::Mixed) {
+                        ui.separator();
+                        ui.label(t(I18nKey::ImgMinArea));
+                        let old = self.min_diff_area;
+                        ui.add(egui::Slider::new(&mut self.min_diff_area, 1..=256));
+                        if old != self.min_diff_area {
+                            self.recompute_current();
+                        }
+                    }
+                }
                 ui.checkbox(&mut self.show_overlay, "差异叠加");
                 ui.checkbox(&mut self.show_stats, "统计");
                 if let Some(p) = &self.pair {

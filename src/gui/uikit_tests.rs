@@ -576,6 +576,91 @@ fn imagetab_context_menu_swap_exchanges_sides() {
     assert_eq!(t.right, a, "交换后右侧应为原左侧");
 }
 
+// ---- P37-1e：图片旋转/翻转 + 差异模式 ----------------
+
+#[test]
+fn imagetab_rotate_cw_button_applies_transform() {
+    let d = tempdir().unwrap();
+    let a = write_png(d.path(), "a.png", [10, 20, 30, 255]);
+    let b = write_png(d.path(), "b.png", [10, 20, 99, 255]);
+    let tab = RefCell::new(ImageTab::new(&a, &b));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert_eq!(tab.borrow().rotation, 0, "默认不旋转");
+    // 点击顺时针旋转按钮（↻）
+    h.get_by_label("↻").click();
+    h.run();
+    assert_eq!(tab.borrow().rotation, 90, "点击↻后旋转 90°");
+    // 再次点击 → 180°
+    h.get_by_label("↻").click();
+    h.run();
+    assert_eq!(tab.borrow().rotation, 180, "再次点击后旋转 180°");
+    // 重置（↩）→ 0°
+    h.get_by_label("↩").click();
+    h.run();
+    assert_eq!(tab.borrow().rotation, 0, "重置后旋转归零");
+}
+
+#[test]
+fn imagetab_flip_buttons_toggle_flags() {
+    let d = tempdir().unwrap();
+    let a = write_png(d.path(), "a.png", [1, 2, 3, 255]);
+    let b = write_png(d.path(), "b.png", [1, 2, 99, 255]);
+    let tab = RefCell::new(ImageTab::new(&a, &b));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert!(!tab.borrow().flip_h && !tab.borrow().flip_v, "默认无翻转");
+    h.get_by_label("⇋").click(); // 水平翻转
+    h.run();
+    assert!(tab.borrow().flip_h, "点击⇋后水平翻转");
+    h.get_by_label("⇵").click(); // 垂直翻转
+    h.run();
+    assert!(tab.borrow().flip_v, "点击⇵后垂直翻转");
+    h.get_by_label("↩").click(); // 重置
+    h.run();
+    assert!(
+        !tab.borrow().flip_h && !tab.borrow().flip_v,
+        "重置后翻转清除"
+    );
+}
+
+#[test]
+fn imagetab_diff_mode_switch_via_combo() {
+    let d = tempdir().unwrap();
+    let a = write_png(d.path(), "a.png", [10, 20, 30, 255]);
+    let b = write_png(d.path(), "b.png", [10, 20, 99, 255]);
+    let tab = RefCell::new(ImageTab::new(&a, &b));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    assert_eq!(
+        tab.borrow().diff_mode,
+        crate::imgcmp::DiffMode::Exact,
+        "默认精确模式"
+    );
+    // 打开差异模式下拉（value 含「精确」）
+    let combo = h
+        .query_all_by_role(eframe::egui::accesskit::Role::ComboBox)
+        .find(|n| n.value().map(|v| v.contains("精确")).unwrap_or(false))
+        .expect("应存在差异模式下拉");
+    combo.click();
+    let mut clicked = false;
+    for _ in 0..25 {
+        h.run_steps(2);
+        if let Some(node) = h.query_by_label("容差") {
+            node.click();
+            clicked = true;
+            break;
+        }
+    }
+    assert!(clicked, "差异模式下拉应出现「容差」选项");
+    h.run();
+    assert_eq!(
+        tab.borrow().diff_mode,
+        crate::imgcmp::DiffMode::Tolerance,
+        "切换后应为容差模式"
+    );
+}
+
 #[test]
 fn mergetab_context_menu_registers_without_panic() {
     let d = tempdir().unwrap();

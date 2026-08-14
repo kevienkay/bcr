@@ -131,6 +131,42 @@ pub fn compare_paths(l: &str, r: &str) -> Result<ImgPair, String> {
 
 /// 已解码 RGBA 图的像素级比较
 pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
+    compare_images_opt(left, right, CompareOptions::default())
+}
+
+/// P37-1e：差异判定模式（BC Picture Compare 视图菜单）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiffMode {
+    /// 精确逐像素比较（默认）
+    #[default]
+    Exact,
+    /// 容差模式：RGB 曼哈顿距离 ≤ tolerance 视为相同
+    Tolerance,
+    /// 不匹配范围模式：面积 < min_diff_area 的孤立差异块忽略
+    MismatchRange,
+    /// 混合模式：容差 + 忽略孤立块同时生效
+    Mixed,
+}
+
+/// P37-1e：比较选项
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CompareOptions {
+    pub mode: DiffMode,
+    /// 容差阈值 0-255（Tolerance/Mixed 生效）
+    pub tolerance: u8,
+    /// 最小差异块面积（MismatchRange/Mixed 生效，像素数）
+    pub min_diff_area: u32,
+}
+
+/// 两像素 RGB 曼哈顿距离
+fn rgb_dist(a: &Rgba<u8>, b: &Rgba<u8>) -> u32 {
+    (a[0] as i32 - b[0] as i32).unsigned_abs()
+        + (a[1] as i32 - b[1] as i32).unsigned_abs()
+        + (a[2] as i32 - b[2] as i32).unsigned_abs()
+}
+
+/// P37-1e：按选项做像素级比较
+pub fn compare_images_opt(left: RgbaImage, right: RgbaImage, opts: CompareOptions) -> ImgPair {
     let (lw, lh) = left.dimensions();
     let (rw, rh) = right.dimensions();
     let size_differs = (lw, lh) != (rw, rh);
@@ -145,6 +181,8 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
     let mut min_y: u32 = u32::MAX;
     let mut max_x: u32 = 0;
     let mut max_y: u32 = 0;
+    // 差异像素标记（公共区域，供孤立块过滤）
+    let mut diff_mask: Vec<bool> = vec![false; (w as usize) * (h as usize)];
 
     // 公共区域逐像素比较
     for y in 0..h {
@@ -152,8 +190,67 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
             let lp = *left.get_pixel(x, y);
             let rp = *right.get_pixel(x, y);
             total += 1;
-            if lp != rp {
+            let diff = match opts.mode {
+                DiffMode::Exact => lp != rp,
+                DiffMode::Tolerance | DiffMode::Mixed => {
+                    lp != rp && rgb_dist(&lp, &rp) > opts.tolerance as u32
+                }
+                DiffMode::MismatchRange => lp != rp,
+            };
+            if diff {
+                diff_mask[(y as usize) * (w as usize) + x as usize] = true;
+            }
+        }
+    }
+
+    // MismatchRange/Mixed：过滤孤立差异块（4-邻接连通域，面积 < min_diff_area 忽略）
+    if matches!(opts.mode, DiffMode::MismatchRange | DiffMode::Mixed) && opts.min_diff_area > 0 {
+        let mut visited: Vec<bool> = vec![false; (w as usize) * (h as usize)];
+        for y in 0..h {
+            for x in 0..w {
+                let idx = (y as usize) * (w as usize) + x as usize;
+                if !diff_mask[idx] || visited[idx] {
+                    continue;
+                }
+                // BFS 收集连通块
+                let mut stack = vec![(x, y)];
+                visited[idx] = true;
+                let mut area = 0u32;
+                let mut cells: Vec<(u32, u32)> = Vec::new();
+                while let Some((cx, cy)) = stack.pop() {
+                    area += 1;
+                    cells.push((cx, cy));
+                    for (nx, ny) in [
+                        (cx.wrapping_sub(1), cy),
+                        (cx + 1, cy),
+                        (cx, cy.wrapping_sub(1)),
+                        (cx, cy + 1),
+                    ] {
+                        if nx < w && ny < h {
+                            let ni = (ny as usize) * (w as usize) + nx as usize;
+                            if diff_mask[ni] && !visited[ni] {
+                                visited[ni] = true;
+                                stack.push((nx, ny));
+                            }
+                        }
+                    }
+                }
+                if area < opts.min_diff_area {
+                    // 忽略该块：清除差异标记
+                    for (cx, cy) in cells {
+                        diff_mask[(cy as usize) * (w as usize) + cx as usize] = false;
+                    }
+                }
+            }
+        }
+    }
+
+    // 汇总差异（公共区域）
+    for y in 0..h {
+        for x in 0..w {
+            if diff_mask[(y as usize) * (w as usize) + x as usize] {
                 diff_pixels += 1;
+                let lp = *left.get_pixel(x, y);
                 overlay.put_pixel(x, y, blend_overlay(lp, HIGHLIGHT_OVERLAY));
                 min_x = min_x.min(x);
                 min_y = min_y.min(y);
@@ -222,6 +319,67 @@ pub fn compare_images(left: RgbaImage, right: RgbaImage) -> ImgPair {
         overlay,
         stats,
     }
+}
+
+/// P37-1e：旋转图像（0/90/180/270，顺时针）
+pub fn rotate_image(img: &RgbaImage, deg: u32) -> RgbaImage {
+    match deg % 360 {
+        90 => {
+            let (w, h) = img.dimensions();
+            let mut out = RgbaImage::new(h, w);
+            for y in 0..h {
+                for x in 0..w {
+                    out.put_pixel(y, w - 1 - x, *img.get_pixel(x, y));
+                }
+            }
+            out
+        }
+        180 => {
+            let (w, h) = img.dimensions();
+            let mut out = RgbaImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    out.put_pixel(w - 1 - x, h - 1 - y, *img.get_pixel(x, y));
+                }
+            }
+            out
+        }
+        270 => {
+            let (w, h) = img.dimensions();
+            let mut out = RgbaImage::new(h, w);
+            for y in 0..h {
+                for x in 0..w {
+                    out.put_pixel(h - 1 - y, x, *img.get_pixel(x, y));
+                }
+            }
+            out
+        }
+        _ => img.clone(),
+    }
+}
+
+/// P37-1e：翻转图像（horizontal=true 水平镜像，false 垂直镜像）
+pub fn flip_image(img: &RgbaImage, horizontal: bool) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let mut out = img.clone();
+    if horizontal {
+        for y in 0..h {
+            for x in 0..w / 2 {
+                let p = *out.get_pixel(x, y);
+                out.put_pixel(x, y, *out.get_pixel(w - 1 - x, y));
+                out.put_pixel(w - 1 - x, y, p);
+            }
+        }
+    } else {
+        for y in 0..h / 2 {
+            for x in 0..w {
+                let p = *out.get_pixel(x, y);
+                out.put_pixel(x, y, *out.get_pixel(x, h - 1 - y));
+                out.put_pixel(x, h - 1 - y, p);
+            }
+        }
+    }
+    out
 }
 
 /// 差异高亮色：不透明红（尺寸超出区域）或作为叠加层 alpha 混合
@@ -434,6 +592,152 @@ mod tests {
     #[test]
     fn invalid_bytes_error() {
         assert!(compare_bytes(b"not an image", b"also not").is_err());
+    }
+
+    // ---- P37-1e：旋转 / 翻转 ----------------
+
+    #[test]
+    fn rotate_90_swaps_dimensions_and_pixels() {
+        // 2x1 图：左像素红、右像素蓝 → 顺时针 90° 后 1x2：上蓝下红
+        let mut a = RgbaImage::new(2, 1);
+        a.put_pixel(0, 0, Rgba([255, 0, 0, 255]));
+        a.put_pixel(1, 0, Rgba([0, 0, 255, 255]));
+        let r = rotate_image(&a, 90);
+        assert_eq!(r.dimensions(), (1, 2));
+        assert_eq!(*r.get_pixel(0, 0), Rgba([0, 0, 255, 255]));
+        assert_eq!(*r.get_pixel(0, 1), Rgba([255, 0, 0, 255]));
+    }
+
+    #[test]
+    fn rotate_180_and_270() {
+        let mut a = RgbaImage::new(2, 2);
+        a.put_pixel(0, 0, Rgba([1, 0, 0, 255]));
+        a.put_pixel(1, 0, Rgba([2, 0, 0, 255]));
+        a.put_pixel(0, 1, Rgba([3, 0, 0, 255]));
+        a.put_pixel(1, 1, Rgba([4, 0, 0, 255]));
+        let r180 = rotate_image(&a, 180);
+        assert_eq!(*r180.get_pixel(0, 0), Rgba([4, 0, 0, 255]));
+        assert_eq!(*r180.get_pixel(1, 1), Rgba([1, 0, 0, 255]));
+        let r270 = rotate_image(&a, 270);
+        assert_eq!(r270.dimensions(), (2, 2));
+        // 270 = 顺时针 3 次：角点映射验证
+        assert_eq!(*r270.get_pixel(0, 0), Rgba([3, 0, 0, 255]));
+    }
+
+    #[test]
+    fn rotate_0_is_identity() {
+        let a = RgbaImage::from_pixel(3, 2, Rgba([9, 9, 9, 255]));
+        let r = rotate_image(&a, 0);
+        assert_eq!(r.dimensions(), (3, 2));
+        assert_eq!(r.as_raw(), a.as_raw());
+    }
+
+    #[test]
+    fn flip_horizontal_mirrors() {
+        let mut a = RgbaImage::new(2, 1);
+        a.put_pixel(0, 0, Rgba([10, 0, 0, 255]));
+        a.put_pixel(1, 0, Rgba([20, 0, 0, 255]));
+        let f = flip_image(&a, true);
+        assert_eq!(*f.get_pixel(0, 0), Rgba([20, 0, 0, 255]));
+        assert_eq!(*f.get_pixel(1, 0), Rgba([10, 0, 0, 255]));
+    }
+
+    #[test]
+    fn flip_vertical_mirrors() {
+        let mut a = RgbaImage::new(1, 2);
+        a.put_pixel(0, 0, Rgba([30, 0, 0, 255]));
+        a.put_pixel(0, 1, Rgba([40, 0, 0, 255]));
+        let f = flip_image(&a, false);
+        assert_eq!(*f.get_pixel(0, 0), Rgba([40, 0, 0, 255]));
+        assert_eq!(*f.get_pixel(0, 1), Rgba([30, 0, 0, 255]));
+    }
+
+    // ---- P37-1e：容差 / 不匹配范围 / 混合 ----------------
+
+    #[test]
+    fn tolerance_ignores_small_color_delta() {
+        let a = solid(2, 2, [100, 100, 100, 255]);
+        let b = solid(2, 2, [102, 100, 100, 255]); // 差值 2
+                                                   // 精确模式：有差异
+        let exact = compare_images(a.clone(), b.clone());
+        assert_eq!(exact.stats.diff_pixels, 4);
+        // 容差 3：视为相同
+        let tol = compare_images_opt(
+            a.clone(),
+            b.clone(),
+            CompareOptions {
+                mode: DiffMode::Tolerance,
+                tolerance: 3,
+                min_diff_area: 0,
+            },
+        );
+        assert_eq!(tol.stats.diff_pixels, 0, "容差内应无差异");
+        // 容差 1：仍有差异
+        let strict = compare_images_opt(
+            a.clone(),
+            b.clone(),
+            CompareOptions {
+                mode: DiffMode::Tolerance,
+                tolerance: 1,
+                min_diff_area: 0,
+            },
+        );
+        assert_eq!(strict.stats.diff_pixels, 4);
+    }
+
+    #[test]
+    fn mismatch_range_ignores_isolated_blocks() {
+        // 4x4 黑色图；b 在 (0,0) 单像素差异 + 右下 2x2 块差异
+        let a = solid(4, 4, [0, 0, 0, 255]);
+        let mut b = solid(4, 4, [0, 0, 0, 255]);
+        b.put_pixel(0, 0, Rgba([255, 255, 255, 255]));
+        for y in 2..4 {
+            for x in 2..4 {
+                b.put_pixel(x, y, Rgba([255, 255, 255, 255]));
+            }
+        }
+        // min_diff_area=2：忽略面积 1 的孤立像素，保留 2x2 块（面积 4）
+        let p = compare_images_opt(
+            a,
+            b,
+            CompareOptions {
+                mode: DiffMode::MismatchRange,
+                tolerance: 0,
+                min_diff_area: 2,
+            },
+        );
+        assert_eq!(p.stats.diff_pixels, 4, "仅保留 2x2 块");
+        // 精确模式：5 像素
+        let a2 = solid(4, 4, [0, 0, 0, 255]);
+        let mut b2 = solid(4, 4, [0, 0, 0, 255]);
+        b2.put_pixel(0, 0, Rgba([255, 255, 255, 255]));
+        for y in 2..4 {
+            for x in 2..4 {
+                b2.put_pixel(x, y, Rgba([255, 255, 255, 255]));
+            }
+        }
+        let exact = compare_images(a2, b2);
+        assert_eq!(exact.stats.diff_pixels, 5);
+    }
+
+    #[test]
+    fn mixed_mode_combines_tolerance_and_area() {
+        // 1 个孤立小差异（容差内）+ 1 个孤立大差异（容差外）→ 混合模式两者都忽略（面积均 < min）
+        let a = solid(6, 1, [100, 100, 100, 255]);
+        let mut b = solid(6, 1, [100, 100, 100, 255]);
+        b.put_pixel(0, 0, Rgba([101, 100, 100, 255])); // 容差内
+        b.put_pixel(5, 0, Rgba([0, 0, 0, 255])); // 大差异，面积 1
+        let p = compare_images_opt(
+            a,
+            b,
+            CompareOptions {
+                mode: DiffMode::Mixed,
+                tolerance: 3,
+                min_diff_area: 2,
+            },
+        );
+        // 两处差异面积均 < 2 → 全部忽略
+        assert_eq!(p.stats.diff_pixels, 0, "混合模式应忽略小面积差异块");
     }
 }
 

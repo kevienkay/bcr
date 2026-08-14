@@ -465,6 +465,28 @@ pub enum Key {
     MenuNewMerge,
     /// 新建图片对比
     MenuNewImage,
+    /// P37-1e：图片差异模式 精确
+    ImgModeExact,
+    /// P37-1e：图片差异模式 容差
+    ImgModeTolerance,
+    /// P37-1e：图片差异模式 不匹配范围
+    ImgModeMismatch,
+    /// P37-1e：图片差异模式 混合
+    ImgModeMixed,
+    /// P37-1e：容差阈值
+    ImgTolerance,
+    /// P37-1e：最小差异块面积
+    ImgMinArea,
+    /// P37-1e：顺时针旋转
+    ImgRotateCw,
+    /// P37-1e：逆时针旋转
+    ImgRotateCcw,
+    /// P37-1e：水平翻转
+    ImgFlipH,
+    /// P37-1e：垂直翻转
+    ImgFlipV,
+    /// P37-1e：重置变换
+    ImgResetTransform,
     /// 新建 CSV 表格
     MenuNewCsv,
     /// 新建 Hex 对比
