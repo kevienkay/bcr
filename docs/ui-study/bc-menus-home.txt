@@ -1,0 +1,172 @@
+=== 菜单栏 ===
+Apple
+  关于本机
+  系统信息
+   [disabled]
+  系统设置…，2项更新
+  App Store
+   [disabled]
+  最近使用的项目
+    应用程序 [disabled]
+    归档实用工具
+    在访达中显示“归档实用工具”
+    文本编辑
+    在访达中显示“文本编辑”
+    系统设置
+    在访达中显示“系统设置”
+    终端
+    在访达中显示“终端”
+    bcr
+    在访达中显示“bcr”
+    Beyond Compare
+    在访达中显示“Beyond Compare”
+    ChatGPT
+    在访达中显示“ChatGPT”
+    Google Chrome
+    在访达中显示“Google Chrome”
+    Mole
+    在访达中显示“Mole”
+    Open Design
+    在访达中显示“Open Design”
+     [disabled]
+    文稿 [disabled]
+    未命名
+    在访达中显示“未命名”
+    bcr
+    在访达中显示“bcr”
+    bcr 2
+    在访达中显示“bcr 2”
+    change.patch
+    在访达中显示“change.patch”
+    img-6.png
+    在访达中显示“img-6.png”
+    img-7.png
+    在访达中显示“img-7.png”
+    img-8.png
+    在访达中显示“img-8.png”
+    mole-gui
+    在访达中显示“mole-gui”
+    readme
+    在访达中显示“readme”
+    readme.txt.rtf
+    在访达中显示“readme.txt.rtf”
+     [disabled]
+    服务器 [disabled]
+    Macintosh HD
+     [disabled]
+    清除菜单
+   [disabled]
+  强制退出…  (⇧⎋)
+  强制退出“Beyond Compare”  (⌘⇧⎋)
+   [disabled]
+  睡眠
+  重新启动…
+  重新启动
+  关机…
+  关机
+   [disabled]
+  锁定屏幕  (⌥Q)
+  退出登录“ycy”…  (⌘Q)
+  退出登录“ycy”  (⌘⇧Q)
+   [disabled]
+Beyond Compare
+  关于 Beyond Compare 
+   [disabled]
+  设置...  (,)
+  文件格式...
+  配置文件...
+   [disabled]
+  检查更新
+  输入密钥...
+  安装命令行工具...
+   [disabled]
+  Services
+    Activity Monitor
+    Allocations & Leaks
+    File Activity
+    System Trace
+    服务设置…
+   [disabled]
+  Hide Beyond Compare  (H)
+  Hide Others  (⇧H)
+  Show All
+   [disabled]
+  Quit Beyond Compare  (Q)
+会话
+  新建会话
+    文件夹比较
+    文件夹合并
+    文件夹同步
+    文本比较
+    文本合并
+    16 进制比较
+    媒体比较
+    图片比较
+    表格比较
+  新建标签页  (T)
+  新建窗口  (N)
+  打开会话  (⌥O)
+   [disabled]
+  加载工作空间
+    管理工作空间...
+  保存工作空间为...
+  关闭窗口  (⌘W)
+  关闭窗口  (W)
+  关闭所有窗口  (⌘⇧W)
+  关闭所有窗口  (⇧W)
+  关闭标签页 [disabled]
+  关闭其它标签页 [disabled]
+   [disabled]
+编辑
+  撤销  (Z) [disabled]
+  重做  (⌘Z) [disabled]
+   [disabled]
+  剪切  (X) [disabled]
+  复制  (C) [disabled]
+  粘贴  (V) [disabled]
+   [disabled]
+  全选  (A) [disabled]
+   [disabled]
+  自动填充
+    通讯录… [disabled]
+    密码… [disabled]
+    信用卡… [disabled]
+  开始听写…  (⌃D)
+  表情与符号  (⌃E)
+视图
+  显示会话管理
+  最大化“会话管理”
+  显示网络资源
+工具
+  导出设置...
+  导入设置...
+  恢复出厂默认...
+   [disabled]
+  保存快照...
+  编辑文本文件
+  查看补丁...
+窗口
+  最小化  (M)
+  最小化全部  (⇧M)
+  缩放
+  缩放全部
+  在各窗口循环  (`)
+   [disabled]
+  选择下一个标签页  (⌘]) [disabled]
+  选择上一个标签页  (⌘[) [disabled]
+  移动标签页到新窗口 [disabled]
+  合并所有窗口 [disabled]
+   [disabled]
+  全部前移
+  在前面排列
+  主页
+帮助
+  Beyond Compare 帮助
+   [disabled]
+  网上 Scooter Software 
+  支持
+
+=== 窗口 0: 主页 ===
+  w[AXButton] title= desc=
+  w[AXButton] title= desc=
+  w[AXButton] title= desc=

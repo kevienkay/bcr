@@ -1,0 +1,220 @@
+=== 菜单栏 ===
+Apple
+  关于本机
+  系统信息
+   [disabled]
+  系统设置…，2项更新
+  App Store
+   [disabled]
+  最近使用的项目
+    应用程序 [disabled]
+    归档实用工具
+    在访达中显示“归档实用工具”
+    文本编辑
+    在访达中显示“文本编辑”
+    系统设置
+    在访达中显示“系统设置”
+    终端
+    在访达中显示“终端”
+    bcr
+    在访达中显示“bcr”
+    Beyond Compare
+    在访达中显示“Beyond Compare”
+    ChatGPT
+    在访达中显示“ChatGPT”
+    Google Chrome
+    在访达中显示“Google Chrome”
+    Mole
+    在访达中显示“Mole”
+    Open Design
+    在访达中显示“Open Design”
+     [disabled]
+    文稿 [disabled]
+    未命名
+    在访达中显示“未命名”
+    bcr
+    在访达中显示“bcr”
+    bcr 2
+    在访达中显示“bcr 2”
+    img-5.png
+    在访达中显示“img-5.png”
+    img-6.png
+    在访达中显示“img-6.png”
+    img-7.png
+    在访达中显示“img-7.png”
+    img-8.png
+    在访达中显示“img-8.png”
+    mole-gui
+    在访达中显示“mole-gui”
+    readme
+    在访达中显示“readme”
+    readme.txt.rtf
+    在访达中显示“readme.txt.rtf”
+     [disabled]
+    服务器 [disabled]
+    Macintosh HD
+     [disabled]
+    清除菜单
+   [disabled]
+  强制退出…  (⇧⎋)
+  强制退出“Beyond Compare”  (⌘⇧⎋)
+   [disabled]
+  睡眠
+  重新启动…
+  重新启动
+  关机…
+  关机
+   [disabled]
+  锁定屏幕  (⌥Q)
+  退出登录“ycy”…  (⌘Q)
+  退出登录“ycy”  (⌘⇧Q)
+   [disabled]
+Beyond Compare
+  关于 Beyond Compare 
+   [disabled]
+  设置...  (,)
+  文件格式...
+  配置文件...
+   [disabled]
+  检查更新
+  输入密钥...
+  安装命令行工具...
+   [disabled]
+  Services
+    Activity Monitor
+    Allocations & Leaks
+    File Activity
+    System Trace
+    服务设置…
+   [disabled]
+  Hide Beyond Compare  (H)
+  Hide Others  (⇧H)
+  Show All
+   [disabled]
+  Quit Beyond Compare  (Q)
+会话
+  新建会话
+    文件夹比较
+    文件夹合并
+    文件夹同步
+    文本比较
+    文本合并
+    16 进制比较
+    媒体比较
+    图片比较
+    表格比较
+  新建标签页  (T)
+  新建窗口  (N)
+  打开会话  (⌥O)
+   [disabled]
+  加载工作空间
+    管理工作空间...
+  保存工作空间为...
+   [disabled]
+  关闭窗口  (⌘W)
+  关闭所有窗口  (⌘⇧W)
+  关闭标签页  (W)
+  关闭其它标签页  (⇧W)
+   [disabled]
+  保存会话  (⌥S)
+  保存会话为...
+  会话设置...
+  已锁定
+  清除会话  (⌥C)
+   [disabled]
+  交换两边
+  重载文件  (R)
+  重新比较文件  (⌘R)
+   [disabled]
+  图片比较 报告...  (P)
+  图片比较 信息
+   [disabled]
+  比较文件使用
+    文本比较
+    16 进制比较
+    媒体比较
+    图片比较
+    表格比较
+  比较父文件夹
+文件
+  打开文件...  (O)
+  打开剪贴板  (⌘V)
+编辑
+  撤销  (Z) [disabled]
+  重做  (⌘Z) [disabled]
+   [disabled]
+  剪切  (X) [disabled]
+  复制  (C) [disabled]
+  粘贴  (V) [disabled]
+   [disabled]
+  全选  (A)
+   [disabled]
+  自动填充
+    通讯录…
+    密码…
+    信用卡…
+  开始听写…  (⌃D)
+  表情与符号  (⌃E)
+视图
+  容差模式  (1)
+  不匹配范围模式  (2)
+  混合模式  (3)
+   [disabled]
+  忽略不重要差异
+  自动缩放
+  顺时针旋转
+  逆时针旋转
+  水平翻转
+  垂直翻转
+  重置差异偏移 [disabled]
+   [disabled]
+  比较 元数据 [disabled]
+   [disabled]
+  混合切换
+  文件信息
+  全屏
+  缩放
+    放大  (+)
+    缩小  (-)
+    实际尺寸
+    适合窗口
+  工具栏
+工具
+  导出设置...
+  导入设置...
+  恢复出厂默认...
+   [disabled]
+  保存快照...
+  编辑文本文件
+  查看补丁...
+窗口
+  最小化  (M)
+  最小化全部  (⇧M)
+  缩放
+  缩放全部
+  在各窗口循环  (`)
+   [disabled]
+  选择下一个标签页  (⌘])
+  选择上一个标签页  (⌘[)
+  移动标签页到新窗口
+  合并所有窗口
+   [disabled]
+  全部前移
+  在前面排列
+  新建 图片比较 - 图片比较
+  left <--> right - 文件夹比较
+帮助
+  Beyond Compare 帮助
+   [disabled]
+  网上 Scooter Software 
+  支持
+
+=== 窗口 0: 新建 图片比较 - 图片比较 ===
+  w[AXButton] title= desc=
+  w[AXButton] title= desc=
+  w[AXButton] title= desc=
+
+=== 窗口 1: left <--> right - 文件夹比较 ===
+  w[AXButton] title= desc=
+  w[AXButton] title= desc=
+  w[AXButton] title= desc=
