@@ -1856,12 +1856,33 @@ impl eframe::App for DiffApp {
     }
 }
 
-/// 加载系统中文字体作为 fallback（egui 默认字体不含 CJK，三端中文 UI 都需要）。
-/// 按平台探测常见中文字体路径，找到第一个存在的加载。
+/// 加载系统字体：等宽优先（JetBrains Mono / 系统等宽）+ CJK fallback（egui 默认字体不含 CJK）。
+/// 按平台探测常见字体路径，全部存在的都加载：
+/// - Monospace 族首位插入等宽字体（行号/代码/hex 观感提升）
+/// - Proportional/Monospace 末尾追加 CJK fallback（中/日/韩/阿拉伯，保证 10 语言可显示）
 fn install_cjk_fonts(ctx: &egui::Context) {
-    // 每平台候选字体（按优先级），全部存在的都加载为 fallback：
-    // 中/日文（CJK）+ 韩文 + 阿拉伯文，保证 10 语言全部可显示
-    let candidates: &[&str] = if cfg!(target_os = "windows") {
+    // 等宽字体候选（按优先级，找到即作为 Monospace 首选）
+    let mono_candidates: &[&str] = if cfg!(target_os = "windows") {
+        &[
+            "C:\\Windows\\Fonts\\JetBrainsMono-Regular.ttf",
+            "C:\\Windows\\Fonts\\Consolas.ttf",
+            "C:\\Windows\\Fonts\\cour.ttf",
+        ]
+    } else if cfg!(target_os = "macos") {
+        &[
+            "/Library/Fonts/JetBrainsMono-Regular.ttf",
+            "/System/Library/Fonts/SFNSMono.ttf",
+            "/System/Library/Fonts/Menlo.ttc",
+        ]
+    } else {
+        &[
+            "/usr/share/fonts/truetype/jetbrains/JetBrainsMono-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+        ]
+    };
+    // CJK fallback 候选（每平台按优先级）
+    let cjk_candidates: &[&str] = if cfg!(target_os = "windows") {
         &[
             "C:\\Windows\\Fonts\\msyh.ttc",     // 微软雅黑（中日韩）
             "C:\\Windows\\Fonts\\simhei.ttf",   // 黑体
@@ -1891,14 +1912,31 @@ fn install_cjk_fonts(ctx: &egui::Context) {
     };
     let mut fonts = egui::FontDefinitions::default();
     let mut loaded_any = false;
-    for (i, p) in candidates.iter().enumerate() {
+    // 1. 等宽字体：Monospace 族首位
+    for (i, p) in mono_candidates.iter().enumerate() {
+        if std::path::Path::new(p).exists() {
+            if let Ok(bytes) = std::fs::read(p) {
+                let name = format!("mono_{i}");
+                fonts
+                    .font_data
+                    .insert(name.clone(), egui::FontData::from_owned(bytes).into());
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, name.clone());
+                loaded_any = true;
+            }
+        }
+    }
+    // 2. CJK fallback：追加到比例字体与等宽字体末尾（保留默认拉丁字体）
+    for (i, p) in cjk_candidates.iter().enumerate() {
         if std::path::Path::new(p).exists() {
             if let Ok(bytes) = std::fs::read(p) {
                 let name = format!("fallback_{i}");
                 fonts
                     .font_data
                     .insert(name.clone(), egui::FontData::from_owned(bytes).into());
-                // 追加到比例字体与等宽字体末尾作为 fallback，保留默认拉丁字体
                 for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
                     fonts.families.entry(family).or_default().push(name.clone());
                 }

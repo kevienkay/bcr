@@ -1564,14 +1564,14 @@ impl DiffTab {
                 }
                 // A3 剪贴板对比（复用 P33 菜单栏转发方法）
                 if ui
-                    .button("📋 剪贴板→左")
+                    .button("⧉ 剪贴板→左")
                     .on_hover_text("用系统剪贴板文本作为左侧对比（若左侧已打开则替换）")
                     .clicked()
                 {
                     self.load_clipboard_left();
                 }
                 if ui
-                    .button("📋 剪贴板→右")
+                    .button("⧉ 剪贴板→右")
                     .on_hover_text("用系统剪贴板文本作为右侧对比（若右侧已打开则替换）")
                     .clicked()
                 {
@@ -2744,7 +2744,7 @@ impl DiffTab {
                         // P37-1j：外部工具对比（~/.bcr-external.toml 扩展名映射）
                         if let (Some(lp2), Some(rp2)) = (&lp, &rp) {
                             if ui
-                                .button("🔧 外部工具对比")
+                                .button("⚙ 外部工具对比")
                                 .on_hover_text(
                                     "用 ~/.bcr-external.toml 配置的第三方工具对比两侧文件",
                                 )
@@ -3006,18 +3006,19 @@ fn paint_diff_row(
         }
     }
 
-    // BC 风格当前差异行：左侧 3px 竖条（P31）
+    // BC 风格当前差异行：左侧 3px 竖条（P31；P39-2b 改蓝色系对齐 BC）
     if is_current {
         ui.painter().rect_filled(
             Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H)),
             0.0,
-            super::theme::diff_modify(),
+            super::theme::current_bar(),
         );
     }
 
     // 左 gutter + 内容（P31：gutter 用微灰底色与内容区分，BC 观感）
+    // P39-2b：深色下 gutter 底色略亮于内容区，行号更易读
     let gutter_bg = if ui.visuals().dark_mode {
-        Some(Color32::from_gray(30))
+        Some(Color32::from_gray(38))
     } else {
         Some(Color32::from_gray(238))
     };

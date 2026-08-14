@@ -26,36 +26,42 @@ pub const CURRENT_BAR: f32 = 3.0;
 pub const MID_GAP: f32 = 14.0;
 
 /// 差异色（BC 语义：仅左/删除=红，仅右/插入=绿，修改=黄）
+/// P39-2b：对齐 BC 5.2.5 柔和色调（浅色：删除 rgb(253,224,223) 系淡红/插入淡绿/修改淡黄）
 pub fn diff_delete() -> Color32 {
-    Color32::from_rgb(224, 96, 96)
+    Color32::from_rgb(226, 110, 110)
 }
 #[allow(dead_code)]
 pub fn diff_insert() -> Color32 {
-    Color32::from_rgb(96, 208, 118)
+    Color32::from_rgb(110, 196, 128)
 }
 pub fn diff_modify() -> Color32 {
-    Color32::from_rgb(232, 200, 84)
+    Color32::from_rgb(224, 190, 96)
 }
 
-/// 行级底色（半透明，深浅主题通用；深色下提高亮度由 apply 处理）
+/// P39-2b：当前差异行左侧竖条（BC 蓝色系，代替原黄色）
+pub fn current_bar() -> Color32 {
+    Color32::from_rgb(86, 148, 240)
+}
+
+/// 行级底色（半透明，深浅主题通用；BC 5.2.5 实测浅红/浅绿/浅黄）
 pub fn bg_left_only() -> Color32 {
-    Color32::from_rgba_unmultiplied(224, 96, 96, 52)
+    Color32::from_rgba_unmultiplied(246, 96, 96, 40)
 }
 pub fn bg_right_only() -> Color32 {
-    Color32::from_rgba_unmultiplied(96, 208, 118, 48)
+    Color32::from_rgba_unmultiplied(96, 196, 118, 38)
 }
 pub fn bg_modified_l() -> Color32 {
-    Color32::from_rgba_unmultiplied(224, 96, 96, 62)
+    Color32::from_rgba_unmultiplied(246, 96, 96, 48)
 }
 pub fn bg_modified_r() -> Color32 {
-    Color32::from_rgba_unmultiplied(96, 208, 118, 62)
+    Color32::from_rgba_unmultiplied(96, 196, 118, 48)
 }
 pub fn bg_match() -> Color32 {
-    Color32::from_rgba_unmultiplied(232, 200, 84, 40)
+    Color32::from_rgba_unmultiplied(224, 190, 96, 32)
 }
 /// 当前差异行底色（比 match 更强的描边感）
 pub fn bg_current() -> Color32 {
-    Color32::from_rgba_unmultiplied(240, 200, 60, 90)
+    Color32::from_rgba_unmultiplied(120, 170, 250, 60)
 }
 /// 选中单元格底色（P37-1c：CSV 表格单元格选中）
 pub fn bg_select() -> Color32 {
@@ -63,20 +69,20 @@ pub fn bg_select() -> Color32 {
 }
 /// 行内变更段高亮
 pub fn hl_delete() -> Color32 {
-    Color32::from_rgba_unmultiplied(224, 96, 96, 150)
+    Color32::from_rgba_unmultiplied(226, 110, 110, 150)
 }
 pub fn hl_insert() -> Color32 {
-    Color32::from_rgba_unmultiplied(96, 208, 118, 150)
+    Color32::from_rgba_unmultiplied(110, 196, 128, 150)
 }
 pub fn hl_modify_l() -> Color32 {
-    Color32::from_rgba_unmultiplied(232, 120, 120, 160)
+    Color32::from_rgba_unmultiplied(226, 120, 120, 160)
 }
 pub fn hl_modify_r() -> Color32 {
-    Color32::from_rgba_unmultiplied(110, 226, 132, 160)
+    Color32::from_rgba_unmultiplied(120, 210, 138, 160)
 }
 
-/// 行号颜色
-pub const GUTTER: Color32 = Color32::from_gray(118);
+/// 行号颜色（P39-2b：适中灰，深浅主题都清晰）
+pub const GUTTER: Color32 = Color32::from_gray(128);
 
 /// 状态徽标前景色（目录对比/合并视图，批次 3 使用）
 #[allow(dead_code)]

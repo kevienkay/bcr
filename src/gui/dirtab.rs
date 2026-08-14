@@ -1820,7 +1820,7 @@ impl DirTab {
                                 let full_l = std::path::Path::new(&self.left).join(&e.rel);
                                 let full_r = std::path::Path::new(&self.right).join(&e.rel);
                                 if ui
-                                    .button("🔧 外部工具对比")
+                                    .button("⚙ 外部工具对比")
                                     .on_hover_text(
                                         "用 ~/.bcr-external.toml 配置的第三方工具对比该文件两侧",
                                     )
