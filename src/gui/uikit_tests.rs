@@ -2210,6 +2210,93 @@ fn difftab_detail_mode_hex_and_layout() {
     );
 }
 
+// ---- P39-2e：替换菜单聚焦 + 忽略不重要差异 + 视图切换 -------------
+
+#[test]
+fn difftab_replace_focus_via_shift_cmd_f() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nb\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    h.key_combination_modifiers(
+        eframe::egui::Modifiers::COMMAND | eframe::egui::Modifiers::SHIFT,
+        &[eframe::egui::Key::F],
+    );
+    h.run();
+    // 渲染时 replace_focus 消费 → 替换框获得焦点（TextInput 第 3 个：行号→搜索→替换）
+    assert!(
+        h.query_all_by_role(eframe::egui::accesskit::Role::TextInput)
+            .nth(2)
+            .is_some_and(|n| n.is_focused()),
+        "⇧⌘F 后替换框应获得焦点"
+    );
+}
+
+#[test]
+fn ignore_minor_toggles_all_options() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\n");
+    let r = write(d.path(), "r.txt", "b\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // 默认全 false
+    assert!(!tab.borrow().opts.ignore_whitespace);
+    // 模拟菜单「忽略不重要差异」：四开关同开
+    {
+        let mut t = tab.borrow_mut();
+        t.opts.ignore_whitespace = true;
+        t.opts.ignore_trailing = true;
+        t.opts.ignore_case = true;
+        t.opts.ignore_crlf = true;
+        t.recompute();
+    }
+    assert!(tab.borrow().opts.ignore_whitespace);
+    assert!(tab.borrow().opts.ignore_crlf);
+    // 重算后无 panic、diff_rows 清空/更新
+    assert!(!tab.borrow().rows.is_empty());
+}
+
+// ---- P39-2e：比较文件使用（视图切换） -------------
+
+#[test]
+fn compare_using_reopen_views() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nB\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    // 文本 → 图片视图
+    {
+        let mut app = app.borrow_mut();
+        app.reopen_as_image(&l, &r);
+        assert!(
+            matches!(app.tabs[0], super::Tab::Image(_)),
+            "应打开图片视图"
+        );
+    }
+    // 文本 → 表格视图
+    {
+        let mut app = app.borrow_mut();
+        app.reopen_as_csv(&l, &r);
+        assert!(matches!(app.tabs[1], super::Tab::Csv(_)), "应打开表格视图");
+    }
+    // 文本 → hex 视图（强制 hex 细节）
+    {
+        let mut app = app.borrow_mut();
+        app.reopen_as_hex(&l, &r);
+        assert!(matches!(app.tabs[2], super::Tab::Diff(_)), "应打开文本标签");
+        if let super::Tab::Diff(t) = &app.tabs[2] {
+            assert_eq!(
+                t.detail_mode,
+                DiffDetailMode::Hex,
+                "hex 视图应强制 Hex 细节"
+            );
+        }
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

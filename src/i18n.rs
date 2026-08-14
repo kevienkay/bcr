@@ -661,6 +661,14 @@ pub enum Key {
     MenuGotoBookmark,
     /// P39-2d：清除书签
     MenuClearBookmarks,
+    /// P39-2e：替换…（⇧⌘F）
+    MenuReplace,
+    /// P39-2e：忽略不重要差异
+    IgnoreMinor,
+    /// P39-2e：保存快照
+    MenuSnapshot,
+    /// P39-2e：比较文件使用（视图切换）
+    MenuCompareUsing,
 
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比

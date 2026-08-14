@@ -657,6 +657,39 @@ impl DiffApp {
         }
     }
 
+    /// P39-2e：比较文件使用（视图切换）——用指定视图重新打开当前文件对
+    fn reopen_as_text(&mut self, l: &str, r: &str) {
+        let mut t = DiffTab::new();
+        t.opts = ViewOptions {
+            ignore_whitespace: self.settings.ignore_whitespace,
+            ignore_trailing: self.settings.ignore_trailing,
+            ignore_case: self.settings.ignore_case,
+            ignore_crlf: self.settings.ignore_crlf,
+            ignore_lines: Vec::new(),
+        };
+        t.show_stats = self.settings.show_stats;
+        t.load_pair(l, r, t.opts.clone());
+        self.add_tab(Tab::Diff(t));
+    }
+
+    /// P39-2e：16进制视图（强制 hex 渲染）
+    fn reopen_as_hex(&mut self, l: &str, r: &str) {
+        self.reopen_as_text(l, r);
+        if let Tab::Diff(t) = &mut self.tabs[self.active] {
+            t.set_detail_mode(difftab::DiffDetailMode::Hex);
+        }
+    }
+
+    /// P39-2e：图片视图
+    fn reopen_as_image(&mut self, l: &str, r: &str) {
+        self.add_tab(Tab::Image(ImageTab::new(l, r)));
+    }
+
+    /// P39-2e：表格视图
+    fn reopen_as_csv(&mut self, l: &str, r: &str) {
+        self.add_tab(Tab::Csv(CsvTab::new(l, r)));
+    }
+
     /// P32-A7：欢迎页 — 大标题 + 会话类型网格卡片（文本/文件夹/三路合并/图片/CSV）
     fn welcome_ui(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show(ui, |ui| {

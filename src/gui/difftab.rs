@@ -66,6 +66,8 @@ pub struct SearchState {
     pub current: Option<usize>,
     /// 请求聚焦搜索框
     pub focus: bool,
+    /// P39-2e：请求聚焦替换框
+    pub replace_focus: bool,
 }
 
 /// 二进制文件的十六进制对比数据（任一文件检测为二进制时启用）
@@ -654,6 +656,11 @@ impl DiffTab {
     /// 聚焦搜索框（菜单 Search>Find）
     pub fn focus_search(&mut self) {
         self.search.focus = true;
+    }
+
+    /// P39-2e：聚焦替换框（菜单 Search>Replace，⇧⌘F）
+    pub fn focus_replace(&mut self) {
+        self.search.replace_focus = true;
     }
 
     // ---- P32-A2/A6：行内编辑提交 + 撤销/重做 ----
@@ -1652,7 +1659,12 @@ impl DiffTab {
             return;
         }
         if ui.input(|i| i.key_pressed(Key::F) && ctrl) {
-            self.search.focus = true;
+            if ui.input(|i| i.modifiers.shift) {
+                // P39-2e：⇧⌘F 替换
+                self.search.replace_focus = true;
+            } else {
+                self.search.focus = true;
+            }
             return;
         }
         // P39-2a：⌘L 转到行（BC 快捷键）；⌘G / ⇧⌘G 查找下一/上一
@@ -2040,11 +2052,16 @@ impl DiffTab {
                     ui.label(format!("{}/{}", k + 1, self.search.matches.len()));
                 }
                 // A4 文本替换
-                ui.add(
+                let rep_resp = ui.add(
                     egui::TextEdit::singleline(&mut self.search.replace)
+                        .id(egui::Id::new("diff_replace"))
                         .hint_text("替换为")
                         .desired_width(100.0),
                 );
+                if self.search.replace_focus {
+                    rep_resp.request_focus();
+                    self.search.replace_focus = false;
+                }
                 if ui
                     .button("🔁 替换")
                     .on_hover_text("替换当前匹配（写回文件并自动备份）")

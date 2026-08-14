@@ -92,6 +92,46 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             app.show_report = true;
             app.report_error = None;
         }
+        ui.separator();
+        // P39-2e：比较文件使用（视图切换，对标 BC Session>比较文件使用）
+        // 用另一视图重新打开当前 DiffTab 的左右文件
+        let cur_paths = app.tabs.get(app.active).and_then(|t| match t {
+            super::Tab::Diff(d) => match (&d.left, &d.right) {
+                (Some(l), Some(r)) => Some((l.path.clone(), r.path.clone())),
+                _ => None,
+            },
+            _ => None,
+        });
+        if cur_paths.is_some() {
+            ui.menu_button(t(I18nKey::MenuCompareUsing), |ui| {
+                let targets: [(&str, crate::i18n::Key); 4] = [
+                    ("文本对比", crate::i18n::Key::SessionText),
+                    ("16进制对比", crate::i18n::Key::MenuNewHex),
+                    ("图片对比", crate::i18n::Key::SessionImage),
+                    ("表格对比", crate::i18n::Key::SessionCsv),
+                ];
+                for (label, key) in targets {
+                    if ui.button(label).clicked() {
+                        ui.close();
+                        let (l, r) = cur_paths.clone().unwrap();
+                        match key {
+                            crate::i18n::Key::SessionText => {
+                                app.reopen_as_text(&l, &r);
+                            }
+                            crate::i18n::Key::MenuNewHex => {
+                                app.reopen_as_hex(&l, &r);
+                            }
+                            crate::i18n::Key::SessionImage => {
+                                app.reopen_as_image(&l, &r);
+                            }
+                            _ => {
+                                app.reopen_as_csv(&l, &r);
+                            }
+                        }
+                    }
+                }
+            });
+        }
     });
 }
 
@@ -208,6 +248,11 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_search());
         }
+        // P39-2e：替换…（⇧⌘F）
+        if ui.button(t(I18nKey::MenuReplace)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.focus_replace());
+        }
         // P39-2a：查找下一 / 上一（⌘G / ⇧⌘G）
         if ui.button(t(I18nKey::MenuFindNext)).clicked() {
             ui.close();
@@ -309,6 +354,28 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             i18n::set_lang(new_lang);
         }
         ui.separator();
+        // P39-2e：忽略不重要差异（空白/行尾/大小写一键切换，对标 BC View>Ignore Minor）
+        let minor = app.tabs.get(app.active).and_then(|t| match t {
+            super::Tab::Diff(tab) => Some(
+                tab.opts.ignore_whitespace
+                    && tab.opts.ignore_trailing
+                    && tab.opts.ignore_case
+                    && tab.opts.ignore_crlf,
+            ),
+            _ => None,
+        });
+        if let Some(m) = minor {
+            let mut mm = m;
+            if ui.checkbox(&mut mm, t(I18nKey::IgnoreMinor)).changed() {
+                if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                    tab.opts.ignore_whitespace = mm;
+                    tab.opts.ignore_trailing = mm;
+                    tab.opts.ignore_case = mm;
+                    tab.opts.ignore_crlf = mm;
+                    tab.recompute();
+                }
+            }
+        }
         // 统计栏 / 缩略图（当前文本标签）
         if ui.button(t(I18nKey::MenuStats)).clicked() {
             ui.close();
@@ -400,6 +467,11 @@ fn tools_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             app.show_external = true;
         }
         ui.separator();
+        // P39-2e：保存快照（保存当前标签为命名会话，对标 BC Tools>保存快照）
+        if ui.button(t(I18nKey::MenuSnapshot)).clicked() {
+            ui.close();
+            app.show_sessions = true;
+        }
         if ui.button("💬 会话中心").clicked() {
             ui.close();
             app.show_sessions = true;
