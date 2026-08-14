@@ -693,7 +693,10 @@ impl DiffApp {
                                             );
                                         });
                                     })
+                                    // Frame::show 的 response 默认 Sense::hover() 不含点击，
+                                    // 必须补 interact(Sense::click()) 才能捕获点击（P38-1f 修复）
                                     .response
+                                    .interact(egui::Sense::click())
                                     .on_hover_cursor(egui::CursorIcon::PointingHand);
                                 if resp.clicked() {
                                     card_click = Some(*id);

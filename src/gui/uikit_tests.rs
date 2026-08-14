@@ -994,6 +994,33 @@ fn welcome_page_shows_session_cards() {
         .is_some());
 }
 
+// P38-1f：修复欢迎页卡片点击不跳转（Frame response 默认 Sense::hover 不含 click）
+
+#[test]
+fn welcome_page_card_click_opens_session() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    assert!(app.borrow().tabs.is_empty(), "前置：无标签页");
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().welcome_ui(ui));
+    h.run();
+    // 点击「文本对比」卡片 → 应创建 Diff 标签
+    h.get_by_label_contains("文本对比").click();
+    h.run();
+    assert_eq!(app.borrow().tabs.len(), 1, "点击后应创建 1 个标签页");
+    assert!(
+        matches!(app.borrow().tabs[0], super::Tab::Diff(_)),
+        "文本对比卡片应创建 Diff 标签"
+    );
+    // 点击「CSV 表格」卡片（第二行首列，视口内）→ 创建 Csv 标签（同一 Harness 继续点击）
+    h.get_by_label_contains("CSV 表格").click();
+    h.run();
+    let n = app.borrow().tabs.len();
+    assert_eq!(n, 2, "点击后应再创建 1 个标签页");
+    assert!(
+        matches!(app.borrow().tabs[n - 1], super::Tab::Csv(_)),
+        "CSV 卡片应创建 Csv 标签"
+    );
+}
+
 // ---- P32-B1：快捷键系统化 ----------------
 
 #[test]
