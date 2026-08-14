@@ -63,7 +63,7 @@ pub struct DirTab {
     /// 同步执行结果消息
     pub sync_msg: Option<String>,
     /// 上次自动刷新时间（秒，egui time）
-    last_auto_refresh: f64,
+    pub(crate) last_auto_refresh: f64,
     /// 手动对齐弹窗：选中的左侧文件相对路径
     align_left: Option<String>,
     /// 手动对齐弹窗：选中的右侧文件相对路径

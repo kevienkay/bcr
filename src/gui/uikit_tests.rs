@@ -1440,6 +1440,8 @@ fn dirtab_sync_now_button_via_ui() {
     {
         let mut t = tab.borrow_mut();
         t.sync_mode = "update".to_string();
+        // 禁用自动刷新：kittest 时间推进可能触发 refresh 占用 bg，导致立即同步被吞
+        t.last_auto_refresh = f64::MAX;
         t.refresh_sync();
     }
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
