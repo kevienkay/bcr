@@ -259,6 +259,18 @@ pub enum Key {
     HexTitle,
     /// 二进制文件，已切换十六进制对比视图
     HexModeHint,
+    /// P37-1d：地址格式 Hex
+    HexAddrHex,
+    /// P37-1d：地址格式 Dec
+    HexAddrDec,
+    /// P37-1d：值格式 字节（逐字节）
+    HexValRaw,
+    /// P37-1d：值格式 小尾序
+    HexValLittle,
+    /// P37-1d：值格式 大端序
+    HexValBig,
+    /// P37-1d：显示字节地址
+    HexShowAddr,
     /// 打开左侧…
     OpenLeft,
     /// 打开右侧…

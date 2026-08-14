@@ -49,6 +49,94 @@ pub fn ascii_byte(b: u8) -> char {
     }
 }
 
+/// P37-1d：hex 视图字节值显示模式（BC 视图菜单）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HexValueMode {
+    /// 逐字节显示（默认，xxd 风格）
+    #[default]
+    Raw,
+    /// 小端序：每 4 字节按 u32 LE 解释
+    LittleEndian,
+    /// 大端序：每 4 字节按 u32 BE 解释
+    BigEndian,
+}
+
+/// P37-1d：偏移列格式化（BC Byte Addresses：hex / dec）
+pub fn format_offset(offset: usize, hex: bool) -> String {
+    if hex {
+        format!("{:08x}", offset)
+    } else {
+        format!("{:08}", offset)
+    }
+}
+
+/// P37-1d：按显示模式生成一行字节的 hex 文本。
+///
+/// Raw：逐字节 `{:02X}`（8 字节处空格）；LE/BE：每 4 字节一组解释为 u32。
+/// 不足 4 字节的剩余部分按逐字节显示；不足 16 字节补齐宽度（与 Raw 对齐）。
+pub fn hex_values_text(bytes: &[u8], mode: HexValueMode) -> String {
+    match mode {
+        HexValueMode::Raw => hex_text_pub(bytes),
+        HexValueMode::LittleEndian | HexValueMode::BigEndian => {
+            let mut s = String::new();
+            let mut i = 0;
+            let mut group = 0;
+            while i < bytes.len() {
+                if group == 4 {
+                    s.push(' ');
+                }
+                let end = (i + 4).min(bytes.len());
+                if end - i == 4 {
+                    let mut buf = [0u8; 4];
+                    buf.copy_from_slice(&bytes[i..end]);
+                    let v = match mode {
+                        HexValueMode::LittleEndian => u32::from_le_bytes(buf),
+                        HexValueMode::BigEndian => u32::from_be_bytes(buf),
+                        _ => unreachable!(),
+                    };
+                    s.push_str(&format!("{:08X} ", v));
+                    i = end;
+                } else {
+                    // 剩余不足 4 字节：逐字节
+                    for b in &bytes[i..end] {
+                        s.push_str(&format!("{:02X} ", b));
+                    }
+                    i = end;
+                }
+                group += 1;
+            }
+            // 补齐到 4 组（16 字节）宽度：每组 8 字符 + 1 空格 = 9
+            for _ in group..4 {
+                s.push_str("         ");
+            }
+            s.trim_end().to_string()
+        }
+    }
+}
+
+/// 逐字节 xxd 风格（8 字节处加空格，不足 16 字节补齐宽度）
+fn hex_text_pub(bytes: &[u8]) -> String {
+    let mut s = String::new();
+    for (i, b) in bytes.iter().enumerate() {
+        if i == 8 {
+            s.push(' ');
+        }
+        s.push_str(&format!("{:02X} ", b));
+    }
+    // 不足 16 字节补齐到 16 字节宽度（保证两侧对齐）
+    let width = bytes.len().min(16);
+    for _ in width..16 {
+        if width == 8 {
+            s.push(' ');
+        }
+        s.push_str("   ");
+    }
+    if !s.is_empty() && bytes.len() >= 8 {
+        s.push(' ');
+    }
+    s.trim_end().to_string()
+}
+
 /// 一行字节的 xxd 风格 hex 文本（8 字节处加空格分隔）
 #[cfg(test)]
 fn hex_text(bytes: &[u8]) -> String {
@@ -221,5 +309,74 @@ mod tests {
         let s = ascii_text(b"AB");
         assert_eq!(s.len(), 16);
         assert!(s.starts_with("AB"));
+    }
+
+    // ---- P37-1d：偏移格式 / 值显示模式 ----------------
+
+    #[test]
+    fn format_offset_hex_and_dec() {
+        assert_eq!(format_offset(0, true), "00000000");
+        assert_eq!(format_offset(255, true), "000000ff");
+        assert_eq!(format_offset(255, false), "00000255");
+        assert_eq!(format_offset(0x1234, false), "00004660");
+    }
+
+    #[test]
+    fn hex_values_raw_is_bytewise() {
+        let b = [0x01, 0x02, 0x03, 0x04, 0x05];
+        let s = hex_values_text(&b, HexValueMode::Raw);
+        assert!(s.contains("01 02 03 04"));
+        assert!(s.contains("05"));
+        // 8 字节分隔：5 字节不足 8，无额外分隔
+        assert!(!s.starts_with("01 02 03 04 05  0"));
+    }
+
+    #[test]
+    fn hex_values_little_endian_groups() {
+        // 0x01020304 的小端字节序 = 04 03 02 01 → u32 LE = 0x01020304
+        let b = [0x04, 0x03, 0x02, 0x01, 0x08, 0x07, 0x06, 0x05];
+        let s = hex_values_text(&b, HexValueMode::LittleEndian);
+        assert!(
+            s.contains("01020304"),
+            "LE 第一组应解释为 0x01020304: {}",
+            s
+        );
+        assert!(
+            s.contains("05060708"),
+            "LE 第二组应解释为 0x05060708: {}",
+            s
+        );
+        // 与 Raw 不同
+        let raw = hex_values_text(&b, HexValueMode::Raw);
+        assert_ne!(s, raw);
+    }
+
+    #[test]
+    fn hex_values_big_endian_groups() {
+        // 0x01020304 的大端字节序 = 01 02 03 04 → u32 BE = 0x01020304
+        let b = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let s = hex_values_text(&b, HexValueMode::BigEndian);
+        assert!(
+            s.contains("01020304"),
+            "BE 第一组应解释为 0x01020304: {}",
+            s
+        );
+        assert!(
+            s.contains("05060708"),
+            "BE 第二组应解释为 0x05060708: {}",
+            s
+        );
+        // LE 与 BE 结果不同（字节序反转）
+        let le = hex_values_text(&b, HexValueMode::LittleEndian);
+        assert_ne!(le, s);
+    }
+
+    #[test]
+    fn hex_values_partial_group_falls_back_to_bytes() {
+        // 不足 4 字节的尾部逐字节显示
+        let b = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE];
+        let s = hex_values_text(&b, HexValueMode::BigEndian);
+        assert!(s.contains("AABBCCDD"), "前 4 字节成组: {}", s);
+        assert!(s.contains("EE"), "剩余字节逐字节: {}", s);
     }
 }

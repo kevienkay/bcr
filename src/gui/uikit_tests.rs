@@ -888,6 +888,96 @@ fn difftab_hex_diff_navigation_via_keys() {
     );
 }
 
+// ---- P37-1d：hex 显示格式（地址 hex/dec、值格式、隐藏地址） ----------------
+
+#[test]
+fn difftab_hex_show_addr_toggle() {
+    let d = tempdir().unwrap();
+    let l = {
+        let mut v = vec![0u8; 20];
+        v[0] = 0x41;
+        String::from_utf8_lossy(&v).into_owned()
+    };
+    let r = {
+        let mut v = vec![0u8; 20];
+        v[0] = 0x42;
+        String::from_utf8_lossy(&v).into_owned()
+    };
+    let lp = write(d.path(), "l.bin", &l);
+    let rp = write(d.path(), "r.bin", &r);
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&lp, &rp, ViewOptions::default());
+    assert!(tab.borrow().hex.is_some(), "二进制文件应进入 hex 模式");
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 默认显示地址（hex）
+    {
+        let t = tab.borrow();
+        let hx = t.hex.as_ref().unwrap();
+        assert!(hx.show_addr, "默认显示字节地址");
+        assert!(hx.addr_hex, "默认地址格式 hex");
+    }
+    // 点击「显示字节地址」→ 隐藏
+    h.get_by_label_contains("显示字节地址").click();
+    h.run();
+    assert!(
+        !tab.borrow().hex.as_ref().unwrap().show_addr,
+        "勾选后应隐藏字节地址"
+    );
+}
+
+#[test]
+fn difftab_hex_value_mode_switch_via_ui() {
+    let d = tempdir().unwrap();
+    let l = {
+        let mut v = vec![0u8; 20];
+        v[0] = 0x41;
+        String::from_utf8_lossy(&v).into_owned()
+    };
+    let r = {
+        let mut v = vec![0u8; 20];
+        v[0] = 0x42;
+        String::from_utf8_lossy(&v).into_owned()
+    };
+    let lp = write(d.path(), "l.bin", &l);
+    let rp = write(d.path(), "r.bin", &r);
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&lp, &rp, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 默认 Raw（逐字节）
+    assert_eq!(
+        tab.borrow().hex.as_ref().unwrap().value_mode,
+        crate::hexview::HexValueMode::Raw
+    );
+    // 打开地址格式 ComboBox（选中文本 value 为「Hex 地址」，区别于视图过滤等下拉）
+    let combos: Vec<_> = h
+        .query_all_by_role(eframe::egui::accesskit::Role::ComboBox)
+        .collect();
+    assert!(!combos.is_empty(), "hex 模式应有格式下拉");
+    let addr_combo = combos
+        .iter()
+        .find(|n| n.value().map(|v| v.contains("地址")).unwrap_or(false))
+        .cloned()
+        .expect("应存在地址格式下拉（value 含「地址」）");
+    addr_combo.click();
+    let mut clicked = false;
+    for _ in 0..25 {
+        h.run_steps(2);
+        if let Some(node) = h.query_by_label("Dec 地址") {
+            node.click();
+            clicked = true;
+            break;
+        }
+    }
+    assert!(clicked, "地址格式下拉应出现 Dec 地址选项");
+    h.run();
+    assert!(
+        !tab.borrow().hex.as_ref().unwrap().addr_hex,
+        "切换后地址应为 dec"
+    );
+}
+
 // ---- P34：空会话入口 + 拖拽填充 ----------------
 
 #[test]

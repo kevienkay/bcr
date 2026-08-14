@@ -54,6 +54,12 @@ pub struct HexTabData {
     pub left_bytes: Vec<u8>,
     /// 右侧原始字节（编辑保存用）
     pub right_bytes: Vec<u8>,
+    /// P37-1d：偏移列用 hex 还是 dec
+    pub addr_hex: bool,
+    /// P37-1d：字节值显示模式（逐字节 / 小尾 / 大端）
+    pub value_mode: crate::hexview::HexValueMode,
+    /// P37-1d：是否显示字节地址列
+    pub show_addr: bool,
 }
 
 /// hex 编辑状态：编辑某侧某行的字节
@@ -227,6 +233,9 @@ impl DiffTab {
                 rows,
                 left_bytes: std::fs::read(l).unwrap_or_default(),
                 right_bytes: std::fs::read(r).unwrap_or_default(),
+                addr_hex: true,
+                value_mode: crate::hexview::HexValueMode::Raw,
+                show_addr: true,
             });
             self.left = None;
             self.right = None;
@@ -1129,6 +1138,56 @@ impl DiffTab {
                 // P35-A4：显示空白符
                 ui.checkbox(&mut self.show_whitespace, t(I18nKey::VisibleWs))
                     .on_hover_text("空格显示为 ·，制表符显示为 →");
+                // P37-1d：hex 模式显示选项（字节地址格式 / 值格式）
+                if let Some(h) = self.hex.as_mut() {
+                    ui.separator();
+                    ui.checkbox(&mut h.show_addr, t(I18nKey::HexShowAddr));
+                    {
+                        let cur_addr_hex = h.addr_hex;
+                        egui::ComboBox::from_id_salt("hex_addr_fmt")
+                            .selected_text(if cur_addr_hex {
+                                t(I18nKey::HexAddrHex)
+                            } else {
+                                t(I18nKey::HexAddrDec)
+                            })
+                            .show_ui(ui, |ui| {
+                                if ui
+                                    .selectable_label(cur_addr_hex, t(I18nKey::HexAddrHex))
+                                    .clicked()
+                                {
+                                    h.addr_hex = true;
+                                }
+                                if ui
+                                    .selectable_label(!cur_addr_hex, t(I18nKey::HexAddrDec))
+                                    .clicked()
+                                {
+                                    h.addr_hex = false;
+                                }
+                            });
+                    }
+                    {
+                        use crate::hexview::HexValueMode;
+                        let cur = h.value_mode;
+                        let label = match cur {
+                            HexValueMode::Raw => t(I18nKey::HexValRaw),
+                            HexValueMode::LittleEndian => t(I18nKey::HexValLittle),
+                            HexValueMode::BigEndian => t(I18nKey::HexValBig),
+                        };
+                        egui::ComboBox::from_id_salt("hex_val_fmt")
+                            .selected_text(label)
+                            .show_ui(ui, |ui| {
+                                for (mode, k) in [
+                                    (HexValueMode::Raw, I18nKey::HexValRaw),
+                                    (HexValueMode::LittleEndian, I18nKey::HexValLittle),
+                                    (HexValueMode::BigEndian, I18nKey::HexValBig),
+                                ] {
+                                    if ui.selectable_label(cur == mode, t(k)).clicked() {
+                                        h.value_mode = mode;
+                                    }
+                                }
+                            });
+                    }
+                }
                 // A11 缩略图总览开关
                 ui.checkbox(&mut self.show_overview, "缩略图")
                     .on_hover_text("右侧迷你差异地图，点击跳转");
@@ -1532,7 +1591,7 @@ impl DiffTab {
                                     continue;
                                 }
                             }
-                            paint_hex_row(ui, row, fg);
+                            paint_hex_row(ui, row, fg, h.addr_hex, h.value_mode, h.show_addr);
                             // 双击进入编辑（编辑该行左/右侧字节）
                             let (rect, resp) = ui.allocate_exact_size(
                                 Vec2::new(total_w, HEX_ROW_H),
@@ -2434,7 +2493,16 @@ const HEX_R_X: f32 = 86.0;
 const HEX_R_ASCII_X: f32 = 136.0;
 
 /// 绘制一行 hex 对比（偏移 + L hex + L ascii + R hex + R ascii）
-fn paint_hex_row(ui: &mut egui::Ui, row: &crate::hexview::HexRow, fg: Color32) {
+///
+/// P37-1d：偏移列支持 hex/dec 与隐藏；字节值支持逐字节/小尾/大端。
+fn paint_hex_row(
+    ui: &mut egui::Ui,
+    row: &crate::hexview::HexRow,
+    fg: Color32,
+    addr_hex: bool,
+    value_mode: crate::hexview::HexValueMode,
+    show_addr: bool,
+) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(HEX_TOTAL_W, HEX_ROW_H), egui::Sense::hover());
     let x = rect.left();
     let y = rect.top();
@@ -2444,17 +2512,23 @@ fn paint_hex_row(ui: &mut egui::Ui, row: &crate::hexview::HexRow, fg: Color32) {
         paint_bg(ui, rect, Some(bg_replace_l()));
     }
 
-    // 偏移
-    ui.painter().text(
-        Pos2::new(x + HEX_OFF_X, y + 2.0),
-        egui::Align2::LEFT_TOP,
-        format!("{:08x}", row.offset),
-        egui::FontId::monospace(13.0),
-        GUTTER,
-    );
+    // 偏移（P37-1d：hex/dec 可切换、可隐藏）
+    if show_addr {
+        ui.painter().text(
+            Pos2::new(x + HEX_OFF_X, y + 2.0),
+            egui::Align2::LEFT_TOP,
+            crate::hexview::format_offset(row.offset, addr_hex),
+            egui::FontId::monospace(13.0),
+            GUTTER,
+        );
+    }
 
-    // 左侧 hex（差异字节红色）
-    let l_hex = hex_bytes_text(&row.left, &row.right, true);
+    // 左侧 hex（P37-1d：按值模式渲染；Raw 保留差异字节红/绿底色逻辑）
+    let l_hex = if value_mode == crate::hexview::HexValueMode::Raw {
+        hex_bytes_text(&row.left, &row.right, true)
+    } else {
+        crate::hexview::hex_values_text(&row.left, value_mode)
+    };
     ui.painter().text(
         Pos2::new(x + HEX_L_X, y + 2.0),
         egui::Align2::LEFT_TOP,
@@ -2476,8 +2550,12 @@ fn paint_hex_row(ui: &mut egui::Ui, row: &crate::hexview::HexRow, fg: Color32) {
         fg,
     );
 
-    // 右侧 hex（差异字节绿色）
-    let r_hex = hex_bytes_text(&row.right, &row.left, false);
+    // 右侧 hex（P37-1d：按值模式渲染）
+    let r_hex = if value_mode == crate::hexview::HexValueMode::Raw {
+        hex_bytes_text(&row.right, &row.left, false)
+    } else {
+        crate::hexview::hex_values_text(&row.right, value_mode)
+    };
     ui.painter().text(
         Pos2::new(x + HEX_R_X, y + 2.0),
         egui::Align2::LEFT_TOP,
