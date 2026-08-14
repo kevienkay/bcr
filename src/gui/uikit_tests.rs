@@ -1446,11 +1446,12 @@ fn dirtab_sync_now_button_via_ui() {
     h.run_steps(4);
     // 点击「⚡ 立即同步」→ 生成计划并执行（后台线程）
     h.get_by_label_contains("立即同步").click();
-    h.run_steps(6);
-    // 后台执行是异步的：轮询等待右侧出现 a.txt
+    h.run_steps(4);
+    // 后台执行是异步的：轮询等待右侧出现 a.txt（本地线程可能已清空 bg，勿断言 bg 状态；CI 慢需真实 sleep）
     let mut done = false;
-    for _ in 0..30 {
+    for _ in 0..100 {
         h.run_steps(2);
+        std::thread::sleep(std::time::Duration::from_millis(10));
         if d2.path().join("a.txt").exists() {
             done = true;
             break;
