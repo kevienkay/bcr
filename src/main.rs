@@ -164,7 +164,11 @@ fn main() {
                     | clap::error::ErrorKind::MissingSubcommand
             ) =>
         {
-            if should_launch_gui(std::io::stdin().is_terminal(), console_procs()) {
+            // macOS：无参数一律启动 GUI（对标 BC：bcomp 无参数打开 GUI；
+            // Finder 双击裸二进制会用 Terminal 打开，stdin 是终端，无法与手动运行区分）
+            let launch_gui = cfg!(target_os = "macos")
+                || should_launch_gui(std::io::stdin().is_terminal(), console_procs());
+            if launch_gui {
                 Cli {
                     lang: None,
                     encoding: None,
