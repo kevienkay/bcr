@@ -149,6 +149,14 @@ pub fn decode(data: &[u8]) -> TextFile {
     if let Some(kind) = sniff_utf16(data) {
         return decode_with(kind, data);
     }
+    // 2.5. UTF-16 无 BOM 试解码兜底（NUL 分布嗅探对中文等高字节非零内容失效：
+    //    汉字 UTF-16 高字节多在 0x4E-0x9F，NUL 稀疏；此时 chardetng 兜底会把
+    //    UTF-16 字节流中的 0x0A 当换行 → 一行文本显示多行+乱码）
+    //    必须在二进制判定之前：低字节为 0 的汉字（如「一」U+4E00 → 00 4E）
+    //    会触发 looks_binary 的 NUL 阈值误判
+    if let Some(tf) = try_decode_utf16(data) {
+        return tf;
+    }
 
     // 3. 二进制判定（NUL 密度/控制字符；也在 UTF-8 验证之前：全 NUL 数据
     //    是合法 UTF-8，需先拦截）
@@ -249,6 +257,95 @@ fn sniff_utf16(data: &[u8]) -> Option<EncodingKind> {
     } else {
         None
     }
+}
+
+/// UTF-16 无 BOM 试解码兜底：NUL 分布嗅探对中文等高字节非零内容失效时，
+/// 直接按 LE/BE 解码采样并验证结果合理性（替换字符少 + 可读文本占比高）。
+/// 合理性判定：
+/// - 无替换字符（had_errors=false）或替换占比 < 5%；
+/// - 可读字符（非控制、非私有区、常见 CJK/ASCII）占比 ≥ 80%；
+/// - 字节流含 NUL 且非纯 ASCII（排除 UTF-8 文本按 UTF-16 误读）；
+///
+/// 返回完整解码结果。
+fn try_decode_utf16(data: &[u8]) -> Option<TextFile> {
+    let n = (data.len() / 2) * 2;
+    if n < 8 {
+        return None;
+    }
+    // 关键约束 1：纯 ASCII 文本（如 hello\nworld\n）无 NUL，按 UTF-16BE
+    // 误读后每个码元落在 CJK 基本区（0x65-0x7A 高字节全在 4E00-9FFF 内），
+    // 可读性仍 100%——直接交给严格 UTF-8 验证，不进 UTF-16 试解码
+    let sample_ascii = data[..n]
+        .iter()
+        .filter(|&&b| (0x20..=0x7E).contains(&b))
+        .count();
+    if sample_ascii * 100 > n * 90 {
+        return None;
+    }
+    // 关键约束 2：真实 UTF-16 文本字节流必含 NUL（ASCII 字符/换行的高字节
+    // 或低字节为 0 的汉字）；纯中文无换行无 NUL 的 UTF-16LE 属信息论上
+    // 不可区分场景，退回 chardetng（不会产生多行乱码，因无 0A 字节）
+    if !data[..n].contains(&0) {
+        return None;
+    }
+    let sample = &data[..n.min(4096)];
+    for (kind, enc) in [
+        (EncodingKind::Utf16Le, encoding_rs::UTF_16LE),
+        (EncodingKind::Utf16Be, encoding_rs::UTF_16BE),
+    ] {
+        let Some(text) = enc.decode_without_bom_handling_and_without_replacement(sample) else {
+            // 有替换字符：不是该字节序的 UTF-16 文本
+            continue;
+        };
+        let text = text.into_owned();
+        let total = text.chars().count();
+        if total == 0 {
+            continue;
+        }
+        // 可读性：控制字符（含 NUL/私有区）少，且常见文本字符占比高
+        let readable = text.chars().filter(|&c| is_readable_text_char(c)).count();
+        let ctrl = text
+            .chars()
+            .filter(|&c| c.is_control() && !matches!(c, '\t' | '\n' | '\r'))
+            .count();
+        // 私有区/未分配码元占比硬性上限：真实 UTF-16 文本不含私有区字符；
+        // UTF-8 文本被按错误字节序误读时（如 hello 世界 → 0xE4B8）私有区占比高
+        let private_use = text
+            .chars()
+            .filter(|&c| ('\u{E000}'..='\u{F8FF}').contains(&c))
+            .count();
+        if ctrl * 100 > total * 5 {
+            continue;
+        }
+        if private_use * 100 > total * 5 {
+            continue;
+        }
+        // 可读性阈值 80%：真实 UTF-16 中文/ASCII 文本解码后几乎全可读；
+        // UTF-8 文本按 UTF-16LE 误读会产生私有区/未分配码元（如 hello 世界 → 50%）
+        if readable * 100 < total * 80 {
+            continue;
+        }
+        return Some(decode_with(kind, data));
+    }
+    None
+}
+
+/// 可读文本字符：常见 CJK 汉字/标点、ASCII 可打印、常见空白；
+/// 排除控制字符、私有区（E000-F8FF）等乱码区。
+fn is_readable_text_char(c: char) -> bool {
+    if c.is_ascii_graphic() || matches!(c, ' ' | '\t' | '\n' | '\r') {
+        return true;
+    }
+    if ('\u{4E00}'..='\u{9FFF}').contains(&c) {
+        return true; // CJK 统一表意文字
+    }
+    if ('\u{3000}'..='\u{303F}').contains(&c) {
+        return true; // CJK 标点
+    }
+    if ('\u{FF00}'..='\u{FFEF}').contains(&c) {
+        return true; // 全角形式
+    }
+    false
 }
 
 /// 二进制判定：前 8192 字节中 NUL 占比 ≥ 1%，或非文本控制字符占比 ≥ 5%。
@@ -499,5 +596,51 @@ mod tests {
         let tf = decode_with(kind, &[0xD6, 0xD0, 0xCE, 0xC4]);
         let out = encode_back(&tf, "中文");
         assert_eq!(out, [0xD6, 0xD0, 0xCE, 0xC4]);
+    }
+}
+
+#[cfg(test)]
+mod repro {
+    use super::*;
+
+    #[test]
+    fn utf16le_cn_no_bom_detected() {
+        // 中文 UTF-16LE 无 BOM（用户场景：一行文本显示多行+乱码）
+        let mut data = Vec::new();
+        for u in "这是一行测试文本\n".encode_utf16() {
+            data.push((u & 0xFF) as u8);
+            data.push((u >> 8) as u8);
+        }
+        let tf = decode(&data);
+        assert!(!tf.is_binary, "中文 UTF-16LE 不应判为二进制");
+        assert_eq!(tf.text, "这是一行测试文本\n");
+        assert_eq!(tf.encoding.name(), "UTF-16LE");
+    }
+
+    #[test]
+    fn utf16le_cn_short_detected() {
+        // 短中文（<16 字节，NUL 嗅探失效）；含换行 → 必含 NUL，可识别
+        let mut data = Vec::new();
+        for u in "中文测试\n".encode_utf16() {
+            data.push((u & 0xFF) as u8);
+            data.push((u >> 8) as u8);
+        }
+        let tf = decode(&data);
+        assert!(!tf.is_binary);
+        assert_eq!(tf.text, "中文测试\n");
+        assert_eq!(tf.encoding.name(), "UTF-16LE");
+    }
+
+    #[test]
+    fn gbk_not_misdetected_as_utf16() {
+        // GBK 中文不应被 UTF-16 试解码误判
+        let bytes = [
+            0xD5, 0xE2, 0xCA, 0xC7, 0xD2, 0xBB, 0xD0, 0xD0, 0xB2, 0xE2, 0xCA, 0xD4, 0xCE, 0xC4,
+            0xB1, 0xBE, 0x0A,
+        ];
+        let tf = decode(&bytes);
+        assert!(!tf.is_binary);
+        assert_eq!(tf.text, "这是一行测试文本\n");
+        assert_eq!(tf.encoding.name(), "GBK");
     }
 }
