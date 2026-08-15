@@ -155,6 +155,24 @@ impl TextEditTab {
         }
     }
 
+    /// P42-2：打开剪贴板（BC 文本编辑 File>打开剪贴板）：读系统剪贴板文本 → 填充内容
+    pub fn open_clipboard(&mut self) {
+        let mut cb = arboard::Clipboard::new().ok();
+        let text = cb.as_mut().and_then(|c| c.get_text().ok());
+        match text {
+            Some(text) => {
+                self.undo_stack.push(self.content.clone());
+                self.content = text;
+                self.path.clear(); // 未命名：保存时走另存
+                self.error = None;
+                self.redo_stack.clear();
+            }
+            None => {
+                self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string());
+            }
+        }
+    }
+
     /// 是否为空会话
     pub fn is_empty(&self) -> bool {
         self.path.is_empty()

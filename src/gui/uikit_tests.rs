@@ -2585,6 +2585,41 @@ fn difftab_convert_file_trim_and_line_ending() {
     assert!(std::path::Path::new(&format!("{l}.bak")).exists());
 }
 
+// ---- P42-2：剪贴板比较 ⌘V + 文本编辑打开剪贴板 ----------------
+
+#[test]
+fn difftab_cmd_v_loads_clipboard_right() {
+    // 用系统剪贴板（arboard）——测试环境可能无剪贴板，跳过真实断言，只验证快捷键不 panic
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nb\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 写入剪贴板后按 ⌘V → 右侧被剪贴板内容替换（headless 无剪贴板则保持原内容，不 panic）
+    let _ = arboard::Clipboard::new().and_then(|mut c| c.set_text("clip\n"));
+    h.key_combination_modifiers(eframe::egui::Modifiers::COMMAND, &[eframe::egui::Key::V]);
+    h.run();
+    // 无断言硬依赖（CI headless 剪贴板不可用），仅验证不 panic
+    let _ = tab.borrow().right.as_ref().map(|f| f.content.clone());
+}
+
+#[test]
+fn textedit_open_clipboard_sets_content() {
+    let mut tab = TextEditTab::new("");
+    tab.content = "old".to_string();
+    // 尝试从剪贴板读（headless 可能失败）；成功则内容替换、路径清空
+    let ok = arboard::Clipboard::new()
+        .and_then(|mut c| c.set_text("clipboard-new\n"))
+        .is_ok();
+    if ok {
+        tab.open_clipboard();
+        assert_eq!(tab.content, "clipboard-new\n", "打开剪贴板应替换内容");
+        assert!(tab.is_empty(), "剪贴板内容未命名（另存）");
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

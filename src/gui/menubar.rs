@@ -168,6 +168,15 @@ fn file_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.load_clipboard_right());
         }
+        // P42-2：文本编辑「打开剪贴板」（BC 文本编辑 File 菜单）
+        if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))
+            && ui.button(t(I18nKey::MenuClipRight)).clicked()
+        {
+            ui.close();
+            if let Some(Tab::TextEdit(t)) = app.tabs.get_mut(app.active) {
+                t.open_clipboard();
+            }
+        }
         ui.separator();
         if ui.button(t(I18nKey::MenuOpenCloud)).clicked() {
             ui.close();

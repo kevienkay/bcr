@@ -1753,7 +1753,12 @@ impl DiffTab {
             }
             return;
         }
-        // P39-2a：⌘L 转到行（BC 快捷键）；⌘G / ⇧⌘G 查找下一/上一
+        // P39-2a：⌘L 转到行（BC 快捷键）；⌘G / ⇧⌘G 查找下一/上一；⌘V 剪贴板比较
+        if ui.input(|i| i.key_pressed(Key::V) && ctrl) {
+            // P42-2：打开剪贴板比较（BC File>打开剪贴板，右侧）
+            self.load_clipboard_right();
+            return;
+        }
         if ui.input(|i| i.key_pressed(Key::L) && ctrl) {
             self.goto_focus = true;
             return;
