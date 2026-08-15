@@ -62,6 +62,8 @@ pub struct BlockInfo {
     pub left: Vec<String>,
     pub right: Vec<String>,
     pub resolution: Resolution,
+    /// P45-1：行级采用覆盖（Conflict 块逐行；None = 跟随块 resolution）
+    pub line_res: Vec<Option<Resolution>>,
 }
 
 /// 三路合并视图
@@ -100,6 +102,7 @@ pub fn build_merge_view(base: &str, left: &str, right: &str) -> MergeView {
             left: blk.left.iter().map(|s| s.to_string()).collect(),
             right: blk.right.iter().map(|s| s.to_string()).collect(),
             resolution: Resolution::Auto,
+            line_res: Vec::new(),
         };
         if kind == BlockKind::Conflict {
             view.conflicts += 1;
@@ -241,27 +244,58 @@ pub fn render_merged(view: &MergeView, label_l: &str, label_r: &str) -> (Vec<Str
     let mut unresolved = 0usize;
     for blk in &view.blocks {
         match blk.kind {
-            BlockKind::Conflict => match blk.resolution {
-                Resolution::Left => out.extend(blk.left.iter().cloned()),
-                Resolution::Right => out.extend(blk.right.iter().cloned()),
-                Resolution::Base => out.extend(blk.base.iter().cloned()),
-                Resolution::LeftThenRight => {
-                    out.extend(blk.left.iter().cloned());
-                    out.extend(blk.right.iter().cloned());
+            BlockKind::Conflict => {
+                // P45-1：行级采用覆盖（逐行）；未设置行跟随块 resolution
+                if blk.line_res.is_empty() {
+                    match blk.resolution {
+                        Resolution::Left => out.extend(blk.left.iter().cloned()),
+                        Resolution::Right => out.extend(blk.right.iter().cloned()),
+                        Resolution::Base => out.extend(blk.base.iter().cloned()),
+                        Resolution::LeftThenRight => {
+                            out.extend(blk.left.iter().cloned());
+                            out.extend(blk.right.iter().cloned());
+                        }
+                        Resolution::RightThenLeft => {
+                            out.extend(blk.right.iter().cloned());
+                            out.extend(blk.left.iter().cloned());
+                        }
+                        Resolution::Auto => {
+                            unresolved += 1;
+                            out.push(format!("<<<<<<< {label_l}"));
+                            out.extend(blk.left.iter().cloned());
+                            out.push("=======".to_string());
+                            out.extend(blk.right.iter().cloned());
+                            out.push(format!(">>>>>>> {label_r}"));
+                        }
+                    }
+                } else {
+                    for (i, lr) in blk.line_res.iter().enumerate() {
+                        match lr {
+                            Some(Resolution::Left) => {
+                                if let Some(l) = blk.left.get(i) {
+                                    out.push(l.clone());
+                                }
+                            }
+                            Some(Resolution::Right) => {
+                                if let Some(r) = blk.right.get(i) {
+                                    out.push(r.clone());
+                                }
+                            }
+                            Some(Resolution::Base) => {
+                                if let Some(b) = blk.base.get(i) {
+                                    out.push(b.clone());
+                                }
+                            }
+                            // 行级未解决 → 跟随块 resolution（未设行取整块语义）
+                            _ => {
+                                if let Some(l) = blk.left.get(i) {
+                                    out.push(l.clone());
+                                }
+                            }
+                        }
+                    }
                 }
-                Resolution::RightThenLeft => {
-                    out.extend(blk.right.iter().cloned());
-                    out.extend(blk.left.iter().cloned());
-                }
-                Resolution::Auto => {
-                    unresolved += 1;
-                    out.push(format!("<<<<<<< {label_l}"));
-                    out.extend(blk.left.iter().cloned());
-                    out.push("=======".to_string());
-                    out.extend(blk.right.iter().cloned());
-                    out.push(format!(">>>>>>> {label_r}"));
-                }
-            },
+            }
             BlockKind::LeftOnly | BlockKind::Same => out.extend(blk.left.iter().cloned()),
             BlockKind::RightOnly => out.extend(blk.right.iter().cloned()),
             BlockKind::Context => out.extend(blk.base.iter().cloned()),

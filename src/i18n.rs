@@ -624,6 +624,12 @@ pub enum Key {
     MenuFindFileName,
     /// 在多个文件中查找...（TextEdit ⌘⇧F）
     MenuFindInFiles,
+    /// 采用左边的行（行级，⌥⇧←）
+    MenuTakeLeftLine,
+    /// 采用中心行（行级）
+    MenuTakeCenterLine,
+    /// 采用右边行（行级，⌥⇧→）
+    MenuTakeRightLine,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页

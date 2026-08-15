@@ -492,6 +492,22 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     tab.resolve_current(crate::mergeview::Resolution::RightThenLeft)
                 });
             }
+            ui.separator();
+            // P45-1：行级采用（BC 编辑菜单 采用左边的行/中心行/右边行）
+            if ui.button(t(I18nKey::MenuTakeLeftLine)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.take_line(crate::mergeview::Resolution::Left));
+            }
+            if ui.button(t(I18nKey::MenuTakeCenterLine)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| tab.take_line(crate::mergeview::Resolution::Base));
+            }
+            if ui.button(t(I18nKey::MenuTakeRightLine)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| {
+                    tab.take_line(crate::mergeview::Resolution::Right)
+                });
+            }
         }
     });
 }

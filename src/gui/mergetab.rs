@@ -19,6 +19,8 @@ pub struct MergeTab {
     /// 预览窗格滚动偏移
     pub preview_scroll: Vec2,
     pub show_preview: bool,
+    /// P45-1：当前行（渲染点击记录，行级采用定位用）
+    pub cur_line: usize,
 }
 
 impl MergeTab {
@@ -35,6 +37,7 @@ impl MergeTab {
             label_r: "RIGHT".to_string(),
             preview_scroll: Vec2::ZERO,
             show_preview: true,
+            cur_line: 0,
         };
         t.reload();
         t
@@ -273,6 +276,47 @@ impl MergeTab {
         }
     }
 
+    /// P45-1：行级采用（BC 采用左边的行/中心行/右边行）——当前行所在冲突块的对应行
+    pub fn take_line(&mut self, res: Resolution) {
+        // 找 cur_line 所在冲突块（view.rows 索引 → blocks 索引）
+        let Some(&row) = self
+            .view
+            .conflict_rows
+            .iter()
+            .find(|&&s| s <= self.cur_line)
+        else {
+            return;
+        };
+        let Some(ci) = self.view.conflict_rows.iter().position(|&s| s == row) else {
+            return;
+        };
+        let Some(&bi) = self.view.conflict_block_indices.get(ci) else {
+            return;
+        };
+        let Some(blk) = self.view.blocks.get_mut(bi) else {
+            return;
+        };
+        // 行偏移 = cur_line - 冲突块起始行；line_res 长度不足时补齐
+        let off = self.cur_line - row;
+        let len = blk.left.len().max(blk.right.len()).max(blk.base.len());
+        if blk.line_res.len() < len {
+            blk.line_res.resize(len, None);
+        }
+        if off < blk.line_res.len() {
+            blk.line_res[off] = Some(res);
+        }
+    }
+
+    /// P45-1：行级采用已解析行数（测试/状态用）
+    #[cfg(test)]
+    pub fn line_takes(&self) -> usize {
+        self.view
+            .blocks
+            .iter()
+            .map(|b| b.line_res.iter().filter(|r| r.is_some()).count())
+            .sum()
+    }
+
     pub fn save(&mut self) -> bool {
         let Some(path) = rfd::FileDialog::new()
             .set_file_name("merged.txt")
@@ -501,6 +545,14 @@ impl MergeTab {
         }) {
             self.prev_conflict();
         }
+        // P45-1：⌥⇧←/→ 采用左/右行（行级采用，BC 编辑菜单）
+        let alt = ui.input(|i| i.modifiers.alt);
+        if alt && shift && ui.input(|i| i.key_pressed(Key::ArrowLeft)) {
+            self.take_line(Resolution::Left);
+        }
+        if alt && shift && ui.input(|i| i.key_pressed(Key::ArrowRight)) {
+            self.take_line(Resolution::Right);
+        }
 
         // 底部实时预览窗格（显示保存将得到的结果，未解决冲突高亮）
         if self.show_preview {
@@ -598,6 +650,7 @@ impl MergeTab {
             let total_w = gutter * 3.0 + col_w * 3.0;
             let fg = text_color(ui);
 
+            let mut click_line: Option<usize> = None;
             let out = {
                 let mut sa = egui::ScrollArea::both().auto_shrink([false, false]);
                 sa = sa.vertical_scroll_offset(self.scroll.y);
@@ -620,6 +673,10 @@ impl MergeTab {
                             ui, row, gutter, col_w, bg_b, bg_l, bg_r, hl_l, hl_r, fg, syn_b, syn_l,
                             syn_r,
                         );
+                        // P45-1：点击行记录 cur_line（行级采用定位）
+                        if resp.clicked() {
+                            click_line = Some(i);
+                        }
                         // P32-A4：行右键菜单（复制路径/打开所在位置/系统打开）
                         let (bp2, lp2, rp2) = (bp.clone(), lp.clone(), rp.clone());
                         resp.context_menu(|ui| {
@@ -665,6 +722,10 @@ impl MergeTab {
                     }
                 })
             };
+            // P45-1：渲染后应用点击行（借用安全：闭包外写 self）
+            if let Some(i) = click_line {
+                self.cur_line = i;
+            }
             self.scroll = out.state.offset;
         });
     }

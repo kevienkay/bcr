@@ -386,6 +386,9 @@ i18n_table!(t_zh,
     SortDescending => "降序",
     MenuFindFileName => "查找文件名...",
     MenuFindInFiles => "在多个文件中查找...",
+    MenuTakeLeftLine => "采用左边的行",
+    MenuTakeCenterLine => "采用中心行",
+    MenuTakeRightLine => "采用右边行",
 );
 i18n_table!(t_en,
     // CLI
@@ -744,6 +747,9 @@ i18n_table!(t_en,
     SortDescending => "Descending",
     MenuFindFileName => "Find File Name...",
     MenuFindInFiles => "Find in Files...",
+    MenuTakeLeftLine => "Take Left Line",
+    MenuTakeCenterLine => "Take Center Line",
+    MenuTakeRightLine => "Take Right Line",
 );
 i18n_table!(t_de,
     // CLI
@@ -1102,6 +1108,9 @@ i18n_table!(t_de,
     SortDescending => "Absteigend",
     MenuFindFileName => "Dateinamen suchen...",
     MenuFindInFiles => "In Dateien suchen...",
+    MenuTakeLeftLine => "Linke Zeile übernehmen",
+    MenuTakeCenterLine => "Mittlere Zeile übernehmen",
+    MenuTakeRightLine => "Rechte Zeile übernehmen",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1460,6 +1469,9 @@ i18n_table!(t_ja,
     SortDescending => "降順",
     MenuFindFileName => "ファイル名を検索...",
     MenuFindInFiles => "複数のファイルで検索...",
+    MenuTakeLeftLine => "左の行を採用",
+    MenuTakeCenterLine => "中央の行を採用",
+    MenuTakeRightLine => "右の行を採用",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1818,6 +1830,9 @@ i18n_table!(t_ko,
     SortDescending => "내림차순",
     MenuFindFileName => "파일 이름 찾기...",
     MenuFindInFiles => "여러 파일에서 찾기...",
+    MenuTakeLeftLine => "왼쪽 줄 채택",
+    MenuTakeCenterLine => "중앙 줄 채택",
+    MenuTakeRightLine => "오른쪽 줄 채택",
 );
 i18n_table!(t_es,
     // CLI
@@ -2176,6 +2191,9 @@ i18n_table!(t_es,
     SortDescending => "Descendente",
     MenuFindFileName => "Buscar nombre de archivo...",
     MenuFindInFiles => "Buscar en archivos...",
+    MenuTakeLeftLine => "Usar línea izquierda",
+    MenuTakeCenterLine => "Usar línea central",
+    MenuTakeRightLine => "Usar línea derecha",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2534,6 +2552,9 @@ i18n_table!(t_pt,
     SortDescending => "Decrescente",
     MenuFindFileName => "Procurar nome de arquivo...",
     MenuFindInFiles => "Procurar em arquivos...",
+    MenuTakeLeftLine => "Usar linha esquerda",
+    MenuTakeCenterLine => "Usar linha central",
+    MenuTakeRightLine => "Usar linha direita",
 );
 i18n_table!(t_ar,
     // CLI
@@ -2892,6 +2913,9 @@ i18n_table!(t_ar,
     SortDescending => "تنازلي",
     MenuFindFileName => "البحث عن اسم ملف...",
     MenuFindInFiles => "البحث في الملفات...",
+    MenuTakeLeftLine => "اعتماد السطر الأيسر",
+    MenuTakeCenterLine => "اعتماد السطر الأوسط",
+    MenuTakeRightLine => "اعتماد السطر الأيمن",
 );
 i18n_table!(t_ru,
     // CLI
@@ -3250,6 +3274,9 @@ i18n_table!(t_ru,
     SortDescending => "По убыванию",
     MenuFindFileName => "Искать имя файла...",
     MenuFindInFiles => "Искать в файлах...",
+    MenuTakeLeftLine => "Взять левую строку",
+    MenuTakeCenterLine => "Взять центральную строку",
+    MenuTakeRightLine => "Взять правую строку",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3608,4 +3635,7 @@ i18n_table!(t_fr,
     SortDescending => "Décroissant",
     MenuFindFileName => "Rechercher un nom de fichier...",
     MenuFindInFiles => "Rechercher dans les fichiers...",
+    MenuTakeLeftLine => "Prendre la ligne gauche",
+    MenuTakeCenterLine => "Prendre la ligne centrale",
+    MenuTakeRightLine => "Prendre la ligne droite",
 );

@@ -3110,6 +3110,35 @@ fn dirtab_find_name_and_textedit_find_in_files() {
     assert!(te.find_in_files_open(), "在多个文件中查找弹窗应打开");
 }
 
+// ---- P45-1：文本合并行级采用（⌥⇧←/→ 采用左/右行；Edit 菜单 3 项） ----------------
+
+#[test]
+fn merge_tab_line_take() {
+    let d = tempdir().unwrap();
+    let base = write(d.path(), "base.txt", "a\nb\nc\n");
+    let l = write(d.path(), "l.txt", "L1\nL2\nc\n");
+    let r = write(d.path(), "r.txt", "R1\nR2\nc\n");
+    let mut t = super::MergeTab::new(&base, &l, &r);
+    // 定位第一个冲突块，逐行行级采用（cur_line = 冲突块起始行/下一行）
+    t.next_conflict();
+    let start = t.view.conflict_rows[0];
+    t.cur_line = start;
+    t.take_line(crate::mergeview::Resolution::Left);
+    t.cur_line = start + 1;
+    t.take_line(crate::mergeview::Resolution::Right);
+    assert_eq!(t.line_takes(), 2, "行级采用后应记录 2 行");
+    // 预览输出应包含行级采用结果（首行取左、次行取右）
+    let (lines, _) = crate::mergeview::render_merged(&t.view, &t.label_l, &t.label_r);
+    assert!(
+        lines.iter().any(|ln| ln == "L1"),
+        "行级采用左边后输出应含 L1"
+    );
+    assert!(
+        lines.iter().any(|ln| ln == "R2"),
+        "行级采用右边后输出应含 R2"
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]
