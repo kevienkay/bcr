@@ -6,6 +6,16 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### 导航/选区/媒体（P43，对标 BC 5.2.5 会话/编辑/搜索/视图）
+
+- **DirTab 导航历史**：后退/前进/上一层/比较父文件夹（Session 菜单 DirTab 分支；navigate 首次调用把当前路径对入栈作历史起点，back 可回退；空会话不入栈）
+- **DiffTab 文本选区**：当前差异块选为选区（蓝色高亮）→ 选择内容/把选择内容和剪贴板比较（Edit 菜单；选区文本写临时文件 → 右侧加载）；修复 P42-1 转换文件子菜单误入 DirTab 分支（改独立 DiffTab 分支）
+- **替换导航**：下一/上一替换（Search 菜单，跳匹配 + 聚焦替换框）
+- **差异文件导航**：下一/上一差异文件（DirTab，isize 取模循环跳 status≠Same 文件并选中+滚动）
+- **会话菜单补齐**：合并文件（当前 Diff 左右文件进三路合并，BASE 留空）/ 和输出比较（FolderMerge 输出目录 vs 左侧开 DirTab）
+- **信息弹窗**：Session>信息——按当前标签显示统计（Diff 编码/大小/行数/差异行、Dir 条目/统计、Merge 冲突/行、Image 帧/差异像素、Csv 行列、TextEdit 字符/行、Patch 标题、FolderMerge 输出、Media 差异字段）
+- **媒体比较（简化版）**：mediacmp 自研容器头解析（WAV RIFF fmt 块→声道/采样率/位深/时长；MP3 帧头同步字→码率表估算时长；FLAC STREAMINFO→采样率/声道/位深/时长）+ 字段级对比；MediaTab 双栏元数据并排 + 差异字段红色标记 + 重新加载/交换两侧；主页第 9 张卡片 🎵 + Session 菜单新建媒体比较 + 拖放两文件自动识别（is_media_file 扩展名兜底）；状态栏显示差异字段数
+
 ### 交互模型对齐（P34，对标 BC 空会话 + 拖拽导入）
 
 - **空会话入口**：首页卡片/菜单 Session 直接进空会话（Diff/Dir/Merge/Image/Csv），空面板分别打开左右侧（BASE/LEFT/RIGHT），不再强制一次选满文件
