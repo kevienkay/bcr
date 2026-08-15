@@ -286,8 +286,11 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     t.invert_selection();
                 }
             }
+        }
+        // DiffTab 分支：转换文件 + 文本选区操作（BC 编辑菜单）
+        if matches!(app.tabs.get(app.active), Some(Tab::Diff(_))) {
             ui.separator();
-            // P42-1：转换文件（BC Edit>Convert File，DiffTab 分支）
+            // P42-1：转换文件（BC Edit>Convert File）
             ui.menu_button(t(I18nKey::ConvertFile), |ui| {
                 let modes = [
                     (t(I18nKey::ConvertTrim), super::textedit::ConvertMode::Trim),
@@ -310,6 +313,19 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     }
                 }
             });
+            // P43-2：文本选区操作（BC 编辑菜单 选择选择内容/把选择内容和剪贴板比较）
+            if ui.button(t(I18nKey::MenuSelectSelection)).clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.select_selection();
+                }
+            }
+            if ui.button(t(I18nKey::MenuSelectionToClipboard)).clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.selection_to_clipboard();
+                }
+            }
         }
     });
 }

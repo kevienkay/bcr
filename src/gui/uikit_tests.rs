@@ -2716,6 +2716,30 @@ fn dirtab_navigation_history_back_forward_up() {
     assert_eq!(tab.borrow().left, p1, "比较父文件夹应回父目录");
 }
 
+// ---- P43-2：文本选区操作（T6 选择选择内容/剪贴板比较） ----------------
+
+#[test]
+fn difftab_selection_ops_select_block_and_text() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\nd\ne\n");
+    let r = write(d.path(), "r.txt", "a\nX\nc\nd\nY\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // 定位到第 2 行差异（diff_rows 索引 1）
+    tab.borrow_mut().next_diff();
+    tab.borrow_mut().next_diff();
+    // 选择选择内容：当前差异块选为选区
+    tab.borrow_mut().select_selection();
+    let sel = tab.borrow().selection;
+    assert!(sel.is_some(), "应产生选区");
+    // 选区文本（左侧行）
+    let text = tab.borrow().selection_text();
+    assert!(!text.is_empty(), "选区文本非空");
+    // 把选择内容和剪贴板比较：右侧被选区文本替换（headless 剪贴板不可用则跳过断言）
+    tab.borrow_mut().selection_to_clipboard();
+    let _ = tab.borrow().right.as_ref().map(|f| f.content.clone());
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

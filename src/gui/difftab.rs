@@ -161,6 +161,11 @@ pub struct DiffTab {
     pub show_whitespace: bool,
     /// P42-3：字符列标尺
     pub show_ruler: bool,
+    /// P43-2：文本选区（rows 行索引范围 [start, end]，T6 选择选择内容/剪贴板比较）
+    pub selection: Option<(usize, usize)>,
+    /// P43-3：替换导航位置（search.matches 索引）
+    #[allow(dead_code)] // P43-3 批次使用
+    pub replace_nav: Option<usize>,
     /// P35-A3：视图过滤（All/Diff/Same/Context）
     pub view_filter: DiffViewFilter,
     /// P35-A3：Context 模式上下文行数
@@ -235,6 +240,8 @@ impl DiffTab {
             h_scroll: 0.0,
             show_whitespace: false,
             show_ruler: false,
+            selection: None,
+            replace_nav: None,
             view_filter: DiffViewFilter::All,
             context_lines: 3,
             detail_mode: DiffDetailMode::Text,
@@ -721,6 +728,63 @@ impl DiffTab {
             }
             None => self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string()),
         }
+    }
+
+    /// P43-2：选择选择内容(D)——把当前差异块（diff_pos 所在块）选为选区
+    pub fn select_selection(&mut self) {
+        // 优先：当前差异行所在块；否则第一个差异块
+        let cur_row = self
+            .diff_pos
+            .and_then(|p| self.diff_rows.get(p))
+            .copied()
+            .unwrap_or(0);
+        let block = self
+            .diff_blocks
+            .iter()
+            .find(|&&(s, e)| s <= cur_row && cur_row <= e)
+            .copied()
+            .or_else(|| self.diff_blocks.first().copied());
+        match block {
+            Some((s, e)) => self.selection = Some((s, e)),
+            None => self.selection = None,
+        }
+    }
+
+    /// P43-2：把选择内容和剪贴板比较（选区文本 → 剪贴板 → 右侧对比）
+    pub fn selection_to_clipboard(&mut self) {
+        let Some((s, e)) = self.selection else {
+            return;
+        };
+        let mut text = String::new();
+        for (i, row) in self.rows.iter().enumerate() {
+            if i < s || i > e {
+                continue;
+            }
+            if let Some(c) = &row.left {
+                text.push_str(&c.text);
+                text.push('\n');
+            }
+        }
+        if text.is_empty() {
+            return;
+        }
+        // 写入临时文件并加载为右侧（复用剪贴板对比路径）
+        if let Some(path) = write_clipboard_temp(&text) {
+            self.load_right(&path, self.opts.clone());
+        }
+    }
+
+    /// P43-2：当前选区文本（供测试）
+    #[cfg(test)]
+    pub(crate) fn selection_text(&self) -> String {
+        let Some((s, e)) = self.selection else {
+            return String::new();
+        };
+        self.rows[s..=e.min(self.rows.len().saturating_sub(1))]
+            .iter()
+            .filter_map(|r| r.left.as_ref().map(|c| c.text.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// 聚焦搜索框（菜单 Search>Find）
@@ -2790,6 +2854,13 @@ impl DiffTab {
                         RowTag::Delete => (Some(bg_delete()), None),
                         RowTag::Insert => (None, Some(bg_insert())),
                         RowTag::Replace => (Some(bg_replace_l()), Some(bg_replace_r())),
+                    };
+                    // P43-2：文本选区高亮（蓝色系叠加）
+                    let (bg_l, bg_r) = if self.selection.is_some_and(|(s, e)| oi >= s && oi <= e) {
+                        let sel = Some(Color32::from_rgba_unmultiplied(86, 148, 240, 60));
+                        (bg_l.or(sel), bg_r.or(sel))
+                    } else {
+                        (bg_l, bg_r)
                     };
                     // 搜索命中高亮（按原始行索引映射）
                     let (bg_l, bg_r) = if match_set.contains(&oi) {
