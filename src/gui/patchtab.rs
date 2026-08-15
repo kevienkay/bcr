@@ -337,7 +337,11 @@ impl PatchTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("patch_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if ui.button(t(I18nKey::OpenFile)).clicked() {
+                    if ui
+                        .button(format!("📂 {}", t(I18nKey::OpenFile)))
+                        .on_hover_text("打开补丁文件")
+                        .clicked()
+                    {
                         self.open_dialog();
                     }
                     if ui

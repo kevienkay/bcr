@@ -463,11 +463,15 @@ impl TextEditTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("textedit_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if ui.button(t(I18nKey::OpenFile)).clicked() {
+                    if ui
+                        .button(format!("📂 {}", t(I18nKey::OpenFile)))
+                        .on_hover_text("打开文件")
+                        .clicked()
+                    {
                         self.open_dialog();
                     }
                     if ui
-                        .button(t(I18nKey::SaveFile))
+                        .button(format!("💾 {}", t(I18nKey::SaveFile)))
                         .on_hover_text("Ctrl+S")
                         .clicked()
                     {
@@ -495,28 +499,28 @@ impl TextEditTab {
                     ui.separator();
                     // BC Convert File
                     if ui
-                        .button(t(I18nKey::ConvertTrim))
+                        .button(format!("✂ {}", t(I18nKey::ConvertTrim)))
                         .on_hover_text("移除每行行尾空白")
                         .clicked()
                     {
                         self.convert_trim();
                     }
                     if ui
-                        .button(t(I18nKey::ConvertTabs))
+                        .button(format!("⇥ {}", t(I18nKey::ConvertTabs)))
                         .on_hover_text("制表符 → 4 空格")
                         .clicked()
                     {
                         self.convert_tabs();
                     }
                     if ui
-                        .button(t(I18nKey::ConvertCrlf))
+                        .button(format!("⏎ {}", t(I18nKey::ConvertCrlf)))
                         .on_hover_text("行尾 → CRLF")
                         .clicked()
                     {
                         self.convert_line_ending(true);
                     }
                     if ui
-                        .button(t(I18nKey::ConvertLf))
+                        .button(format!("↲ {}", t(I18nKey::ConvertLf)))
                         .on_hover_text("行尾 → LF")
                         .clicked()
                     {

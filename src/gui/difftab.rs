@@ -2110,10 +2110,18 @@ impl DiffTab {
             egui::Panel::top("difftab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     // ---- 打开（BC: Open 按钮组）----
-                    if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                    if ui
+                        .button(format!("◀ {}", t(I18nKey::OpenLeft)))
+                        .on_hover_text("打开左侧文件")
+                        .clicked()
+                    {
                         self.open_left_dialog();
                     }
-                    if ui.button(t(I18nKey::OpenRight)).clicked() {
+                    if ui
+                        .button(format!("▶ {}", t(I18nKey::OpenRight)))
+                        .on_hover_text("打开右侧文件")
+                        .clicked()
+                    {
                         self.open_right_dialog();
                     }
                     ui.separator();

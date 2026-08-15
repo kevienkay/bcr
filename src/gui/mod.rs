@@ -2354,22 +2354,49 @@ impl eframe::App for DiffApp {
                                     .unwrap_or_else(|| r.path.clone()),
                                 (None, None) => String::new(),
                             };
-                            ui.label(paths);
+                            // P47-3：路径用弱色（BC 状态栏分区观感），统计用彩色（同/删/增/改）
+                            ui.label(RichText::new(paths).weak());
                             ui.separator();
-                            ui.label(format!("行 {}", t.rows.len()));
+                            ui.label(RichText::new(format!("行 {}", t.rows.len())).weak());
                             ui.separator();
-                            ui.label(format!(
-                                "{}  {} {}  {} {}  {} {}  {} {}",
-                                crate::i18n::t(crate::i18n::Key::StatsPanel),
+                            let (sc, sd, si, sr) = (
                                 crate::i18n::t(crate::i18n::Key::StatSame),
-                                s.equal,
                                 crate::i18n::t(crate::i18n::Key::StatDelete),
-                                s.delete,
                                 crate::i18n::t(crate::i18n::Key::StatInsert),
-                                s.insert,
                                 crate::i18n::t(crate::i18n::Key::StatReplace),
-                                s.replace,
-                            ));
+                            );
+                            ui.label(
+                                RichText::new(format!("{} {}", sc, s.equal))
+                                    .color(egui::Color32::from_rgb(120, 190, 120)),
+                            );
+                            ui.label(
+                                RichText::new(format!("{} {}", sd, s.delete))
+                                    .color(egui::Color32::from_rgb(220, 120, 120)),
+                            );
+                            ui.label(
+                                RichText::new(format!("{} {}", si, s.insert))
+                                    .color(egui::Color32::from_rgb(120, 190, 120)),
+                            );
+                            ui.label(
+                                RichText::new(format!("{} {}", sr, s.replace))
+                                    .color(egui::Color32::from_rgb(220, 190, 110)),
+                            );
+                            // P47-3：右侧编码/大小弱色（右对齐）
+                            if let Some(l) = &t.left {
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "{} · {}B",
+                                                l.encoding.name(),
+                                                l.size
+                                            ))
+                                            .weak(),
+                                        );
+                                    },
+                                );
+                            }
                         }
                         Tab::Dir(t) => {
                             // B3：选中项数
