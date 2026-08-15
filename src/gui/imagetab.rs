@@ -27,6 +27,8 @@ pub struct ImageTab {
     pub show_stats: bool,
     /// P37-1k：是否显示元数据（尺寸/格式/文件大小）
     pub show_meta: bool,
+    /// P45-4：比较元数据弹窗开关（BC View>比较元数据）
+    pub show_meta_compare: bool,
     /// 自适应窗口（fit-to-window）
     pub fit: bool,
     /// 左侧全部帧（多帧动图；静态图为单帧）
@@ -74,6 +76,7 @@ impl ImageTab {
             show_overlay: false,
             show_stats: true,
             show_meta: false,
+            show_meta_compare: false,
             fit: false,
             frames_l: Vec::new(),
             frames_r: Vec::new(),
@@ -299,6 +302,22 @@ impl ImageTab {
         self.flip_h = false;
         self.flip_v = false;
         self.recompute_current();
+    }
+
+    /// P45-4：重置差异偏移（BC View>重置差异偏移）——滚动归零并定位第一个差异区域
+    pub fn reset_diff_offset(&mut self) {
+        self.scroll = egui::Vec2::ZERO;
+        if let Some(p) = &self.pair {
+            if p.stats.bounds.is_some() {
+                self.locate_diff_req = true;
+            }
+        }
+    }
+
+    /// P45-4：比较元数据（BC View>比较元数据）——弹窗对比两侧 尺寸/格式/文件大小/帧数
+    pub fn compare_meta(&mut self) {
+        self.show_meta = true;
+        self.show_meta_compare = !self.show_meta_compare;
     }
 
     /// 跳转到指定帧（越界截断）
@@ -530,6 +549,70 @@ impl ImageTab {
                 );
             });
             return;
+        }
+        // P45-4：比较元数据弹窗（BC View>比较元数据）——两侧 尺寸/格式/文件大小/帧数 对比
+        if self.show_meta_compare {
+            let mut keep = true;
+            let mut close_req = false;
+            egui::Window::new(t(I18nKey::ImgCompareMeta))
+                .collapsible(false)
+                .resizable(true)
+                .default_size([420.0, 200.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    let fmt_l = crate::imgcmp::image_format_name(&self.left);
+                    let fmt_r = crate::imgcmp::image_format_name(&self.right);
+                    let sz_l = std::fs::metadata(&self.left).map(|m| m.len()).unwrap_or(0);
+                    let sz_r = std::fs::metadata(&self.right).map(|m| m.len()).unwrap_or(0);
+                    let frames_l = self.total_frames();
+                    let frames_r = self.frames_r.len().max(1);
+                    let (wl, hl, wr, hr) = match &self.pair {
+                        Some(p) => (
+                            p.stats.left_w,
+                            p.stats.left_h,
+                            p.stats.right_w,
+                            p.stats.right_h,
+                        ),
+                        None => (0, 0, 0, 0),
+                    };
+                    egui::Grid::new("img_meta_grid")
+                        .num_columns(3)
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.label(RichText::new("字段").strong());
+                            ui.label(RichText::new("左侧").strong());
+                            ui.label(RichText::new("右侧").strong());
+                            ui.end_row();
+                            let row = |ui: &mut egui::Ui, k: &str, l: String, r: String| {
+                                ui.label(RichText::new(k).strong());
+                                if l == r {
+                                    ui.monospace(l);
+                                    ui.monospace(r);
+                                } else {
+                                    let c = Color32::from_rgb(226, 110, 110);
+                                    ui.colored_label(c, l);
+                                    ui.colored_label(c, r);
+                                }
+                                ui.end_row();
+                            };
+                            row(ui, "格式", fmt_l, fmt_r);
+                            row(
+                                ui,
+                                "尺寸",
+                                format!("{}x{}", wl, hl),
+                                format!("{}x{}", wr, hr),
+                            );
+                            row(ui, "大小", format!("{}B", sz_l), format!("{}B", sz_r));
+                            row(ui, "帧数", frames_l.to_string(), frames_r.to_string());
+                        });
+                    ui.add_space(8.0);
+                    if ui.button(t(I18nKey::Close)).clicked() {
+                        close_req = true;
+                    }
+                });
+            if close_req || !keep {
+                self.show_meta_compare = false;
+            }
         }
         if self.pair.is_none() && self.left.is_empty() {
             egui::CentralPanel::default().show(ui, |ui| {

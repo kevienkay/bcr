@@ -844,6 +844,21 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
         }
+        // P45-4：图片比较补齐（BC View 菜单 重置差异偏移/比较元数据，ImageTab 分支）
+        if matches!(app.tabs.get(app.active), Some(Tab::Image(_))) {
+            if ui.button(t(I18nKey::ImgResetOffset)).clicked() {
+                ui.close();
+                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                    t.reset_diff_offset();
+                }
+            }
+            if ui.button(t(I18nKey::ImgCompareMeta)).clicked() {
+                ui.close();
+                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                    t.compare_meta();
+                }
+            }
+        }
         // P44-6：行号 / 语法加亮开关（BC 视图菜单；DiffTab 分支）
         if matches!(app.tabs.get(app.active), Some(Tab::Diff(_))) {
             let show_ln = app

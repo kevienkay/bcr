@@ -3196,6 +3196,27 @@ fn dirtab_view_filter_extended() {
     t.rebuild_tree();
 }
 
+// ---- P45-4：图片比较补齐（重置差异偏移 + 比较元数据弹窗） ----------------
+
+#[test]
+fn image_tab_reset_offset_and_meta() {
+    let d = tempdir().unwrap();
+    // 生成两张小 PNG（imgcmp 依赖文件存在才比较；这里仅验证方法不 panic）
+    let p1 = write(d.path(), "a.png", "");
+    let p2 = write(d.path(), "b.png", "");
+    let mut t = super::ImageTab::new(&p1, &p2);
+    // 重置差异偏移：滚动归零 + 请求定位差异（无 pair 时安全）
+    t.scroll = eframe::egui::Vec2::new(100.0, 200.0);
+    t.reset_diff_offset();
+    assert_eq!(t.scroll, eframe::egui::Vec2::ZERO, "重置差异偏移应清空滚动");
+    // 比较元数据：弹窗开关翻转 + show_meta 开启
+    t.compare_meta();
+    assert!(t.show_meta_compare, "比较元数据弹窗应打开");
+    assert!(t.show_meta, "比较元数据应同时开启元数据显示");
+    t.compare_meta();
+    assert!(!t.show_meta_compare, "再次调用应关闭弹窗");
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

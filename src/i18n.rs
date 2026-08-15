@@ -656,6 +656,10 @@ pub enum Key {
     DirFilterLeftNewerOrOrphan,
     /// 显示右边较新和右边独有项
     DirFilterRightNewerOrOrphan,
+    /// 重置差异偏移（ImageTab）
+    ImgResetOffset,
+    /// 比较元数据（ImageTab）
+    ImgCompareMeta,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页

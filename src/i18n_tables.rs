@@ -402,6 +402,8 @@ i18n_table!(t_zh,
     DirFilterDiffNoOrphans => "差异但无独有项",
     DirFilterLeftNewerOrOrphan => "显示左边较新和左边独有项",
     DirFilterRightNewerOrOrphan => "显示右边较新和右边独有项",
+    ImgResetOffset => "重置差异偏移",
+    ImgCompareMeta => "比较元数据",
 );
 i18n_table!(t_en,
     // CLI
@@ -776,6 +778,8 @@ i18n_table!(t_en,
     DirFilterDiffNoOrphans => "Diffs Without Orphans",
     DirFilterLeftNewerOrOrphan => "Left Newer or Left-Only",
     DirFilterRightNewerOrOrphan => "Right Newer or Right-Only",
+    ImgResetOffset => "Reset Difference Offset",
+    ImgCompareMeta => "Compare Metadata",
 );
 i18n_table!(t_de,
     // CLI
@@ -1150,6 +1154,8 @@ i18n_table!(t_de,
     DirFilterDiffNoOrphans => "Änderungen ohne Einzelseiten",
     DirFilterLeftNewerOrOrphan => "Links neuer oder nur links",
     DirFilterRightNewerOrOrphan => "Rechts neuer oder nur rechts",
+    ImgResetOffset => "Differenzversatz zurücksetzen",
+    ImgCompareMeta => "Metadaten vergleichen",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1524,6 +1530,8 @@ i18n_table!(t_ja,
     DirFilterDiffNoOrphans => "片側なしの差異",
     DirFilterLeftNewerOrOrphan => "左が新しいまたは左のみ",
     DirFilterRightNewerOrOrphan => "右が新しいまたは右のみ",
+    ImgResetOffset => "差分オフセットをリセット",
+    ImgCompareMeta => "メタデータを比較",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1898,6 +1906,8 @@ i18n_table!(t_ko,
     DirFilterDiffNoOrphans => "한쪽 없는 차이",
     DirFilterLeftNewerOrOrphan => "왼쪽 최신 또는 왼쪽만",
     DirFilterRightNewerOrOrphan => "오른쪽 최신 또는 오른쪽만",
+    ImgResetOffset => "차이 오프셋 재설정",
+    ImgCompareMeta => "메타데이터 비교",
 );
 i18n_table!(t_es,
     // CLI
@@ -2272,6 +2282,8 @@ i18n_table!(t_es,
     DirFilterDiffNoOrphans => "Diferencias sin únicos",
     DirFilterLeftNewerOrOrphan => "Izquierda más nueva o solo izquierda",
     DirFilterRightNewerOrOrphan => "Derecha más nueva o solo derecha",
+    ImgResetOffset => "Restablecer desplazamiento de diferencia",
+    ImgCompareMeta => "Comparar metadatos",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2646,6 +2658,8 @@ i18n_table!(t_pt,
     DirFilterDiffNoOrphans => "Diferenças sem órfãos",
     DirFilterLeftNewerOrOrphan => "Esquerda mais nova ou só esquerda",
     DirFilterRightNewerOrOrphan => "Direita mais nova ou só direita",
+    ImgResetOffset => "Redefinir deslocamento de diferença",
+    ImgCompareMeta => "Comparar metadados",
 );
 i18n_table!(t_ar,
     // CLI
@@ -3020,6 +3034,8 @@ i18n_table!(t_ar,
     DirFilterDiffNoOrphans => "اختلافات بدون مفرد",
     DirFilterLeftNewerOrOrphan => "أحدث يسار أو يسار فقط",
     DirFilterRightNewerOrOrphan => "أحدث يمين أو يمين فقط",
+    ImgResetOffset => "إعادة تعيين إزاحة الاختلاف",
+    ImgCompareMeta => "مقارنة البيانات الوصفية",
 );
 i18n_table!(t_ru,
     // CLI
@@ -3394,6 +3410,8 @@ i18n_table!(t_ru,
     DirFilterDiffNoOrphans => "Различия без уникальных",
     DirFilterLeftNewerOrOrphan => "Слева новее или только слева",
     DirFilterRightNewerOrOrphan => "Справа новее или только справа",
+    ImgResetOffset => "Сбросить смещение различий",
+    ImgCompareMeta => "Сравнить метаданные",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3768,4 +3786,6 @@ i18n_table!(t_fr,
     DirFilterDiffNoOrphans => "Différences sans uniques",
     DirFilterLeftNewerOrOrphan => "Gauche plus récente ou gauche seule",
     DirFilterRightNewerOrOrphan => "Droite plus récente ou droite seule",
+    ImgResetOffset => "Réinitialiser le décalage des différences",
+    ImgCompareMeta => "Comparer les métadonnées",
 );
