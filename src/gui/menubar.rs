@@ -114,6 +114,20 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             app.show_sessions = true;
         }
+        // P44-4：打开会话（BC Session>打开会话，⌥⌘O；打开会话中心）
+        if ui.button(t(I18nKey::MenuOpenSession)).clicked() {
+            ui.close();
+            app.show_sessions = true;
+        }
+        // P44-4：重新比较文件（BC Session>重新比较文件，⌘R）
+        if ui.button(t(I18nKey::MenuRecompare)).clicked() {
+            ui.close();
+            app.reload_current();
+        }
+        // P44-4：已锁定（BC Session>已锁定；DiffTab 分支，锁定会话防编辑）
+        if let Some(Tab::Diff(lock_tab)) = app.tabs.get_mut(app.active) {
+            ui.checkbox(&mut lock_tab.locked, crate::i18n::t(I18nKey::MenuLocked));
+        }
         // P39-2a：清除会话（重置当前标签为空会话）
         if ui.button(t(I18nKey::MenuClearSession)).clicked() {
             ui.close();
@@ -230,6 +244,45 @@ fn file_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
         }
         ui.separator();
+        // P44-4：保存文件为（BC File>保存文件为...，⌘⇧S；TextEdit 另存对话框）
+        if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))
+            && ui.button(t(I18nKey::MenuSaveFileAs)).clicked()
+        {
+            ui.close();
+            if let Some(Tab::TextEdit(t)) = app.tabs.get_mut(app.active) {
+                t.save_as();
+            }
+        }
+        // P44-4：打开方式（BC File>打开方式；DiffTab 左右文件用系统应用打开/在查找器中显示）
+        if let Some(Tab::Diff(d)) = app.tabs.get(app.active) {
+            let lp = d.left.as_ref().map(|f| f.path.clone());
+            let rp = d.right.as_ref().map(|f| f.path.clone());
+            if lp.is_some() || rp.is_some() {
+                ui.menu_button(t(I18nKey::MenuOpenWith), |ui| {
+                    if let Some(p) = &lp {
+                        if ui.button(t(I18nKey::MenuOpenWith)).clicked() {
+                            ui.close();
+                            super::common::open_with_system_app(p);
+                        }
+                        if ui.button(t(I18nKey::MenuRevealInFinder)).clicked() {
+                            ui.close();
+                            super::common::reveal_in_file_manager(p);
+                        }
+                        ui.separator();
+                    }
+                    if let Some(p) = &rp {
+                        if ui.button(t(I18nKey::MenuOpenWith)).clicked() {
+                            ui.close();
+                            super::common::open_with_system_app(p);
+                        }
+                        if ui.button(t(I18nKey::MenuRevealInFinder)).clicked() {
+                            ui.close();
+                            super::common::reveal_in_file_manager(p);
+                        }
+                    }
+                });
+            }
+        }
         if ui.button(t(I18nKey::MenuOpenCloud)).clicked() {
             ui.close();
             app.show_cloud = true;

@@ -588,6 +588,18 @@ pub enum Key {
     MenuTakeLeftThenRight,
     /// 采用右边然后左边（⇧⌘B）
     MenuTakeRightThenLeft,
+    /// 打开会话（⌥⌘O）
+    MenuOpenSession,
+    /// 重新比较文件（⌘R）
+    MenuRecompare,
+    /// 已锁定（会话锁定防编辑）
+    MenuLocked,
+    /// 打开方式
+    MenuOpenWith,
+    /// 在查找器中显示
+    MenuRevealInFinder,
+    /// 保存文件为...（⌘⇧S）
+    MenuSaveFileAs,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页

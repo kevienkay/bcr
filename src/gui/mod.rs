@@ -364,6 +364,32 @@ impl DiffApp {
             // ⌥⌘C 清除会话（重置当前标签为空会话）
             self.clear_active_tab();
         }
+        // P44-4：⌥⌘O 打开会话（会话中心；BC Session>打开会话）
+        if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::O)) {
+            self.show_sessions = true;
+        }
+        // P44-4：⌘R 重新比较（BC Session>重新比较文件；转发当前标签 reload/refresh）
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::R)) {
+            self.reload_current();
+        }
+        // P44-4：⌘⇧S 保存文件为（BC File>保存文件为...；TextEdit 另存对话框）
+        if cmd && ui.input(|i| i.modifiers.shift && i.key_pressed(egui::Key::S)) {
+            if let Some(Tab::TextEdit(t)) = self.tabs.get_mut(self.active) {
+                t.save_as();
+            }
+        }
+    }
+
+    /// P44-4：重新比较当前标签（BC ⌘R）——Diff/Merge/FolderMerge 重载，Dir 重新扫描
+    fn reload_current(&mut self) {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::Diff(t)) => t.reload(),
+            Some(Tab::Merge(t)) => t.reload(),
+            Some(Tab::Dir(t)) => t.refresh(),
+            Some(Tab::FolderMerge(t)) => t.reload(),
+            Some(Tab::Csv(t)) => t.reload(),
+            _ => {}
+        }
     }
 
     /// P43-5：信息弹窗（BC Session>信息，当前标签统计；抽为独立方法便于测试）

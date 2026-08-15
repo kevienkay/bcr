@@ -205,6 +205,39 @@ impl TextEditTab {
         }
     }
 
+    /// P44-4：保存文件为...（BC File>保存文件为，⌘⇧S；rfd 对话框选新路径）
+    pub fn save_as(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_file_name(
+                std::path::Path::new(&self.path)
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "untitled.txt".to_string()),
+            )
+            .save_file()
+        else {
+            return;
+        };
+        let bytes = crate::encoding::encode_back(
+            &crate::encoding::TextFile {
+                text: String::new(),
+                encoding: self.encoding,
+                had_bom: self.had_bom,
+                is_binary: false,
+            },
+            &self.content,
+        );
+        match std::fs::write(&path, bytes) {
+            Ok(()) => {
+                self.path = path.to_string_lossy().into_owned();
+                self.error = None;
+            }
+            Err(e) => {
+                self.error = Some(format!("保存失败: {}", e));
+            }
+        }
+    }
+
     /// 压入撤销快照（修改内容前调用）
     fn push_snapshot(&mut self) {
         self.undo_stack.push(self.content.clone());

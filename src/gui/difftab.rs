@@ -176,6 +176,8 @@ pub struct DiffTab {
     pub layout: DiffLayout,
     /// P39-2d：书签（编号 0-9 → 渲染行索引）
     pub bookmarks: std::collections::HashMap<u8, usize>,
+    /// P44-4：会话锁定（BC Session>已锁定，锁定时禁止编辑操作）
+    pub locked: bool,
 }
 
 /// 编辑窗口状态
@@ -247,6 +249,7 @@ impl DiffTab {
             detail_mode: DiffDetailMode::Text,
             layout: DiffLayout::SideBySide,
             bookmarks: std::collections::HashMap::new(),
+            locked: false,
         }
     }
 

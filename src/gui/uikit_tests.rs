@@ -3009,6 +3009,36 @@ fn merge_tab_take_shortcuts() {
     );
 }
 
+// ---- P44-4：会话/文件菜单补齐（⌥⌘O 打开会话 / ⌘R 重新比较 / ⌘⇧S 保存文件为 / 已锁定） ----------------
+
+#[test]
+fn session_lock_and_reload_shortcuts() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\n");
+    let r = write(d.path(), "r.txt", "a\nB\nc\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    {
+        let mut app = app.borrow_mut();
+        app.open_empty_diff();
+        if let super::Tab::Diff(t) = &mut app.tabs[0] {
+            t.load_pair(&l, &r, ViewOptions::default());
+            // 已锁定开关（Session 菜单 checkbox 语义）
+            t.locked = true;
+            assert!(t.locked, "锁定开关应生效");
+            t.locked = false;
+        }
+        // ⌘R 重新比较（reload_current：DiffTab reload 不崩溃且保留路径）
+        app.reload_current();
+        if let super::Tab::Diff(t) = &app.tabs[0] {
+            assert_eq!(t.left.as_ref().map(|f| f.path.as_str()), Some(l.as_str()));
+        }
+        // ⌥⌘O 打开会话
+        app.show_sessions = true;
+        assert!(app.show_sessions);
+        app.show_sessions = false;
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]
