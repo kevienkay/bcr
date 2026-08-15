@@ -6,6 +6,11 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### 自动化补强（P49）
+
+- **P27 契约扩展新视图**：`bcr diff --json`（diff.v1，行号区间 ops）；`bcr hex --json`（hex.v1，差异行 + 统计）；新子命令 `bcr media`（media.v1，媒体字段级差异，CLI 与 GUI 同源自研容器头解析）
+- **kittest 菜单真点验证 3 例**：驱动完整菜单栏，点击「会话 → 新建文本/文件夹/三路合并」验证对应标签创建
+
 ### UI 精修续（P48）
 
 - **主页卡片 hover 动效**：animate_bool 动画插值 3px 上浮 + 阴影叠层模拟（兼容深浅主题），hover 平滑过渡
