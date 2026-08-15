@@ -2805,6 +2805,47 @@ fn dirtab_next_prev_diff_file_navigation() {
     assert_eq!(rel1, rel3, "上一差异文件应回到第一个");
 }
 
+// ---- P43-4：合并文件 + 和输出比较 ----------------
+
+#[test]
+fn reopen_as_merge_and_compare_with_output() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nB\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    // 文本 → 合并文件（BASE 留空）
+    {
+        let mut app = app.borrow_mut();
+        app.reopen_as_merge(&l, &r);
+        assert!(
+            matches!(app.tabs[0], super::Tab::Merge(_)),
+            "应打开三路合并标签"
+        );
+        if let super::Tab::Merge(m) = &app.tabs[0] {
+            assert_eq!(m.left_path, l, "左路径应为原左文件");
+            assert_eq!(m.right_path, r, "右路径应为原右文件");
+        }
+    }
+    // 文件夹合并 → 和输出比较（输出 vs 左侧开 DirTab）
+    let d2 = tempdir().unwrap();
+    let out_dir = d2.path().join("out");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let out = out_dir.to_str().unwrap().to_string();
+    {
+        let mut app = app.borrow_mut();
+        app.add_tab(super::Tab::FolderMerge(super::FolderMergeTab::new(
+            "", &l, &r, &out,
+        )));
+        app.active = 1;
+        app.compare_with_output();
+        assert_eq!(app.tabs.len(), 3, "应新增 1 个标签");
+        assert!(
+            matches!(app.tabs[2], super::Tab::Dir(_)),
+            "和输出比较应打开目录对比"
+        );
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

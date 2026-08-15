@@ -792,6 +792,23 @@ impl DiffApp {
         self.add_tab(Tab::Csv(CsvTab::new(l, r)));
     }
 
+    /// P43-4：合并文件（BC 文本比较 Session>合并文件）——当前左右文件进入三路合并，BASE 留空待填
+    fn reopen_as_merge(&mut self, l: &str, r: &str) {
+        self.add_tab(Tab::Merge(MergeTab::new("", l, r)));
+    }
+
+    /// P43-4：和输出比较（BC 文件夹合并/同步 Session>和输出比较）——输出目录 vs 左侧目录对比
+    fn compare_with_output(&mut self) {
+        let Some(Tab::FolderMerge(t)) = self.tabs.get(self.active) else {
+            return;
+        };
+        let (out, left) = (t.out.clone(), t.left.clone());
+        if out.is_empty() || left.is_empty() {
+            return;
+        }
+        self.add_tab(Tab::Dir(DirTab::new(&out, &left)));
+    }
+
     /// P32-A7：欢迎页 — 大标题 + 会话类型网格卡片（文本/文件夹/三路合并/图片/CSV）
     fn welcome_ui(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show(ui, |ui| {

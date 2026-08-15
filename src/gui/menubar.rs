@@ -159,6 +159,19 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     }
                 }
             });
+            // P43-4：合并文件（BC 文本比较 Session>合并文件）
+            if ui.button(t(I18nKey::MenuMergeFiles)).clicked() {
+                ui.close();
+                let (l, r) = cur_paths.clone().unwrap();
+                app.reopen_as_merge(&l, &r);
+            }
+        }
+        // P43-4：和输出比较（BC 文件夹合并 Session>和输出比较）
+        if matches!(app.tabs.get(app.active), Some(Tab::FolderMerge(_)))
+            && ui.button(t(I18nKey::MenuCompareWithOutput)).clicked()
+        {
+            ui.close();
+            app.compare_with_output();
         }
     });
 }
