@@ -614,6 +614,8 @@ pub enum Key {
     MenuLineNumbers,
     /// 语法加亮（开关）
     MenuSyntaxHighlight,
+    /// 文件信息（开关）
+    MenuFileInfo,
     /// 排序...
     MenuSort,
     /// 升序

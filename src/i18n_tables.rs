@@ -404,6 +404,7 @@ i18n_table!(t_zh,
     DirFilterRightNewerOrOrphan => "显示右边较新和右边独有项",
     ImgResetOffset => "重置差异偏移",
     ImgCompareMeta => "比较元数据",
+    MenuFileInfo => "文件信息",
 );
 i18n_table!(t_en,
     // CLI
@@ -780,6 +781,7 @@ i18n_table!(t_en,
     DirFilterRightNewerOrOrphan => "Right Newer or Right-Only",
     ImgResetOffset => "Reset Difference Offset",
     ImgCompareMeta => "Compare Metadata",
+    MenuFileInfo => "File Info",
 );
 i18n_table!(t_de,
     // CLI
@@ -1156,6 +1158,7 @@ i18n_table!(t_de,
     DirFilterRightNewerOrOrphan => "Rechts neuer oder nur rechts",
     ImgResetOffset => "Differenzversatz zurücksetzen",
     ImgCompareMeta => "Metadaten vergleichen",
+    MenuFileInfo => "Dateiinfo",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1532,6 +1535,7 @@ i18n_table!(t_ja,
     DirFilterRightNewerOrOrphan => "右が新しいまたは右のみ",
     ImgResetOffset => "差分オフセットをリセット",
     ImgCompareMeta => "メタデータを比較",
+    MenuFileInfo => "ファイル情報",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1908,6 +1912,7 @@ i18n_table!(t_ko,
     DirFilterRightNewerOrOrphan => "오른쪽 최신 또는 오른쪽만",
     ImgResetOffset => "차이 오프셋 재설정",
     ImgCompareMeta => "메타데이터 비교",
+    MenuFileInfo => "파일 정보",
 );
 i18n_table!(t_es,
     // CLI
@@ -2284,6 +2289,7 @@ i18n_table!(t_es,
     DirFilterRightNewerOrOrphan => "Derecha más nueva o solo derecha",
     ImgResetOffset => "Restablecer desplazamiento de diferencia",
     ImgCompareMeta => "Comparar metadatos",
+    MenuFileInfo => "Información del archivo",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2660,6 +2666,7 @@ i18n_table!(t_pt,
     DirFilterRightNewerOrOrphan => "Direita mais nova ou só direita",
     ImgResetOffset => "Redefinir deslocamento de diferença",
     ImgCompareMeta => "Comparar metadados",
+    MenuFileInfo => "Informações do arquivo",
 );
 i18n_table!(t_ar,
     // CLI
@@ -3036,6 +3043,7 @@ i18n_table!(t_ar,
     DirFilterRightNewerOrOrphan => "أحدث يمين أو يمين فقط",
     ImgResetOffset => "إعادة تعيين إزاحة الاختلاف",
     ImgCompareMeta => "مقارنة البيانات الوصفية",
+    MenuFileInfo => "معلومات الملف",
 );
 i18n_table!(t_ru,
     // CLI
@@ -3412,6 +3420,7 @@ i18n_table!(t_ru,
     DirFilterRightNewerOrOrphan => "Справа новее или только справа",
     ImgResetOffset => "Сбросить смещение различий",
     ImgCompareMeta => "Сравнить метаданные",
+    MenuFileInfo => "Информация о файле",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3788,4 +3797,5 @@ i18n_table!(t_fr,
     DirFilterRightNewerOrOrphan => "Droite plus récente ou droite seule",
     ImgResetOffset => "Réinitialiser le décalage des différences",
     ImgCompareMeta => "Comparer les métadonnées",
+    MenuFileInfo => "Informations du fichier",
 );

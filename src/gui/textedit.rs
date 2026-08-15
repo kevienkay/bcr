@@ -66,6 +66,12 @@ pub struct TextEditTab {
     show_ws: bool,
     /// 语法高亮预览模式（只读渲染高亮；关闭时直接编辑）
     show_syntax: bool,
+    /// P46-1：行号显示开关（BC View>行号）
+    pub(crate) show_line_numbers: bool,
+    /// P46-1：自动换行开关（BC View>自动换行）
+    pub(crate) show_wrap: bool,
+    /// P46-1：文件信息显示开关（BC View>文件信息）
+    pub(crate) show_file_info: bool,
     /// 文件编码（保存回写用）
     encoding: crate::encoding::EncodingKind,
     /// 原文件是否带 BOM
@@ -102,6 +108,9 @@ impl TextEditTab {
             show_search: false,
             show_ws: false,
             show_syntax: false,
+            show_line_numbers: true,
+            show_wrap: false,
+            show_file_info: true,
             encoding: crate::encoding::EncodingKind::Utf8,
             had_bom: false,
             scroll: Vec2::ZERO,
@@ -517,7 +526,8 @@ impl TextEditTab {
                     ui.checkbox(&mut self.show_ws, t(I18nKey::VisibleWs));
                     ui.checkbox(&mut self.show_syntax, t(I18nKey::TextEditSyntax));
                     ui.separator();
-                    if !self.path.is_empty() {
+                    // P46-1：文件信息开关（BC View>文件信息）
+                    if self.show_file_info && !self.path.is_empty() {
                         ui.label(fmt(
                             I18nKey::TextEditStatus,
                             &[
@@ -709,7 +719,11 @@ impl TextEditTab {
             if self.show_syntax {
                 let lines: Vec<&str> = self.content.lines().collect();
                 let max_no = lines.len();
-                let gutter = gutter_width(max_no);
+                let gutter = if self.show_line_numbers {
+                    gutter_width(max_no)
+                } else {
+                    0.0
+                };
                 let fg = text_color(ui);
                 let syn = crate::highlight::syntax_for(&self.path);
                 let out =
@@ -719,11 +733,13 @@ impl TextEditTab {
                                 Vec2::new(ui.available_width().max(200.0), ROW_H),
                                 egui::Sense::hover(),
                             );
-                            paint_line_no(
-                                ui,
-                                Rect::from_min_size(rect.min, vec2(gutter, ROW_H)),
-                                Some(i + 1),
-                            );
+                            if self.show_line_numbers {
+                                paint_line_no(
+                                    ui,
+                                    Rect::from_min_size(rect.min, vec2(gutter, ROW_H)),
+                                    Some(i + 1),
+                                );
+                            }
                             let cell = crate::sideview::Cell {
                                 text: lines[i].to_string(),
                                 segments: vec![(lines[i].to_string(), false)],
@@ -749,9 +765,15 @@ impl TextEditTab {
             let out = egui::ScrollArea::both()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
+                    // P46-1：自动换行开关（BC View>自动换行）——换行时固定可用宽度，否则横向滚动
+                    let dw = if self.show_wrap {
+                        ui.available_width().max(200.0)
+                    } else {
+                        f32::INFINITY
+                    };
                     let edit = egui::TextEdit::multiline(&mut self.content)
                         .font(egui::TextStyle::Monospace)
-                        .desired_width(f32::INFINITY)
+                        .desired_width(dw)
                         .desired_rows(30)
                         .lock_focus(true)
                         .code_editor();

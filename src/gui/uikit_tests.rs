@@ -3247,6 +3247,26 @@ fn p45_5_misc_tab_features() {
     assert_eq!(te.search, "hello", "选区文本应填入查找框");
 }
 
+// ---- P46-1：TextEdit 视图开关（行号/自动换行/文件信息） ----------------
+
+#[test]
+fn textedit_view_switches() {
+    let d = tempdir().unwrap();
+    let tf = write(d.path(), "note.txt", "hello\nworld\n");
+    let mut t = super::TextEditTab::new(&tf);
+    // 默认：行号/文件信息开，自动换行关
+    assert!(t.show_line_numbers && t.show_file_info);
+    assert!(!t.show_wrap);
+    // 切换开关
+    t.show_line_numbers = false;
+    t.show_wrap = true;
+    t.show_file_info = false;
+    assert!(!t.show_line_numbers && !t.show_file_info && t.show_wrap);
+    // 文件信息辅助方法可用
+    assert_eq!(t.char_count(), 12); // "hello\nworld\n" 含 2 个换行符
+    assert_eq!(t.line_count(), 2);
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

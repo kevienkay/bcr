@@ -869,6 +869,54 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
         }
+        // P46-1：TextEdit 视图开关（BC 文本编辑视图菜单 行号/自动换行/文件信息）
+        if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_))) {
+            let mut show_ln = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::TextEdit(tab) => Some(tab.show_line_numbers),
+                    _ => None,
+                })
+                .unwrap_or(true);
+            if ui
+                .checkbox(&mut show_ln, t(I18nKey::MenuLineNumbers))
+                .changed()
+            {
+                if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
+                    tab.show_line_numbers = show_ln;
+                }
+            }
+            let mut show_wrap = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::TextEdit(tab) => Some(tab.show_wrap),
+                    _ => None,
+                })
+                .unwrap_or(false);
+            if ui.checkbox(&mut show_wrap, t(I18nKey::WordWrap)).changed() {
+                if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
+                    tab.show_wrap = show_wrap;
+                }
+            }
+            let mut show_fi = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::TextEdit(tab) => Some(tab.show_file_info),
+                    _ => None,
+                })
+                .unwrap_or(true);
+            if ui
+                .checkbox(&mut show_fi, t(I18nKey::MenuFileInfo))
+                .changed()
+            {
+                if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
+                    tab.show_file_info = show_fi;
+                }
+            }
+        }
         // P45-4：图片比较补齐（BC View 菜单 重置差异偏移/比较元数据，ImageTab 分支）
         if matches!(app.tabs.get(app.active), Some(Tab::Image(_))) {
             if ui.button(t(I18nKey::ImgResetOffset)).clicked() {
