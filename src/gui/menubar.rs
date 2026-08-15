@@ -4,10 +4,10 @@
 //! - 所有入口复用现有 DiffApp 方法（打开会话/弹窗/转发当前标签）
 //! - 语言/主题切换移入 View 菜单（BC 观感：设置类操作收进菜单，不再占工具栏）
 
-use eframe::egui::{self, ThemePreference};
+use eframe::egui::{self};
 
 use super::{DiffApp, Tab};
-use crate::i18n::{self, t, Key as I18nKey};
+use crate::i18n::{t, Key as I18nKey};
 
 /// 顶部菜单栏（BC 式 7 个主菜单）
 pub fn menu_bar(app: &mut DiffApp, ui: &mut egui::Ui) {
@@ -739,56 +739,13 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     });
 }
 
-/// View：主题 / 语言 / 设置 / 统计栏 / 缩略图
+/// View：设置 / 统计栏 / 缩略图（主题与语言切换已移入设置对话框，对标 BC 设置集中管理）
 fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuView), |ui| {
         // P39-2a：设置…（⌘,）集中管理对话框
         if ui.button(t(I18nKey::MenuSettings)).clicked() {
             ui.close();
             app.show_settings = true;
-        }
-        ui.separator();
-        // 主题（系统/深色/浅色）
-        ui.label(t(I18nKey::Theme));
-        let mut pref = app.settings.theme_pref();
-        let mut changed = false;
-        for (key, p) in [
-            (I18nKey::ThemeSystem, ThemePreference::System),
-            (I18nKey::ThemeDark, ThemePreference::Dark),
-            (I18nKey::ThemeLight, ThemePreference::Light),
-        ] {
-            if ui.selectable_label(pref == p, t(key)).clicked() {
-                pref = p;
-                changed = true;
-            }
-        }
-        if changed {
-            app.settings.theme = match pref {
-                ThemePreference::Dark => "dark".to_string(),
-                ThemePreference::Light => "light".to_string(),
-                _ => "system".to_string(),
-            };
-            app.settings.save();
-            ui.ctx().set_theme(pref);
-        }
-        ui.separator();
-        // 语言（10 语言列表）
-        ui.label(t(I18nKey::Language));
-        let mut new_lang = i18n::current();
-        let mut lang_changed = false;
-        for l in i18n::Lang::ALL {
-            if ui
-                .selectable_label(new_lang == l, l.native_name())
-                .clicked()
-            {
-                new_lang = l;
-                lang_changed = true;
-            }
-        }
-        if lang_changed {
-            app.settings.lang = new_lang.code().to_string();
-            app.settings.save();
-            i18n::set_lang(new_lang);
         }
         ui.separator();
         // P39-2e：忽略不重要差异（空白/行尾/大小写一键切换，对标 BC View>Ignore Minor）

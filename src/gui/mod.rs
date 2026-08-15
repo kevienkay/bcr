@@ -1775,6 +1775,51 @@ impl eframe::App for DiffApp {
                         crate::i18n::t(crate::i18n::Key::SettingsIgnoreCrlf),
                     );
                     ui.separator();
+                    // 外观：主题（系统/深色/浅色）——从 View 菜单移入设置（BC 设置集中管理）
+                    ui.horizontal(|ui| {
+                        ui.label(crate::i18n::t(crate::i18n::Key::Theme));
+                        let mut pref = self.settings.theme_pref();
+                        for (key, p) in [
+                            (crate::i18n::Key::ThemeSystem, ThemePreference::System),
+                            (crate::i18n::Key::ThemeDark, ThemePreference::Dark),
+                            (crate::i18n::Key::ThemeLight, ThemePreference::Light),
+                        ] {
+                            if ui
+                                .selectable_label(pref == p, crate::i18n::t(key))
+                                .clicked()
+                            {
+                                pref = p;
+                                self.settings.theme = match p {
+                                    ThemePreference::Dark => "dark".to_string(),
+                                    ThemePreference::Light => "light".to_string(),
+                                    _ => "system".to_string(),
+                                };
+                                self.settings.save();
+                                ui.ctx().set_theme(p);
+                            }
+                        }
+                    });
+                    // 外观：语言（10 语言）——从 View 菜单移入设置
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(crate::i18n::t(crate::i18n::Key::Language));
+                        let mut new_lang = crate::i18n::current();
+                        let mut lang_changed = false;
+                        for l in crate::i18n::Lang::ALL {
+                            if ui
+                                .selectable_label(new_lang == l, l.native_name())
+                                .clicked()
+                            {
+                                new_lang = l;
+                                lang_changed = true;
+                            }
+                        }
+                        if lang_changed {
+                            self.settings.lang = new_lang.code().to_string();
+                            self.settings.save();
+                            crate::i18n::set_lang(new_lang);
+                        }
+                    });
+                    ui.separator();
                     // 编码（空 = 自动检测）
                     ui.horizontal(|ui| {
                         ui.label(crate::i18n::t(crate::i18n::Key::SettingsEncoding));
