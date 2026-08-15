@@ -85,6 +85,8 @@ pub struct TextEditTab {
     pub(crate) file_hits_total: usize,
     /// 跳转行（点击结果后打开文件并滚动）
     jump_to_line: Option<usize>,
+    /// P45-5：编辑选区（char 范围，渲染时从 TextEdit output 捕获，⌘E 使用选择内容查找）
+    pub(crate) sel_range: Option<(usize, usize)>,
 }
 
 impl TextEditTab {
@@ -109,6 +111,7 @@ impl TextEditTab {
             file_hits: Vec::new(),
             file_hits_total: 0,
             jump_to_line: None,
+            sel_range: None,
         };
         t.open(path);
         t
@@ -246,6 +249,22 @@ impl TextEditTab {
             }
         }
         self.show_file_search = true;
+    }
+
+    /// P45-5：使用选择内容进行查找（BC 搜索>使用选择内容进行查找，⌘E；选区文本填入查找框）
+    pub fn find_selection(&mut self) {
+        let Some((a, b)) = self.sel_range else {
+            return;
+        };
+        if a >= b {
+            return;
+        }
+        let text: String = self.content.chars().skip(a).take(b - a).collect();
+        if text.is_empty() {
+            return;
+        }
+        self.search = text;
+        self.show_search = true;
     }
 
     /// P44-7：在多个文件中查找弹窗是否打开（供测试）
@@ -655,6 +674,10 @@ impl TextEditTab {
         if ui.input(|i| i.modifiers.command && i.key_pressed(Key::Y)) {
             self.redo();
         }
+        // P45-5：⌘E 使用选择内容进行查找（BC 搜索菜单）
+        if ui.input(|i| i.modifiers.command && i.key_pressed(Key::E)) {
+            self.find_selection();
+        }
 
         egui::CentralPanel::default().show(ui, |ui| {
             if self.path.is_empty() {
@@ -732,7 +755,14 @@ impl TextEditTab {
                         .desired_rows(30)
                         .lock_focus(true)
                         .code_editor();
-                    ui.add(edit);
+                    let out = edit.show(ui);
+                    // P45-5：捕获选区（char 范围，⌘E 使用选择内容查找）
+                    if let Some(cr) = out.cursor_range {
+                        let a = cr.primary.index.0;
+                        let b = cr.secondary.index.0;
+                        self.sel_range = Some((a.min(b), a.max(b)));
+                    }
+                    out
                 });
             ui.spacing_mut().item_spacing.y = prev;
             let _ = out;

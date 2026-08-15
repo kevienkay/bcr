@@ -3217,6 +3217,36 @@ fn image_tab_reset_offset_and_meta() {
     assert!(!t.show_meta_compare, "再次调用应关闭弹窗");
 }
 
+// ---- P45-5：表格/HEX/补丁/文本编辑补齐（在后面插入列/HEX复制到右边/选择选择内容/⌘E选区查找） ----------------
+
+#[test]
+fn p45_5_misc_tab_features() {
+    let d = tempdir().unwrap();
+    // CsvTab 在后面插入列
+    let l = write(d.path(), "l.csv", "id,name\n1,a\n");
+    let r = write(d.path(), "r.csv", "id,name\n1,A\n");
+    let mut ct = super::CsvTab::new(&l, &r);
+    ct.select_row_col(0, 0);
+    assert!(ct.insert_col_after(), "在后面插入列应成功");
+
+    // PatchTab 选择选择内容（第一个差异块选为选区）
+    let patch = write(
+        d.path(),
+        "p.patch",
+        "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n",
+    );
+    let mut pt = super::PatchTab::new(&patch);
+    pt.select_selection();
+    assert!(pt.selection.is_some(), "补丁应有差异块可选为选区");
+
+    // TextEdit 使用选择内容查找（⌘E）：选区文本填入查找框
+    let tf = write(d.path(), "note.txt", "hello world\n");
+    let mut te = super::TextEditTab::new(&tf);
+    te.sel_range = Some((0, 5));
+    te.find_selection();
+    assert_eq!(te.search, "hello", "选区文本应填入查找框");
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

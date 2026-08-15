@@ -451,10 +451,26 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     tab.insert_row_after();
                 }
             }
+            if ui.button("在后面插入列").clicked() {
+                ui.close();
+                if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+                    tab.insert_col_after();
+                }
+            }
             if ui.button(t(I18nKey::CsvDeleteRow)).clicked() {
                 ui.close();
                 if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
                     tab.delete_row();
+                }
+            }
+        }
+        // P45-5：PatchTab 分支——选择选择内容（BC 编辑菜单，D）
+        if matches!(app.tabs.get(app.active), Some(Tab::Patch(_))) {
+            ui.separator();
+            if ui.button(t(I18nKey::MenuSelectSelection)).clicked() {
+                ui.close();
+                if let Some(Tab::Patch(tab)) = app.tabs.get_mut(app.active) {
+                    tab.select_selection();
                 }
             }
         }
@@ -571,6 +587,15 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         {
             ui.close();
             with_diff_tab(app, |tab| tab.find_selection());
+        }
+        // P45-5：文本编辑 使用选择内容进行查找（BC 搜索>使用选择内容进行查找，⌘E）
+        if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))
+            && ui.button(t(I18nKey::MenuFindSelection)).clicked()
+        {
+            ui.close();
+            if let Some(Tab::TextEdit(t)) = app.tabs.get_mut(app.active) {
+                t.find_selection();
+            }
         }
         // P39-2e：替换…（⇧⌘F）
         if ui.button(t(I18nKey::MenuReplace)).clicked() {

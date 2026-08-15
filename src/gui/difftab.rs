@@ -1863,6 +1863,39 @@ impl DiffTab {
         }
     }
 
+    /// P45-5：HEX 复制到右边（BC 16进制 编辑>复制到右边，⇧⌃→）——当前差异行左侧字节写入右侧文件
+    pub fn hex_copy_to_right(&mut self) {
+        let Some(h) = &self.hex else { return };
+        let Some(idx) = self.hex_diff_pos else { return };
+        let Some(row) = h.rows.get(idx) else { return };
+        if row.left.is_empty() || !row.diff {
+            return;
+        }
+        let (l_path, r_path) = (h.left.clone(), h.right.clone());
+        let start = row.offset;
+        let new_bytes = row.left.clone();
+        let mut data = std::fs::read(&r_path).unwrap_or_default();
+        for (k, b) in new_bytes.iter().enumerate() {
+            let pos = start + k;
+            if pos < data.len() {
+                data[pos] = *b;
+            } else {
+                data.push(*b);
+            }
+        }
+        // A2 保存前自动备份原文件为 <path>.bak
+        let _ = std::fs::copy(&r_path, format!("{r_path}.bak"));
+        match std::fs::write(&r_path, &data) {
+            Ok(()) => {
+                // 重新加载并重建
+                self.load_pair(&l_path, &r_path, self.opts.clone());
+            }
+            Err(e) => {
+                self.error = Some(format!("保存失败: {}", e));
+            }
+        }
+    }
+
     pub fn handle_keys(&mut self, ui: &egui::Ui) {
         let ctrl = ui.input(|i| i.modifiers.command);
         // P32-A2：内联编辑中 Enter 提交 / ESC 取消（优先于搜索 Enter）
@@ -2008,6 +2041,13 @@ impl DiffTab {
         // B7：F5 重新加载
         if ui.input(|i| i.key_pressed(Key::F5)) {
             self.reload();
+        }
+        // P45-5：⇧⌃→ HEX 复制到右边（BC 16进制 编辑>复制到右边）
+        if self.hex.is_some()
+            && ui.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(Key::ArrowRight))
+        {
+            self.hex_copy_to_right();
+            return;
         }
         if ui.input(|i| i.key_pressed(Key::Enter)) {
             self.next_match();

@@ -29,6 +29,8 @@ pub struct PatchTab {
     bookmarks: std::collections::HashMap<u8, usize>,
     /// P37-1k：书签编号输入框
     bookmark_no: String,
+    /// P45-5：选区（rows 行索引范围，选择选择内容用）
+    pub(crate) selection: Option<(usize, usize)>,
 }
 
 impl PatchTab {
@@ -44,6 +46,7 @@ impl PatchTab {
             apply_req: false,
             bookmarks: std::collections::HashMap::new(),
             bookmark_no: String::new(),
+            selection: None,
         };
         t.open(path);
         t
@@ -59,6 +62,30 @@ impl PatchTab {
                 .unwrap_or_else(|| self.path.clone());
             format!("🧩 {}", name)
         }
+    }
+
+    /// P45-5：选择选择内容——把第一个差异块（Delete/Insert/Replace 行连续段）选为选区
+    pub(crate) fn select_selection(&mut self) {
+        if self.rows.is_empty() {
+            self.selection = None;
+            return;
+        }
+        let mut start = None;
+        let mut end = None;
+        for (i, r) in self.rows.iter().enumerate() {
+            if matches!(r.tag, RowTag::Delete | RowTag::Insert | RowTag::Replace) {
+                if start.is_none() {
+                    start = Some(i);
+                }
+                end = Some(i);
+            } else if start.is_some() {
+                break;
+            }
+        }
+        self.selection = match (start, end) {
+            (Some(s), Some(e)) => Some((s, e)),
+            _ => None,
+        };
     }
 
     /// 打开补丁文件并解析
@@ -315,6 +342,8 @@ impl PatchTab {
                         RowTag::Insert => Some(bg_replace_r()),
                         _ => None,
                     };
+                    // P45-5：选区行叠加蓝色高亮（选择选择内容）
+                    let sel_bg = self.selection.is_some_and(|(s, e)| i >= s && i <= e);
                     // P37-1k：书签标记（🔖 + 编号）
                     if let Some(&no) = bookmark_marks.get(&i) {
                         ui.painter().text(
@@ -327,7 +356,12 @@ impl PatchTab {
                     }
                     // 左列
                     let lr = Rect::from_min_size(rect.min, vec2(gutter + half, ROW_H));
-                    paint_bg(ui, lr, bg);
+                    let bg_use = if sel_bg {
+                        Some(Color32::from_rgba_unmultiplied(86, 148, 240, 60))
+                    } else {
+                        bg
+                    };
+                    paint_bg(ui, lr, bg_use);
                     paint_line_no(
                         ui,
                         Rect::from_min_size(rect.min, vec2(gutter, ROW_H)),

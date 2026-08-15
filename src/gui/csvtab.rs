@@ -552,6 +552,43 @@ impl CsvTab {
         ok
     }
 
+    /// P45-5：在后面插入列（两侧同步插入；BC 在后面插入列）
+    pub(crate) fn insert_col_after(&mut self) -> bool {
+        let Some((_, col)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let mut a_t = a.clone_table();
+        let mut b_t = b.clone_table();
+        let at = (col + 1).min(a_t.headers.len());
+        if at <= a_t.headers.len() {
+            a_t.headers.insert(at, format!("col{at}"));
+            for r in &mut a_t.rows {
+                r.insert(at.min(r.len()), String::new());
+            }
+        }
+        let bt = (col + 1).min(b_t.headers.len());
+        if bt <= b_t.headers.len() {
+            b_t.headers.insert(bt, format!("col{bt}"));
+            for r in &mut b_t.rows {
+                r.insert(bt.min(r.len()), String::new());
+            }
+        }
+        let ok = self.write_side(true, &a_t) & self.write_side(false, &b_t);
+        if ok {
+            self.reload();
+        }
+        ok
+    }
+
+    /// P45-5：选中单元格（行对齐索引, 列索引；供菜单/测试）
+    #[cfg(test)]
+    pub(crate) fn select_row_col(&mut self, row: usize, col: usize) {
+        self.selected = Some((row, col));
+    }
+
     /// 修改选中单元格（写回选中侧——有右侧行改右侧，否则改左侧）
     pub(crate) fn set_cell(&mut self, value: String) -> bool {
         let Some((aligned_idx, col)) = self.selected else {
