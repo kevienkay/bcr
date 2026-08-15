@@ -70,6 +70,23 @@ pub struct SearchState {
     pub replace_focus: bool,
 }
 
+/// P46-3：hex 视图过滤（BC 16进制 视图菜单 显示全部/差异/相同，1/2/3）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HexViewFilter {
+    #[default]
+    All,
+    Diff,
+    Same,
+}
+
+/// P46-3：hex 布局（BC 16进制 视图菜单 边并排/上-下）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HexViewLayout {
+    #[default]
+    SideBySide,
+    TopBottom,
+}
+
 /// 二进制文件的十六进制对比数据（任一文件检测为二进制时启用）
 #[derive(Clone)]
 pub struct HexTabData {
@@ -151,6 +168,10 @@ pub struct DiffTab {
     pub hex_edit: Option<HexEditState>,
     /// B4：hex 差异导航位置（hex 差异行索引）
     pub hex_diff_pos: Option<usize>,
+    /// P46-3：hex 视图过滤（显示全部/差异/相同，BC 1/2/3）
+    pub hex_filter: HexViewFilter,
+    /// P46-3：hex 布局（边并排/上-下，BC 布局）
+    pub hex_layout: HexViewLayout,
     /// A8 自动换行（word wrap，BC5 特性）
     pub wrap: bool,
     /// A11 缩略图总览（右侧迷你差异地图，点击跳转）
@@ -241,6 +262,8 @@ impl DiffTab {
             hex: None,
             hex_edit: None,
             hex_diff_pos: None,
+            hex_filter: HexViewFilter::All,
+            hex_layout: HexViewLayout::SideBySide,
             wrap: false,
             show_overview: true,
             h_scroll: 0.0,
@@ -1980,6 +2003,24 @@ impl DiffTab {
             } else {
                 None
             };
+            // P46-3：hex 模式 1/2/3 切换 hex 视图过滤（BC 16进制 显示全部/差异/相同）
+            if self.hex.is_some() {
+                let hf = if ui.input(|i| i.key_pressed(Key::Num1)) {
+                    Some(HexViewFilter::All)
+                } else if ui.input(|i| i.key_pressed(Key::Num2)) {
+                    Some(HexViewFilter::Diff)
+                } else if ui.input(|i| i.key_pressed(Key::Num3)) {
+                    Some(HexViewFilter::Same)
+                } else {
+                    None
+                };
+                if let Some(hf) = hf {
+                    if self.hex_filter != hf {
+                        self.hex_filter = hf;
+                    }
+                    return;
+                }
+            }
             if let Some(vf) = vf {
                 if self.view_filter != vf {
                     self.view_filter = vf;
@@ -2436,6 +2477,18 @@ impl DiffTab {
                 }
                 let fg = text_color(ui);
                 let diff_count = h.rows.iter().filter(|r| r.diff).count();
+                // P46-3：视图过滤（显示全部/差异/相同）+ 布局行高（上-下 = 2 行高）
+                let row_h = match self.hex_layout {
+                    HexViewLayout::SideBySide => HEX_ROW_H,
+                    HexViewLayout::TopBottom => HEX_ROW_H * 2.0,
+                };
+                let visible: Vec<usize> = (0..h.rows.len())
+                    .filter(|&i| match self.hex_filter {
+                        HexViewFilter::All => true,
+                        HexViewFilter::Diff => h.rows[i].diff,
+                        HexViewFilter::Same => !h.rows[i].diff,
+                    })
+                    .collect();
                 let total_w = HEX_TOTAL_W;
                 let mut edit_click: Option<usize> = None;
                 let mut save_req = false;
@@ -2445,14 +2498,11 @@ impl DiffTab {
                 {
                     save_req = true;
                 }
-                let out = super::show_rows_offset(
-                    ui,
-                    h.rows.len(),
-                    HEX_ROW_H,
-                    self.scroll,
-                    |ui, range| {
+                let out =
+                    super::show_rows_offset(ui, visible.len(), row_h, self.scroll, |ui, range| {
                         ui.set_min_width(total_w);
-                        for i in range {
+                        for vi in range {
+                            let i = visible[vi];
                             let row = &h.rows[i];
                             // 正在编辑的行：显示输入框
                             if let Some(he) = &self.hex_edit {
@@ -2503,8 +2553,7 @@ impl DiffTab {
                             }
                             let _ = rect;
                         }
-                    },
-                );
+                    });
                 // 双击 → 打开编辑（默认编辑差异行左侧）
                 if let Some(i) = edit_click {
                     if let Some(h) = &self.hex {

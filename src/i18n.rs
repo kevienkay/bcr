@@ -616,6 +616,16 @@ pub enum Key {
     MenuSyntaxHighlight,
     /// 文件信息（开关）
     MenuFileInfo,
+    /// hex 显示全部（过滤，1）
+    HexFilterAll,
+    /// hex 显示差异（过滤，2）
+    HexFilterDiff,
+    /// hex 显示相同（过滤，3）
+    HexFilterSame,
+    /// hex 边并排布局
+    HexLayoutSideBySide,
+    /// hex 上-下布局
+    HexLayoutTopBottom,
     /// 排序...
     MenuSort,
     /// 升序

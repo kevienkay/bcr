@@ -885,6 +885,34 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                                 }
                             }
                         });
+                    // P46-3：hex 视图过滤（BC 16进制 显示全部/差异/相同，1/2/3）
+                    let cur_f = tab.hex_filter;
+                    ui.label(t(I18nKey::MenuFilter));
+                    for (f, k) in [
+                        (super::difftab::HexViewFilter::All, I18nKey::HexFilterAll),
+                        (super::difftab::HexViewFilter::Diff, I18nKey::HexFilterDiff),
+                        (super::difftab::HexViewFilter::Same, I18nKey::HexFilterSame),
+                    ] {
+                        if ui.selectable_label(cur_f == f, t(k)).clicked() {
+                            tab.hex_filter = f;
+                        }
+                    }
+                    // P46-3：hex 布局（BC 16进制 边并排/上-下）
+                    let cur_l = tab.hex_layout;
+                    for (l, k) in [
+                        (
+                            super::difftab::HexViewLayout::SideBySide,
+                            I18nKey::HexLayoutSideBySide,
+                        ),
+                        (
+                            super::difftab::HexViewLayout::TopBottom,
+                            I18nKey::HexLayoutTopBottom,
+                        ),
+                    ] {
+                        if ui.selectable_label(cur_l == l, t(k)).clicked() {
+                            tab.hex_layout = l;
+                        }
+                    }
                 }
             }
         }

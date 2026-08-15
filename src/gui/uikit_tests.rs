@@ -3297,6 +3297,24 @@ fn patch_tab_diff_navigation() {
     }
 }
 
+// ---- P46-3：hex 视图过滤与布局（1/2/3 + 边并排/上-下） ----------------
+
+#[test]
+fn hex_view_filter_and_layout() {
+    let mut t = super::DiffTab::new();
+    // 默认：全部过滤 + 边并排布局
+    assert_eq!(t.hex_filter, super::difftab::HexViewFilter::All);
+    assert_eq!(t.hex_layout, super::difftab::HexViewLayout::SideBySide);
+    // 切换过滤（1/2/3 语义）
+    t.hex_filter = super::difftab::HexViewFilter::Diff;
+    assert_eq!(t.hex_filter, super::difftab::HexViewFilter::Diff);
+    t.hex_filter = super::difftab::HexViewFilter::Same;
+    assert_eq!(t.hex_filter, super::difftab::HexViewFilter::Same);
+    // 切换布局（边并排/上-下）
+    t.hex_layout = super::difftab::HexViewLayout::TopBottom;
+    assert_eq!(t.hex_layout, super::difftab::HexViewLayout::TopBottom);
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]
