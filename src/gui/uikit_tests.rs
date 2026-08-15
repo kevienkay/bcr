@@ -2975,6 +2975,40 @@ fn diff_tab_align_indent_find_shortcuts() {
     }
 }
 
+// ---- P44-3：文本合并快捷键（⇧←/⇧→ 采用、⌘B/⇧⌘B 顺序合并、⌘⇧⌃↓/↑ 冲突导航） ----------------
+
+#[test]
+fn merge_tab_take_shortcuts() {
+    let d = tempdir().unwrap();
+    let base = write(d.path(), "base.txt", "a\nb\nc\n");
+    let l = write(d.path(), "l.txt", "L1\nb\nc\n");
+    let r = write(d.path(), "r.txt", "R1\nb\nc\n");
+    let mut t = super::MergeTab::new(&base, &l, &r);
+    // 首冲突块未解决 → 定位后采用左边（⇧← 语义）
+    t.next_conflict();
+    t.resolve_current(crate::mergeview::Resolution::Left);
+    assert!(
+        t.view
+            .conflict_block_indices
+            .iter()
+            .all(|&bi| t.view.blocks[bi].resolution != crate::mergeview::Resolution::Auto),
+        "采用左边后冲突应已解决"
+    );
+    // 下一冲突并采用右边（⇧→ 语义）
+    t.next_conflict();
+    t.resolve_current(crate::mergeview::Resolution::Right);
+    // 顺序合并（⌘B 左后右 / ⇧⌘B 右后左）
+    t.resolve_current(crate::mergeview::Resolution::LeftThenRight);
+    t.resolve_current(crate::mergeview::Resolution::RightThenLeft);
+    assert!(
+        t.view.blocks.iter().all(|b| {
+            b.resolution != crate::mergeview::Resolution::Auto
+                || b.kind != crate::mergeview::BlockKind::Conflict
+        }),
+        "全部冲突应采用后不再有 Auto"
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

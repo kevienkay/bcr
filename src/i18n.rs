@@ -578,6 +578,16 @@ pub enum Key {
     MenuIndentDecrease,
     /// 使用选择内容进行查找（⌘E）
     MenuFindSelection,
+    /// 采用左边（冲突，⇧←）
+    MenuTakeLeft,
+    /// 采用中心（冲突）
+    MenuTakeCenter,
+    /// 采用右边（冲突，⇧→）
+    MenuTakeRight,
+    /// 采用左边然后右边（⌘B）
+    MenuTakeLeftThenRight,
+    /// 采用右边然后左边（⇧⌘B）
+    MenuTakeRightThenLeft,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页

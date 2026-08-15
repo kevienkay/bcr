@@ -371,6 +371,41 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 }
             }
         }
+        // P44-3：MergeTab 分支——冲突采用（BC 编辑菜单 冲突子组）
+        if matches!(app.tabs.get(app.active), Some(Tab::Merge(_))) {
+            ui.separator();
+            if ui.button(t(I18nKey::MenuTakeLeft)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| {
+                    tab.resolve_current(crate::mergeview::Resolution::Left)
+                });
+            }
+            if ui.button(t(I18nKey::MenuTakeCenter)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| {
+                    tab.resolve_current(crate::mergeview::Resolution::Base)
+                });
+            }
+            if ui.button(t(I18nKey::MenuTakeRight)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| {
+                    tab.resolve_current(crate::mergeview::Resolution::Right)
+                });
+            }
+            ui.separator();
+            if ui.button(t(I18nKey::MenuTakeLeftThenRight)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| {
+                    tab.resolve_current(crate::mergeview::Resolution::LeftThenRight)
+                });
+            }
+            if ui.button(t(I18nKey::MenuTakeRightThenLeft)).clicked() {
+                ui.close();
+                with_merge_tab(app, |tab| {
+                    tab.resolve_current(crate::mergeview::Resolution::RightThenLeft)
+                });
+            }
+        }
     });
 }
 

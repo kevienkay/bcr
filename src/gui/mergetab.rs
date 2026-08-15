@@ -469,6 +469,38 @@ impl MergeTab {
                 self.next_conflict();
             }
         }
+        // P44-3：BC 冲突采用快捷键（⇧← 采用左边 / ⇧→ 采用右边；⌘B 左后右 / ⇧⌘B 右后左）
+        let cmd = ui.input(|i| i.modifiers.command);
+        let shift = ui.input(|i| i.modifiers.shift);
+        if !cmd && shift && ui.input(|i| i.key_pressed(Key::ArrowLeft)) {
+            self.resolve_current(Resolution::Left);
+        }
+        if !cmd && shift && ui.input(|i| i.key_pressed(Key::ArrowRight)) {
+            self.resolve_current(Resolution::Right);
+        }
+        if cmd && !shift && ui.input(|i| i.key_pressed(Key::B)) {
+            self.resolve_current(Resolution::LeftThenRight);
+        }
+        if cmd && shift && ui.input(|i| i.key_pressed(Key::B)) {
+            self.resolve_current(Resolution::RightThenLeft);
+        }
+        // P44-3：⌘⇧⌃↓/↑ 下一/上一冲突部分（BC 搜索菜单，与 F7/⇧F7 等效）
+        if ui.input(|i| {
+            i.modifiers.command
+                && i.modifiers.shift
+                && i.modifiers.ctrl
+                && i.key_pressed(Key::ArrowDown)
+        }) {
+            self.next_conflict();
+        }
+        if ui.input(|i| {
+            i.modifiers.command
+                && i.modifiers.shift
+                && i.modifiers.ctrl
+                && i.key_pressed(Key::ArrowUp)
+        }) {
+            self.prev_conflict();
+        }
 
         // 底部实时预览窗格（显示保存将得到的结果，未解决冲突高亮）
         if self.show_preview {
