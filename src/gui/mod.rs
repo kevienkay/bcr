@@ -512,7 +512,8 @@ impl DiffApp {
         egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuInfo))
             .collapsible(false)
             .resizable(true)
-            .default_size([440.0, 300.0])
+            .default_size([460.0, 340.0])
+            .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
             .open(&mut keep)
             .show(ui.ctx(), |ui| {
                 let mut rows: Vec<(String, String)> = Vec::new();
@@ -1308,10 +1309,24 @@ impl DiffApp {
                                     .response
                                     .interact(egui::Sense::click())
                                     .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                // P48-1：hover 上浮动效（0~1 动画插值，平滑过渡）+ 阴影加深
+                                let hover_anim = ui
+                                    .ctx()
+                                    .animate_bool(egui::Id::new(("card_hover", i)), resp.hovered());
+                                let lift = 3.0 * hover_anim;
+                                let rect = resp.rect.translate(egui::vec2(0.0, -lift));
+                                // 阴影：hover 时加深的半透明边框（egui 无原生投影，用叠层模拟）
+                                if hover_anim > 0.0 {
+                                    ui.painter().rect_filled(
+                                        rect.translate(egui::vec2(0.0, 2.0 + lift)),
+                                        8.0,
+                                        egui::Color32::from_black_alpha((18.0 * hover_anim) as u8),
+                                    );
+                                }
                                 // P39-2d：hover 高亮描边（BC 卡片 hover 反馈）
                                 if resp.hovered() {
                                     ui.painter().rect_stroke(
-                                        resp.rect,
+                                        rect,
                                         8.0,
                                         egui::Stroke::new(1.5, Color32::from_rgb(86, 148, 240)),
                                         egui::StrokeKind::Outside,
@@ -1510,13 +1525,29 @@ impl eframe::App for DiffApp {
                 let mut drag_req: Option<(usize, usize)> = None;
                 for i in 0..self.tabs.len() {
                     let selected = i == self.active;
-                    // BC 风格：当前标签高亮底色 + 圆角，与普通标签区分
+                    // P48-2：标签用 Frame 包裹——选中标签高亮底色+圆角（BC 观感），普通标签弱色
+                    let tab_bg = if selected {
+                        if ui.visuals().dark_mode {
+                            Color32::from_rgb(52, 58, 70)
+                        } else {
+                            Color32::from_rgb(228, 232, 240)
+                        }
+                    } else {
+                        egui::Color32::TRANSPARENT
+                    };
                     let text = if selected {
                         RichText::new(self.tabs[i].title()).strong()
                     } else {
                         RichText::new(self.tabs[i].title())
                     };
-                    let resp = ui.selectable_label(selected, text);
+                    let resp = egui::Frame::new()
+                        .fill(tab_bg)
+                        .corner_radius(6.0)
+                        .inner_margin(egui::Margin::symmetric(8, 4))
+                        .show(ui, |ui| ui.selectable_label(selected, text))
+                        .response
+                        .interact(egui::Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
                     // B6：拖拽检测（拖拽标签标题区域）
                     if resp.drag_started() {
                         self.drag_tab = Some(i);
@@ -1532,16 +1563,21 @@ impl eframe::App for DiffApp {
                     if resp.clicked() {
                         activate = Some(i);
                     }
-                    // 关闭按钮（hover 变色）
+                    // 关闭按钮（hover 变色；当前标签 hover 时红色提示）
+                    let close_color = if resp.hovered() {
+                        theme::diff_delete()
+                    } else if selected {
+                        ui.visuals().strong_text_color()
+                    } else {
+                        ui.visuals().weak_text_color()
+                    };
                     let close_resp = ui
                         .add(
-                            egui::Button::new(RichText::new("✕").color(if resp.hovered() {
-                                theme::diff_delete()
-                            } else {
-                                ui.visuals().weak_text_color()
-                            }))
-                            .small()
-                            .corner_radius(eframe::egui::CornerRadius::same(theme::CORNER as u8)),
+                            egui::Button::new(RichText::new("✕").color(close_color))
+                                .small()
+                                .corner_radius(eframe::egui::CornerRadius::same(
+                                    theme::CORNER as u8,
+                                )),
                         )
                         .on_hover_text(crate::i18n::t(crate::i18n::Key::CloseTab));
                     if close_resp.clicked() {
@@ -1686,7 +1722,8 @@ impl eframe::App for DiffApp {
             let mut close_req = false;
             egui::Window::new(crate::i18n::t(crate::i18n::Key::SettingsTitle))
                 .collapsible(false)
-                .default_size([440.0, 420.0])
+                .default_size([460.0, 440.0])
+                .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
                 .open(&mut keep)
                 .show(ui.ctx(), |ui| {
                     ui.label(
@@ -1784,7 +1821,8 @@ impl eframe::App for DiffApp {
             let mut save_req = false;
             egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuReport))
                 .collapsible(false)
-                .default_size([420.0, 300.0])
+                .default_size([460.0, 340.0])
+                .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
                 .open(&mut keep)
                 .show(ui.ctx(), |ui| {
                     // 格式选择
@@ -1880,7 +1918,8 @@ impl eframe::App for DiffApp {
             order.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)));
             egui::Window::new("会话中心")
                 .collapsible(false)
-                .default_size([560.0, 400.0])
+                .default_size([560.0, 420.0])
+                .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
                 .open(&mut keep)
                 .show(ui.ctx(), |ui| {
                     ui.horizontal(|ui| {
