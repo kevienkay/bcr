@@ -894,6 +894,56 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             crate::gui::common::SHOW_TOOLBAR.store(tb, std::sync::atomic::Ordering::Relaxed);
         }
         ui.separator();
+        // P45-2：文件夹合并视图过滤（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化，1-7）
+        if matches!(app.tabs.get(app.active), Some(Tab::FolderMerge(_))) {
+            ui.label(t(I18nKey::MenuFilter));
+            let cur = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::FolderMerge(tab) => Some(tab.view_filter),
+                    _ => None,
+                })
+                .unwrap_or(super::foldermergetab::MergeFilter::All);
+            for (f, key) in [
+                (
+                    super::foldermergetab::MergeFilter::All,
+                    I18nKey::MergeFilterAll,
+                ),
+                (
+                    super::foldermergetab::MergeFilter::Changed,
+                    I18nKey::MergeFilterChanged,
+                ),
+                (
+                    super::foldermergetab::MergeFilter::Conflict,
+                    I18nKey::MergeFilterConflict,
+                ),
+                (
+                    super::foldermergetab::MergeFilter::LeftChanged,
+                    I18nKey::MergeFilterLeftChanged,
+                ),
+                (
+                    super::foldermergetab::MergeFilter::RightChanged,
+                    I18nKey::MergeFilterRightChanged,
+                ),
+                (
+                    super::foldermergetab::MergeFilter::Mergeable,
+                    I18nKey::MergeFilterMergeable,
+                ),
+                (
+                    super::foldermergetab::MergeFilter::Unchanged,
+                    I18nKey::MergeFilterUnchanged,
+                ),
+            ] {
+                if ui.selectable_label(cur == f, t(key)).clicked() {
+                    if let Tab::FolderMerge(tab) = &mut app.tabs[app.active] {
+                        tab.view_filter = f;
+                    }
+                    ui.close();
+                }
+            }
+            ui.separator();
+        }
         // P39-2d：细节三模式（BC 视图菜单「细节」）
         ui.label(t(I18nKey::MenuDetail));
         let cur_detail = app.tabs.get(app.active).and_then(|t| match t {

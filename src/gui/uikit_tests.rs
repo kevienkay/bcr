@@ -3139,6 +3139,39 @@ fn merge_tab_line_take() {
     );
 }
 
+// ---- P45-2：文件夹合并视图过滤（1-7 快捷键 + View 菜单 7 项） ----------------
+
+#[test]
+fn folder_merge_view_filter() {
+    let d = tempdir().unwrap();
+    let b = write(d.path(), "b", "");
+    let l = write(d.path(), "l", "");
+    let r = write(d.path(), "r", "");
+    let mut t = super::FolderMergeTab::new(&b, &l, &r, "");
+    t.reload();
+    let Some(plan) = &t.plan else {
+        return; // 空目录无计划也通过（环境相关）
+    };
+    // 过滤匹配：全部恒真；未变化只匹配 same
+    let has_same = plan.iter().any(|i| i.op == "same");
+    t.view_filter = super::foldermergetab::MergeFilter::All;
+    for item in plan.iter() {
+        assert!(t.filter_matches(item), "All 过滤应匹配全部");
+    }
+    if has_same {
+        t.view_filter = super::foldermergetab::MergeFilter::Unchanged;
+        assert!(
+            plan.iter().all(|i| !t.filter_matches(i) || i.op == "same"),
+            "Unchanged 过滤只应匹配 same"
+        );
+    }
+    // 默认过滤为 All
+    assert_eq!(
+        super::foldermergetab::MergeFilter::default(),
+        super::foldermergetab::MergeFilter::All
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

@@ -7,6 +7,19 @@ use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::merge3::{build_merge3_plan, execute_plan, Merge3PlanItem, Merge3Stats};
 use eframe::egui::{self, Color32, RichText};
 
+/// P45-2：文件夹合并视图过滤（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MergeFilter {
+    #[default]
+    All,
+    Changed,
+    Conflict,
+    LeftChanged,
+    RightChanged,
+    Mergeable,
+    Unchanged,
+}
+
 /// 文件夹合并标签页
 pub struct FolderMergeTab {
     pub base: String,
@@ -25,6 +38,8 @@ pub struct FolderMergeTab {
     gen_req: bool,
     /// 执行合并请求
     exec_req: bool,
+    /// P45-2：视图过滤
+    pub(crate) view_filter: MergeFilter,
 }
 
 impl FolderMergeTab {
@@ -41,6 +56,7 @@ impl FolderMergeTab {
             scroll: egui::Vec2::ZERO,
             gen_req: false,
             exec_req: false,
+            view_filter: MergeFilter::All,
         };
         t.reload();
         t
@@ -113,6 +129,19 @@ impl FolderMergeTab {
             Err(e) => {
                 self.error = Some(format!("生成计划失败: {}", e));
             }
+        }
+    }
+
+    /// P45-2：视图过滤匹配（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化）
+    pub(crate) fn filter_matches(&self, item: &Merge3PlanItem) -> bool {
+        match self.view_filter {
+            MergeFilter::All => true,
+            MergeFilter::Changed => item.op != "same",
+            MergeFilter::Conflict => item.conflicted || item.op == "conflict",
+            MergeFilter::LeftChanged => item.from.as_deref() == Some("left"),
+            MergeFilter::RightChanged => item.from.as_deref() == Some("right"),
+            MergeFilter::Mergeable => item.op == "merge",
+            MergeFilter::Unchanged => item.op == "same",
         }
     }
 
@@ -202,6 +231,22 @@ impl FolderMergeTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        // P45-2：快捷键 1-7 视图过滤（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化）
+        if !ui.ctx().egui_wants_keyboard_input() {
+            for (key, f) in [
+                (egui::Key::Num1, MergeFilter::All),
+                (egui::Key::Num2, MergeFilter::Changed),
+                (egui::Key::Num3, MergeFilter::Conflict),
+                (egui::Key::Num4, MergeFilter::LeftChanged),
+                (egui::Key::Num5, MergeFilter::RightChanged),
+                (egui::Key::Num6, MergeFilter::Mergeable),
+                (egui::Key::Num7, MergeFilter::Unchanged),
+            ] {
+                if ui.input(|i| i.key_pressed(key)) {
+                    self.view_filter = f;
+                }
+            }
+        }
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("foldermerge_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
@@ -304,8 +349,13 @@ impl FolderMergeTab {
                 return;
             };
             let fg = ui.visuals().text_color();
-            let out = super::show_rows(ui, plan.len(), super::theme::ROW_H, |ui, range| {
-                for i in range {
+            // P45-2：视图过滤（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化）
+            let visible: Vec<usize> = (0..plan.len())
+                .filter(|&i| self.filter_matches(&plan[i]))
+                .collect();
+            let out = super::show_rows(ui, visible.len(), super::theme::ROW_H, |ui, range| {
+                for vi in range {
+                    let i = visible[vi];
                     let item = &plan[i];
                     let (rect, _) = ui.allocate_exact_size(
                         egui::Vec2::new(ui.available_width().max(300.0), super::theme::ROW_H),

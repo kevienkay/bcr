@@ -630,6 +630,22 @@ pub enum Key {
     MenuTakeCenterLine,
     /// 采用右边行（行级，⌥⇧→）
     MenuTakeRightLine,
+    /// 显示全部（文件夹合并过滤，1）
+    MergeFilterAll,
+    /// 显示更改（2）
+    MergeFilterChanged,
+    /// 显示冲突（3）
+    MergeFilterConflict,
+    /// 显示左边变化（4）
+    MergeFilterLeftChanged,
+    /// 显示右边变化（5）
+    MergeFilterRightChanged,
+    /// 显示可合并（6）
+    MergeFilterMergeable,
+    /// 显示未变化项（7）
+    MergeFilterUnchanged,
+    /// 过滤（视图菜单分组标签）
+    MenuFilter,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页
