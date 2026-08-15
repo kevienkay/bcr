@@ -116,6 +116,16 @@ pub struct TextFile {
 
 /// 字节 → TextFile 的完整检测链
 pub fn decode(data: &[u8]) -> TextFile {
+    // 0.5. RTF 富文本识别（`{\rtf` 头）：提取纯文本，避免控制字当正文显示
+    if let Some(text) = extract_rtf_text(data) {
+        return TextFile {
+            text,
+            encoding: EncodingKind::Utf8,
+            had_bom: false,
+            is_binary: false,
+        };
+    }
+
     // 0. 用户强制指定编码（BCR_ENCODING / --encoding）
     if let Ok(name) = std::env::var("BCR_ENCODING") {
         if !name.is_empty() {
@@ -346,6 +356,210 @@ fn is_readable_text_char(c: char) -> bool {
         return true; // 全角形式
     }
     false
+}
+
+/// RTF 富文本识别与纯文本提取：文件以 `{\\rtf` 开头（可含前导空白）时，
+/// 剥离控制字/分组/转义，返回正文纯文本（按 ansicpg 代码页解码 `\'hh` 字节）。
+/// 非 RTF 返回 None。
+fn extract_rtf_text(data: &[u8]) -> Option<String> {
+    // 跳过前导空白后必须是 {\rtf
+    let start = data.iter().position(|&b| !b.is_ascii_whitespace())?;
+    if !data[start..].starts_with(b"{\\rtf") {
+        return None;
+    }
+    // 代码页（\ansicpgN；缺省 1252）
+    let mut cpg: u32 = 1252;
+    let head = String::from_utf8_lossy(&data[start..data.len().min(start + 512)]);
+    if let Some(p) = head.find("\\ansicpg") {
+        let rest = &head[p + 8..];
+        let num: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if let Ok(n) = num.parse::<u32>() {
+            cpg = n;
+        }
+    }
+
+    let mut out: Vec<u8> = Vec::new();
+    let mut i = start;
+    while i < data.len() {
+        let c = data[i];
+        if c == b'{' {
+            // 目的地分组（\fonttbl / \colortbl / \stylesheet / \info / \* 等）
+            // 内容应整体丢弃，跳过到匹配的 }
+            if let Some(end) = rtf_skip_destination(data, i) {
+                i = end;
+                continue;
+            }
+            i += 1; // 普通分组括号：跳过，内容继续
+            continue;
+        }
+        if c == b'}' {
+            i += 1;
+            continue;
+        }
+        if c != b'\\' {
+            // 普通字节；RTF 源码中的裸换行是排版空白，忽略
+            if c != b'\r' && c != b'\n' {
+                out.push(c);
+            }
+            i += 1;
+            continue;
+        }
+        // 控制字 / 转义
+        i += 1;
+        if i >= data.len() {
+            break;
+        }
+        match data[i] {
+            b'\'' => {
+                // \'hh 十六进制字节
+                if i + 2 < data.len() {
+                    if let (Some(h), Some(l)) = (rtf_hex(data[i + 1]), rtf_hex(data[i + 2])) {
+                        out.push(h * 16 + l);
+                    }
+                    i += 3;
+                } else {
+                    i += 1;
+                }
+            }
+            b'u' => {
+                // \uN 后跟替换字符（一个 ASCII 字符）
+                i += 1;
+                let num_start = i;
+                while i < data.len() && (data[i].is_ascii_digit() || data[i] == b'-') {
+                    i += 1;
+                }
+                if let Some(n) = std::str::from_utf8(&data[num_start..i])
+                    .ok()
+                    .and_then(|s| s.parse::<i32>().ok())
+                {
+                    if n > 0 {
+                        if let Some(ch) = char::from_u32(n as u32) {
+                            let mut buf = [0u8; 4];
+                            out.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                        }
+                    }
+                }
+                // 跳过替换字符
+                if i < data.len() {
+                    i += 1;
+                }
+            }
+            b'\\' => {
+                out.push(b'\\');
+                i += 1;
+            }
+            _ if data[i].is_ascii_alphabetic() => {
+                let wstart = i;
+                while i < data.len() && data[i].is_ascii_alphabetic() {
+                    i += 1;
+                }
+                let word = &data[wstart..i];
+                // 可选参数（-?\d+）
+                while i < data.len() && (data[i].is_ascii_digit() || data[i] == b'-') {
+                    i += 1;
+                }
+                match word {
+                    b"par" | b"line" => out.push(b'\n'),
+                    b"tab" => out.push(b'\t'),
+                    _ => {}
+                }
+                // 控制字后的空格是分隔符，跳过
+                if i < data.len() && data[i] == b' ' {
+                    i += 1;
+                }
+            }
+            _ => i += 1,
+        }
+    }
+
+    let text = match cpg {
+        936 => encoding_rs::GBK.decode(&out).0.into_owned(),
+        65001 | 0 => String::from_utf8_lossy(&out).into_owned(),
+        _ => encoding_rs::WINDOWS_1252.decode(&out).0.into_owned(),
+    };
+    Some(text.trim().to_string())
+}
+
+fn rtf_hex(c: u8) -> Option<u8> {
+    match c {
+        b'0'..=b'9' => Some(c - b'0'),
+        b'a'..=b'f' => Some(c - b'a' + 10),
+        b'A'..=b'F' => Some(c - b'A' + 10),
+        _ => None,
+    }
+}
+
+/// RTF 目的地分组跳过：`{` 后紧跟已知目的地控制字（\fonttbl/\colortbl/
+/// \stylesheet/\info/\* 扩展等）时返回匹配 `}` 的下标（不含），否则 None。
+/// 这些分组（字体表/颜色表/样式表/文档属性）是格式定义，不应作为正文。
+fn rtf_skip_destination(data: &[u8], brace: usize) -> Option<usize> {
+    // 跳过 { 后的空白
+    let mut j = brace + 1;
+    while j < data.len() && data[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    if j >= data.len() || data[j] != b'\\' {
+        return None; // 普通分组（内容为正文）
+    }
+    // \* 扩展目的地
+    let mut k = j + 1;
+    let starred = k < data.len() && data[k] == b'*';
+    if starred {
+        k += 1;
+        // \* 后通常紧跟 \目的地（如 \*\expandedcolortbl）
+        if k < data.len() && data[k] == b'\\' {
+            k += 1;
+        }
+    }
+    if k >= data.len() || !data[k].is_ascii_alphabetic() {
+        return None;
+    }
+    let wstart = k;
+    while k < data.len() && data[k].is_ascii_alphabetic() {
+        k += 1;
+    }
+    let word = &data[wstart..k];
+    let is_dest = starred
+        || matches!(
+            word,
+            b"fonttbl"
+                | b"colortbl"
+                | b"stylesheet"
+                | b"info"
+                | b"datatbl"
+                | b"object"
+                | b"pict"
+                | b"header"
+                | b"footer"
+                | b"footnote"
+                | b"themedata"
+                | b"colorschememapping"
+                | b"latentstyles"
+                | b"listtable"
+                | b"listoverridetable"
+                | b"generator"
+                | b"rsidtbl"
+        );
+    if !is_dest {
+        return None;
+    }
+    // 跳过嵌套括号到匹配的 }
+    let mut depth = 1usize;
+    let mut i = brace + 1;
+    while i < data.len() {
+        match data[i] {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i + 1);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    Some(data.len())
 }
 
 /// 二进制判定：前 8192 字节中 NUL 占比 ≥ 1%，或非文本控制字符占比 ≥ 5%。
@@ -642,5 +856,48 @@ mod repro {
         assert!(!tf.is_binary);
         assert_eq!(tf.text, "这是一行测试文本\n");
         assert_eq!(tf.encoding.name(), "GBK");
+    }
+}
+
+#[cfg(test)]
+mod rtf_tests {
+    use super::*;
+
+    #[test]
+    fn rtf_extracts_plain_text() {
+        // 模拟用户场景：macOS TextEdit 保存的 RTF（\cocoartf2868），正文只有一行
+        let data = br#"{\rtf1\ansi\ansicpg936\cocoartf2868
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 Apikey:tvly-dev-xxxxxxxxxxxx-TEST-ONLY}"#;
+        let tf = decode(data);
+        assert!(!tf.is_binary);
+        assert_eq!(tf.text, "Apikey:tvly-dev-xxxxxxxxxxxx-TEST-ONLY");
+        // 关键：不能有多行（RTF 控制字被剥离）
+        assert_eq!(tf.text.lines().count(), 1);
+    }
+
+    #[test]
+    fn rtf_with_gbk_chinese() {
+        // \ansicpg936 + \'hh GBK 字节：'中文' GBK = D6D0 CEC4
+        let data = br#"{\rtf1\ansi\ansicpg936
+\pard \f0\fs24 \'d6\'d0\'ce\'c4
+\par}"#;
+        let tf = decode(data);
+        assert!(!tf.is_binary);
+        assert_eq!(tf.text, "中文");
+    }
+
+    #[test]
+    fn plain_text_not_treated_as_rtf() {
+        // 普通 txt 不受 RTF 分支影响
+        let data = "hello 世界\n";
+        let tf = decode(data.as_bytes());
+        assert!(!tf.is_binary);
+        assert_eq!(tf.text, "hello 世界\n");
     }
 }
