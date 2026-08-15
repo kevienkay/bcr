@@ -8,6 +8,7 @@
 //!
 //! 运行：cargo test gui::uikit_tests
 
+use crate::compare::FileStatus;
 use crate::gui::csvtab::CsvTab;
 use crate::gui::difftab::{DiffDetailMode, DiffLayout, DiffTab, DiffViewFilter, EditSide};
 use crate::gui::dirtab::{DirTab, ViewFilter};
@@ -2360,6 +2361,88 @@ fn dirtab_expand_collapse_all() {
         tab.borrow().flat.iter().any(|r| r.name == "b.txt"),
         "展开全部后深层文件应恢复"
     );
+}
+
+// ---- P41-2：视图过滤扩展（较新维度 D4） ----------------
+
+#[test]
+fn dirtab_view_filter_left_right_newer() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    // 两侧内容不同 + mtime 不同：左新 / 右新 各一个
+    write(d1.path(), "left_new.txt", "L1");
+    write(d2.path(), "left_new.txt", "L2");
+    write(d1.path(), "right_new.txt", "R2");
+    write(d2.path(), "right_new.txt", "R1");
+    // 手动调整 mtime：left_new.txt 左侧更新；right_new.txt 右侧更新
+    let base = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    for (name, side_newer) in [("left_new.txt", "left"), ("right_new.txt", "right")] {
+        let lp = d1.path().join(name);
+        let rp = d2.path().join(name);
+        let t_new =
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_100);
+        let t_old =
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        let (l_t, r_t) = if side_newer == "left" {
+            (t_new, t_old)
+        } else {
+            (t_old, t_new)
+        };
+        let _ = filetime::set_file_mtime(&lp, filetime::FileTime::from_system_time(l_t));
+        let _ = filetime::set_file_mtime(&rp, filetime::FileTime::from_system_time(r_t));
+    }
+    let _ = base;
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().view_filter = ViewFilter::All;
+    tab.borrow_mut().only_diff = false;
+    tab.borrow_mut().show_same = true;
+    tab.borrow_mut().refresh_sync();
+    // 两个文件都是 Differ（内容不同）
+    {
+        let t = tab.borrow();
+        let r = t.result.as_ref().unwrap();
+        assert_eq!(r.entries.len(), 2, "两个文件都应判 Differ");
+        assert!(
+            r.entries.iter().all(|e| e.status == FileStatus::Differ),
+            "内容不同应判 Differ"
+        );
+    }
+    // 仅左侧较新 → 只剩 left_new.txt
+    tab.borrow_mut().view_filter = ViewFilter::LeftNewer;
+    tab.borrow_mut().rebuild_tree();
+    {
+        let t = tab.borrow();
+        let names: Vec<&str> = t.flat.iter().map(|r| r.name.as_str()).collect();
+        assert!(
+            names.contains(&"left_new.txt"),
+            "LeftNewer 应含 left_new.txt: {:?}",
+            names
+        );
+        assert!(
+            !names.contains(&"right_new.txt"),
+            "LeftNewer 不应含 right_new.txt: {:?}",
+            names
+        );
+    }
+    // 仅右侧较新 → 只剩 right_new.txt
+    tab.borrow_mut().view_filter = ViewFilter::RightNewer;
+    tab.borrow_mut().rebuild_tree();
+    {
+        let t = tab.borrow();
+        let names: Vec<&str> = t.flat.iter().map(|r| r.name.as_str()).collect();
+        assert!(
+            names.contains(&"right_new.txt"),
+            "RightNewer 应含 right_new.txt: {:?}",
+            names
+        );
+        assert!(
+            !names.contains(&"left_new.txt"),
+            "RightNewer 不应含 left_new.txt: {:?}",
+            names
+        );
+    }
 }
 
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------

@@ -673,6 +673,10 @@ pub enum Key {
     MenuExpandAll,
     /// P41-1：折叠全部
     MenuCollapseAll,
+    /// P41-2：仅左侧较新
+    ViewLeftNewer,
+    /// P41-2：仅右侧较新
+    ViewRightNewer,
 
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比

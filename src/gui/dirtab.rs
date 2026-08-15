@@ -23,6 +23,10 @@ pub enum ViewFilter {
     Moved,
     /// 仅相同
     Same,
+    /// P41-2：仅左侧较新（Differ 且 left.mtime > right.mtime）
+    LeftNewer,
+    /// P41-2：仅右侧较新（Differ 且 right.mtime > left.mtime）
+    RightNewer,
 }
 
 /// 目录标签页
@@ -176,6 +180,28 @@ pub(crate) struct FlatRow {
     pub(crate) expanded: bool,
     /// 文件在 entries 中的索引
     pub(crate) entry: Option<usize>,
+}
+
+/// P41-2：左侧较新（Differ 且 left.mtime > right.mtime）
+fn is_left_newer(e: &crate::compare::FileEntry) -> bool {
+    if e.status != FileStatus::Differ {
+        return false;
+    }
+    match (&e.left, &e.right) {
+        (Some(l), Some(r)) => l.mtime > r.mtime,
+        _ => false,
+    }
+}
+
+/// P41-2：右侧较新（Differ 且 right.mtime > left.mtime）
+fn is_right_newer(e: &crate::compare::FileEntry) -> bool {
+    if e.status != FileStatus::Differ {
+        return false;
+    }
+    match (&e.left, &e.right) {
+        (Some(l), Some(r)) => r.mtime > l.mtime,
+        _ => false,
+    }
 }
 
 impl DirTab {
@@ -444,6 +470,12 @@ impl DirTab {
             }
             ViewFilter::Same => {
                 visible.retain(|e| e.status == FileStatus::Same);
+            }
+            ViewFilter::LeftNewer => {
+                visible.retain(|e| is_left_newer(e));
+            }
+            ViewFilter::RightNewer => {
+                visible.retain(|e| is_right_newer(e));
             }
         }
         // P36-D2：右键「排除」的文件（会话级，重建时过滤）
@@ -1099,6 +1131,9 @@ impl DirTab {
                     (ViewFilter::RightOnly, "仅右侧"),
                     (ViewFilter::Moved, "仅移动"),
                     (ViewFilter::Same, "仅相同"),
+                    // P41-2：较新维度（Differ + mtime 比较）
+                    (ViewFilter::LeftNewer, t(I18nKey::ViewLeftNewer)),
+                    (ViewFilter::RightNewer, t(I18nKey::ViewRightNewer)),
                 ];
                 let cur = self.view_filter;
                 egui::ComboBox::from_id_salt("dir_view_filter")

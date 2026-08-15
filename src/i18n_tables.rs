@@ -327,6 +327,8 @@ i18n_table!(t_zh,
     MenuCompareUsing => "比较文件使用…",
     MenuExpandAll => "展开全部",
     MenuCollapseAll => "折叠全部",
+    ViewLeftNewer => "仅左侧较新",
+    ViewRightNewer => "仅右侧较新",
 );
 i18n_table!(t_en,
     // CLI
@@ -626,6 +628,8 @@ i18n_table!(t_en,
     MenuCompareUsing => "Compare Using…",
     MenuExpandAll => "Expand All",
     MenuCollapseAll => "Collapse All",
+    ViewLeftNewer => "Left Newer Only",
+    ViewRightNewer => "Right Newer Only",
 );
 i18n_table!(t_de,
     // CLI
@@ -925,6 +929,8 @@ i18n_table!(t_de,
     MenuCompareUsing => "Vergleichen mit…",
     MenuExpandAll => "Alle erweitern",
     MenuCollapseAll => "Alle einklappen",
+    ViewLeftNewer => "Nur links neuer",
+    ViewRightNewer => "Nur rechts neuer",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1224,6 +1230,8 @@ i18n_table!(t_ja,
     MenuCompareUsing => "比較に使用…",
     MenuExpandAll => "すべて展開",
     MenuCollapseAll => "すべて折りたたむ",
+    ViewLeftNewer => "左のみ新しい",
+    ViewRightNewer => "右のみ新しい",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1523,6 +1531,8 @@ i18n_table!(t_ko,
     MenuCompareUsing => "다음을 사용하여 비교…",
     MenuExpandAll => "모두 펼치기",
     MenuCollapseAll => "모두 접기",
+    ViewLeftNewer => "왼쪽만 최신",
+    ViewRightNewer => "오른쪽만 최신",
 );
 i18n_table!(t_es,
     // CLI
@@ -1822,6 +1832,8 @@ i18n_table!(t_es,
     MenuCompareUsing => "Comparar usando…",
     MenuExpandAll => "Expandir todo",
     MenuCollapseAll => "Contraer todo",
+    ViewLeftNewer => "Solo más nuevo a la izquierda",
+    ViewRightNewer => "Solo más nuevo a la derecha",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2121,6 +2133,8 @@ i18n_table!(t_pt,
     MenuCompareUsing => "Comparar usando…",
     MenuExpandAll => "Expandir tudo",
     MenuCollapseAll => "Recolher tudo",
+    ViewLeftNewer => "Somente esquerda mais nova",
+    ViewRightNewer => "Somente direita mais nova",
 );
 i18n_table!(t_ar,
     // CLI
@@ -2420,6 +2434,8 @@ i18n_table!(t_ar,
     MenuCompareUsing => "قارن باستخدام…",
     MenuExpandAll => "توسيع الكل",
     MenuCollapseAll => "طي الكل",
+    ViewLeftNewer => "الأحدث يسارًا فقط",
+    ViewRightNewer => "الأحدث يمينًا فقط",
 );
 i18n_table!(t_ru,
     // CLI
@@ -2719,6 +2735,8 @@ i18n_table!(t_ru,
     MenuCompareUsing => "Сравнить с помощью…",
     MenuExpandAll => "Развернуть все",
     MenuCollapseAll => "Свернуть все",
+    ViewLeftNewer => "Только левее новее",
+    ViewRightNewer => "Только правее новее",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3018,4 +3036,6 @@ i18n_table!(t_fr,
     MenuCompareUsing => "Comparer avec…",
     MenuExpandAll => "Tout développer",
     MenuCollapseAll => "Tout réduire",
+    ViewLeftNewer => "Seulement plus récent à gauche",
+    ViewRightNewer => "Seulement plus récent à droite",
 );
