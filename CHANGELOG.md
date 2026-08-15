@@ -6,6 +6,12 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### 修复（P50）
+
+- **打开文件对比多选**：`打开文件对比` 改 `pick_files()` 多选——选 1 个立即显示在左侧（不再等两个文件才创建标签），选 2 个走双文件逻辑（图片/CSV 专用标签），≥3 个走三路合并（与拖拽一致）
+- **浅色主题差异文字对比度**：差异前景色函数带 `dark` 参数，浅色主题改用深红/深绿/深黄（白底可读），深色主题保持原柔和色调；DiffTab/MergeTab/状态徽标全部调用点同步
+- **拖放逻辑注入验证 3 例**：kittest 注入 `dropped_files`（自定义 `DroppedFile` 测试桩）验证单文件→DiffTab 左侧加载、双文件→左右加载、双目录→DirTab；确认 `handle_dropped` 逻辑层正常（真实拖放失败如复现属平台层，需真机验证）
+
 ### 自动化补强（P49）
 
 - **P27 契约扩展新视图**：`bcr diff --json`（diff.v1，行号区间 ops）；`bcr hex --json`（hex.v1，差异行 + 统计）；新子命令 `bcr media`（media.v1，媒体字段级差异，CLI 与 GUI 同源自研容器头解析）
