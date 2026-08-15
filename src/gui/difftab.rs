@@ -305,6 +305,24 @@ impl DiffTab {
     }
 
     pub fn load_pair(&mut self, l: &str, r: &str, opts: ViewOptions) {
+        // 拖入单文件/空路径守卫：只有一侧时转单侧加载（BC 语义：先导入的显示在左边）
+        if l.is_empty() && r.is_empty() {
+            self.opts = opts;
+            self.left = None;
+            self.right = None;
+            self.rows.clear();
+            self.hex = None;
+            self.error = None;
+            return;
+        }
+        if r.is_empty() {
+            self.load_left(l, opts);
+            return;
+        }
+        if l.is_empty() {
+            self.load_right(r, opts);
+            return;
+        }
         self.opts = opts;
         // 任一文件为二进制 → 切换 hex 对比视图
         if is_binary_file(l) || is_binary_file(r) {

@@ -3550,3 +3550,27 @@ fn dropped_two_dirs_creates_dir_tab() {
         }
     }
 }
+
+#[test]
+fn dropped_single_file_into_empty_diff_tab_keeps_left_only() {
+    let d = tempdir().unwrap();
+    let f = write(d.path(), "a.txt", "hello\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    // 已有空 DiffTab 会话（欢迎页点「文本对比」卡片后）再拖入单文件
+    app.borrow_mut().add_tab(super::Tab::Diff(DiffTab::new()));
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().handle_dropped(ui.ctx()));
+    inject_dropped(&mut h, &[f]);
+    h.run_steps(2);
+    {
+        let b = app.borrow();
+        assert_eq!(b.tabs.len(), 1, "拖入单文件不应新建标签");
+        match &b.tabs[0] {
+            super::Tab::Diff(t) => {
+                assert!(t.left.is_some(), "左侧应加载");
+                assert!(t.right.is_none(), "右侧应留空（不读空路径）");
+                assert!(t.error.is_none(), "不应报 ENOENT 读取错误");
+            }
+            _ => panic!("应为 DiffTab"),
+        }
+    }
+}

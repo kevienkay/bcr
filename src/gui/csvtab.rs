@@ -156,6 +156,10 @@ impl CsvTab {
         }
         let delim = self.delim_char();
         let mut read = |p: &str| -> Option<String> {
+            // 空路径（拖入单文件/空会话）不读文件，视为空内容
+            if p.is_empty() {
+                return Some(String::new());
+            }
             match std::fs::read_to_string(p) {
                 Ok(s) => Some(s),
                 Err(e) => {

@@ -62,10 +62,18 @@ impl MergeTab {
             self.error = None;
             return;
         }
+        // 空路径（拖入单文件/空会话）不读文件，视为空内容
+        let read = |p: &str| -> std::io::Result<String> {
+            if p.is_empty() {
+                Ok(String::new())
+            } else {
+                std::fs::read_to_string(p)
+            }
+        };
         let (b, l, r) = match (
-            std::fs::read_to_string(&self.base_path),
-            std::fs::read_to_string(&self.left_path),
-            std::fs::read_to_string(&self.right_path),
+            read(&self.base_path),
+            read(&self.left_path),
+            read(&self.right_path),
         ) {
             (Ok(b), Ok(l), Ok(r)) => (b, l, r),
             (Err(e), _, _) => {
