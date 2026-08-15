@@ -88,6 +88,8 @@ pub struct DirTab {
     pub(crate) show_filter_panel: bool,
     /// B2 扩展名过滤（逗号分隔，如 "txt,rs"；空 = 全部）
     pub(crate) ext_filter: String,
+    /// P44-7：文件名过滤（查找文件名，空 = 全部；不区分大小写）
+    pub(crate) find_name: String,
     /// B2 大小下限（字节，空 = 不限）
     pub(crate) min_size: String,
     /// B2 大小上限（字节，空 = 不限）
@@ -248,6 +250,7 @@ impl DirTab {
             leave_alone: HashSet::new(),
             show_filter_panel: false,
             ext_filter: String::new(),
+            find_name: String::new(),
             min_size: String::new(),
             max_size: String::new(),
             mtime_from: String::new(),
@@ -592,6 +595,17 @@ impl DirTab {
                     .map(|s| s.to_string_lossy().to_lowercase())
                     .unwrap_or_default();
                 exts.iter().any(|x| x == &ext)
+            });
+        }
+        // P44-7：文件名过滤（查找文件名，不区分大小写；匹配文件基名）
+        let find = self.find_name.trim().to_lowercase();
+        if !find.is_empty() {
+            visible.retain(|e| {
+                let base = std::path::Path::new(&e.rel)
+                    .file_name()
+                    .map(|s| s.to_string_lossy().to_lowercase())
+                    .unwrap_or_default();
+                base.contains(&find)
             });
         }
         // B2：大小范围（字节；取存在侧的最大 size）
@@ -1769,6 +1783,19 @@ impl DirTab {
                     );
                     if r.changed() {
                         self.ext_filter = ext;
+                        self.rebuild_tree();
+                    }
+                    ui.add_space(6.0);
+                    // P44-7：查找文件名（⌘F，BC 文件夹比较搜索菜单）
+                    ui.label("查找文件名");
+                    let mut fnm = self.find_name.clone();
+                    let fr = ui.add(
+                        egui::TextEdit::singleline(&mut fnm)
+                            .hint_text("readme")
+                            .desired_width(200.0),
+                    );
+                    if fr.changed() {
+                        self.find_name = fnm;
                         self.rebuild_tree();
                     }
                     ui.add_space(6.0);

@@ -384,6 +384,8 @@ i18n_table!(t_zh,
     MenuSort => "排序...",
     SortAscending => "升序",
     SortDescending => "降序",
+    MenuFindFileName => "查找文件名...",
+    MenuFindInFiles => "在多个文件中查找...",
 );
 i18n_table!(t_en,
     // CLI
@@ -740,6 +742,8 @@ i18n_table!(t_en,
     MenuSort => "Sort...",
     SortAscending => "Ascending",
     SortDescending => "Descending",
+    MenuFindFileName => "Find File Name...",
+    MenuFindInFiles => "Find in Files...",
 );
 i18n_table!(t_de,
     // CLI
@@ -1096,6 +1100,8 @@ i18n_table!(t_de,
     MenuSort => "Sortieren...",
     SortAscending => "Aufsteigend",
     SortDescending => "Absteigend",
+    MenuFindFileName => "Dateinamen suchen...",
+    MenuFindInFiles => "In Dateien suchen...",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1452,6 +1458,8 @@ i18n_table!(t_ja,
     MenuSort => "並べ替え...",
     SortAscending => "昇順",
     SortDescending => "降順",
+    MenuFindFileName => "ファイル名を検索...",
+    MenuFindInFiles => "複数のファイルで検索...",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1808,6 +1816,8 @@ i18n_table!(t_ko,
     MenuSort => "정렬...",
     SortAscending => "오름차순",
     SortDescending => "내림차순",
+    MenuFindFileName => "파일 이름 찾기...",
+    MenuFindInFiles => "여러 파일에서 찾기...",
 );
 i18n_table!(t_es,
     // CLI
@@ -2164,6 +2174,8 @@ i18n_table!(t_es,
     MenuSort => "Ordenar...",
     SortAscending => "Ascendente",
     SortDescending => "Descendente",
+    MenuFindFileName => "Buscar nombre de archivo...",
+    MenuFindInFiles => "Buscar en archivos...",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2520,6 +2532,8 @@ i18n_table!(t_pt,
     MenuSort => "Ordenar...",
     SortAscending => "Crescente",
     SortDescending => "Decrescente",
+    MenuFindFileName => "Procurar nome de arquivo...",
+    MenuFindInFiles => "Procurar em arquivos...",
 );
 i18n_table!(t_ar,
     // CLI
@@ -2876,6 +2890,8 @@ i18n_table!(t_ar,
     MenuSort => "فرز...",
     SortAscending => "تصاعدي",
     SortDescending => "تنازلي",
+    MenuFindFileName => "البحث عن اسم ملف...",
+    MenuFindInFiles => "البحث في الملفات...",
 );
 i18n_table!(t_ru,
     // CLI
@@ -3232,6 +3248,8 @@ i18n_table!(t_ru,
     MenuSort => "Сортировать...",
     SortAscending => "По возрастанию",
     SortDescending => "По убыванию",
+    MenuFindFileName => "Искать имя файла...",
+    MenuFindInFiles => "Искать в файлах...",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3588,4 +3606,6 @@ i18n_table!(t_fr,
     MenuSort => "Trier...",
     SortAscending => "Croissant",
     SortDescending => "Décroissant",
+    MenuFindFileName => "Rechercher un nom de fichier...",
+    MenuFindInFiles => "Rechercher dans les fichiers...",
 );

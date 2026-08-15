@@ -3085,6 +3085,31 @@ fn diff_view_switches_and_csv_shortcuts() {
     assert!(!ct.sort_label().is_empty());
 }
 
+// ---- P44-7：搜索补齐（DirTab 查找文件名 ⌘F；TextEdit 在多个文件中查找 ⌘⇧F） ----------------
+
+#[test]
+fn dirtab_find_name_and_textedit_find_in_files() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l", "");
+    let r = write(d.path(), "r", "");
+    let mut t = super::DirTab::new(&l, &r);
+    t.refresh_sync();
+    assert!(t.find_name.is_empty());
+    // 查找文件名过滤（不区分大小写）
+    t.find_name = "README".to_string();
+    t.rebuild_tree();
+    assert!(t.find_name == "README");
+    // 清空恢复
+    t.find_name.clear();
+    t.rebuild_tree();
+
+    // TextEdit 在多个文件中查找（默认当前文件目录）
+    let tf = write(d.path(), "note.txt", "hello\n");
+    let mut te = super::TextEditTab::new(&tf);
+    te.open_find_in_files();
+    assert!(te.find_in_files_open(), "在多个文件中查找弹窗应打开");
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

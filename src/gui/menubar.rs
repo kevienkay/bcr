@@ -618,6 +618,13 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         // P43-3：差异文件导航（DirTab 分支，BC 搜索菜单 下一个/上一个差异文件）
         if matches!(app.tabs.get(app.active), Some(Tab::Dir(_))) {
+            // P44-7：查找文件名（⌘F，BC 文件夹比较搜索菜单）
+            if ui.button(t(I18nKey::MenuFindFileName)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.show_filter_panel = true;
+                }
+            }
             if ui.button(t(I18nKey::MenuNextDiffFile)).clicked() {
                 ui.close();
                 if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
@@ -629,6 +636,15 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
                     t.prev_diff_file();
                 }
+            }
+        }
+        // P44-7：在多个文件中查找（⌘⇧F，BC 文本编辑搜索菜单；已有 P37-1n 弹窗补入口）
+        if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))
+            && ui.button(t(I18nKey::MenuFindInFiles)).clicked()
+        {
+            ui.close();
+            if let Some(Tab::TextEdit(t)) = app.tabs.get_mut(app.active) {
+                t.open_find_in_files();
             }
         }
     });

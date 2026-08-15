@@ -620,6 +620,10 @@ pub enum Key {
     SortAscending,
     /// 降序
     SortDescending,
+    /// 查找文件名...（DirTab ⌘F）
+    MenuFindFileName,
+    /// 在多个文件中查找...（TextEdit ⌘⇧F）
+    MenuFindInFiles,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页

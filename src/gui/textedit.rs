@@ -238,6 +238,22 @@ impl TextEditTab {
         }
     }
 
+    /// P44-7：在多个文件中查找（BC 搜索>在多个文件中查找，⌘⇧F；默认当前文件所在目录）
+    pub(crate) fn open_find_in_files(&mut self) {
+        if self.search_dir.is_empty() {
+            if let Some(p) = std::path::Path::new(&self.path).parent() {
+                self.search_dir = p.to_string_lossy().to_string();
+            }
+        }
+        self.show_file_search = true;
+    }
+
+    /// P44-7：在多个文件中查找弹窗是否打开（供测试）
+    #[cfg(test)]
+    pub(crate) fn find_in_files_open(&self) -> bool {
+        self.show_file_search
+    }
+
     /// 压入撤销快照（修改内容前调用）
     fn push_snapshot(&mut self) {
         self.undo_stack.push(self.content.clone());
