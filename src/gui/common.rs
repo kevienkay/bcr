@@ -8,6 +8,22 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Vec2};
 /// P42-4：工具栏全局开关（BC View>工具栏，各 tab 工具栏渲染统一受控）
 pub static SHOW_TOOLBAR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
+/// P50：统一对话框——不透明背景（修复 Frame::new() 默认 fill 透明导致的透视）
+/// + 屏幕居中显示（BC 风格弹窗）。所有弹窗应经此创建。
+pub fn dialog_window<'a>(
+    ctx: &egui::Context,
+    title: impl Into<egui::WidgetText>,
+) -> egui::Window<'a> {
+    let style = ctx.style_of(ctx.theme());
+    egui::Window::new(title)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .frame(
+            egui::Frame::window(&style)
+                .inner_margin(egui::Margin::same(14))
+                .fill(style.visuals.window_fill()),
+        )
+}
+
 /// 虚拟化行高
 pub const ROW_H: f32 = super::theme::ROW_H;
 /// 等宽字体大小

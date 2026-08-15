@@ -1116,7 +1116,7 @@ impl CsvTab {
             let mut keep = true;
             let mut apply = false;
             let mut close_req = false;
-            egui::Window::new(t(I18nKey::CsvEditCell))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::CsvEditCell))
                 .collapsible(false)
                 .resizable(false)
                 .open(&mut keep)
@@ -1155,7 +1155,7 @@ impl CsvTab {
             // 当前排序列（默认第一列升序）
             let mut col_name = self.sort_label();
             let mut asc = self.sort.map(|s| s.asc).unwrap_or(true);
-            egui::Window::new(t(I18nKey::MenuSort))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::MenuSort))
                 .collapsible(false)
                 .resizable(false)
                 .open(&mut keep)

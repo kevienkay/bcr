@@ -546,7 +546,7 @@ impl TextEditTab {
         } // textedit_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
-            egui::Window::new(t(I18nKey::Hint))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::Hint))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
@@ -596,7 +596,7 @@ impl TextEditTab {
             let mut run_search = false;
             let mut close_req = false;
             let mut open_hit: Option<(String, usize)> = None;
-            egui::Window::new("在文件中查找")
+            crate::gui::common::dialog_window(ui.ctx(), "在文件中查找")
                 .collapsible(false)
                 .resizable(true)
                 .default_size(Vec2::new(560.0, 320.0))

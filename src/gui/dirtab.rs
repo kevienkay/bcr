@@ -1590,7 +1590,7 @@ impl DirTab {
         } // dirtab_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
-            egui::Window::new(t(I18nKey::Hint))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::Hint))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
@@ -1608,7 +1608,7 @@ impl DirTab {
             let mut keep = true;
             let mut open_req: Option<(String, String)> = None;
             let mut close_req = false;
-            egui::Window::new("手动对齐")
+            crate::gui::common::dialog_window(ui.ctx(), "手动对齐")
                 .collapsible(false)
                 .resizable(true)
                 .default_size([520.0, 360.0])
@@ -1705,7 +1705,7 @@ impl DirTab {
             let mut keep = true;
             let mut do_rename = false;
             let mut cancel_req = false;
-            egui::Window::new("重命名 (F2)")
+            crate::gui::common::dialog_window(ui.ctx(), "重命名 (F2)")
                 .collapsible(false)
                 .resizable(false)
                 .default_size([320.0, 100.0])
@@ -1764,7 +1764,7 @@ impl DirTab {
         // 同步面板（右侧浮窗）
         if self.show_sync {
             let mut keep = true;
-            egui::Window::new("同步")
+            crate::gui::common::dialog_window(ui.ctx(), "同步")
                 .collapsible(false)
                 .resizable(true)
                 .default_size([420.0, 420.0])

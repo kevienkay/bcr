@@ -408,7 +408,7 @@ impl PatchTab {
         } // patch_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
-            egui::Window::new(t(I18nKey::Hint))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::Hint))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
@@ -419,7 +419,7 @@ impl PatchTab {
                 });
         }
         if let Some(m) = self.msg.clone() {
-            egui::Window::new(t(I18nKey::Hint))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::Hint))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {

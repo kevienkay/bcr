@@ -554,7 +554,7 @@ impl ImageTab {
         if self.show_meta_compare {
             let mut keep = true;
             let mut close_req = false;
-            egui::Window::new(t(I18nKey::ImgCompareMeta))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::ImgCompareMeta))
                 .collapsible(false)
                 .resizable(true)
                 .default_size([420.0, 200.0])

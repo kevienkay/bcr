@@ -509,11 +509,10 @@ impl DiffApp {
             return;
         }
         let mut keep = true;
-        egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuInfo))
+        crate::gui::common::dialog_window(ui.ctx(), crate::i18n::t(crate::i18n::Key::MenuInfo))
             .collapsible(false)
             .resizable(true)
             .default_size([460.0, 340.0])
-            .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
             .open(&mut keep)
             .show(ui.ctx(), |ui| {
                 let mut rows: Vec<(String, String)> = Vec::new();
@@ -621,61 +620,62 @@ impl DiffApp {
         // 图例弹窗：差异色/状态徽标含义说明
         if self.show_legend {
             let mut keep = true;
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuLegend))
-                .collapsible(false)
-                .default_size([360.0, 300.0])
-                .open(&mut keep)
-                .show(ui.ctx(), |ui| {
-                    ui.label(RichText::new("文本比较").strong());
-                    for (color, label) in [
-                        (
-                            theme::diff_delete(ui.visuals().dark_mode),
-                            "删除 / 仅左侧（淡红）",
-                        ),
-                        (
-                            theme::diff_insert(ui.visuals().dark_mode),
-                            "插入 / 仅右侧（淡绿）",
-                        ),
-                        (theme::diff_modify(ui.visuals().dark_mode), "修改（淡黄）"),
-                        (
-                            theme::current_bar(ui.visuals().dark_mode),
-                            "当前差异行竖条（蓝）",
-                        ),
-                    ] {
-                        ui.horizontal(|ui| {
-                            let (rect, _) = ui.allocate_exact_size(
-                                egui::Vec2::new(14.0, 14.0),
-                                egui::Sense::hover(),
-                            );
-                            ui.painter().rect_filled(rect, 2.0, color);
-                            ui.label(label);
-                        });
-                    }
-                    ui.separator();
-                    ui.label(RichText::new("文件夹比较状态徽标").strong());
-                    for (letter, color, label) in [
-                        ('S', ui.visuals().text_color(), "相同"),
-                        ('C', Color32::from_rgb(246, 39, 16), "差异"),
-                        ('L', Color32::from_rgb(83, 44, 199), "仅左侧"),
-                        ('R', Color32::from_rgb(83, 44, 199), "仅右侧"),
-                        ('M', Color32::from_rgb(246, 39, 16), "移动/重命名"),
-                    ] {
-                        ui.horizontal(|ui| {
-                            let badge_c = ui.cursor().min + egui::vec2(9.0, 10.0);
-                            ui.painter()
-                                .circle_filled(badge_c, 9.0, color.gamma_multiply(0.25));
-                            ui.painter().text(
-                                badge_c,
-                                egui::Align2::CENTER_CENTER,
-                                letter.to_string(),
-                                egui::FontId::monospace(12.0),
-                                color,
-                            );
-                            ui.add_space(16.0);
-                            ui.label(label);
-                        });
-                    }
-                });
+            crate::gui::common::dialog_window(
+                ui.ctx(),
+                crate::i18n::t(crate::i18n::Key::MenuLegend),
+            )
+            .collapsible(false)
+            .default_size([360.0, 300.0])
+            .open(&mut keep)
+            .show(ui.ctx(), |ui| {
+                ui.label(RichText::new("文本比较").strong());
+                for (color, label) in [
+                    (
+                        theme::diff_delete(ui.visuals().dark_mode),
+                        "删除 / 仅左侧（淡红）",
+                    ),
+                    (
+                        theme::diff_insert(ui.visuals().dark_mode),
+                        "插入 / 仅右侧（淡绿）",
+                    ),
+                    (theme::diff_modify(ui.visuals().dark_mode), "修改（淡黄）"),
+                    (
+                        theme::current_bar(ui.visuals().dark_mode),
+                        "当前差异行竖条（蓝）",
+                    ),
+                ] {
+                    ui.horizontal(|ui| {
+                        let (rect, _) = ui
+                            .allocate_exact_size(egui::Vec2::new(14.0, 14.0), egui::Sense::hover());
+                        ui.painter().rect_filled(rect, 2.0, color);
+                        ui.label(label);
+                    });
+                }
+                ui.separator();
+                ui.label(RichText::new("文件夹比较状态徽标").strong());
+                for (letter, color, label) in [
+                    ('S', ui.visuals().text_color(), "相同"),
+                    ('C', Color32::from_rgb(246, 39, 16), "差异"),
+                    ('L', Color32::from_rgb(83, 44, 199), "仅左侧"),
+                    ('R', Color32::from_rgb(83, 44, 199), "仅右侧"),
+                    ('M', Color32::from_rgb(246, 39, 16), "移动/重命名"),
+                ] {
+                    ui.horizontal(|ui| {
+                        let badge_c = ui.cursor().min + egui::vec2(9.0, 10.0);
+                        ui.painter()
+                            .circle_filled(badge_c, 9.0, color.gamma_multiply(0.25));
+                        ui.painter().text(
+                            badge_c,
+                            egui::Align2::CENTER_CENTER,
+                            letter.to_string(),
+                            egui::FontId::monospace(12.0),
+                            color,
+                        );
+                        ui.add_space(16.0);
+                        ui.label(label);
+                    });
+                }
+            });
             if !keep {
                 self.show_legend = false;
             }
@@ -683,7 +683,7 @@ impl DiffApp {
         // 日志面板：最近操作/错误记录
         if self.show_log {
             let mut keep = true;
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuLog))
+            crate::gui::common::dialog_window(ui.ctx(), crate::i18n::t(crate::i18n::Key::MenuLog))
                 .collapsible(false)
                 .resizable(true)
                 .default_size([520.0, 280.0])
@@ -1643,7 +1643,7 @@ impl eframe::App for DiffApp {
                 "\tcmd = bcr merge \"$BASE\" \"$LOCAL\" \"$REMOTE\" -o \"$MERGED\"",
             ];
             let config = lines.join("\n");
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::GitTitle))
+            crate::gui::common::dialog_window(ui.ctx(), crate::i18n::t(crate::i18n::Key::GitTitle))
                 .collapsible(false)
                 .default_size([560.0, 340.0])
                 .show(ui.ctx(), |ui| {
@@ -1680,42 +1680,45 @@ impl eframe::App for DiffApp {
         // P33：快捷键说明弹窗（Help > Shortcuts）
         if self.show_shortcuts {
             let mut keep = true;
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuShortcuts))
-                .collapsible(false)
-                .default_size([420.0, 380.0])
-                .open(&mut keep)
-                .show(ui.ctx(), |ui| {
-                    let rows = [
-                        ("F5", "重新加载 / 刷新"),
-                        ("F6", "下一差异"),
-                        ("F7", "上一差异"),
-                        ("F2", "重命名（目录对比）"),
-                        ("⌘,", "设置"),
-                        ("⌘T", "新建标签页"),
-                        ("⌘N", "新建窗口"),
-                        ("⌘L", "转到行"),
-                        ("⌘G / ⇧⌘G", "查找下一 / 上一"),
-                        ("⌥⌘S", "保存会话"),
-                        ("⌥⌘C", "清除会话"),
-                        ("1 / 2 / 3", "显示全部 / 差异 / 相同"),
-                        ("⌘F", "查找"),
-                        ("⌘Z", "撤销"),
-                        ("⌘Y", "重做"),
-                        ("⌘W", "关闭当前标签"),
-                        ("Enter", "打开选中文件对比（目录）"),
-                        ("双击行", "内联编辑"),
-                    ];
-                    egui::Grid::new("shortcut_grid")
-                        .num_columns(2)
-                        .striped(true)
-                        .show(ui, |ui| {
-                            for (k, v) in rows {
-                                ui.monospace(k);
-                                ui.label(v);
-                                ui.end_row();
-                            }
-                        });
-                });
+            crate::gui::common::dialog_window(
+                ui.ctx(),
+                crate::i18n::t(crate::i18n::Key::MenuShortcuts),
+            )
+            .collapsible(false)
+            .default_size([420.0, 380.0])
+            .open(&mut keep)
+            .show(ui.ctx(), |ui| {
+                let rows = [
+                    ("F5", "重新加载 / 刷新"),
+                    ("F6", "下一差异"),
+                    ("F7", "上一差异"),
+                    ("F2", "重命名（目录对比）"),
+                    ("⌘,", "设置"),
+                    ("⌘T", "新建标签页"),
+                    ("⌘N", "新建窗口"),
+                    ("⌘L", "转到行"),
+                    ("⌘G / ⇧⌘G", "查找下一 / 上一"),
+                    ("⌥⌘S", "保存会话"),
+                    ("⌥⌘C", "清除会话"),
+                    ("1 / 2 / 3", "显示全部 / 差异 / 相同"),
+                    ("⌘F", "查找"),
+                    ("⌘Z", "撤销"),
+                    ("⌘Y", "重做"),
+                    ("⌘W", "关闭当前标签"),
+                    ("Enter", "打开选中文件对比（目录）"),
+                    ("双击行", "内联编辑"),
+                ];
+                egui::Grid::new("shortcut_grid")
+                    .num_columns(2)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        for (k, v) in rows {
+                            ui.monospace(k);
+                            ui.label(v);
+                            ui.end_row();
+                        }
+                    });
+            });
             if !keep {
                 self.show_shortcuts = false;
             }
@@ -1724,22 +1727,25 @@ impl eframe::App for DiffApp {
         // P33：关于弹窗（Help > About）
         if self.show_about {
             let mut keep = true;
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuAbout))
-                .collapsible(false)
-                .default_size([400.0, 260.0])
-                .open(&mut keep)
-                .show(ui.ctx(), |ui| {
-                    ui.label(RichText::new("bcr").size(26.0).strong());
-                    ui.label(format!(
-                        "v{} — Beyond Compare 风格文件对比工具",
-                        env!("CARGO_PKG_VERSION")
-                    ));
-                    ui.separator();
-                    ui.label("Rust + egui 实现");
-                    ui.label("文本 / 文件夹 / 三路合并 / 图片 / CSV / Hex 对比");
-                    ui.add_space(6.0);
-                    ui.label("GitHub: github.com/kevienkay/bcr");
-                });
+            crate::gui::common::dialog_window(
+                ui.ctx(),
+                crate::i18n::t(crate::i18n::Key::MenuAbout),
+            )
+            .collapsible(false)
+            .default_size([400.0, 260.0])
+            .open(&mut keep)
+            .show(ui.ctx(), |ui| {
+                ui.label(RichText::new("bcr").size(26.0).strong());
+                ui.label(format!(
+                    "v{} — Beyond Compare 风格文件对比工具",
+                    env!("CARGO_PKG_VERSION")
+                ));
+                ui.separator();
+                ui.label("Rust + egui 实现");
+                ui.label("文本 / 文件夹 / 三路合并 / 图片 / CSV / Hex 对比");
+                ui.add_space(6.0);
+                ui.label("GitHub: github.com/kevienkay/bcr");
+            });
             if !keep {
                 self.show_about = false;
             }
@@ -1749,141 +1755,143 @@ impl eframe::App for DiffApp {
         if self.show_settings {
             let mut keep = true;
             let mut close_req = false;
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::SettingsTitle))
-                .collapsible(false)
-                .default_size([460.0, 440.0])
-                .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
-                .open(&mut keep)
-                .show(ui.ctx(), |ui| {
-                    ui.label(
-                        RichText::new(crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs)).strong(),
-                    );
-                    ui.checkbox(
-                        &mut self.settings.ignore_whitespace,
-                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs),
-                    );
-                    ui.checkbox(
-                        &mut self.settings.ignore_trailing,
-                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreTrail),
-                    );
-                    ui.checkbox(
-                        &mut self.settings.ignore_case,
-                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreCase),
-                    );
-                    ui.checkbox(
-                        &mut self.settings.ignore_crlf,
-                        crate::i18n::t(crate::i18n::Key::SettingsIgnoreCrlf),
-                    );
-                    ui.separator();
-                    // 外观：主题（系统/深色/浅色）——从 View 菜单移入设置（BC 设置集中管理）
-                    ui.horizontal(|ui| {
-                        ui.label(crate::i18n::t(crate::i18n::Key::Theme));
-                        let mut pref = self.settings.theme_pref();
-                        for (key, p) in [
-                            (crate::i18n::Key::ThemeSystem, ThemePreference::System),
-                            (crate::i18n::Key::ThemeDark, ThemePreference::Dark),
-                            (crate::i18n::Key::ThemeLight, ThemePreference::Light),
-                        ] {
-                            if ui
-                                .selectable_label(pref == p, crate::i18n::t(key))
-                                .clicked()
-                            {
-                                pref = p;
-                                self.settings.theme = match p {
-                                    ThemePreference::Dark => "dark".to_string(),
-                                    ThemePreference::Light => "light".to_string(),
-                                    _ => "system".to_string(),
-                                };
-                                self.settings.save();
-                                ui.ctx().set_theme(p);
-                            }
-                        }
-                    });
-                    // 外观：语言（10 语言）——从 View 菜单移入设置
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(crate::i18n::t(crate::i18n::Key::Language));
-                        let mut new_lang = crate::i18n::current();
-                        let mut lang_changed = false;
-                        for l in crate::i18n::Lang::ALL {
-                            if ui
-                                .selectable_label(new_lang == l, l.native_name())
-                                .clicked()
-                            {
-                                new_lang = l;
-                                lang_changed = true;
-                            }
-                        }
-                        if lang_changed {
-                            self.settings.lang = new_lang.code().to_string();
-                            self.settings.save();
-                            crate::i18n::set_lang(new_lang);
-                        }
-                    });
-                    ui.separator();
-                    // 编码（空 = 自动检测）
-                    ui.horizontal(|ui| {
-                        ui.label(crate::i18n::t(crate::i18n::Key::SettingsEncoding));
-                        let encodings = [
-                            "",
-                            "utf-8",
-                            "utf-16le",
-                            "utf-16be",
-                            "utf-32le",
-                            "utf-32be",
-                            "gbk",
-                            "big5",
-                            "shift_jis",
-                        ];
-                        let mut sel = self.settings.encoding.clone();
-                        egui::ComboBox::from_id_salt("settings_encoding")
-                            .selected_text(if sel.is_empty() {
-                                "auto".to_string()
-                            } else {
-                                sel.clone()
-                            })
-                            .show_ui(ui, |ui| {
-                                for e in encodings {
-                                    let label = if e.is_empty() {
-                                        "auto".to_string()
-                                    } else {
-                                        e.to_string()
-                                    };
-                                    if ui.selectable_label(sel == e, label).clicked() {
-                                        sel = e.to_string();
-                                    }
-                                }
-                            });
-                        self.settings.encoding = sel;
-                    });
-                    // 大小上限（MB，0 = 默认）
-                    ui.horizontal(|ui| {
-                        ui.label(crate::i18n::t(crate::i18n::Key::SettingsMaxSize));
-                        let mut mb = self.settings.max_size.unwrap_or(0);
+            crate::gui::common::dialog_window(
+                ui.ctx(),
+                crate::i18n::t(crate::i18n::Key::SettingsTitle),
+            )
+            .collapsible(false)
+            .default_size([460.0, 440.0])
+            .open(&mut keep)
+            .show(ui.ctx(), |ui| {
+                ui.label(
+                    RichText::new(crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs)).strong(),
+                );
+                ui.checkbox(
+                    &mut self.settings.ignore_whitespace,
+                    crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs),
+                );
+                ui.checkbox(
+                    &mut self.settings.ignore_trailing,
+                    crate::i18n::t(crate::i18n::Key::SettingsIgnoreTrail),
+                );
+                ui.checkbox(
+                    &mut self.settings.ignore_case,
+                    crate::i18n::t(crate::i18n::Key::SettingsIgnoreCase),
+                );
+                ui.checkbox(
+                    &mut self.settings.ignore_crlf,
+                    crate::i18n::t(crate::i18n::Key::SettingsIgnoreCrlf),
+                );
+                ui.separator();
+                // 外观：主题（系统/深色/浅色）——从 View 菜单移入设置（BC 设置集中管理）
+                ui.horizontal(|ui| {
+                    ui.label(crate::i18n::t(crate::i18n::Key::Theme));
+                    let mut pref = self.settings.theme_pref();
+                    for (key, p) in [
+                        (crate::i18n::Key::ThemeSystem, ThemePreference::System),
+                        (crate::i18n::Key::ThemeDark, ThemePreference::Dark),
+                        (crate::i18n::Key::ThemeLight, ThemePreference::Light),
+                    ] {
                         if ui
-                            .add(egui::DragValue::new(&mut mb).range(0..=65536))
-                            .changed()
+                            .selectable_label(pref == p, crate::i18n::t(key))
+                            .clicked()
                         {
-                            self.settings.max_size = if mb == 0 { None } else { Some(mb) };
-                        }
-                        ui.label("MB");
-                    });
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        let save = ui
-                            .button(crate::i18n::t(crate::i18n::Key::MenuSaveSession))
-                            .on_hover_text("保存设置到 ~/.bcr-gui.toml")
-                            .clicked();
-                        if save {
-                            // 持久化 + 写入环境变量（编码 / 大小上限对标 CLI 行为）
-                            apply_settings_env(&self.settings);
+                            pref = p;
+                            self.settings.theme = match p {
+                                ThemePreference::Dark => "dark".to_string(),
+                                ThemePreference::Light => "light".to_string(),
+                                _ => "system".to_string(),
+                            };
                             self.settings.save();
-                            close_req = true;
+                            ui.ctx().set_theme(p);
                         }
-                        if ui.button(crate::i18n::t(crate::i18n::Key::Close)).clicked() {
-                            close_req = true;
-                        }
-                    });
+                    }
                 });
+                // 外观：语言（10 语言）——从 View 菜单移入设置
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(crate::i18n::t(crate::i18n::Key::Language));
+                    let mut new_lang = crate::i18n::current();
+                    let mut lang_changed = false;
+                    for l in crate::i18n::Lang::ALL {
+                        if ui
+                            .selectable_label(new_lang == l, l.native_name())
+                            .clicked()
+                        {
+                            new_lang = l;
+                            lang_changed = true;
+                        }
+                    }
+                    if lang_changed {
+                        self.settings.lang = new_lang.code().to_string();
+                        self.settings.save();
+                        crate::i18n::set_lang(new_lang);
+                    }
+                });
+                ui.separator();
+                // 编码（空 = 自动检测）
+                ui.horizontal(|ui| {
+                    ui.label(crate::i18n::t(crate::i18n::Key::SettingsEncoding));
+                    let encodings = [
+                        "",
+                        "utf-8",
+                        "utf-16le",
+                        "utf-16be",
+                        "utf-32le",
+                        "utf-32be",
+                        "gbk",
+                        "big5",
+                        "shift_jis",
+                    ];
+                    let mut sel = self.settings.encoding.clone();
+                    egui::ComboBox::from_id_salt("settings_encoding")
+                        .selected_text(if sel.is_empty() {
+                            "auto".to_string()
+                        } else {
+                            sel.clone()
+                        })
+                        .show_ui(ui, |ui| {
+                            for e in encodings {
+                                let label = if e.is_empty() {
+                                    "auto".to_string()
+                                } else {
+                                    e.to_string()
+                                };
+                                if ui.selectable_label(sel == e, label).clicked() {
+                                    sel = e.to_string();
+                                }
+                            }
+                        });
+                    self.settings.encoding = sel;
+                });
+                // 大小上限（MB，0 = 默认）
+                ui.horizontal(|ui| {
+                    ui.label(crate::i18n::t(crate::i18n::Key::SettingsMaxSize));
+                    let mut mb = self.settings.max_size.unwrap_or(0);
+                    if ui
+                        .add(egui::DragValue::new(&mut mb).range(0..=65536))
+                        .changed()
+                    {
+                        self.settings.max_size = if mb == 0 { None } else { Some(mb) };
+                    }
+                    ui.label("MB");
+                });
+                ui.separator();
+                ui.horizontal(|ui| {
+                    let save = ui
+                        .button(crate::i18n::t(crate::i18n::Key::MenuSaveSession))
+                        .on_hover_text("保存设置到 ~/.bcr-gui.toml")
+                        .clicked();
+                    if save {
+                        // 持久化 + 写入环境变量（编码 / 大小上限对标 CLI 行为）
+                        apply_settings_env(&self.settings);
+                        self.settings.save();
+                        close_req = true;
+                    }
+                    if ui.button(crate::i18n::t(crate::i18n::Key::Close)).clicked() {
+                        close_req = true;
+                    }
+                });
+            });
             if close_req || !keep {
                 self.show_settings = false;
             }
@@ -1893,54 +1901,56 @@ impl eframe::App for DiffApp {
         if self.show_report {
             let mut keep = true;
             let mut save_req = false;
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuReport))
-                .collapsible(false)
-                .default_size([460.0, 340.0])
-                .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
-                .open(&mut keep)
-                .show(ui.ctx(), |ui| {
-                    // 格式选择
-                    ui.horizontal(|ui| {
-                        ui.label("格式:");
-                        for (fmt, label) in [("txt", "文本 TXT"), ("html", "HTML")] {
-                            if ui
-                                .selectable_label(self.report_format == fmt, label)
-                                .clicked()
-                            {
-                                self.report_format = fmt.to_string();
-                            }
+            crate::gui::common::dialog_window(
+                ui.ctx(),
+                crate::i18n::t(crate::i18n::Key::MenuReport),
+            )
+            .collapsible(false)
+            .default_size([460.0, 340.0])
+            .open(&mut keep)
+            .show(ui.ctx(), |ui| {
+                // 格式选择
+                ui.horizontal(|ui| {
+                    ui.label("格式:");
+                    for (fmt, label) in [("txt", "文本 TXT"), ("html", "HTML")] {
+                        if ui
+                            .selectable_label(self.report_format == fmt, label)
+                            .clicked()
+                        {
+                            self.report_format = fmt.to_string();
                         }
-                    });
-                    ui.separator();
-                    // 报告预览（当前标签）
-                    let preview = match self.tabs.get(self.active) {
-                        Some(Tab::Dir(t)) => t
-                            .result
-                            .as_ref()
-                            .map(|r| crate::report::render_txt(&t.left, &t.right, r)),
-                        Some(Tab::Diff(t)) => Some(diff_report_preview(t)),
-                        _ => None,
-                    };
-                    match preview {
-                        Some(p) => {
-                            egui::ScrollArea::vertical()
-                                .max_height(160.0)
-                                .show(ui, |ui| {
-                                    ui.monospace(p);
-                                });
-                            ui.separator();
-                            if ui.button("💾 保存报告…").clicked() {
-                                save_req = true;
-                            }
-                        }
-                        None => {
-                            ui.label("当前标签暂不支持报告（需目录对比结果或文本对比）");
-                        }
-                    }
-                    if let Some(err) = &self.report_error {
-                        ui.label(RichText::new(err).color(theme::error_color()).size(12.0));
                     }
                 });
+                ui.separator();
+                // 报告预览（当前标签）
+                let preview = match self.tabs.get(self.active) {
+                    Some(Tab::Dir(t)) => t
+                        .result
+                        .as_ref()
+                        .map(|r| crate::report::render_txt(&t.left, &t.right, r)),
+                    Some(Tab::Diff(t)) => Some(diff_report_preview(t)),
+                    _ => None,
+                };
+                match preview {
+                    Some(p) => {
+                        egui::ScrollArea::vertical()
+                            .max_height(160.0)
+                            .show(ui, |ui| {
+                                ui.monospace(p);
+                            });
+                        ui.separator();
+                        if ui.button("💾 保存报告…").clicked() {
+                            save_req = true;
+                        }
+                    }
+                    None => {
+                        ui.label("当前标签暂不支持报告（需目录对比结果或文本对比）");
+                    }
+                }
+                if let Some(err) = &self.report_error {
+                    ui.label(RichText::new(err).color(theme::error_color()).size(12.0));
+                }
+            });
             if save_req {
                 self.save_current_report();
             }
@@ -1958,19 +1968,22 @@ impl eframe::App for DiffApp {
         // P33：外部工具说明弹窗（Tools > 外部工具）
         if self.show_external {
             let mut keep = true;
-            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuExternal))
-                .collapsible(false)
-                .default_size([520.0, 300.0])
-                .open(&mut keep)
-                .show(ui.ctx(), |ui| {
-                    ui.label("通过 ~/.bcr-external.toml 把扩展名映射到第三方对比工具：");
-                    ui.monospace("[external]");
-                    ui.monospace(".docx = \"wps\"");
-                    ui.monospace(".pdf  = \"open\"");
-                    ui.add_space(6.0);
-                    ui.label("CLI 用法：bcr diff a.docx b.docx --external");
-                    ui.label("GUI 目录对比：右键文件 → 外部工具对比");
-                });
+            crate::gui::common::dialog_window(
+                ui.ctx(),
+                crate::i18n::t(crate::i18n::Key::MenuExternal),
+            )
+            .collapsible(false)
+            .default_size([520.0, 300.0])
+            .open(&mut keep)
+            .show(ui.ctx(), |ui| {
+                ui.label("通过 ~/.bcr-external.toml 把扩展名映射到第三方对比工具：");
+                ui.monospace("[external]");
+                ui.monospace(".docx = \"wps\"");
+                ui.monospace(".pdf  = \"open\"");
+                ui.add_space(6.0);
+                ui.label("CLI 用法：bcr diff a.docx b.docx --external");
+                ui.label("GUI 目录对比：右键文件 → 外部工具对比");
+            });
             if !keep {
                 self.show_external = false;
             }
@@ -1990,10 +2003,9 @@ impl eframe::App for DiffApp {
                 .map(|(n, s)| (n.clone(), s.favorite, s.last_used.unwrap_or(0)))
                 .collect();
             order.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)));
-            egui::Window::new("会话中心")
+            crate::gui::common::dialog_window(ui.ctx(), "会话中心")
                 .collapsible(false)
                 .default_size([560.0, 420.0])
-                .frame(egui::Frame::new().inner_margin(egui::Margin::same(14)))
                 .open(&mut keep)
                 .show(ui.ctx(), |ui| {
                     ui.horizontal(|ui| {
@@ -2143,7 +2155,7 @@ impl eframe::App for DiffApp {
             let mut delete_req: Option<String> = None;
             let mut selected_name: Option<String> = None;
             let profiles = crate::profile::load();
-            egui::Window::new("比较规则 (Profile)")
+            crate::gui::common::dialog_window(ui.ctx(), "比较规则 (Profile)")
                 .collapsible(false)
                 .resizable(true)
                 .default_size([560.0, 440.0])
@@ -2313,7 +2325,7 @@ impl eframe::App for DiffApp {
             let mut close_req = false;
             let mut scan_left = false;
             let mut scan_right = false;
-            egui::Window::new("☁ 云盘/远程目录")
+            crate::gui::common::dialog_window(ui.ctx(), "☁ 云盘/远程目录")
                 .collapsible(false)
                 .resizable(true)
                 .default_size([620.0, 460.0])

@@ -2382,7 +2382,7 @@ impl DiffTab {
 
         // 错误弹窗
         if let Some(err) = self.error.clone() {
-            egui::Window::new(t(I18nKey::Error))
+            crate::gui::common::dialog_window(ui.ctx(), t(I18nKey::Error))
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
@@ -2401,7 +2401,7 @@ impl DiffTab {
             };
             let mut close = false;
             let mut save = false;
-            egui::Window::new(format!("编辑{side_name}: {}", edit.path))
+            crate::gui::common::dialog_window(ui.ctx(), format!("编辑{side_name}: {}", edit.path))
                 .default_size([800.0, 600.0])
                 .resizable(true)
                 .show(ui.ctx(), |ui| {
