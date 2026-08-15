@@ -276,6 +276,28 @@ impl DiffApp {
         }
     }
 
+    /// P44-1：选择下一个标签页（⌘] / 窗口菜单，BC Window>选择下一个标签页）
+    fn next_tab(&mut self) {
+        if self.tabs.is_empty() {
+            return;
+        }
+        self.active = (self.active + 1) % self.tabs.len();
+    }
+
+    /// P44-1：选择上一个标签页（⌘[ / 窗口菜单，BC Window>选择上一个标签页）
+    fn prev_tab(&mut self) {
+        if self.tabs.is_empty() {
+            return;
+        }
+        self.active = (self.active + self.tabs.len() - 1) % self.tabs.len();
+    }
+
+    /// P44-1：关闭所有窗口（BC Window>关闭所有窗口）——单窗口应用 = 清空所有标签回主页
+    fn close_all_tabs(&mut self) {
+        self.tabs.clear();
+        self.active = 0;
+    }
+
     /// B6：标签拖拽重排（from → to，保持 active 指向同一标签）
     fn move_tab(&mut self, from: usize, to: usize) {
         if from == to || from >= self.tabs.len() || to > self.tabs.len() {
@@ -572,6 +594,25 @@ impl DiffApp {
         }
         if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
             self.clear_active_tab();
+        }
+        // P44-1：⌘] / ⌘[ 选择下一/上一标签页（BC Window>选择下一个标签页）
+        if !self.tabs.is_empty() && cmd && ui.input(|i| i.key_pressed(egui::Key::CloseBracket)) {
+            self.next_tab();
+        }
+        if !self.tabs.is_empty() && cmd && ui.input(|i| i.key_pressed(egui::Key::OpenBracket)) {
+            self.prev_tab();
+        }
+        // P44-1：⌘⇧W 关闭所有窗口（清空所有标签回主页）
+        if !self.tabs.is_empty()
+            && cmd
+            && ui.input(|i| i.modifiers.shift && i.key_pressed(egui::Key::W))
+        {
+            self.close_all_tabs();
+        }
+        // P44-1：⌘M 最小化窗口（BC Window>最小化）
+        if cmd && ui.input(|i| i.key_pressed(egui::Key::M)) {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
         }
     }
 

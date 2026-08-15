@@ -570,6 +570,16 @@ pub enum Key {
     MenuTools,
     /// 帮助
     MenuHelp,
+    /// 窗口
+    MenuWindow,
+    /// 选择下一个标签页
+    MenuNextTab,
+    /// 选择上一个标签页
+    MenuPrevTab,
+    /// 最小化
+    MenuMinimize,
+    /// 关闭所有窗口
+    MenuCloseAllWindows,
     /// 新建文本对比
     MenuNewText,
     /// 新建文件夹对比

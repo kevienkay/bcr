@@ -2913,6 +2913,31 @@ fn mediatab_compares_wav_metadata() {
     assert!(!t.title().is_empty());
 }
 
+// ---- P44-1：窗口菜单 + 标签切换 ----------------
+
+#[test]
+fn window_tab_switch_and_close_all() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    {
+        let mut app = app.borrow_mut();
+        app.open_empty_diff();
+        app.open_empty_dir();
+        app.open_empty_csv();
+        assert_eq!(app.tabs.len(), 3);
+        assert_eq!(app.active, 2);
+        // ⌘] 下一标签：2 → 0（循环）
+        app.next_tab();
+        assert_eq!(app.active, 0);
+        // ⌘[ 上一标签：0 → 2（循环）
+        app.prev_tab();
+        assert_eq!(app.active, 2);
+        // ⌘⇧W 关闭所有窗口：清空回主页
+        app.close_all_tabs();
+        assert!(app.tabs.is_empty());
+        assert_eq!(app.active, 0);
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

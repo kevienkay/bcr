@@ -18,6 +18,7 @@ pub fn menu_bar(app: &mut DiffApp, ui: &mut egui::Ui) {
         search_menu(app, ui);
         view_menu(app, ui);
         tools_menu(app, ui);
+        window_menu(app, ui);
         help_menu(app, ui);
     });
 }
@@ -774,6 +775,36 @@ fn tools_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if ui.button(t(I18nKey::MenuOpenCloud)).clicked() {
             ui.close();
             app.show_cloud = true;
+        }
+    });
+}
+
+/// P44-1：窗口菜单（BC Window>选择下一/上一标签页/最小化/关闭所有窗口）
+fn window_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
+    ui.menu_button(t(I18nKey::MenuWindow), |ui| {
+        if app.tabs.is_empty() {
+            ui.add_enabled(false, egui::Button::new(t(I18nKey::MenuNextTab)));
+            ui.add_enabled(false, egui::Button::new(t(I18nKey::MenuPrevTab)));
+            ui.add_enabled(false, egui::Button::new(t(I18nKey::MenuCloseAllWindows)));
+            return;
+        }
+        if ui.button(t(I18nKey::MenuNextTab)).clicked() {
+            ui.close();
+            app.next_tab();
+        }
+        if ui.button(t(I18nKey::MenuPrevTab)).clicked() {
+            ui.close();
+            app.prev_tab();
+        }
+        ui.separator();
+        if ui.button(t(I18nKey::MenuMinimize)).clicked() {
+            ui.close();
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
+        if ui.button(t(I18nKey::MenuCloseAllWindows)).clicked() {
+            ui.close();
+            app.close_all_tabs();
         }
     });
 }
