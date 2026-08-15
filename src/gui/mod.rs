@@ -221,6 +221,8 @@ struct DiffApp {
     show_log: bool,
     /// P42-4：日志条目（最近 N 条操作/错误）
     log: Vec<String>,
+    /// P43-5：信息弹窗开关
+    show_info: bool,
 }
 
 impl DiffApp {
@@ -250,6 +252,7 @@ impl DiffApp {
             show_legend: false,
             show_log: false,
             log: Vec::new(),
+            show_info: false,
         }
     }
 
@@ -333,6 +336,112 @@ impl DiffApp {
         if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
             // ⌥⌘C 清除会话（重置当前标签为空会话）
             self.clear_active_tab();
+        }
+    }
+
+    /// P43-5：信息弹窗（BC Session>信息，当前标签统计；抽为独立方法便于测试）
+    fn info_window(&mut self, ui: &mut egui::Ui) {
+        if !self.show_info {
+            return;
+        }
+        let mut keep = true;
+        egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuInfo))
+            .collapsible(false)
+            .resizable(true)
+            .default_size([440.0, 300.0])
+            .open(&mut keep)
+            .show(ui.ctx(), |ui| {
+                let mut rows: Vec<(String, String)> = Vec::new();
+                match self.tabs.get(self.active) {
+                    Some(Tab::Diff(t)) => {
+                        rows.push(("视图".to_string(), "文本对比".to_string()));
+                        if let Some(l) = &t.left {
+                            rows.push(("左侧文件".to_string(), l.path.clone()));
+                            rows.push(("编码".to_string(), l.encoding.name().to_string()));
+                            rows.push(("大小".to_string(), format!("{} bytes", l.size)));
+                        }
+                        if let Some(r) = &t.right {
+                            rows.push(("右侧文件".to_string(), r.path.clone()));
+                        }
+                        rows.push(("行数".to_string(), t.rows.len().to_string()));
+                        rows.push(("差异行".to_string(), t.diff_rows.len().to_string()));
+                        rows.push(("相同".to_string(), t.stats.equal.to_string()));
+                        rows.push(("仅左".to_string(), t.stats.delete.to_string()));
+                        rows.push(("仅右".to_string(), t.stats.insert.to_string()));
+                        rows.push(("修改".to_string(), t.stats.replace.to_string()));
+                    }
+                    Some(Tab::Dir(t)) => {
+                        rows.push(("视图".to_string(), "文件夹对比".to_string()));
+                        rows.push(("左侧目录".to_string(), t.left.clone()));
+                        rows.push(("右侧目录".to_string(), t.right.clone()));
+                        if let Some(r) = &t.result {
+                            let s = r.stats;
+                            rows.push(("条目".to_string(), r.entries.len().to_string()));
+                            rows.push(("相同".to_string(), s.same.to_string()));
+                            rows.push(("仅左".to_string(), s.left_only.to_string()));
+                            rows.push(("仅右".to_string(), s.right_only.to_string()));
+                            rows.push(("差异".to_string(), s.differ.to_string()));
+                            rows.push(("移动".to_string(), s.moved.to_string()));
+                        } else {
+                            rows.push(("状态".to_string(), "未比较".to_string()));
+                        }
+                    }
+                    Some(Tab::Merge(t)) => {
+                        rows.push(("视图".to_string(), "三路合并".to_string()));
+                        rows.push(("BASE".to_string(), t.base_path.clone()));
+                        rows.push(("左侧".to_string(), t.left_path.clone()));
+                        rows.push(("右侧".to_string(), t.right_path.clone()));
+                        rows.push(("冲突".to_string(), t.view.conflicts.to_string()));
+                        rows.push(("行数".to_string(), t.view.blocks.len().to_string()));
+                    }
+                    Some(Tab::Image(t)) => {
+                        rows.push(("视图".to_string(), "图片对比".to_string()));
+                        rows.push(("左侧".to_string(), t.left.clone()));
+                        rows.push(("右侧".to_string(), t.right.clone()));
+                        if let Some(p) = &t.pair {
+                            let s = p.stats;
+                            rows.push(("帧".to_string(), t.total_frames().to_string()));
+                            rows.push(("差异像素".to_string(), s.diff_pixels.to_string()));
+                        }
+                    }
+                    Some(Tab::Csv(t)) => {
+                        rows.push(("视图".to_string(), "表格对比".to_string()));
+                        rows.push(("行数".to_string(), t.row_count().to_string()));
+                        rows.push(("列数".to_string(), t.col_count().to_string()));
+                    }
+                    Some(Tab::TextEdit(t)) => {
+                        rows.push(("视图".to_string(), "文本编辑".to_string()));
+                        rows.push(("标题".to_string(), t.title()));
+                        rows.push(("字符".to_string(), t.content.chars().count().to_string()));
+                        rows.push(("行数".to_string(), t.content.lines().count().to_string()));
+                    }
+                    Some(Tab::Patch(t)) => {
+                        rows.push(("视图".to_string(), "补丁".to_string()));
+                        rows.push(("标题".to_string(), t.title()));
+                    }
+                    Some(Tab::FolderMerge(t)) => {
+                        rows.push(("视图".to_string(), "文件夹合并".to_string()));
+                        rows.push(("输出".to_string(), t.out.clone()));
+                        rows.push(("左侧".to_string(), t.left.clone()));
+                        rows.push(("右侧".to_string(), t.right.clone()));
+                    }
+                    None => {
+                        rows.push(("状态".to_string(), "无标签".to_string()));
+                    }
+                }
+                egui::Grid::new("info_grid")
+                    .num_columns(2)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        for (k, v) in &rows {
+                            ui.label(RichText::new(k).strong());
+                            ui.monospace(v);
+                            ui.end_row();
+                        }
+                    });
+            });
+        if !keep {
+            self.show_info = false;
         }
     }
 
@@ -1521,6 +1630,8 @@ impl eframe::App for DiffApp {
 
         // P42-4：图例弹窗 + 日志面板（BC View>图例/日志）
         self.legend_log_windows(ui);
+        // P43-5：信息弹窗（BC Session>信息）
+        self.info_window(ui);
 
         // P33：外部工具说明弹窗（Tools > 外部工具）
         if self.show_external {

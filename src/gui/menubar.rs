@@ -120,6 +120,11 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             app.show_report = true;
             app.report_error = None;
         }
+        // P43-5：信息（BC Session>信息，当前标签统计）
+        if ui.button(t(I18nKey::MenuInfo)).clicked() {
+            ui.close();
+            app.show_info = true;
+        }
         ui.separator();
         // P39-2e：比较文件使用（视图切换，对标 BC Session>比较文件使用）
         // 用另一视图重新打开当前 DiffTab 的左右文件

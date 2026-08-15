@@ -2846,6 +2846,37 @@ fn reopen_as_merge_and_compare_with_output() {
     }
 }
 
+// ---- P43-5：信息弹窗 ----------------
+
+#[test]
+fn info_window_shows_tab_stats() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\nc\n");
+    let r = write(d.path(), "r.txt", "a\nB\nc\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    {
+        let mut app = app.borrow_mut();
+        app.open_empty_diff();
+        if let super::Tab::Diff(t) = &mut app.tabs[0] {
+            t.load_pair(&l, &r, ViewOptions::default());
+        }
+        app.show_info = true;
+    }
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().info_window(ui));
+    h.run();
+    // 信息弹窗应显示文本对比视图 + 差异行统计
+    assert!(
+        h.query_all_by_label_contains("文本对比").next().is_some(),
+        "信息弹窗应显示视图类型"
+    );
+    assert!(
+        h.query_all_by_label_contains("3").next().is_some()
+            || h.query_all_by_label_contains("行数").next().is_some(),
+        "信息弹窗应显示行数"
+    );
+    app.borrow_mut().show_info = false;
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]
