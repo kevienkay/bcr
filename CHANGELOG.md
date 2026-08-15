@@ -72,6 +72,13 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **视图过滤扩展（2）**：ViewFilter 加 `LeftNewer`/`RightNewer`（仅左侧/右侧较新，Differ + mtime 比较 `is_left_newer`/`is_right_newer`），工具栏下拉加 2 项
 - **选择操作（3）**：多选集合 `selected_set`（flat 索引）+ 行渲染高亮；`select_all`/`select_none`/`invert_selection`/`select_orphans`（LeftOnly+RightOnly）/`select_newer`（较新项）；Edit 菜单 DirTab 分支加 5 项
 
+### 文本比较编辑补齐与视图辅助（P42，对标 BC 文本比较 编辑/视图菜单）
+
+- **转换文件（1）**：`ConvertMode`+`convert_content` 纯函数（Trim 行尾空白/Tabs→空格/CRLF↔LF）抽到 textedit 供 DiffTab 复用；DiffTab `convert_file` 作用于两侧（.bak 备份+编码回写+撤销快照+重载）；Edit 菜单 DiffTab 分支「转换文件」子菜单
+- **剪贴板比较（2）**：DiffTab `⌘V` → load_clipboard_right（BC File>打开剪贴板）；TextEditTab `open_clipboard`（读剪贴板填充内容+撤销快照+未命名另存）；File 菜单 TextEdit 分支转发
+- **字符列标尺（3）**：DiffTab `show_ruler` 内容区顶部左右栏 10/20/...200 刻度，View 菜单 checkbox
+- **图例/日志/工具栏开关（4）**：View 菜单图例弹窗（差异色/状态徽标含义）、日志面板（最近操作滚动+清空）、工具栏开关（全局 `SHOW_TOOLBAR` AtomicBool 门控 8 个 tab 工具栏渲染）
+
 ## [0.3.0] - 2026-08-13
 
 ### UI 重构（P33，对标 Beyond Compare 5.2.5 真实界面）
