@@ -429,10 +429,34 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.prev_edit());
         }
+        // P43-3：替换导航（BC 搜索菜单 下一个/上一个替换）
+        if ui.button(t(I18nKey::MenuNextReplace)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.next_replace());
+        }
+        if ui.button(t(I18nKey::MenuPrevReplace)).clicked() {
+            ui.close();
+            with_diff_tab(app, |tab| tab.prev_replace());
+        }
         ui.separator();
         if ui.button(t(I18nKey::MenuReload)).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.reload());
+        }
+        // P43-3：差异文件导航（DirTab 分支，BC 搜索菜单 下一个/上一个差异文件）
+        if matches!(app.tabs.get(app.active), Some(Tab::Dir(_))) {
+            if ui.button(t(I18nKey::MenuNextDiffFile)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.next_diff_file();
+                }
+            }
+            if ui.button(t(I18nKey::MenuPrevDiffFile)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.prev_diff_file();
+                }
+            }
         }
     });
 }

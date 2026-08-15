@@ -2740,6 +2740,71 @@ fn difftab_selection_ops_select_block_and_text() {
     let _ = tab.borrow().right.as_ref().map(|f| f.content.clone());
 }
 
+// ---- P43-3：替换导航 + 差异文件导航 ----------------
+
+#[test]
+fn difftab_replace_nav_next_prev() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "alpha\nbeta\nalpha\n");
+    let r = write(d.path(), "r.txt", "ALPHA\nbeta\nALPHA\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    tab.borrow_mut().search.query = "a".to_string();
+    tab.borrow_mut().update_search();
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 下一替换：跳到第一匹配并聚焦替换框
+    tab.borrow_mut().next_replace();
+    assert_eq!(
+        tab.borrow().search.current,
+        Some(0),
+        "下一替换应定位到第一匹配"
+    );
+    assert!(tab.borrow().search.replace_focus, "下一替换应聚焦替换框");
+    // 再下一替换：循环到第二匹配
+    tab.borrow_mut().next_replace();
+    assert_eq!(
+        tab.borrow().search.current,
+        Some(1),
+        "再下一替换应到第二匹配"
+    );
+    // 上一替换：回到第一匹配
+    tab.borrow_mut().prev_replace();
+    assert_eq!(tab.borrow().search.current, Some(0), "上一替换应回第一匹配");
+}
+
+#[test]
+fn dirtab_next_prev_diff_file_navigation() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "same.txt", "x");
+    write(d1.path(), "diff1.txt", "A");
+    write(d1.path(), "diff2.txt", "B");
+    write(d2.path(), "same.txt", "x");
+    write(d2.path(), "diff1.txt", "B");
+    write(d2.path(), "diff2.txt", "C");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().compare_content = true;
+    tab.borrow_mut().view_filter = ViewFilter::All;
+    tab.borrow_mut().only_diff = false;
+    tab.borrow_mut().show_same = true;
+    tab.borrow_mut().refresh_sync();
+    // 下一差异文件：应选中第一个差异文件
+    assert!(tab.borrow_mut().next_diff_file(), "应找到差异文件");
+    let rel1 = tab.borrow().selected_rel();
+    assert!(rel1.is_some(), "选中应有相对路径");
+    // 再下一：到第二个差异文件
+    assert!(tab.borrow_mut().next_diff_file());
+    let rel2 = tab.borrow().selected_rel();
+    assert_ne!(rel1, rel2, "两个差异文件应不同");
+    // 上一差异文件：回到第一个
+    assert!(tab.borrow_mut().prev_diff_file());
+    let rel3 = tab.borrow().selected_rel();
+    assert_eq!(rel1, rel3, "上一差异文件应回到第一个");
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

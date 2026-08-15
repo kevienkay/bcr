@@ -1565,6 +1565,22 @@ impl DiffTab {
         self.goto_match(next);
     }
 
+    /// P43-3：下一替换（BC 搜索菜单 下一个/上一个替换）——跳到下一匹配并聚焦替换框
+    pub fn next_replace(&mut self) {
+        self.next_match();
+        if self.search.current.is_some() {
+            self.search.replace_focus = true;
+        }
+    }
+
+    /// P43-3：上一替换——跳到上一匹配并聚焦替换框
+    pub fn prev_replace(&mut self) {
+        self.prev_match();
+        if self.search.current.is_some() {
+            self.search.replace_focus = true;
+        }
+    }
+
     pub fn prev_match(&mut self) {
         if self.search.matches.is_empty() {
             return;

@@ -710,6 +710,46 @@ impl DirTab {
         r.entries.get(ei).map(|e| e.rel.clone())
     }
 
+    /// P43-3：下一差异文件（flat 中从当前选中向后找第一个差异文件并选中）
+    pub fn next_diff_file(&mut self) -> bool {
+        self.move_diff_file(1)
+    }
+
+    /// P43-3：上一差异文件（flat 中从当前选中向前找第一个差异文件并选中）
+    pub fn prev_diff_file(&mut self) -> bool {
+        self.move_diff_file(-1)
+    }
+
+    /// P43-3：差异文件导航公共逻辑（dir：+1 下一 / -1 上一）
+    fn move_diff_file(&mut self, dir: isize) -> bool {
+        let Some(r) = &self.result else {
+            return false;
+        };
+        if self.flat.is_empty() {
+            return false;
+        }
+        let n = self.flat.len() as isize;
+        let start = self.selected.map(|i| i as isize).unwrap_or(0);
+        let mut i = start;
+        for _ in 0..n {
+            i = (i + dir + n) % n;
+            let Some(row) = self.flat.get(i as usize) else {
+                continue;
+            };
+            let Some(ei) = row.entry else {
+                continue;
+            };
+            if let Some(e) = r.entries.get(ei) {
+                if e.status != crate::compare::FileStatus::Same {
+                    self.selected = Some(i as usize);
+                    self.scroll_to_selected = true;
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// 生成同步计划（基于当前 left/right/过滤/模式），勾选默认全部可执行项
     pub fn gen_sync_plan(&mut self) {
         let filter = match Filter::new(&split_globs(&self.includes), &split_globs(&self.excludes)) {
