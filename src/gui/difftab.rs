@@ -440,7 +440,10 @@ impl DiffTab {
     pub fn recompute(&mut self) {
         let (l, r) = match (&self.left, &self.right) {
             (Some(l), Some(r)) => (l.content.as_str(), r.content.as_str()),
-            _ => {
+            // P50：单侧导入时仍构建 rows（BC 语义：先导入的显示在左边，右侧留空）
+            (Some(l), None) => (l.content.as_str(), ""),
+            (None, Some(r)) => ("", r.content.as_str()),
+            (None, None) => {
                 self.rows.clear();
                 self.stats = Stats::default();
                 self.diff_rows.clear();

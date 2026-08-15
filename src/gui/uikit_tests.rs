@@ -3493,7 +3493,13 @@ fn dropped_single_file_creates_diff_tab_with_left_loaded() {
         let b = app.borrow();
         assert_eq!(b.tabs.len(), 1, "拖入单文件应创建标签");
         match &b.tabs[0] {
-            super::Tab::Diff(t) => assert!(t.left.is_some(), "左侧应加载"),
+            super::Tab::Diff(t) => {
+                assert!(t.left.is_some(), "左侧应加载");
+                assert!(
+                    !t.rows.is_empty(),
+                    "单侧加载后应能立即显示内容（不等第二个文件）"
+                );
+            }
             _ => panic!("应为 DiffTab"),
         }
     }
