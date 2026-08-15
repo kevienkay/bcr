@@ -6,6 +6,14 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### 视图开关与导航补齐（P46，对标 BC 5.2.5 各视图视图/搜索/会话菜单）
+
+- **TextEdit 视图开关**：行号/自动换行/文件信息（预览模式 gutter 行号条件化、编辑模式自动换行 desired_width 条件化——egui 0.36 无 wrap_mode API、TextEditStatus 文件信息条件化），View 菜单 TextEdit 分支 3 个 checkbox
+- **PatchTab 差异导航**：diff_rows 集合（RowTag≠Equal）+ next/prev_diff（循环跳差异行）+ next/prev_diff_section（连续差异块合并取块首）+ jump_to 滚动定位；快捷键 ⇧⌥⌃↓/↑ 差异、⇧⌃↓/↑ 差异部分；Search 菜单 PatchTab 分支 4 项
+- **hex 视图过滤与布局**：HexViewFilter（全部/差异/相同）+ HexViewLayout（边并排/上-下）枚举与字段；渲染可见索引过滤 + 上-下布局行高 2x；快捷键 1/2/3（hex 模式）；View 菜单 hex 分支过滤 3 项 + 布局 2 项
+- **DirTab 结构选项**：总是显示文件夹（关闭时隐藏空目录）/仅比较文件（walk 跳过目录行）；View 菜单 DirTab 分支 2 个 checkbox（切换后 rebuild_tree）
+- **文件夹同步视图 + 工作空间**：图例快捷键 ⇧L（纯 shift，输入框聚焦不触发）；DiffApp save_workspace/load_workspace（标签布局 TOML 持久化，WsFile 包装结构规避 toml 0.8 顶层数组 unsupported rust type，支持 diff/dir/merge/image/csv/media 重建）；Session 菜单 保存工作空间为.../加载工作空间
+
 ### 深层交互补齐（P45，对标 BC 5.2.5 各视图专属菜单）
 
 - **文本合并行级采用**：⌥⇧←/→ 采用左/右行（MergeView BlockInfo 加 line_res 行级覆盖 + render_merged 行级优先输出；点击行记录 cur_line），Edit 菜单 MergeTab 分支加 采用左边的行/中心行/右边行
