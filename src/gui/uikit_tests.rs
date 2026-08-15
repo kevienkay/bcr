@@ -2620,6 +2620,26 @@ fn textedit_open_clipboard_sets_content() {
     }
 }
 
+// ---- P42-3：字符列标尺 ----------------
+
+#[test]
+fn difftab_ruler_toggle_renders() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nb\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    assert!(!tab.borrow().show_ruler, "标尺默认关闭");
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    tab.borrow_mut().show_ruler = true;
+    h.run();
+    assert!(
+        tab.borrow().show_ruler,
+        "开启标尺后应保持 true 且渲染不 panic"
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

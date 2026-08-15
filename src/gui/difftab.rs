@@ -159,6 +159,8 @@ pub struct DiffTab {
     pub h_scroll: f32,
     /// P35-A4：显示空白符（空格→·、制表符→→）
     pub show_whitespace: bool,
+    /// P42-3：字符列标尺
+    pub show_ruler: bool,
     /// P35-A3：视图过滤（All/Diff/Same/Context）
     pub view_filter: DiffViewFilter,
     /// P35-A3：Context 模式上下文行数
@@ -232,6 +234,7 @@ impl DiffTab {
             show_overview: true,
             h_scroll: 0.0,
             show_whitespace: false,
+            show_ruler: false,
             view_filter: DiffViewFilter::All,
             context_lines: 3,
             detail_mode: DiffDetailMode::Text,
@@ -2638,6 +2641,40 @@ impl DiffTab {
                         detail_fg,
                     );
                 });
+                ui.separator();
+            }
+
+            // P42-3：字符列标尺（BC 标尺，内容区顶部绘制 10/20/... 刻度）
+            if self.show_ruler && self.hex.is_none() {
+                let ruler_h = 16.0;
+                let (ruler_rect, _) =
+                    ui.allocate_exact_size(Vec2::new(total_w, ruler_h), egui::Sense::hover());
+                let ruler_bg = if ui.visuals().dark_mode {
+                    Color32::from_gray(32)
+                } else {
+                    Color32::from_gray(244)
+                };
+                paint_bg(ui, ruler_rect, Some(ruler_bg));
+                let tick_fg = ui.visuals().weak_text_color();
+                let font = egui::FontId::monospace(9.0);
+                // 左栏刻度（gutter + content 起点对齐行内容）
+                let left_start = ruler_rect.left() + gutter_l;
+                let right_start = ruler_rect.left() + gutter_l + content_w + mid_gap + gutter_r;
+                for (start, w) in [(left_start, content_w), (right_start, content_w)] {
+                    for col in (10..=200).step_by(10) {
+                        let x = start + col as f32 * 8.0; // 约每字符 8px（等宽 14px 的 0.57 倍）
+                        if x > start + w - 4.0 {
+                            break;
+                        }
+                        ui.painter().text(
+                            Pos2::new(x, ruler_rect.top() + ruler_h / 2.0),
+                            egui::Align2::LEFT_CENTER,
+                            col.to_string(),
+                            font.clone(),
+                            tick_fg,
+                        );
+                    }
+                }
                 ui.separator();
             }
 

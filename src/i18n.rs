@@ -317,6 +317,14 @@ pub enum Key {
     ConvertTrim,
     /// P42-1：转换文件（菜单标题）
     ConvertFile,
+    /// P42-3：标尺（字符列标尺）
+    ShowRuler,
+    /// P42-4：图例
+    MenuLegend,
+    /// P42-4：日志
+    MenuLog,
+    /// P42-4：工具栏
+    MenuToolbar,
     /// P37-1g：转换-Tabs to Spaces
     ConvertTabs,
     /// P37-1g：转换-行尾 CRLF

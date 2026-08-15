@@ -507,6 +507,11 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 if ui.checkbox(&mut ws, t(I18nKey::VisibleWs)).changed() {
                     tab.show_whitespace = ws;
                 }
+                // P42-3：字符列标尺
+                let mut ruler = tab.show_ruler;
+                if ui.checkbox(&mut ruler, t(I18nKey::ShowRuler)).changed() {
+                    tab.show_ruler = ruler;
+                }
             }
             // P40-1：hex 显示选项（原工具栏 ComboBox，收进 View 菜单）
             if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
