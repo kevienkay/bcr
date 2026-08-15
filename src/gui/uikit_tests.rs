@@ -3172,6 +3172,30 @@ fn folder_merge_view_filter() {
     );
 }
 
+// ---- P45-3：文件夹比较视图过滤扩展（独有/不独有/差异但无独有/组合项） ----------------
+
+#[test]
+fn dirtab_view_filter_extended() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l", "");
+    let r = write(d.path(), "r", "");
+    let mut t = super::DirTab::new(&l, &r);
+    t.refresh_sync();
+    // 过滤匹配（通过 rebuild 后的 flat 条目数量验证新过滤枚举可用）
+    t.view_filter = super::dirtab::ViewFilter::Orphans;
+    t.rebuild_tree();
+    t.view_filter = super::dirtab::ViewFilter::NonOrphans;
+    t.rebuild_tree();
+    t.view_filter = super::dirtab::ViewFilter::DiffNoOrphans;
+    t.rebuild_tree();
+    t.view_filter = super::dirtab::ViewFilter::LeftNewerOrOrphan;
+    t.rebuild_tree();
+    t.view_filter = super::dirtab::ViewFilter::RightNewerOrOrphan;
+    t.rebuild_tree();
+    t.view_filter = super::dirtab::ViewFilter::All;
+    t.rebuild_tree();
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

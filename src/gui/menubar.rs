@@ -944,6 +944,57 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
             ui.separator();
         }
+        // P45-3：文件夹比较视图过滤扩展（BC View 菜单 显示独有/不独有/差异但无独有/组合项）
+        if matches!(app.tabs.get(app.active), Some(Tab::Dir(_))) {
+            ui.label(t(I18nKey::MenuFilter));
+            let cur = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::Dir(tab) => Some(tab.view_filter),
+                    _ => None,
+                })
+                .unwrap_or(super::dirtab::ViewFilter::All);
+            for (f, key) in [
+                (super::dirtab::ViewFilter::All, I18nKey::ShowAll),
+                (super::dirtab::ViewFilter::Diff, I18nKey::OnlyDiff),
+                (super::dirtab::ViewFilter::Same, I18nKey::ShowSame),
+                (
+                    super::dirtab::ViewFilter::Orphans,
+                    I18nKey::DirFilterOrphans,
+                ),
+                (
+                    super::dirtab::ViewFilter::NonOrphans,
+                    I18nKey::DirFilterNonOrphans,
+                ),
+                (
+                    super::dirtab::ViewFilter::DiffNoOrphans,
+                    I18nKey::DirFilterDiffNoOrphans,
+                ),
+                (super::dirtab::ViewFilter::LeftNewer, I18nKey::ViewLeftNewer),
+                (
+                    super::dirtab::ViewFilter::RightNewer,
+                    I18nKey::ViewRightNewer,
+                ),
+                (
+                    super::dirtab::ViewFilter::LeftNewerOrOrphan,
+                    I18nKey::DirFilterLeftNewerOrOrphan,
+                ),
+                (
+                    super::dirtab::ViewFilter::RightNewerOrOrphan,
+                    I18nKey::DirFilterRightNewerOrOrphan,
+                ),
+            ] {
+                if ui.selectable_label(cur == f, t(key)).clicked() {
+                    if let Tab::Dir(tab) = &mut app.tabs[app.active] {
+                        tab.view_filter = f;
+                        tab.rebuild_tree();
+                    }
+                    ui.close();
+                }
+            }
+            ui.separator();
+        }
         // P39-2d：细节三模式（BC 视图菜单「细节」）
         ui.label(t(I18nKey::MenuDetail));
         let cur_detail = app.tabs.get(app.active).and_then(|t| match t {

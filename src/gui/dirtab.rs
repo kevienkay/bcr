@@ -27,6 +27,16 @@ pub enum ViewFilter {
     LeftNewer,
     /// P41-2：仅右侧较新（Differ 且 right.mtime > left.mtime）
     RightNewer,
+    /// P45-3：显示独有（左独有 + 右独有）
+    Orphans,
+    /// P45-3：显示不独有（排除仅单侧存在的条目）
+    NonOrphans,
+    /// P45-3：差异但无独有项（Differ + Moved）
+    DiffNoOrphans,
+    /// P45-3：左较新 + 左独有
+    LeftNewerOrOrphan,
+    /// P45-3：右较新 + 右独有
+    RightNewerOrOrphan,
 }
 
 /// 目录标签页
@@ -575,6 +585,29 @@ impl DirTab {
             }
             ViewFilter::RightNewer => {
                 visible.retain(|e| is_right_newer(e));
+            }
+            ViewFilter::Orphans => {
+                visible.retain(|e| {
+                    e.status == FileStatus::LeftOnly || e.status == FileStatus::RightOnly
+                });
+            }
+            ViewFilter::NonOrphans => {
+                visible.retain(|e| {
+                    e.status != FileStatus::LeftOnly && e.status != FileStatus::RightOnly
+                });
+            }
+            ViewFilter::DiffNoOrphans => {
+                visible.retain(|e| {
+                    e.status != FileStatus::Same
+                        && e.status != FileStatus::LeftOnly
+                        && e.status != FileStatus::RightOnly
+                });
+            }
+            ViewFilter::LeftNewerOrOrphan => {
+                visible.retain(|e| is_left_newer(e) || e.status == FileStatus::LeftOnly);
+            }
+            ViewFilter::RightNewerOrOrphan => {
+                visible.retain(|e| is_right_newer(e) || e.status == FileStatus::RightOnly);
             }
         }
         // P36-D2：右键「排除」的文件（会话级，重建时过滤）

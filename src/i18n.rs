@@ -646,6 +646,16 @@ pub enum Key {
     MergeFilterUnchanged,
     /// 过滤（视图菜单分组标签）
     MenuFilter,
+    /// 显示独有（DirTab）
+    DirFilterOrphans,
+    /// 显示不独有
+    DirFilterNonOrphans,
+    /// 差异但无独有项
+    DirFilterDiffNoOrphans,
+    /// 显示左边较新和左边独有项
+    DirFilterLeftNewerOrOrphan,
+    /// 显示右边较新和右边独有项
+    DirFilterRightNewerOrOrphan,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页
