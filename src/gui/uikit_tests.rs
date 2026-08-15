@@ -3315,6 +3315,27 @@ fn hex_view_filter_and_layout() {
     assert_eq!(t.hex_layout, super::difftab::HexViewLayout::TopBottom);
 }
 
+// ---- P46-4：DirTab 结构选项（总是显示文件夹/仅比较文件） ----------------
+
+#[test]
+fn dirtab_structure_options() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l", "");
+    let r = write(d.path(), "r", "");
+    let mut t = super::DirTab::new(&l, &r);
+    // 默认：总是显示文件夹开，仅比较文件关
+    assert!(t.show_all_dirs);
+    assert!(!t.only_files);
+    // 切换结构选项后 rebuild 不 panic
+    t.show_all_dirs = false;
+    t.only_files = true;
+    t.refresh_sync();
+    t.rebuild_tree();
+    t.show_all_dirs = true;
+    t.only_files = false;
+    t.rebuild_tree();
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

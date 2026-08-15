@@ -410,6 +410,8 @@ i18n_table!(t_zh,
     HexFilterSame => "显示相同",
     HexLayoutSideBySide => "边并排布局",
     HexLayoutTopBottom => "上-下布局",
+    DirShowAllDirs => "总是显示文件夹",
+    DirOnlyFiles => "仅比较文件",
 );
 i18n_table!(t_en,
     // CLI
@@ -792,6 +794,8 @@ i18n_table!(t_en,
     HexFilterSame => "Show Same",
     HexLayoutSideBySide => "Side by Side",
     HexLayoutTopBottom => "Top to Bottom",
+    DirShowAllDirs => "Always Show Folders",
+    DirOnlyFiles => "Compare Files Only",
 );
 i18n_table!(t_de,
     // CLI
@@ -1174,6 +1178,8 @@ i18n_table!(t_de,
     HexFilterSame => "Gleiche anzeigen",
     HexLayoutSideBySide => "Nebeneinander",
     HexLayoutTopBottom => "Übereinander",
+    DirShowAllDirs => "Ordner immer anzeigen",
+    DirOnlyFiles => "Nur Dateien vergleichen",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1556,6 +1562,8 @@ i18n_table!(t_ja,
     HexFilterSame => "同じを表示",
     HexLayoutSideBySide => "左右並列",
     HexLayoutTopBottom => "上下",
+    DirShowAllDirs => "常にフォルダを表示",
+    DirOnlyFiles => "ファイルのみ比較",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1938,6 +1946,8 @@ i18n_table!(t_ko,
     HexFilterSame => "동일 표시",
     HexLayoutSideBySide => "나란히",
     HexLayoutTopBottom => "위아래",
+    DirShowAllDirs => "항상 폴더 표시",
+    DirOnlyFiles => "파일만 비교",
 );
 i18n_table!(t_es,
     // CLI
@@ -2320,6 +2330,8 @@ i18n_table!(t_es,
     HexFilterSame => "Mostrar iguales",
     HexLayoutSideBySide => "Lado a lado",
     HexLayoutTopBottom => "Arriba-abajo",
+    DirShowAllDirs => "Mostrar siempre carpetas",
+    DirOnlyFiles => "Comparar solo archivos",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2702,6 +2714,8 @@ i18n_table!(t_pt,
     HexFilterSame => "Mostrar iguais",
     HexLayoutSideBySide => "Lado a lado",
     HexLayoutTopBottom => "De cima para baixo",
+    DirShowAllDirs => "Sempre mostrar pastas",
+    DirOnlyFiles => "Comparar apenas arquivos",
 );
 i18n_table!(t_ar,
     // CLI
@@ -3084,6 +3098,8 @@ i18n_table!(t_ar,
     HexFilterSame => "عرض المتطابق",
     HexLayoutSideBySide => "جنبًا إلى جنب",
     HexLayoutTopBottom => "من الأعلى إلى الأسفل",
+    DirShowAllDirs => "إظهار المجلدات دائمًا",
+    DirOnlyFiles => "مقارنة الملفات فقط",
 );
 i18n_table!(t_ru,
     // CLI
@@ -3466,6 +3482,8 @@ i18n_table!(t_ru,
     HexFilterSame => "Показать одинаковые",
     HexLayoutSideBySide => "Бок о бок",
     HexLayoutTopBottom => "Сверху вниз",
+    DirShowAllDirs => "Всегда показывать папки",
+    DirOnlyFiles => "Сравнивать только файлы",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3848,4 +3866,6 @@ i18n_table!(t_fr,
     HexFilterSame => "Afficher identiques",
     HexLayoutSideBySide => "Côte à côte",
     HexLayoutTopBottom => "Haut en bas",
+    DirShowAllDirs => "Toujours afficher les dossiers",
+    DirOnlyFiles => "Comparer uniquement les fichiers",
 );

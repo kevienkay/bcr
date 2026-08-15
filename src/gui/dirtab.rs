@@ -52,6 +52,10 @@ pub struct DirTab {
     /// 状态过滤（B1）
     pub view_filter: ViewFilter,
     pub result: Option<CompareResult>,
+    /// P46-4：总是显示文件夹（BC View>总是显示文件夹）
+    pub show_all_dirs: bool,
+    /// P46-4：仅比较文件（BC View>仅比较文件，隐藏目录行）
+    pub only_files: bool,
     pub error: Option<String>,
     pub scroll: Vec2,
     /// 请求打开并排 diff（rel 相对路径，由主应用拼完整路径）
@@ -234,6 +238,8 @@ impl DirTab {
             only_diff: true,
             view_filter: ViewFilter::Diff,
             result: None,
+            show_all_dirs: true,
+            only_files: false,
             error: None,
             scroll: Vec2::ZERO,
             open_diff: None,
@@ -702,6 +708,9 @@ impl DirTab {
         }
         // 展平（跳过折叠目录）
         let mut out: Vec<FlatRow> = Vec::new();
+        let only_files = self.only_files;
+        let show_all_dirs = self.show_all_dirs;
+        #[allow(clippy::too_many_arguments)]
         fn walk(
             node: &Node,
             path: &str,
@@ -709,14 +718,28 @@ impl DirTab {
             collapsed: &HashSet<String>,
             visible: &[&crate::compare::FileEntry],
             out: &mut Vec<FlatRow>,
+            only_files: bool,
+            show_all_dirs: bool,
         ) {
             for (dir_name, child) in &node.dirs {
+                // P46-4：仅比较文件 → 跳过目录行（不展开）
+                if only_files {
+                    continue;
+                }
                 let dir_path = if path.is_empty() {
                     dir_name.clone()
                 } else {
                     format!("{path}/{dir_name}")
                 };
                 let expanded = !collapsed.contains(&dir_path);
+                // P46-4：总是显示文件夹关闭时，隐藏空目录（无文件且子目录无文件）
+                if !show_all_dirs {
+                    let has_files = !child.files.is_empty();
+                    let has_sub_files = child.dirs.values().any(|d| !d.files.is_empty());
+                    if !has_files && !has_sub_files {
+                        continue;
+                    }
+                }
                 out.push(FlatRow {
                     depth,
                     name: format!("{dir_name}/"),
@@ -726,7 +749,16 @@ impl DirTab {
                     entry: None,
                 });
                 if expanded {
-                    walk(child, &dir_path, depth + 1, collapsed, visible, out);
+                    walk(
+                        child,
+                        &dir_path,
+                        depth + 1,
+                        collapsed,
+                        visible,
+                        out,
+                        only_files,
+                        show_all_dirs,
+                    );
                 }
             }
             for (name, idx) in &node.files {
@@ -741,7 +773,16 @@ impl DirTab {
                 });
             }
         }
-        walk(&root, "", 0, &self.collapsed, &visible, &mut out);
+        walk(
+            &root,
+            "",
+            0,
+            &self.collapsed,
+            &visible,
+            &mut out,
+            only_files,
+            show_all_dirs,
+        );
         self.flat = out;
         if self.selected.is_none() && !self.flat.is_empty() {
             self.selected = Some(0);

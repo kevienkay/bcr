@@ -1137,6 +1137,41 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     ui.close();
                 }
             }
+            // P46-4：结构选项（BC 文件夹比较视图菜单 总是显示文件夹/仅比较文件）
+            let mut show_dirs = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::Dir(tab) => Some(tab.show_all_dirs),
+                    _ => None,
+                })
+                .unwrap_or(true);
+            if ui
+                .checkbox(&mut show_dirs, t(I18nKey::DirShowAllDirs))
+                .changed()
+            {
+                if let Tab::Dir(tab) = &mut app.tabs[app.active] {
+                    tab.show_all_dirs = show_dirs;
+                    tab.rebuild_tree();
+                }
+            }
+            let mut only_files = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::Dir(tab) => Some(tab.only_files),
+                    _ => None,
+                })
+                .unwrap_or(false);
+            if ui
+                .checkbox(&mut only_files, t(I18nKey::DirOnlyFiles))
+                .changed()
+            {
+                if let Tab::Dir(tab) = &mut app.tabs[app.active] {
+                    tab.only_files = only_files;
+                    tab.rebuild_tree();
+                }
+            }
             ui.separator();
         }
         // P39-2d：细节三模式（BC 视图菜单「细节」）

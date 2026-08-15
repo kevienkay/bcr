@@ -626,6 +626,10 @@ pub enum Key {
     HexLayoutSideBySide,
     /// hex 上-下布局
     HexLayoutTopBottom,
+    /// 总是显示文件夹（DirTab）
+    DirShowAllDirs,
+    /// 仅比较文件（DirTab）
+    DirOnlyFiles,
     /// 排序...
     MenuSort,
     /// 升序
