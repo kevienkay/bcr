@@ -3063,6 +3063,28 @@ fn settings_export_import_reset() {
     assert!(s.ignore_case);
 }
 
+// ---- P44-6：视图开关 + 表格快捷键（DiffTab 行号/语法开关；CsvTab 修改 ⇧⌃↩/前后插行/排序） ----------------
+
+#[test]
+fn diff_view_switches_and_csv_shortcuts() {
+    let d = tempdir().unwrap();
+    // DiffTab 行号/语法开关默认开，可关
+    let mut dt = super::DiffTab::new();
+    assert!(dt.show_line_numbers && dt.show_syntax);
+    dt.show_line_numbers = false;
+    dt.show_syntax = false;
+    assert!(!dt.show_line_numbers && !dt.show_syntax);
+
+    // CsvTab 排序对话框（selected 私有，走公开方法验证）
+    let l = write(d.path(), "l.csv", "id,name\n1,a\n2,b\n");
+    let r = write(d.path(), "r.csv", "id,name\n1,A\n2,b\n");
+    let mut ct = super::CsvTab::new(&l, &r);
+    assert!(!ct.sort_dialog_open());
+    ct.open_sort_dialog();
+    assert!(ct.sort_dialog_open(), "排序对话框应打开");
+    assert!(!ct.sort_label().is_empty());
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

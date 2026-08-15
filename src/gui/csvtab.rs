@@ -69,6 +69,8 @@ pub(crate) struct CsvTab {
     show_cell_edit: bool,
     /// P37-1l：修改单元格输入缓冲
     cell_edit_buf: String,
+    /// P44-6：排序对话框开关（BC 编辑>排序...）
+    show_sort_dialog: bool,
 }
 
 impl CsvTab {
@@ -91,6 +93,7 @@ impl CsvTab {
             auto_fit: false,
             show_cell_edit: false,
             cell_edit_buf: String::new(),
+            show_sort_dialog: false,
         };
         t.reload();
         t
@@ -456,6 +459,35 @@ impl CsvTab {
         ok
     }
 
+    /// P44-6：在选中行后插入空行（两侧同步插入；BC 在后面插入行 ⌥⌃↩）
+    pub(crate) fn insert_row_after(&mut self) -> bool {
+        let Some((aligned_idx, _)) = self.selected else {
+            return false;
+        };
+        let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
+            return false;
+        };
+        let Some(ar) = self.aligned.get(aligned_idx) else {
+            return false;
+        };
+        let ncols = self.col_count();
+        let mut a_t = a.clone_table();
+        let mut b_t = b.clone_table();
+        if let Some(ai) = ar.a_no {
+            let at = (ai + 1).min(a_t.rows.len());
+            a_t.rows.insert(at, vec![String::new(); ncols]);
+        }
+        if let Some(bi) = ar.b_no {
+            let bt = (bi + 1).min(b_t.rows.len());
+            b_t.rows.insert(bt, vec![String::new(); ncols]);
+        }
+        let ok = self.write_side(true, &a_t) & self.write_side(false, &b_t);
+        if ok {
+            self.reload();
+        }
+        ok
+    }
+
     /// 删除选中列（两侧表头与数据同步删除）
     pub(crate) fn delete_col(&mut self) -> bool {
         let Some((_, col)) = self.selected else {
@@ -558,7 +590,76 @@ impl CsvTab {
         ok
     }
 
+    /// P44-6：打开排序对话框（BC 编辑>排序...）
+    pub(crate) fn open_sort_dialog(&mut self) {
+        self.show_sort_dialog = true;
+    }
+
+    /// P44-6：排序对话框是否打开（供测试/状态栏）
+    #[cfg(test)]
+    pub(crate) fn sort_dialog_open(&self) -> bool {
+        self.show_sort_dialog
+    }
+
+    /// P44-6：当前排序列名（供菜单显示；"左 · 列N" / "右 · 列N"）
+    pub(crate) fn sort_label(&self) -> String {
+        match &self.sort {
+            Some(sk) => format!("{} · 列{}", if sk.side { "左" } else { "右" }, sk.col),
+            None => "列0".to_string(),
+        }
+    }
+
+    /// P44-6：打开修改单元格弹窗（BC 编辑>修改...，⇧⌃↩）
+    pub(crate) fn open_cell_edit(&mut self) {
+        self.cell_edit_buf = self.selected_cell_text();
+        self.show_cell_edit = true;
+    }
+
+    /// P44-6：当前选中单元格文本（弹窗预填）
+    fn selected_cell_text(&self) -> String {
+        let Some((aligned_idx, col)) = self.selected else {
+            return String::new();
+        };
+        let Some(ar) = self.aligned.get(aligned_idx) else {
+            return String::new();
+        };
+        if let Some(bi) = ar.b_no {
+            if let Some(t) = &self.table_b {
+                if let Some(r) = t.rows.get(bi) {
+                    return r.get(col).cloned().unwrap_or_default();
+                }
+            }
+        } else if let Some(ai) = ar.a_no {
+            if let Some(t) = &self.table_a {
+                if let Some(r) = t.rows.get(ai) {
+                    return r.get(col).cloned().unwrap_or_default();
+                }
+            }
+        }
+        String::new()
+    }
+
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui) {
+        // P44-6：表格快捷键（BC 编辑菜单：⇧⌃↩ 修改、⌘⌥⌃↩ 前面插入行、⌥⌃↩ 后面插入行）
+        if self.selected.is_some() && !ui.ctx().egui_wants_keyboard_input() {
+            if ui
+                .input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Enter))
+            {
+                self.show_cell_edit = true;
+            }
+            if ui.input(|i| {
+                i.modifiers.command
+                    && i.modifiers.alt
+                    && i.modifiers.ctrl
+                    && i.key_pressed(egui::Key::Enter)
+            }) {
+                self.insert_row();
+            }
+            if ui.input(|i| i.modifiers.alt && i.modifiers.ctrl && i.key_pressed(egui::Key::Enter))
+            {
+                self.insert_row_after();
+            }
+        }
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("csvtab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
@@ -1004,7 +1105,83 @@ impl CsvTab {
                 self.show_cell_edit = false;
             }
         }
+        // P44-6：排序对话框（BC 编辑>排序...；选列 + 升/降序）
+        if self.show_sort_dialog {
+            let mut keep = true;
+            let mut apply = false;
+            let mut close_req = false;
+            let headers = self.key_options();
+            // 当前排序列（默认第一列升序）
+            let mut col_name = self.sort_label();
+            let mut asc = self.sort.map(|s| s.asc).unwrap_or(true);
+            egui::Window::new(t(I18nKey::MenuSort))
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(format!("当前排序列：{}", col_name));
+                    if !headers.is_empty() {
+                        egui::ComboBox::from_id_salt("csv_sort_col")
+                            .selected_text(col_name.clone())
+                            .show_ui(ui, |ui| {
+                                for (side, label) in [(true, "左"), (false, "右")] {
+                                    let n = if side {
+                                        self.table_a.as_ref().map(|t| t.headers.len()).unwrap_or(0)
+                                    } else {
+                                        self.table_b.as_ref().map(|t| t.headers.len()).unwrap_or(0)
+                                    };
+                                    for c in 0..n {
+                                        let name = format!("{} · 列{}", label, c);
+                                        if ui
+                                            .selectable_label(col_name == name, name.clone())
+                                            .clicked()
+                                        {
+                                            col_name = name;
+                                        }
+                                    }
+                                }
+                            });
+                    }
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut asc, true, t(I18nKey::SortAscending));
+                        ui.radio_value(&mut asc, false, t(I18nKey::SortDescending));
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.button(t(I18nKey::Save)).clicked() {
+                            apply = true;
+                        }
+                        if ui.button(t(I18nKey::Cancel)).clicked() {
+                            close_req = true;
+                        }
+                    });
+                });
+            if apply {
+                // 解析 col_name → (side, col)
+                let (side, col) = parse_sort_col(&col_name);
+                self.sort = Some(SortKey { side, col, asc });
+                self.show_sort_dialog = false;
+            } else if close_req || !keep {
+                self.show_sort_dialog = false;
+            }
+        }
     }
+}
+
+/// P44-6：解析排序对话框选择的列名（"左 · 列N" / "右 · 列N"）为 (side, col)
+fn parse_sort_col(name: &str) -> (bool, usize) {
+    let mut side = true;
+    let mut col = 0usize;
+    if let Some(rest) = name.strip_prefix("右") {
+        side = false;
+        if let Some(n) = rest.trim_start_matches([' ', '·']).strip_prefix("列") {
+            col = n.parse().unwrap_or(0);
+        }
+    } else if let Some(rest) = name.strip_prefix("左") {
+        if let Some(n) = rest.trim_start_matches([' ', '·']).strip_prefix("列") {
+            col = n.parse().unwrap_or(0);
+        }
+    }
+    (side, col)
 }
 
 #[cfg(test)]

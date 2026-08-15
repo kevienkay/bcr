@@ -178,6 +178,10 @@ pub struct DiffTab {
     pub bookmarks: std::collections::HashMap<u8, usize>,
     /// P44-4：会话锁定（BC Session>已锁定，锁定时禁止编辑操作）
     pub locked: bool,
+    /// P44-6：行号显示开关（BC View>行号）
+    pub show_line_numbers: bool,
+    /// P44-6：语法加亮开关（BC View>语法加亮）
+    pub show_syntax: bool,
 }
 
 /// 编辑窗口状态
@@ -250,6 +254,8 @@ impl DiffTab {
             layout: DiffLayout::SideBySide,
             bookmarks: std::collections::HashMap::new(),
             locked: false,
+            show_line_numbers: true,
+            show_syntax: true,
         }
     }
 
@@ -2595,8 +2601,16 @@ impl DiffTab {
                 .filter_map(|r| r.right_no)
                 .max()
                 .unwrap_or(0);
-            let gutter_l = gutter_width(max_no_l);
-            let gutter_r = gutter_width(max_no_r);
+            let gutter_l = if self.show_line_numbers {
+                gutter_width(max_no_l)
+            } else {
+                0.0
+            };
+            let gutter_r = if self.show_line_numbers {
+                gutter_width(max_no_r)
+            } else {
+                0.0
+            };
             // P33：两栏固定各占半屏（BC 式等分），长行栏内横向滚动查看；随窗口缩放自适应
             // P39-2d：布局切换 —— SideBySide 左右并排各半宽；TopBottom/Web 单栏全宽上下堆叠
             let avail = ui.available_width();
@@ -2652,9 +2666,17 @@ impl DiffTab {
                     vi
                 }
             };
-            // 左右语法（按文件路径解析，供行内语法高亮）
-            let syn_l = self.left.as_ref().and_then(|f| f.syntax);
-            let syn_r = self.right.as_ref().and_then(|f| f.syntax);
+            // 左右语法（按文件路径解析，供行内语法高亮；P44-6 可开关）
+            let syn_l = if self.show_syntax {
+                self.left.as_ref().and_then(|f| f.syntax)
+            } else {
+                None
+            };
+            let syn_r = if self.show_syntax {
+                self.right.as_ref().and_then(|f| f.syntax)
+            } else {
+                None
+            };
 
             // 受控滚动 + 虚拟化渲染（统一走 common::show_rows）
             // P32-A2：取出行内编辑状态，渲染循环内传入；双击请求在下循环结束后处理

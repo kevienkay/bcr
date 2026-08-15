@@ -424,6 +424,40 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 }
             }
         }
+        // P44-6：CsvTab 分支——排序/修改/插入行（BC 表格比较编辑菜单）
+        if matches!(app.tabs.get(app.active), Some(Tab::Csv(_))) {
+            ui.separator();
+            if ui.button(t(I18nKey::MenuSort)).clicked() {
+                ui.close();
+                if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+                    tab.open_sort_dialog();
+                }
+            }
+            if ui.button(t(I18nKey::CsvEditCell)).clicked() {
+                ui.close();
+                if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+                    tab.open_cell_edit();
+                }
+            }
+            if ui.button(t(I18nKey::CsvInsertRow)).clicked() {
+                ui.close();
+                if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+                    tab.insert_row();
+                }
+            }
+            if ui.button("在后面插入行").clicked() {
+                ui.close();
+                if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+                    tab.insert_row_after();
+                }
+            }
+            if ui.button(t(I18nKey::CsvDeleteRow)).clicked() {
+                ui.close();
+                if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+                    tab.delete_row();
+                }
+            }
+        }
         // P44-3：MergeTab 分支——冲突采用（BC 编辑菜单 冲突子组）
         if matches!(app.tabs.get(app.active), Some(Tab::Merge(_))) {
             ui.separator();
@@ -777,6 +811,41 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if ui.button(t(I18nKey::MenuThumb)).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
+        }
+        // P44-6：行号 / 语法加亮开关（BC 视图菜单；DiffTab 分支）
+        if matches!(app.tabs.get(app.active), Some(Tab::Diff(_))) {
+            let show_ln = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::Diff(tab) => Some(tab.show_line_numbers),
+                    _ => None,
+                })
+                .unwrap_or(true);
+            if ui
+                .checkbox(&mut show_ln.clone(), t(I18nKey::MenuLineNumbers))
+                .changed()
+            {
+                if let Tab::Diff(tab) = &mut app.tabs[app.active] {
+                    tab.show_line_numbers = show_ln;
+                }
+            }
+            let show_syn = app
+                .tabs
+                .get(app.active)
+                .and_then(|t| match t {
+                    Tab::Diff(tab) => Some(tab.show_syntax),
+                    _ => None,
+                })
+                .unwrap_or(true);
+            if ui
+                .checkbox(&mut show_syn.clone(), t(I18nKey::MenuSyntaxHighlight))
+                .changed()
+            {
+                if let Tab::Diff(tab) = &mut app.tabs[app.active] {
+                    tab.show_syntax = show_syn;
+                }
+            }
         }
         ui.separator();
         // P42-4：图例 / 日志 / 工具栏开关（BC 视图菜单）

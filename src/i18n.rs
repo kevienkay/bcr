@@ -610,6 +610,16 @@ pub enum Key {
     MenuEditTextFile,
     /// 查看补丁...
     MenuViewPatch,
+    /// 行号（开关）
+    MenuLineNumbers,
+    /// 语法加亮（开关）
+    MenuSyntaxHighlight,
+    /// 排序...
+    MenuSort,
+    /// 升序
+    SortAscending,
+    /// 降序
+    SortDescending,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页
