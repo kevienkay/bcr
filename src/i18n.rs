@@ -630,6 +630,10 @@ pub enum Key {
     DirShowAllDirs,
     /// 仅比较文件（DirTab）
     DirOnlyFiles,
+    /// 加载工作空间（会话菜单）
+    MenuLoadWorkspace,
+    /// 保存工作空间为...
+    MenuSaveWorkspaceAs,
     /// 排序...
     MenuSort,
     /// 升序

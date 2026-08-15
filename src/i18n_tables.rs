@@ -412,6 +412,8 @@ i18n_table!(t_zh,
     HexLayoutTopBottom => "上-下布局",
     DirShowAllDirs => "总是显示文件夹",
     DirOnlyFiles => "仅比较文件",
+    MenuLoadWorkspace => "加载工作空间",
+    MenuSaveWorkspaceAs => "保存工作空间为...",
 );
 i18n_table!(t_en,
     // CLI
@@ -796,6 +798,8 @@ i18n_table!(t_en,
     HexLayoutTopBottom => "Top to Bottom",
     DirShowAllDirs => "Always Show Folders",
     DirOnlyFiles => "Compare Files Only",
+    MenuLoadWorkspace => "Load Workspace",
+    MenuSaveWorkspaceAs => "Save Workspace As...",
 );
 i18n_table!(t_de,
     // CLI
@@ -1180,6 +1184,8 @@ i18n_table!(t_de,
     HexLayoutTopBottom => "Übereinander",
     DirShowAllDirs => "Ordner immer anzeigen",
     DirOnlyFiles => "Nur Dateien vergleichen",
+    MenuLoadWorkspace => "Arbeitsbereich laden",
+    MenuSaveWorkspaceAs => "Arbeitsbereich speichern als...",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1564,6 +1570,8 @@ i18n_table!(t_ja,
     HexLayoutTopBottom => "上下",
     DirShowAllDirs => "常にフォルダを表示",
     DirOnlyFiles => "ファイルのみ比較",
+    MenuLoadWorkspace => "ワークスペースを読み込む",
+    MenuSaveWorkspaceAs => "ワークスペースを名前を付けて保存...",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1948,6 +1956,8 @@ i18n_table!(t_ko,
     HexLayoutTopBottom => "위아래",
     DirShowAllDirs => "항상 폴더 표시",
     DirOnlyFiles => "파일만 비교",
+    MenuLoadWorkspace => "작업 영역 로드",
+    MenuSaveWorkspaceAs => "작업 영역을 다른 이름으로 저장...",
 );
 i18n_table!(t_es,
     // CLI
@@ -2332,6 +2342,8 @@ i18n_table!(t_es,
     HexLayoutTopBottom => "Arriba-abajo",
     DirShowAllDirs => "Mostrar siempre carpetas",
     DirOnlyFiles => "Comparar solo archivos",
+    MenuLoadWorkspace => "Cargar espacio de trabajo",
+    MenuSaveWorkspaceAs => "Guardar espacio de trabajo como...",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2716,6 +2728,8 @@ i18n_table!(t_pt,
     HexLayoutTopBottom => "De cima para baixo",
     DirShowAllDirs => "Sempre mostrar pastas",
     DirOnlyFiles => "Comparar apenas arquivos",
+    MenuLoadWorkspace => "Carregar espaço de trabalho",
+    MenuSaveWorkspaceAs => "Salvar espaço de trabalho como...",
 );
 i18n_table!(t_ar,
     // CLI
@@ -3100,6 +3114,8 @@ i18n_table!(t_ar,
     HexLayoutTopBottom => "من الأعلى إلى الأسفل",
     DirShowAllDirs => "إظهار المجلدات دائمًا",
     DirOnlyFiles => "مقارنة الملفات فقط",
+    MenuLoadWorkspace => "تحميل مساحة العمل",
+    MenuSaveWorkspaceAs => "حفظ مساحة العمل باسم...",
 );
 i18n_table!(t_ru,
     // CLI
@@ -3484,6 +3500,8 @@ i18n_table!(t_ru,
     HexLayoutTopBottom => "Сверху вниз",
     DirShowAllDirs => "Всегда показывать папки",
     DirOnlyFiles => "Сравнивать только файлы",
+    MenuLoadWorkspace => "Загрузить рабочее пространство",
+    MenuSaveWorkspaceAs => "Сохранить рабочее пространство как...",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3868,4 +3886,6 @@ i18n_table!(t_fr,
     HexLayoutTopBottom => "Haut en bas",
     DirShowAllDirs => "Toujours afficher les dossiers",
     DirOnlyFiles => "Comparer uniquement les fichiers",
+    MenuLoadWorkspace => "Charger l'espace de travail",
+    MenuSaveWorkspaceAs => "Enregistrer l'espace de travail sous...",
 );

@@ -3336,6 +3336,37 @@ fn dirtab_structure_options() {
     t.rebuild_tree();
 }
 
+// ---- P46-5：文件夹同步视图 + 工作空间（⇧L 图例快捷键；标签布局 TOML 持久化） ----------------
+
+#[test]
+fn workspace_save_load_roundtrip() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\nb\n");
+    let r = write(d.path(), "r.txt", "a\nB\n");
+    let wp = d.path().join("ws.toml");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    {
+        let mut app = app.borrow_mut();
+        app.open_empty_diff();
+        if let super::Tab::Diff(t) = &mut app.tabs[0] {
+            t.load_pair(&l, &r, ViewOptions::default());
+        }
+        app.open_empty_dir();
+        // 保存工作空间（Diff + Dir 两个标签）
+        let sr = app.save_workspace(&wp);
+        assert!(sr.is_ok(), "保存工作空间应成功: {:?}", sr);
+        // 清空后加载
+        app.tabs.clear();
+        app.active = 0;
+        let lr = app.load_workspace(&wp);
+        assert!(lr.is_ok(), "加载工作空间应成功: {:?}", lr);
+        assert_eq!(app.tabs.len(), 2, "应恢复 2 个标签");
+        if let super::Tab::Diff(t) = &app.tabs[0] {
+            assert_eq!(t.left.as_ref().map(|f| f.path.as_str()), Some(l.as_str()));
+        }
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

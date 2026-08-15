@@ -287,6 +287,85 @@ impl DiffApp {
         self.active = self.tabs.len() - 1;
     }
 
+    /// P46-5：保存工作空间（BC 会话>保存工作空间为...）——标签布局 TOML 持久化
+    fn save_workspace(&mut self, path: &std::path::Path) -> Result<(), String> {
+        #[derive(serde::Serialize)]
+        struct WsTab {
+            kind: String,
+            left: String,
+            right: String,
+        }
+        #[derive(serde::Serialize)]
+        struct WsFile {
+            tabs: Vec<WsTab>,
+        }
+        let tabs: Vec<WsTab> = self
+            .tabs
+            .iter()
+            .filter_map(|t| {
+                let (l, r) = session_paths(t)?;
+                let kind = match t {
+                    Tab::Diff(_) => "diff".to_string(),
+                    Tab::Dir(_) => "dir".to_string(),
+                    Tab::Merge(_) => "merge".to_string(),
+                    Tab::Image(_) => "image".to_string(),
+                    Tab::Csv(_) => "csv".to_string(),
+                    Tab::Media(_) => "media".to_string(),
+                    _ => return None,
+                };
+                Some(WsTab {
+                    kind,
+                    left: l,
+                    right: r,
+                })
+            })
+            .collect();
+        if tabs.is_empty() {
+            return Err("当前会话无可保存的对比标签".to_string());
+        }
+        let s = toml::to_string_pretty(&WsFile { tabs }).map_err(|e| e.to_string())?;
+        std::fs::write(path, s).map_err(|e| e.to_string())
+    }
+
+    /// P46-5：加载工作空间（BC 会话>加载工作空间）——按类型重建标签
+    fn load_workspace(&mut self, path: &std::path::Path) -> Result<(), String> {
+        #[derive(serde::Deserialize)]
+        struct WsTab {
+            kind: String,
+            left: String,
+            right: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct WsFile {
+            tabs: Vec<WsTab>,
+        }
+        let s = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let ws: WsFile = toml::from_str(&s).map_err(|e| e.to_string())?;
+        if ws.tabs.is_empty() {
+            return Err("工作空间为空".to_string());
+        }
+        self.tabs.clear();
+        self.active = 0;
+        for t in ws.tabs {
+            let tab = match t.kind.as_str() {
+                "diff" => {
+                    let mut d = DiffTab::new();
+                    d.load_pair(&t.left, &t.right, ViewOptions::default());
+                    Tab::Diff(d)
+                }
+                "dir" => Tab::Dir(DirTab::new(&t.left, &t.right)),
+                "merge" => Tab::Merge(MergeTab::new("", &t.left, &t.right)),
+                "image" => Tab::Image(ImageTab::new(&t.left, &t.right)),
+                "csv" => Tab::Csv(CsvTab::new(&t.left, &t.right)),
+                "media" => Tab::Media(MediaTab::new(&t.left, &t.right)),
+                _ => continue,
+            };
+            self.tabs.push(tab);
+        }
+        self.active = self.tabs.len().saturating_sub(1);
+        Ok(())
+    }
+
     fn close_tab(&mut self, idx: usize) {
         if idx >= self.tabs.len() {
             return;
@@ -398,6 +477,17 @@ impl DiffApp {
             if let Some(Tab::TextEdit(t)) = self.tabs.get_mut(self.active) {
                 t.save_as();
             }
+        }
+        // P46-5：⇧L 图例（BC 视图>图例，⇧L；输入框聚焦时不触发）
+        if ui.input(|i| {
+            i.modifiers.shift
+                && !i.modifiers.command
+                && !i.modifiers.alt
+                && !i.modifiers.ctrl
+                && i.key_pressed(egui::Key::L)
+        }) && !ui.ctx().egui_wants_keyboard_input()
+        {
+            self.show_legend = !self.show_legend;
         }
     }
 

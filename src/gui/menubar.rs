@@ -124,6 +124,26 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             app.reload_current();
         }
+        // P46-5：工作空间（BC 会话菜单 保存工作空间为.../加载工作空间）
+        if ui.button(t(I18nKey::MenuSaveWorkspaceAs)).clicked() {
+            ui.close();
+            if let Some(p) = rfd::FileDialog::new()
+                .set_file_name("bcr-workspace.toml")
+                .save_file()
+            {
+                if let Err(e) = app.save_workspace(&p) {
+                    app.report_error = Some(e);
+                }
+            }
+        }
+        if ui.button(t(I18nKey::MenuLoadWorkspace)).clicked() {
+            ui.close();
+            if let Some(p) = rfd::FileDialog::new().pick_file() {
+                if let Err(e) = app.load_workspace(&p) {
+                    app.report_error = Some(e);
+                }
+            }
+        }
         // P44-4：已锁定（BC Session>已锁定；DiffTab 分支，锁定会话防编辑）
         if let Some(Tab::Diff(lock_tab)) = app.tabs.get_mut(app.active) {
             ui.checkbox(&mut lock_tab.locked, crate::i18n::t(I18nKey::MenuLocked));
