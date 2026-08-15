@@ -3267,6 +3267,36 @@ fn textedit_view_switches() {
     assert_eq!(t.line_count(), 2);
 }
 
+// ---- P46-2：PatchTab 差异导航（⇧⌥⌃↓/↑ 差异、⇧⌃↓/↑ 差异部分） ----------------
+
+#[test]
+fn patch_tab_diff_navigation() {
+    let d = tempdir().unwrap();
+    let patch = write(
+        d.path(),
+        "p.patch",
+        "--- a\n+++ b\n@@ -1,3 +1,3 @@\n-old1\n+new1\n same\n@@ -5,2 +5,2 @@\n-old2\n+new2\n",
+    );
+    let mut t = super::PatchTab::new(&patch);
+    // 无差异时 next_diff 安全
+    t.next_diff();
+    // 存在差异（至少两个差异块）→ 下一差异应定位到非 Equal 行
+    if t.parsed.is_some() {
+        t.next_diff();
+        assert!(t.current_diff_pos().is_some(), "下一差异应定位");
+        let p1 = t.current_diff_pos().unwrap();
+        t.next_diff();
+        let p2 = t.current_diff_pos().unwrap();
+        assert_ne!(p1, p2, "连续两次下一差异应不同行");
+        // 区块导航：下一差异部分
+        t.next_diff_section();
+        assert!(t.current_diff_pos().is_some());
+        // 上一差异
+        t.prev_diff();
+        assert!(t.current_diff_pos().is_some());
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

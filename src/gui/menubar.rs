@@ -643,6 +643,34 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.prev_edit());
         }
+        // P46-2：PatchTab 差异导航（BC 文本补丁搜索菜单 下一个/上一个差异、差异部分）
+        if matches!(app.tabs.get(app.active), Some(Tab::Patch(_))) {
+            ui.separator();
+            if ui.button(t(I18nKey::MenuNextDiff)).clicked() {
+                ui.close();
+                if let Some(Tab::Patch(tab)) = app.tabs.get_mut(app.active) {
+                    tab.next_diff();
+                }
+            }
+            if ui.button(t(I18nKey::MenuPrevDiff)).clicked() {
+                ui.close();
+                if let Some(Tab::Patch(tab)) = app.tabs.get_mut(app.active) {
+                    tab.prev_diff();
+                }
+            }
+            if ui.button(t(I18nKey::MenuNextSection)).clicked() {
+                ui.close();
+                if let Some(Tab::Patch(tab)) = app.tabs.get_mut(app.active) {
+                    tab.next_diff_section();
+                }
+            }
+            if ui.button(t(I18nKey::MenuPrevSection)).clicked() {
+                ui.close();
+                if let Some(Tab::Patch(tab)) = app.tabs.get_mut(app.active) {
+                    tab.prev_diff_section();
+                }
+            }
+        }
         // P43-3：替换导航（BC 搜索菜单 下一个/上一个替换）
         if ui.button(t(I18nKey::MenuNextReplace)).clicked() {
             ui.close();

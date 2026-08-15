@@ -31,6 +31,8 @@ pub struct PatchTab {
     bookmark_no: String,
     /// P45-5：选区（rows 行索引范围，选择选择内容用）
     pub(crate) selection: Option<(usize, usize)>,
+    /// P46-2：当前差异行索引（差异导航定位）
+    diff_pos: Option<usize>,
 }
 
 impl PatchTab {
@@ -47,6 +49,7 @@ impl PatchTab {
             bookmarks: std::collections::HashMap::new(),
             bookmark_no: String::new(),
             selection: None,
+            diff_pos: None,
         };
         t.open(path);
         t
@@ -62,6 +65,114 @@ impl PatchTab {
                 .unwrap_or_else(|| self.path.clone());
             format!("🧩 {}", name)
         }
+    }
+
+    /// P46-2：差异行索引集合（RowTag ≠ Equal 的行）
+    fn diff_rows(&self) -> Vec<usize> {
+        self.rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| r.tag != RowTag::Equal)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// P46-2：下一差异（BC 搜索>下一个差异，⇧⌥⌃↓）
+    pub fn next_diff(&mut self) {
+        let rows = self.diff_rows();
+        if rows.is_empty() {
+            self.diff_pos = None;
+            return;
+        }
+        let cur = self
+            .diff_pos
+            .and_then(|p| rows.iter().position(|&r| r >= p));
+        let next = match cur {
+            Some(c) if rows[c] > self.diff_pos.unwrap_or(0) => c,
+            Some(c) => (c + 1) % rows.len(),
+            None => 0,
+        };
+        self.diff_pos = Some(rows[next]);
+        self.jump_to(rows[next]);
+    }
+
+    /// P46-2：上一差异（BC 搜索>上一个差异，⇧⌥⌃↑）
+    pub fn prev_diff(&mut self) {
+        let rows = self.diff_rows();
+        if rows.is_empty() {
+            self.diff_pos = None;
+            return;
+        }
+        let cur = self
+            .diff_pos
+            .and_then(|p| rows.iter().rposition(|&r| r <= p));
+        let prev = match cur {
+            Some(c) if rows[c] < self.diff_pos.unwrap_or(usize::MAX) => c,
+            Some(c) => (c + rows.len() - 1) % rows.len(),
+            None => rows.len() - 1,
+        };
+        self.diff_pos = Some(rows[prev]);
+        self.jump_to(rows[prev]);
+    }
+
+    /// P46-2：下一差异部分（BC 搜索>下一个差异部分，⇧⌃↓；跳到下一连续差异块首行）
+    pub fn next_diff_section(&mut self) {
+        self.section_nav(true);
+    }
+
+    /// P46-2：上一差异部分（BC 搜索>上一个差异部分，⇧⌃↑）
+    pub fn prev_diff_section(&mut self) {
+        self.section_nav(false);
+    }
+
+    /// P46-2：区块导航通用实现（连续差异行合并为一个区块，取区块首行）
+    fn section_nav(&mut self, forward: bool) {
+        let rows = self.diff_rows();
+        if rows.is_empty() {
+            self.diff_pos = None;
+            return;
+        }
+        // 连续差异行合并为区块（相邻行差距 >1 视为新块）
+        let mut blocks: Vec<usize> = Vec::new();
+        let mut prev: Option<usize> = None;
+        for r in &rows {
+            if prev.map(|p| r - p > 1).unwrap_or(true) {
+                blocks.push(*r);
+            }
+            prev = Some(*r);
+        }
+        let cur_row = self.diff_pos.unwrap_or(0);
+        if forward {
+            let next = blocks
+                .iter()
+                .find(|&&b| b > cur_row)
+                .or_else(|| blocks.first())
+                .copied()
+                .unwrap_or(blocks[0]);
+            self.diff_pos = Some(next);
+            self.jump_to(next);
+        } else {
+            let prev_b = blocks
+                .iter()
+                .rev()
+                .find(|&&b| b < cur_row)
+                .or_else(|| blocks.last())
+                .copied()
+                .unwrap_or(blocks[0]);
+            self.diff_pos = Some(prev_b);
+            self.jump_to(prev_b);
+        }
+    }
+
+    /// P46-2：滚动到指定行（行顶部对齐）
+    fn jump_to(&mut self, row: usize) {
+        self.scroll.y = (row as f32 * super::theme::ROW_H - 4.0 * super::theme::ROW_H).max(0.0);
+    }
+
+    /// P46-2：当前差异行（测试/状态用）
+    #[cfg(test)]
+    pub(crate) fn current_diff_pos(&self) -> Option<usize> {
+        self.diff_pos
     }
 
     /// P45-5：选择选择内容——把第一个差异块（Delete/Insert/Replace 行连续段）选为选区
@@ -188,6 +299,41 @@ impl PatchTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        // P46-2：差异导航快捷键（BC 搜索菜单 ⇧⌥⌃↓/↑ 差异、⇧⌃↓/↑ 差异部分；输入框聚焦时不触发）
+        if !ui.ctx().egui_wants_keyboard_input() {
+            if ui.input(|i| {
+                i.modifiers.ctrl
+                    && i.modifiers.shift
+                    && i.modifiers.alt
+                    && i.key_pressed(egui::Key::ArrowDown)
+            }) {
+                self.next_diff();
+            }
+            if ui.input(|i| {
+                i.modifiers.ctrl
+                    && i.modifiers.shift
+                    && i.modifiers.alt
+                    && i.key_pressed(egui::Key::ArrowUp)
+            }) {
+                self.prev_diff();
+            }
+            if ui.input(|i| {
+                i.modifiers.ctrl
+                    && i.modifiers.shift
+                    && !i.modifiers.alt
+                    && i.key_pressed(egui::Key::ArrowDown)
+            }) {
+                self.next_diff_section();
+            }
+            if ui.input(|i| {
+                i.modifiers.ctrl
+                    && i.modifiers.shift
+                    && !i.modifiers.alt
+                    && i.key_pressed(egui::Key::ArrowUp)
+            }) {
+                self.prev_diff_section();
+            }
+        }
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("patch_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
