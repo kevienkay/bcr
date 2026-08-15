@@ -61,6 +61,10 @@ pub struct DiffArgs {
     /// 复用已保存的规则 Profile（忽略选项等）
     #[arg(long)]
     pub profile: Option<String>,
+
+    /// 输出 JSON 契约（diff.v1，P27 自动化格式）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// 运行 diff 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
@@ -192,6 +196,27 @@ pub fn run(args: &DiffArgs) -> i32 {
         .collect();
 
     let ops = capture_diff_slices(algo, &keys_l, &keys_r);
+
+    // P49-2：--json 输出 diff.v1 契约（行号区间，自动化友好），退出码仍按差异语义
+    if args.json {
+        let json_ops: Vec<(String, usize, usize, usize, usize)> = ops
+            .iter()
+            .map(|op| {
+                let (tag, r0, r1) = match op.tag() {
+                    similar::DiffTag::Equal => ("equal", op.old_range(), op.new_range()),
+                    similar::DiffTag::Delete => ("delete", op.old_range(), op.new_range()),
+                    similar::DiffTag::Insert => ("insert", op.old_range(), op.new_range()),
+                    similar::DiffTag::Replace => ("replace", op.old_range(), op.new_range()),
+                };
+                (tag.to_string(), r0.start, r0.end, r1.start, r1.end)
+            })
+            .collect();
+        let v = crate::jsonout::envelope_diff(&args.left, &args.right, &json_ops);
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+        let has_diff = json_ops.iter().any(|(t, ..)| t != "equal");
+        return if has_diff { 1 } else { 0 };
+    }
+
     // capture_diff_slices 对完全相同的输入返回全 Equal op，而非空 vec，需显式判断
     if ops.iter().all(|op| op.tag() == similar::DiffTag::Equal) {
         return 0; // 无差异
@@ -350,6 +375,7 @@ mod tests {
             highlight: false,
             labels: vec![],
             profile: None,
+            json: false,
         }
     }
 
@@ -499,6 +525,7 @@ mod crlf_tests {
             highlight: false,
             labels: vec![],
             profile: None,
+            json: false,
         }
     }
 
@@ -576,6 +603,7 @@ mod content_filter_tests {
             highlight: false,
             labels: vec![],
             profile: None,
+            json: false,
         }
     }
 

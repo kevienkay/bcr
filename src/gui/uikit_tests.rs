@@ -3396,3 +3396,62 @@ fn dirtab_view_filter_hotkeys_1_2_3() {
     h.run_steps(2);
     assert_eq!(tab.borrow().view_filter, ViewFilter::All);
 }
+
+// ---- P49-3：菜单栏真点验证（kittest 驱动完整 menu_bar，点击菜单项触发行为） ----
+
+#[test]
+fn menubar_session_new_text_creates_diff_tab() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    assert!(app.borrow().tabs.is_empty(), "前置：无标签页");
+    let mut h = Harness::new_ui(|ui| crate::gui::menubar::menu_bar(&mut app.borrow_mut(), ui));
+    h.run();
+    // 展开「会话」菜单（菜单 popup 需要多帧展开）
+    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuSession))
+        .click();
+    h.run_steps(2);
+    // 点击「新建文本对比」→ 应创建 Diff 标签
+    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuNewText))
+        .click();
+    h.run_steps(2);
+    assert_eq!(app.borrow().tabs.len(), 1, "菜单新建文本对比应创建标签");
+    assert!(
+        matches!(app.borrow().tabs[0], super::Tab::Diff(_)),
+        "新标签应为 Diff"
+    );
+}
+
+#[test]
+fn menubar_session_new_dir_creates_dir_tab() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    let mut h = Harness::new_ui(|ui| crate::gui::menubar::menu_bar(&mut app.borrow_mut(), ui));
+    h.run();
+    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuSession))
+        .click();
+    h.run_steps(2);
+    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuNewDir))
+        .click();
+    h.run_steps(2);
+    assert_eq!(app.borrow().tabs.len(), 1, "菜单新建文件夹对比应创建标签");
+    assert!(
+        matches!(app.borrow().tabs[0], super::Tab::Dir(_)),
+        "新标签应为 Dir"
+    );
+}
+
+#[test]
+fn menubar_session_new_merge_creates_merge_tab() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    let mut h = Harness::new_ui(|ui| crate::gui::menubar::menu_bar(&mut app.borrow_mut(), ui));
+    h.run();
+    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuSession))
+        .click();
+    h.run_steps(2);
+    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuNewMerge))
+        .click();
+    h.run_steps(2);
+    assert_eq!(app.borrow().tabs.len(), 1, "菜单新建三路合并应创建标签");
+    assert!(
+        matches!(app.borrow().tabs[0], super::Tab::Merge(_)),
+        "新标签应为 Merge"
+    );
+}

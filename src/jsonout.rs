@@ -255,6 +255,98 @@ pub fn envelope_imgcmp(
     )
 }
 
+/// diff 结果 → JSON 契约(diff.v1)
+/// ops 为 (tag, old_start, old_end, new_start, new_end) 五元组，
+/// tag ∈ equal/delete/insert/replace，range 为左/右行号区间（0 基，半开）。
+pub fn envelope_diff(
+    left: &str,
+    right: &str,
+    ops: &[(String, usize, usize, usize, usize)],
+) -> Value {
+    envelope(
+        "diff.v1",
+        "diff",
+        &[("left", json!(left)), ("right", json!(right))],
+        json!({
+            "ops": ops
+                .iter()
+                .map(|(tag, os, oe, ns, ne)| json!({
+                    "tag": tag,
+                    "old_range": [os, oe],
+                    "new_range": [ns, ne],
+                }))
+                .collect::<Vec<_>>(),
+            "has_differences": ops.iter().any(|(t, ..)| t != "equal"),
+        }),
+    )
+}
+
+/// hex 结果 → JSON 契约(hex.v1)
+/// rows 为 (offset, left_hex, right_hex, diff) 四元组，仅含差异行（与 CLI 默认一致）。
+pub fn envelope_hex(
+    left: &str,
+    right: &str,
+    rows: &[(usize, String, String, bool)],
+    diff_rows: usize,
+    diff_bytes: u64,
+    left_size: u64,
+    right_size: u64,
+) -> Value {
+    envelope(
+        "hex.v1",
+        "hex",
+        &[("left", json!(left)), ("right", json!(right))],
+        json!({
+            "rows": rows
+                .iter()
+                .map(|(offset, l, r, diff)| json!({
+                    "offset": offset,
+                    "left": l,
+                    "right": r,
+                    "diff": diff,
+                }))
+                .collect::<Vec<_>>(),
+            "stats": {
+                "diff_rows": diff_rows,
+                "diff_bytes": diff_bytes,
+                "left_size": left_size,
+                "right_size": right_size,
+            },
+            "has_differences": diff_rows > 0,
+        }),
+    )
+}
+
+/// media 结果 → JSON 契约(media.v1)
+/// fields 为 (name, left, right) 字段级差异列表，left/right 为字符串化值。
+pub fn envelope_media(
+    left: &str,
+    right: &str,
+    left_format: Option<String>,
+    right_format: Option<String>,
+    fields: &[(String, Option<String>, Option<String>)],
+) -> Value {
+    envelope(
+        "media.v1",
+        "media",
+        &[("left", json!(left)), ("right", json!(right))],
+        json!({
+            "left_format": left_format,
+            "right_format": right_format,
+            "fields": fields
+                .iter()
+                .map(|(name, l, r)| json!({
+                    "name": name,
+                    "left": l,
+                    "right": r,
+                    "diff": l != r,
+                }))
+                .collect::<Vec<_>>(),
+            "has_differences": !fields.is_empty(),
+        }),
+    )
+}
+
 /// mp3tag 结果 → JSON 契约(mp3tag.v1)
 #[allow(dead_code)]
 pub fn envelope_mp3tag(
@@ -512,5 +604,55 @@ mod tests {
         assert_eq!(v["schema"], "merge.v1");
         assert_eq!(v["result"]["conflicts"], 2);
         assert_eq!(v["result"]["has_conflicts"], true);
+    }
+
+    #[test]
+    fn diff_envelope_shape() {
+        let ops = vec![
+            ("equal".to_string(), 0usize, 2usize, 0usize, 2usize),
+            ("replace".to_string(), 2usize, 3usize, 2usize, 3usize),
+        ];
+        let v = envelope_diff("/l.txt", "/r.txt", &ops);
+        assert_eq!(v["schema"], "diff.v1");
+        assert_eq!(v["result"]["has_differences"], true);
+        assert_eq!(v["result"]["ops"][1]["tag"], "replace");
+        assert_eq!(v["result"]["ops"][0]["old_range"][0], 0);
+    }
+
+    #[test]
+    fn diff_envelope_no_difference() {
+        let ops = vec![("equal".to_string(), 0usize, 2usize, 0usize, 2usize)];
+        let v = envelope_diff("/l.txt", "/r.txt", &ops);
+        assert_eq!(v["result"]["has_differences"], false);
+    }
+
+    #[test]
+    fn hex_envelope_shape() {
+        let rows = vec![(0usize, "00 01".to_string(), "00 02".to_string(), true)];
+        let v = envelope_hex("/l.bin", "/r.bin", &rows, 1, 2, 2, 2);
+        assert_eq!(v["schema"], "hex.v1");
+        assert_eq!(v["result"]["stats"]["diff_rows"], 1);
+        assert_eq!(v["result"]["rows"][0]["left"], "00 01");
+        assert_eq!(v["result"]["has_differences"], true);
+    }
+
+    #[test]
+    fn media_envelope_shape() {
+        let fields = vec![(
+            "sample_rate".to_string(),
+            Some("44100 Hz".to_string()),
+            Some("48000 Hz".to_string()),
+        )];
+        let v = envelope_media(
+            "/l.wav",
+            "/r.wav",
+            Some("WAV".to_string()),
+            Some("WAV".to_string()),
+            &fields,
+        );
+        assert_eq!(v["schema"], "media.v1");
+        assert_eq!(v["result"]["left_format"], "WAV");
+        assert_eq!(v["result"]["fields"][0]["name"], "sample_rate");
+        assert_eq!(v["result"]["has_differences"], true);
     }
 }

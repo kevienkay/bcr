@@ -227,6 +227,69 @@ pub fn compare_media(left: &str, right: &str) -> Vec<MediaFieldDiff> {
     out
 }
 
+/// `bcr media` 子命令参数（P49-2：P27 契约扩展新视图）
+#[derive(clap::Args, Debug)]
+pub struct MediaArgs {
+    /// 左侧媒体文件
+    pub left: String,
+
+    /// 右侧媒体文件
+    pub right: String,
+
+    /// 输出 JSON 契约（media.v1，P27 自动化格式）
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// 运行 media 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
+pub fn run(args: &MediaArgs) -> i32 {
+    let l = read_media_info(&args.left);
+    let r = read_media_info(&args.right);
+    let diffs = compare_media(&args.left, &args.right);
+    if args.json {
+        let fields: Vec<(String, Option<String>, Option<String>)> = diffs
+            .iter()
+            .map(|d| (d.field.clone(), d.left.clone(), d.right.clone()))
+            .collect();
+        let v = crate::jsonout::envelope_media(
+            &args.left,
+            &args.right,
+            l.format.clone(),
+            r.format.clone(),
+            &fields,
+        );
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
+    } else {
+        println!(
+            "左侧: {} (格式 {})",
+            args.left,
+            l.format.as_deref().unwrap_or("unknown")
+        );
+        println!(
+            "右侧: {} (格式 {})",
+            args.right,
+            r.format.as_deref().unwrap_or("unknown")
+        );
+        if diffs.is_empty() {
+            println!("元数据一致");
+        } else {
+            for d in &diffs {
+                println!(
+                    "- {}: 左={} 右={}",
+                    d.field,
+                    d.left.as_deref().unwrap_or("(无)"),
+                    d.right.as_deref().unwrap_or("(无)")
+                );
+            }
+        }
+    }
+    if diffs.is_empty() {
+        0
+    } else {
+        1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -27,6 +27,10 @@ pub struct HexArgs {
     /// 显示所有行（默认只显示差异行）
     #[arg(long)]
     pub show_same: bool,
+
+    /// 输出 JSON 契约（hex.v1，P27 自动化格式）
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// 运行 hex 子命令，返回进程退出码（0=无差异，1=有差异，2=错误）
@@ -62,6 +66,9 @@ pub fn run(args: &HexArgs) -> i32 {
     let mut rbuf = vec![0u8; CHUNK];
     let mut base = 0usize;
     let mut any_diff = false;
+    // P49-2：--json 模式收集差异行（offset, left_hex, right_hex）与字节统计
+    let mut json_rows: Vec<(usize, String, String, bool)> = Vec::new();
+    let mut diff_bytes: u64 = 0;
     loop {
         let nl = fill(&mut lf, &mut lbuf);
         let nr = fill(&mut rf, &mut rbuf);
@@ -73,11 +80,47 @@ pub fn run(args: &HexArgs) -> i32 {
             r.offset += base;
         }
         any_diff |= rows.iter().any(|r| r.diff);
-        render_hex(&rows, color, args.show_same);
+        if args.json {
+            for r in &rows {
+                if r.diff {
+                    let lhex = r
+                        .left
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let rhex = r
+                        .right
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    diff_bytes += r.left.len().max(r.right.len()) as u64;
+                    json_rows.push((r.offset, lhex, rhex, true));
+                }
+            }
+        } else {
+            render_hex(&rows, color, args.show_same);
+        }
         base += CHUNK;
         if nl < CHUNK && nr < CHUNK {
             break; // 两侧都已读到 EOF
         }
+    }
+
+    if args.json {
+        let lsize = std::fs::metadata(&args.left).map(|m| m.len()).unwrap_or(0);
+        let rsize = std::fs::metadata(&args.right).map(|m| m.len()).unwrap_or(0);
+        let v = crate::jsonout::envelope_hex(
+            &args.left,
+            &args.right,
+            &json_rows,
+            json_rows.len(),
+            diff_bytes,
+            lsize,
+            rsize,
+        );
+        println!("{}", serde_json::to_string(&v).unwrap_or_default());
     }
 
     if any_diff {

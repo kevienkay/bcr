@@ -72,6 +72,9 @@ enum Commands {
     /// MP3 标签对比（ID3v1/v2，字段级差异）
     Mp3tag(mp3tag::Mp3tagArgs),
 
+    /// 媒体元数据对比（WAV/MP3/FLAC 容器头解析，字段级差异）
+    Media(mediacmp::MediaArgs),
+
     /// 对比两个目录树（快速元数据比较或深度内容比较）
     Compare(compare::CompareArgs),
 
@@ -203,6 +206,7 @@ fn main() {
         Commands::Hex(args) => hex::run(&args),
         Commands::Imgcmp(args) => imgcmp::run(&args),
         Commands::Mp3tag(args) => mp3tag::run(&args),
+        Commands::Media(args) => mediacmp::run(&args),
         Commands::Compare(args) => compare::run(&args),
         Commands::Compare3(args) => compare3::run(&args),
         Commands::Csv(args) => csvcmp::run(&args),
