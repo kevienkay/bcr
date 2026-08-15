@@ -66,6 +66,12 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **DirTab 工具栏精简（2）**：include/exclude glob 输入 + 应用过滤收进左侧过滤面板（「清除全部过滤」同步清空），工具栏保留路径/刷新/交换/内容哈希/仅差异/显示相同/状态过滤/统计/同步/批量
 - **其余视图评估**：CsvTab 8 / ImageTab 20（旋转翻转核心）/ MergeTab 15 / FolderMergeTab 2 控件均高频，保留不动
 
+### DirTab 选择操作与过滤扩展（P41，对标 BC 文件夹比较 编辑/视图菜单）
+
+- **展开/折叠全部（1）**：`expand_all`/`collapse_all`（从 entries 收集目录路径折叠、重建树），Edit 菜单 DirTab 分支加两项
+- **视图过滤扩展（2）**：ViewFilter 加 `LeftNewer`/`RightNewer`（仅左侧/右侧较新，Differ + mtime 比较 `is_left_newer`/`is_right_newer`），工具栏下拉加 2 项
+- **选择操作（3）**：多选集合 `selected_set`（flat 索引）+ 行渲染高亮；`select_all`/`select_none`/`invert_selection`/`select_orphans`（LeftOnly+RightOnly）/`select_newer`（较新项）；Edit 菜单 DirTab 分支加 5 项
+
 ## [0.3.0] - 2026-08-13
 
 ### UI 重构（P33，对标 Beyond Compare 5.2.5 真实界面）
