@@ -3,10 +3,48 @@
 //! 单文件编辑器：打开/保存（编码回写 + A2 模式 .bak 备份）、撤销/重做、
 //! 查找/替换、转换文件（Trim 行尾空白 / Tabs to Spaces / CRLF↔LF）、
 //! 语法高亮预览 + 可见空白 + 行号 gutter。
+//! P42-1：ConvertMode + convert_content 抽为公共逻辑，供 TextEditTab 与 DiffTab 复用。
 
 use super::common::*;
 use crate::i18n::{fmt, t, Key as I18nKey};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
+
+/// P42-1：转换文件模式（BC Convert File）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConvertMode {
+    /// Trim 行尾空白（逐行保留各自行尾风格 CRLF/LF）
+    Trim,
+    /// Tabs → 空格（4 空格）
+    TabsToSpaces,
+    /// 行尾 → CRLF
+    ToCrlf,
+    /// 行尾 → LF
+    ToLf,
+}
+
+/// P42-1：按模式转换文本内容（纯函数，供 TextEditTab/DiffTab 共用）
+pub fn convert_content(content: &str, mode: ConvertMode) -> String {
+    match mode {
+        ConvertMode::Trim => {
+            let mut new = String::new();
+            for line in content.split_inclusive('\n') {
+                let (body, ending) = if let Some(stripped) = line.strip_suffix("\r\n") {
+                    (stripped, "\r\n")
+                } else if let Some(stripped) = line.strip_suffix('\n') {
+                    (stripped, "\n")
+                } else {
+                    (line, "")
+                };
+                new.push_str(body.trim_end());
+                new.push_str(ending);
+            }
+            new
+        }
+        ConvertMode::TabsToSpaces => content.replace('\t', "    "),
+        ConvertMode::ToCrlf => content.replace("\r\n", "\n").replace('\n', "\r\n"),
+        ConvertMode::ToLf => content.replace("\r\n", "\n"),
+    }
+}
 
 /// 文本编辑标签页
 pub struct TextEditTab {

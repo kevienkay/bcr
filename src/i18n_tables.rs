@@ -334,6 +334,7 @@ i18n_table!(t_zh,
     MenuInvertSelection => "反向选择",
     MenuSelectAll => "全选",
     MenuSelectNone => "取消选择",
+    ConvertFile => "转换文件",
 );
 i18n_table!(t_en,
     // CLI
@@ -640,6 +641,7 @@ i18n_table!(t_en,
     MenuInvertSelection => "Invert Selection",
     MenuSelectAll => "Select All",
     MenuSelectNone => "Select None",
+    ConvertFile => "Convert File",
 );
 i18n_table!(t_de,
     // CLI
@@ -946,6 +948,7 @@ i18n_table!(t_de,
     MenuInvertSelection => "Auswahl umkehren",
     MenuSelectAll => "Alles auswählen",
     MenuSelectNone => "Auswahl aufheben",
+    ConvertFile => "Datei konvertieren",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1252,6 +1255,7 @@ i18n_table!(t_ja,
     MenuInvertSelection => "選択を反転",
     MenuSelectAll => "すべて選択",
     MenuSelectNone => "選択解除",
+    ConvertFile => "ファイル変換",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1558,6 +1562,7 @@ i18n_table!(t_ko,
     MenuInvertSelection => "선택 반전",
     MenuSelectAll => "모두 선택",
     MenuSelectNone => "선택 해제",
+    ConvertFile => "파일 변환",
 );
 i18n_table!(t_es,
     // CLI
@@ -1864,6 +1869,7 @@ i18n_table!(t_es,
     MenuInvertSelection => "Invertir selección",
     MenuSelectAll => "Seleccionar todo",
     MenuSelectNone => "No seleccionar",
+    ConvertFile => "Convertir archivo",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2170,6 +2176,7 @@ i18n_table!(t_pt,
     MenuInvertSelection => "Inverter seleção",
     MenuSelectAll => "Selecionar tudo",
     MenuSelectNone => "Não selecionar",
+    ConvertFile => "Converter arquivo",
 );
 i18n_table!(t_ar,
     // CLI
@@ -2476,6 +2483,7 @@ i18n_table!(t_ar,
     MenuInvertSelection => "عكس التحديد",
     MenuSelectAll => "تحديد الكل",
     MenuSelectNone => "إلغاء التحديد",
+    ConvertFile => "تحويل الملف",
 );
 i18n_table!(t_ru,
     // CLI
@@ -2782,6 +2790,7 @@ i18n_table!(t_ru,
     MenuInvertSelection => "Инвертировать выбор",
     MenuSelectAll => "Выбрать все",
     MenuSelectNone => "Снять выбор",
+    ConvertFile => "Преобразовать файл",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3088,4 +3097,5 @@ i18n_table!(t_fr,
     MenuInvertSelection => "Inverser la sélection",
     MenuSelectAll => "Tout sélectionner",
     MenuSelectNone => "Tout désélectionner",
+    ConvertFile => "Convertir le fichier",
 );

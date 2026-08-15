@@ -249,6 +249,30 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     t.invert_selection();
                 }
             }
+            ui.separator();
+            // P42-1：转换文件（BC Edit>Convert File，DiffTab 分支）
+            ui.menu_button(t(I18nKey::ConvertFile), |ui| {
+                let modes = [
+                    (t(I18nKey::ConvertTrim), super::textedit::ConvertMode::Trim),
+                    (
+                        t(I18nKey::ConvertTabs),
+                        super::textedit::ConvertMode::TabsToSpaces,
+                    ),
+                    (
+                        t(I18nKey::ConvertCrlf),
+                        super::textedit::ConvertMode::ToCrlf,
+                    ),
+                    (t(I18nKey::ConvertLf), super::textedit::ConvertMode::ToLf),
+                ];
+                for (label, mode) in modes {
+                    if ui.button(label).clicked() {
+                        ui.close();
+                        if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                            tab.convert_file(mode);
+                        }
+                    }
+                }
+            });
         }
     });
 }

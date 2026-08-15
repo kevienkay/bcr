@@ -2542,6 +2542,49 @@ fn dirtab_selection_ops_select_all_invert_orphans() {
     assert!(tab.borrow().selected_set_rels().is_empty());
 }
 
+// ---- P42-1：文本比较转换文件（BC Convert File） ----------------
+
+#[test]
+fn difftab_convert_file_trim_and_line_ending() {
+    let d = tempdir().unwrap();
+    // 左侧有行尾空白，右侧 CRLF
+    let l = write(d.path(), "l.txt", "a  \nb\n");
+    let r = write(d.path(), "r.txt", "a\r\nb\r\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    // Trim 行尾空白（作用于两侧）
+    tab.borrow_mut()
+        .convert_file(crate::gui::textedit::ConvertMode::Trim);
+    assert_eq!(
+        std::fs::read_to_string(&l).unwrap(),
+        "a\nb\n",
+        "Trim 后左侧行尾空白应去除"
+    );
+    // 行尾 → LF（作用于两侧）
+    tab.borrow_mut()
+        .convert_file(crate::gui::textedit::ConvertMode::ToLf);
+    assert_eq!(
+        std::fs::read_to_string(&r).unwrap(),
+        "a\nb\n",
+        "ToLf 后右侧 CRLF 应转 LF"
+    );
+    // Tabs → 空格
+    let t2 = write(d.path(), "t.txt", "\ta\n");
+    let t3 = write(d.path(), "t3.txt", "\ta\n");
+    let tab2 = RefCell::new(DiffTab::new());
+    tab2.borrow_mut()
+        .load_pair(&t2, &t3, ViewOptions::default());
+    tab2.borrow_mut()
+        .convert_file(crate::gui::textedit::ConvertMode::TabsToSpaces);
+    assert_eq!(
+        std::fs::read_to_string(&t2).unwrap(),
+        "    a\n",
+        "TabsToSpaces 后 tab 应转 4 空格"
+    );
+    // .bak 备份生成
+    assert!(std::path::Path::new(&format!("{l}.bak")).exists());
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

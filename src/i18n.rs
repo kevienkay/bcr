@@ -315,6 +315,8 @@ pub enum Key {
     SaveFile,
     /// P37-1g：转换-Trim 行尾空白
     ConvertTrim,
+    /// P42-1：转换文件（菜单标题）
+    ConvertFile,
     /// P37-1g：转换-Tabs to Spaces
     ConvertTabs,
     /// P37-1g：转换-行尾 CRLF

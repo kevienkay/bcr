@@ -598,6 +598,73 @@ impl DiffTab {
         self.error = Some(fmt(I18nKey::Saved, &["替换已写回"]));
     }
 
+    /// P42-1：转换文件（BC Convert File），作用于两侧。
+    /// mode：Trim 行尾空白 / Tabs→空格 / 行尾 CRLF↔LF。
+    /// 与替换同模式：.bak 备份 + 编码回写 + 撤销快照 + 重算 diff。
+    pub fn convert_file(&mut self, mode: crate::gui::textedit::ConvertMode) {
+        let mut changed_any = false;
+        let mut snapshots = Vec::new();
+        for side in [EditSide::Left, EditSide::Right] {
+            let opt = match side {
+                EditSide::Left => self
+                    .left
+                    .as_ref()
+                    .map(|f| (f.path.clone(), f.encoding, f.had_bom, f.content.clone())),
+                EditSide::Right => self
+                    .right
+                    .as_ref()
+                    .map(|f| (f.path.clone(), f.encoding, f.had_bom, f.content.clone())),
+            };
+            let Some((path, enc, bom, content)) = opt else {
+                continue;
+            };
+            let next = crate::gui::textedit::convert_content(&content, mode);
+            if next == content {
+                continue;
+            }
+            changed_any = true;
+            snapshots.push(EditSnapshot {
+                side,
+                path: path.clone(),
+                before: content.clone(),
+                after: next.clone(),
+            });
+            // 保存前自动备份（A2）
+            let _ = std::fs::copy(&path, format!("{path}.bak"));
+            let bytes = crate::encoding::encode_back(
+                &crate::encoding::TextFile {
+                    text: String::new(),
+                    encoding: enc,
+                    had_bom: bom,
+                    is_binary: false,
+                },
+                &next,
+            );
+            if let Err(e) = std::fs::write(&path, bytes) {
+                self.error = Some(format!("转换写回失败: {path}: {e}"));
+                return;
+            }
+        }
+        if !changed_any {
+            self.error = Some(fmt(I18nKey::Saved, &["无内容变化，跳过转换"]));
+            return;
+        }
+        // 入撤销栈（批量快照）
+        for snap in snapshots {
+            self.undo_stack.push(snap);
+        }
+        self.redo_stack.clear();
+        // 重载两侧内容
+        let (l, r) = (
+            self.left.as_ref().map(|f| f.path.clone()),
+            self.right.as_ref().map(|f| f.path.clone()),
+        );
+        if let (Some(l), Some(r)) = (l, r) {
+            self.load_pair(&l, &r, self.opts.clone());
+        }
+        self.error = Some(fmt(I18nKey::Saved, &["转换已写回两侧"]));
+    }
+
     pub fn reload(&mut self) {
         let opts = self.opts.clone();
         let l = self.left.as_ref().map(|f| f.path.clone());
