@@ -54,6 +54,10 @@ pub struct DirTab {
     pub(crate) selected: Option<usize>,
     /// P41-3：多选集合（flat 索引，选择操作）
     pub(crate) selected_set: std::collections::HashSet<usize>,
+    /// P43-1：导航历史栈（(left, right) 路径对，含当前项）
+    pub(crate) history: Vec<(String, String)>,
+    /// P43-1：历史栈当前位置（0 基）
+    pub(crate) history_pos: usize,
     /// 展平后的行
     pub(crate) flat: Vec<FlatRow>,
     /// 需要滚动到选中行的标记
@@ -225,6 +229,8 @@ impl DirTab {
             collapsed: HashSet::new(),
             selected: None,
             selected_set: std::collections::HashSet::new(),
+            history: Vec::new(),
+            history_pos: 0,
             flat: Vec::new(),
             scroll_to_selected: false,
             show_sync: false,
@@ -316,6 +322,93 @@ impl DirTab {
     pub fn swap_sides(&mut self) {
         std::mem::swap(&mut self.left, &mut self.right);
         self.refresh();
+    }
+
+    // ---- P43-1：导航历史（BC 会话菜单 后退/前进/上一层/比较父文件夹）----
+
+    /// 导航到新路径对（入历史栈，截断当前位置之后的分支）
+    pub fn navigate(&mut self, left: &str, right: &str) {
+        // 首次导航：把当前路径（若有）作为历史起点，保证 back() 可回退
+        if self.history.is_empty() && (!self.left.is_empty() || !self.right.is_empty()) {
+            self.history.push((self.left.clone(), self.right.clone()));
+            self.history_pos = 0;
+        }
+        self.history.truncate(self.history_pos + 1);
+        self.history.push((left.to_string(), right.to_string()));
+        self.history_pos = self.history.len() - 1;
+        self.left = left.to_string();
+        self.right = right.to_string();
+        self.refresh();
+    }
+
+    /// 后退：历史栈向前（更早）移动并加载
+    pub fn back(&mut self) -> bool {
+        if self.history_pos == 0 {
+            return false;
+        }
+        self.history_pos -= 1;
+        if let Some((l, r)) = self.history.get(self.history_pos) {
+            self.left = l.clone();
+            self.right = r.clone();
+            self.refresh();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 前进：历史栈向后（更晚）移动并加载
+    pub fn forward(&mut self) -> bool {
+        if self.history_pos + 1 >= self.history.len() {
+            return false;
+        }
+        self.history_pos += 1;
+        if let Some((l, r)) = self.history.get(self.history_pos) {
+            self.left = l.clone();
+            self.right = r.clone();
+            self.refresh();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 上一层：左右各取父目录（路径去末段）
+    pub fn up_level(&mut self) -> bool {
+        let up = |p: &str| -> String {
+            std::path::Path::new(p)
+                .parent()
+                .map(|d| d.to_string_lossy().into_owned())
+                .unwrap_or_else(|| p.to_string())
+        };
+        if self.left.is_empty() && self.right.is_empty() {
+            return false;
+        }
+        let (nl, nr) = (up(&self.left), up(&self.right));
+        if nl == self.left && nr == self.right {
+            return false;
+        }
+        self.navigate(&nl, &nr);
+        true
+    }
+
+    /// 比较父文件夹：取两侧公共父目录（若不同则取各自父目录）对比
+    pub fn compare_parent(&mut self) -> bool {
+        let up = |p: &str| -> String {
+            std::path::Path::new(p)
+                .parent()
+                .map(|d| d.to_string_lossy().into_owned())
+                .unwrap_or_else(|| p.to_string())
+        };
+        if self.left.is_empty() && self.right.is_empty() {
+            return false;
+        }
+        let (pl, pr) = (up(&self.left), up(&self.right));
+        if pl == self.left && pr == self.right {
+            return false;
+        }
+        self.navigate(&pl, &pr);
+        true
     }
 
     // ---- P36-D2：逐文件操作（BC 操作菜单「复制到边/删除/排除」）----

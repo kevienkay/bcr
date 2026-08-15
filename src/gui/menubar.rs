@@ -65,6 +65,34 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             app.open_empty_diff();
         }
         ui.separator();
+        // P43-1：导航历史（BC 会话菜单 后退/前进/上一层/比较父文件夹，DirTab 分支）
+        if matches!(app.tabs.get(app.active), Some(Tab::Dir(_))) {
+            if ui.button(t(I18nKey::MenuBack)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.back();
+                }
+            }
+            if ui.button(t(I18nKey::MenuForward)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.forward();
+                }
+            }
+            if ui.button(t(I18nKey::MenuUpLevel)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.up_level();
+                }
+            }
+            if ui.button(t(I18nKey::MenuCompareParent)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.compare_parent();
+                }
+            }
+        }
+        ui.separator();
         // P39-2a：新建标签页 / 新建窗口（BC Session 菜单）
         if ui.button(t(I18nKey::MenuNewTab)).clicked() {
             ui.close();

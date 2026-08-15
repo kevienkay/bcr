@@ -2674,6 +2674,48 @@ fn legend_and_log_windows_render() {
     );
 }
 
+// ---- P43-1：导航历史（后退/前进/上一层/比较父文件夹） ----------------
+
+#[test]
+fn dirtab_navigation_history_back_forward_up() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    let sub1 = d1.path().join("sub");
+    let sub2 = d2.path().join("sub");
+    std::fs::create_dir_all(&sub1).unwrap();
+    std::fs::create_dir_all(&sub2).unwrap();
+    write(&sub1, "a.txt", "x");
+    write(&sub2, "a.txt", "x");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let s1 = sub1.to_str().unwrap().to_string();
+    let s2 = sub2.to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().view_filter = ViewFilter::All;
+    tab.borrow_mut().only_diff = false;
+    tab.borrow_mut().show_same = true;
+    tab.borrow_mut().refresh_sync();
+    // 导航进入 sub 子目录（new 时左右路径非空 → 首次 navigate 把当前路径作为起点入栈）
+    tab.borrow_mut().navigate(&s1, &s2);
+    assert_eq!(tab.borrow().left, s1);
+    assert_eq!(tab.borrow().history.len(), 2, "起点(根)+navigate 共 2 条");
+    // 后退 → 回根
+    assert!(tab.borrow_mut().back());
+    assert_eq!(tab.borrow().left, p1, "后退应回到根目录");
+    assert_eq!(tab.borrow().history_pos, 0);
+    // 前进 → 回 sub
+    assert!(tab.borrow_mut().forward());
+    assert_eq!(tab.borrow().left, s1, "前进应回到 sub");
+    assert_eq!(tab.borrow().history_pos, 1);
+    // 上一层 → 回根
+    assert!(tab.borrow_mut().up_level());
+    assert_eq!(tab.borrow().left, p1, "上一层应回父目录");
+    // 比较父文件夹（根再上一级）
+    tab.borrow_mut().navigate(&s1, &s2);
+    assert!(tab.borrow_mut().compare_parent());
+    assert_eq!(tab.borrow().left, p1, "比较父文件夹应回父目录");
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

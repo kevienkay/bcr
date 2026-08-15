@@ -325,6 +325,41 @@ pub enum Key {
     MenuLog,
     /// P42-4：工具栏
     MenuToolbar,
+    /// P43-1：后退
+    MenuBack,
+    /// P43-1：前进
+    MenuForward,
+    /// P43-1：上一层
+    MenuUpLevel,
+    /// P43-1：比较父文件夹
+    MenuCompareParent,
+    /// P43-2：选择选择内容
+    #[allow(dead_code)] // P43-2 批次使用
+    MenuSelectSelection,
+    /// P43-2：把选择内容和剪贴板比较
+    #[allow(dead_code)] // P43-2 批次使用
+    MenuSelectionToClipboard,
+    /// P43-3：下一替换
+    #[allow(dead_code)] // P43-3 批次使用
+    MenuNextReplace,
+    /// P43-3：上一替换
+    #[allow(dead_code)] // P43-3 批次使用
+    MenuPrevReplace,
+    /// P43-3：下一差异文件
+    #[allow(dead_code)] // P43-3 批次使用
+    MenuNextDiffFile,
+    /// P43-3：上一差异文件
+    #[allow(dead_code)] // P43-3 批次使用
+    MenuPrevDiffFile,
+    /// P43-4：合并文件
+    #[allow(dead_code)] // P43-4 批次使用
+    MenuMergeFiles,
+    /// P43-4：和输出比较
+    #[allow(dead_code)] // P43-4 批次使用
+    MenuCompareWithOutput,
+    /// P43-5：信息
+    #[allow(dead_code)] // P43-5 批次使用
+    MenuInfo,
     /// P37-1g：转换-Tabs to Spaces
     ConvertTabs,
     /// P37-1g：转换-行尾 CRLF
