@@ -2877,6 +2877,42 @@ fn info_window_shows_tab_stats() {
     app.borrow_mut().show_info = false;
 }
 
+// ---- P43-6：媒体比较 ----------------
+
+#[test]
+fn mediatab_compares_wav_metadata() {
+    let d = tempdir().unwrap();
+    // 两个 WAV：仅采样率不同 → 应检出差异字段
+    let mk = |name: &str, sr: u32| -> String {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&36u32.to_le_bytes());
+        bytes.extend_from_slice(b"WAVE");
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&sr.to_le_bytes());
+        bytes.extend_from_slice(&(sr * 4).to_le_bytes());
+        bytes.extend_from_slice(&4u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&(sr * 4).to_le_bytes());
+        let p = d.path().join(name);
+        std::fs::write(&p, &bytes).unwrap();
+        p.to_str().unwrap().to_string()
+    };
+    let l = mk("l.wav", 44100);
+    let r = mk("r.wav", 48000);
+    let t = super::MediaTab::new(&l, &r);
+    // 采样率不同 → 至少 sample_rate 一个差异字段
+    assert!(
+        t.diffs.iter().any(|df| df.field == "sample_rate"),
+        "应检出采样率差异"
+    );
+    assert!(!t.title().is_empty());
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

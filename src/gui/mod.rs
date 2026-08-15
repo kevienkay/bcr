@@ -11,6 +11,7 @@ mod difftab;
 mod dirtab;
 mod foldermergetab;
 mod imagetab;
+mod mediatab;
 mod menubar;
 mod mergetab;
 mod patchtab;
@@ -27,6 +28,7 @@ use dirtab::DirTab;
 use eframe::egui::{self, Color32, RichText, ThemePreference};
 use foldermergetab::FolderMergeTab;
 use imagetab::ImageTab;
+use mediatab::MediaTab;
 use mergetab::MergeTab;
 use patchtab::PatchTab;
 use std::path::PathBuf;
@@ -89,6 +91,8 @@ enum Tab {
     TextEdit(TextEditTab),
     Patch(PatchTab),
     FolderMerge(FolderMergeTab),
+    /// P43-6：媒体比较（音视频元数据）
+    Media(MediaTab),
 }
 
 impl Tab {
@@ -102,6 +106,7 @@ impl Tab {
             Tab::TextEdit(t) => t.title(),
             Tab::Patch(t) => t.title(),
             Tab::FolderMerge(t) => t.title(),
+            Tab::Media(t) => t.title(),
         }
     }
 }
@@ -425,6 +430,12 @@ impl DiffApp {
                         rows.push(("左侧".to_string(), t.left.clone()));
                         rows.push(("右侧".to_string(), t.right.clone()));
                     }
+                    Some(Tab::Media(t)) => {
+                        rows.push(("视图".to_string(), "媒体比较".to_string()));
+                        rows.push(("左侧".to_string(), t.left.clone()));
+                        rows.push(("右侧".to_string(), t.right.clone()));
+                        rows.push(("差异字段".to_string(), t.diffs.len().to_string()));
+                    }
                     None => {
                         rows.push(("状态".to_string(), "无标签".to_string()));
                     }
@@ -613,6 +624,12 @@ impl DiffApp {
                     self.add_tab(Tab::Image(ImageTab::new(&a, &b)));
                 } else if crate::csvcmp::is_csv_file(&a) && crate::csvcmp::is_csv_file(&b) {
                     self.add_tab(Tab::Csv(CsvTab::new(&a, &b)));
+                } else if crate::mediacmp::read_media_info(&a).format.is_some()
+                    && crate::mediacmp::read_media_info(&b).format.is_some()
+                    && crate::gui::mediatab::is_media_file(&a)
+                    && crate::gui::mediatab::is_media_file(&b)
+                {
+                    self.add_tab(Tab::Media(MediaTab::new(&a, &b)));
                 } else {
                     let mut t = DiffTab::new();
                     t.load_pair(&a, &b, ViewOptions::default());
@@ -823,6 +840,11 @@ impl DiffApp {
         self.add_tab(Tab::Csv(CsvTab::new("", "")));
     }
 
+    /// P43-6：新建空媒体比较会话
+    fn open_empty_media(&mut self) {
+        self.add_tab(Tab::Media(MediaTab::new("", "")));
+    }
+
     /// P39-2a：新建标签页（⌘T）——复制当前会话类型的新空标签
     fn new_tab_like_current(&mut self) {
         match self.tabs.get(self.active) {
@@ -836,6 +858,7 @@ impl DiffApp {
             Some(Tab::FolderMerge(_)) => {
                 self.add_tab(Tab::FolderMerge(FolderMergeTab::new("", "", "", "")))
             }
+            Some(Tab::Media(_)) => self.add_tab(Tab::Media(MediaTab::new("", ""))),
             None => self.open_empty_diff(),
         }
     }
@@ -865,6 +888,7 @@ impl DiffApp {
             Tab::FolderMerge(_) => {
                 self.tabs[idx] = Tab::FolderMerge(FolderMergeTab::new("", "", "", ""))
             }
+            Tab::Media(_) => self.tabs[idx] = Tab::Media(MediaTab::new("", "")),
         }
     }
 
@@ -1006,7 +1030,7 @@ impl DiffApp {
                     );
                     ui.add_space(12.0);
                     // 会话类型卡片（8 类，BC 主页语义）
-                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 8] = [
+                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 9] = [
                         (
                             "📄",
                             crate::i18n::Key::SessionText,
@@ -1055,6 +1079,13 @@ impl DiffApp {
                             crate::i18n::Key::MenuNewMerge,
                             crate::i18n::Key::SessionMergeDesc,
                             7,
+                        ),
+                        // P43-6：媒体比较（音视频元数据）
+                        (
+                            "🎵",
+                            crate::i18n::Key::SessionMedia,
+                            crate::i18n::Key::SessionMediaDesc,
+                            8,
                         ),
                     ];
                     let card_w = 170.0;
@@ -1128,6 +1159,7 @@ impl DiffApp {
                         // 文件夹合并/同步：空目录对比
                         Some(6) => self.open_empty_dir(),
                         Some(7) => self.open_empty_merge(),
+                        Some(8) => self.open_empty_media(),
                         _ => {}
                     }
                     ui.add_space(10.0);
@@ -2109,6 +2141,7 @@ impl eframe::App for DiffApp {
                 Tab::TextEdit(t) => t.ui(ui),
                 Tab::Patch(t) => t.ui(ui),
                 Tab::FolderMerge(t) => t.ui(ui),
+                Tab::Media(t) => t.ui(ui),
             }
         }
 
@@ -2249,6 +2282,20 @@ impl eframe::App for DiffApp {
                                 s.copied,
                                 s.merged,
                                 s.conflicts,
+                            ));
+                        }
+                        Tab::Media(t) => {
+                            let bn = |p: &str| {
+                                std::path::Path::new(p)
+                                    .file_name()
+                                    .map(|s| s.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| p.to_string())
+                            };
+                            ui.label(format!(
+                                "{} ↔ {} | {} 个差异字段",
+                                bn(&t.left),
+                                bn(&t.right),
+                                t.diffs.len(),
                             ));
                         }
                     }

@@ -59,6 +59,11 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             app.open_empty_csv();
         }
+        // P43-6：新建媒体比较会话（音视频元数据）
+        if ui.button(t(I18nKey::SessionMedia)).clicked() {
+            ui.close();
+            app.open_empty_media();
+        }
         // Hex 会话：空文本对比会话（二进制文件自动切 hex 视图）
         if ui.button(t(I18nKey::MenuNewHex)).clicked() {
             ui.close();

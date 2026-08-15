@@ -352,6 +352,8 @@ i18n_table!(t_zh,
     MenuMergeFiles => "合并文件",
     MenuCompareWithOutput => "和输出比较",
     MenuInfo => "信息",
+    SessionMedia => "媒体比较",
+    SessionMediaDesc => "音视频元数据对比",
 );
 i18n_table!(t_en,
     // CLI
@@ -676,6 +678,8 @@ i18n_table!(t_en,
     MenuMergeFiles => "Merge Files",
     MenuCompareWithOutput => "Compare with Output",
     MenuInfo => "Info",
+    SessionMedia => "Media Compare",
+    SessionMediaDesc => "Audio/Video metadata compare",
 );
 i18n_table!(t_de,
     // CLI
@@ -1000,6 +1004,8 @@ i18n_table!(t_de,
     MenuMergeFiles => "Dateien zusammenführen",
     MenuCompareWithOutput => "Mit Ausgabe vergleichen",
     MenuInfo => "Info",
+    SessionMedia => "Medienvergleich",
+    SessionMediaDesc => "Audio/Video-Metadaten vergleichen",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1324,6 +1330,8 @@ i18n_table!(t_ja,
     MenuMergeFiles => "ファイルをマージ",
     MenuCompareWithOutput => "出力と比較",
     MenuInfo => "情報",
+    SessionMedia => "メディア比較",
+    SessionMediaDesc => "音声/動画メタデータ比較",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1648,6 +1656,8 @@ i18n_table!(t_ko,
     MenuMergeFiles => "파일 병합",
     MenuCompareWithOutput => "출력과 비교",
     MenuInfo => "정보",
+    SessionMedia => "미디어 비교",
+    SessionMediaDesc => "오디오/비디오 메타데이터 비교",
 );
 i18n_table!(t_es,
     // CLI
@@ -1972,6 +1982,8 @@ i18n_table!(t_es,
     MenuMergeFiles => "Combinar archivos",
     MenuCompareWithOutput => "Comparar con salida",
     MenuInfo => "Información",
+    SessionMedia => "Comparación de medios",
+    SessionMediaDesc => "Comparar metadatos de audio/vídeo",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2296,6 +2308,8 @@ i18n_table!(t_pt,
     MenuMergeFiles => "Mesclar arquivos",
     MenuCompareWithOutput => "Comparar com saída",
     MenuInfo => "Informações",
+    SessionMedia => "Comparação de mídia",
+    SessionMediaDesc => "Comparar metadados de áudio/vídeo",
 );
 i18n_table!(t_ar,
     // CLI
@@ -2620,6 +2634,8 @@ i18n_table!(t_ar,
     MenuMergeFiles => "دمج الملفات",
     MenuCompareWithOutput => "مقارنة مع الإخراج",
     MenuInfo => "معلومات",
+    SessionMedia => "مقارنة الوسائط",
+    SessionMediaDesc => "مقارنة بيانات الصوت/الفيديو",
 );
 i18n_table!(t_ru,
     // CLI
@@ -2944,6 +2960,8 @@ i18n_table!(t_ru,
     MenuMergeFiles => "Объединить файлы",
     MenuCompareWithOutput => "Сравнить с выводом",
     MenuInfo => "Информация",
+    SessionMedia => "Сравнение медиа",
+    SessionMediaDesc => "Сравнить метаданные аудио/видео",
 );
 i18n_table!(t_fr,
     // CLI
@@ -3268,4 +3286,6 @@ i18n_table!(t_fr,
     MenuMergeFiles => "Fusionner les fichiers",
     MenuCompareWithOutput => "Comparer avec la sortie",
     MenuInfo => "Infos",
+    SessionMedia => "Comparaison de médias",
+    SessionMediaDesc => "Comparer les métadonnées audio/vidéo",
 );

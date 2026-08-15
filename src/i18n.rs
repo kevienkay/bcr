@@ -754,6 +754,10 @@ pub enum Key {
     SessionCsv,
     /// 行级表格对比
     SessionCsvDesc,
+    /// P43-6：媒体比较
+    SessionMedia,
+    /// P43-6：音视频元数据对比
+    SessionMediaDesc,
     /// Git 集成
     GitTitle,
     /// 把 bcr 作为 git difftool / mergetool（写入 ~/.gitconfig）：

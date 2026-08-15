@@ -14,6 +14,7 @@ mod htmlreport;
 mod i18n;
 mod imgcmp;
 mod jsonout;
+mod mediacmp;
 mod merge;
 mod merge3;
 mod mergeview;
