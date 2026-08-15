@@ -6,6 +6,12 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### 优化与 UI 精修（P47）
+
+- **CI 稳定性根治**：Windows 构建依赖不再用 chocolatey（community.chocolatey.org 反复 499/504 超时导致 P45/P46 多次首轮失败）——cmake 用 windows-latest 预装（`C:\Program Files\CMake\bin` 入 PATH），nasm 从官方直链 zip 固定版本 2.16.03 下载解压
+- **工具栏图标化**：DiffTab 打开左/右加 ◀/▶ 图标；TextEdit 打开/保存/转换加 📂/💾/✂/⇥/⏎/↲ 图标；Patch 打开加 📂 图标（Csv 以下拉为主、Merge/Media 已有图标）
+- **Diff 状态栏 BC 分区**：路径弱色 | 行数 | 统计彩色（相同绿/仅左红/仅右绿/修改黄）| 编码·大小弱色右对齐
+
 ### 视图开关与导航补齐（P46，对标 BC 5.2.5 各视图视图/搜索/会话菜单）
 
 - **TextEdit 视图开关**：行号/自动换行/文件信息（预览模式 gutter 行号条件化、编辑模式自动换行 desired_width 条件化——egui 0.36 无 wrap_mode API、TextEditStatus 文件信息条件化），View 菜单 TextEdit 分支 3 个 checkbox
