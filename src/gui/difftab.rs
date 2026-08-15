@@ -787,6 +787,58 @@ impl DiffTab {
             .join("\n")
     }
 
+    /// P44-2：当前差异块起始行（cur_row 定位；无当前位置取第一块）
+    fn current_block_start(&self) -> Option<usize> {
+        let cur_row = self
+            .diff_pos
+            .and_then(|p| self.diff_rows.get(p))
+            .copied()
+            .unwrap_or(0);
+        self.diff_blocks
+            .iter()
+            .find(|&&(s, e)| s <= cur_row && cur_row <= e)
+            .map(|&(s, _e)| s)
+            .or_else(|| self.diff_blocks.first().map(|&(s, _e)| s))
+    }
+
+    /// P44-2：⌘A 对齐方式——当前差异块左侧行与右侧当前行对齐（BC 编辑>对齐方式...）
+    pub fn align_current(&mut self) {
+        let Some(s) = self.current_block_start() else {
+            return;
+        };
+        if let Some(r) = self.rows.get(s) {
+            if let Some(ln) = r.left_no {
+                self.start_align(EditSide::Left, ln);
+            }
+        }
+    }
+
+    /// P44-2：]/[ 缩进——当前差异块整体增加/减少缩进（BC 编辑>增加缩进/减少缩进）
+    pub fn indent_current(&mut self, delta: isize) {
+        let Some(s) = self.current_block_start() else {
+            return;
+        };
+        self.indent_block(s, delta);
+    }
+
+    /// P44-2：⌘E 使用选择内容进行查找（BC 搜索>使用选择内容进行查找）
+    pub fn find_selection(&mut self) {
+        let Some((s, e)) = self.selection else {
+            return;
+        };
+        let text = self.rows[s..=e.min(self.rows.len().saturating_sub(1))]
+            .iter()
+            .filter_map(|r| r.left.as_ref().map(|c| c.text.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if text.is_empty() {
+            return;
+        }
+        self.search.query = text;
+        self.update_search();
+        self.search.focus = true;
+    }
+
     /// 聚焦搜索框（菜单 Search>Find）
     pub fn focus_search(&mut self) {
         self.search.focus = true;
@@ -1841,6 +1893,27 @@ impl DiffTab {
             // P42-2：打开剪贴板比较（BC File>打开剪贴板，右侧）
             self.load_clipboard_right();
             return;
+        }
+        // P44-2：⌘A 对齐方式（BC 编辑>对齐方式...；输入框聚焦时不触发）
+        if ctrl && ui.input(|i| i.key_pressed(Key::A)) && !ui.ctx().egui_wants_keyboard_input() {
+            self.align_current();
+            return;
+        }
+        // P44-2：⌘E 使用选择内容进行查找（BC 搜索>使用选择内容进行查找）
+        if ctrl && ui.input(|i| i.key_pressed(Key::E)) && !ui.ctx().egui_wants_keyboard_input() {
+            self.find_selection();
+            return;
+        }
+        // P44-2：]/[ 增加/减少缩进（BC 编辑>增加缩进/减少缩进；输入框聚焦时不触发）
+        if !ui.ctx().egui_wants_keyboard_input() {
+            if ui.input(|i| i.key_pressed(Key::CloseBracket)) {
+                self.indent_current(1);
+                return;
+            }
+            if ui.input(|i| i.key_pressed(Key::OpenBracket)) {
+                self.indent_current(-1);
+                return;
+            }
         }
         if ui.input(|i| i.key_pressed(Key::L) && ctrl) {
             self.goto_focus = true;

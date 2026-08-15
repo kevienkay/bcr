@@ -2938,6 +2938,43 @@ fn window_tab_switch_and_close_all() {
     }
 }
 
+// ---- P44-2：文本比较快捷键（⌘A 对齐 / ] [ 缩进 / ⌘E 选区查找） ----------------
+
+#[test]
+fn diff_tab_align_indent_find_shortcuts() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "    a\n    b\n    c\n");
+    let r = write(d.path(), "r.txt", "    A\n    b\n    c\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    {
+        let mut app = app.borrow_mut();
+        app.open_empty_diff();
+        if let super::Tab::Diff(t) = &mut app.tabs[0] {
+            t.load_pair(&l, &r, ViewOptions::default());
+            // ⌘E 使用选择内容查找：先选区（选差异块），再 find_selection
+            t.select_selection();
+            let sel = t.selection_text();
+            assert!(!sel.is_empty(), "选区应有内容");
+            t.find_selection();
+            assert!(
+                t.search.query.contains(&sel),
+                "查找框应填入选区文本（{}）",
+                t.search.query
+            );
+            // ] 增加缩进（当前差异块）
+            t.indent_current(1);
+            let after = t.selection_text();
+            assert!(
+                after.starts_with("    ") && sel.trim_start() == after.trim_start(),
+                "缩进后选区首行应多 4 空格"
+            );
+            // ⌘A 对齐当前块
+            t.align_current();
+            assert!(t.align_pick.is_some(), "对齐应进入等待点击目标行状态");
+        }
+    }
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

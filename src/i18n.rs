@@ -570,6 +570,14 @@ pub enum Key {
     MenuTools,
     /// 帮助
     MenuHelp,
+    /// 对齐方式...（⌘A）
+    MenuAlign,
+    /// 增加缩进（]）
+    MenuIndentIncrease,
+    /// 减少缩进（[）
+    MenuIndentDecrease,
+    /// 使用选择内容进行查找（⌘E）
+    MenuFindSelection,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页

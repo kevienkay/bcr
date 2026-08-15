@@ -350,6 +350,26 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     tab.selection_to_clipboard();
                 }
             }
+            ui.separator();
+            // P44-2：对齐方式/缩进（BC 编辑菜单 对齐方式.../增加缩进/减少缩进）
+            if ui.button(t(I18nKey::MenuAlign)).clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.align_current();
+                }
+            }
+            if ui.button(t(I18nKey::MenuIndentIncrease)).clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.indent_current(1);
+                }
+            }
+            if ui.button(t(I18nKey::MenuIndentDecrease)).clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.indent_current(-1);
+                }
+            }
         }
     });
 }
@@ -406,6 +426,13 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if ui.button(t(I18nKey::MenuFind)).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_search());
+        }
+        // P44-2：使用选择内容进行查找（BC 搜索>使用选择内容进行查找，⌘E）
+        if matches!(app.tabs.get(app.active), Some(Tab::Diff(_)))
+            && ui.button(t(I18nKey::MenuFindSelection)).clicked()
+        {
+            ui.close();
+            with_diff_tab(app, |tab| tab.find_selection());
         }
         // P39-2e：替换…（⇧⌘F）
         if ui.button(t(I18nKey::MenuReplace)).clicked() {
