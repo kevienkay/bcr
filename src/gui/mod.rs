@@ -166,6 +166,27 @@ impl Settings {
         }
     }
 
+    /// P44-5：导出设置（BC Tools>导出设置...；TOML 复制到用户选择路径）
+    fn export_to(&self, path: &std::path::Path) -> Result<(), String> {
+        let s = toml::to_string(self).map_err(|e| e.to_string())?;
+        std::fs::write(path, s).map_err(|e| e.to_string())
+    }
+
+    /// P44-5：导入设置（BC Tools>导入设置...；从用户选择路径读取并保存生效）
+    fn import_from(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let s = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let loaded: Settings = toml::from_str(&s).map_err(|e| e.to_string())?;
+        *self = loaded;
+        self.save();
+        Ok(())
+    }
+
+    /// P44-5：恢复出厂默认（BC Tools>恢复出厂默认...；重置为默认并保存）
+    fn reset_defaults(&mut self) {
+        *self = Settings::default();
+        self.save();
+    }
+
     fn theme_pref(&self) -> ThemePreference {
         match self.theme.as_str() {
             "dark" => ThemePreference::Dark,

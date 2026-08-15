@@ -891,6 +891,41 @@ fn tools_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             app.show_cloud = true;
         }
+        ui.separator();
+        // P44-5：导出/导入设置 + 恢复出厂默认（BC Tools 菜单）
+        if ui.button(t(I18nKey::MenuExportSettings)).clicked() {
+            ui.close();
+            if let Some(p) = rfd::FileDialog::new()
+                .set_file_name("bcr-settings.toml")
+                .save_file()
+            {
+                if let Err(e) = app.settings.export_to(&p) {
+                    app.report_error = Some(e);
+                }
+            }
+        }
+        if ui.button(t(I18nKey::MenuImportSettings)).clicked() {
+            ui.close();
+            if let Some(p) = rfd::FileDialog::new().pick_file() {
+                if let Err(e) = app.settings.import_from(&p) {
+                    app.report_error = Some(e);
+                }
+            }
+        }
+        if ui.button(t(I18nKey::MenuResetDefaults)).clicked() {
+            ui.close();
+            app.settings.reset_defaults();
+        }
+        ui.separator();
+        // P44-5：编辑文本文件 / 查看补丁（BC Tools 菜单入口，对应 TextEdit/PatchTab 视图）
+        if ui.button(t(I18nKey::MenuEditTextFile)).clicked() {
+            ui.close();
+            app.add_tab(Tab::TextEdit(super::textedit::TextEditTab::new("")));
+        }
+        if ui.button(t(I18nKey::MenuViewPatch)).clicked() {
+            ui.close();
+            app.add_tab(Tab::Patch(super::patchtab::PatchTab::new("")));
+        }
     });
 }
 

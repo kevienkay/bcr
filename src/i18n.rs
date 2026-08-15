@@ -600,6 +600,16 @@ pub enum Key {
     MenuRevealInFinder,
     /// 保存文件为...（⌘⇧S）
     MenuSaveFileAs,
+    /// 导出设置...
+    MenuExportSettings,
+    /// 导入设置...
+    MenuImportSettings,
+    /// 恢复出厂默认...
+    MenuResetDefaults,
+    /// 编辑文本文件
+    MenuEditTextFile,
+    /// 查看补丁...
+    MenuViewPatch,
     /// 窗口
     MenuWindow,
     /// 选择下一个标签页

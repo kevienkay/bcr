@@ -3039,6 +3039,30 @@ fn session_lock_and_reload_shortcuts() {
     }
 }
 
+// ---- P44-5：工具菜单（导出/导入设置、恢复出厂默认、编辑文本文件/查看补丁） ----------------
+
+#[test]
+fn settings_export_import_reset() {
+    let d = tempdir().unwrap();
+    let p = d.path().join("cfg.toml");
+    let mut s = super::Settings {
+        lang: "ja".to_string(),
+        ignore_case: true,
+        ..super::Settings::default()
+    };
+    // 导出 → 文件存在且含 lang=ja
+    s.export_to(&p).unwrap();
+    let txt = std::fs::read_to_string(&p).unwrap();
+    assert!(txt.contains("ja"), "导出应含 lang=ja");
+    // 重置 → 默认（lang 空）
+    s.reset_defaults();
+    assert!(s.lang.is_empty(), "恢复出厂后 lang 应为空");
+    // 导入 → 恢复 ja/ignore_case
+    s.import_from(&p).unwrap();
+    assert_eq!(s.lang, "ja");
+    assert!(s.ignore_case);
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]
