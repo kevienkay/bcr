@@ -217,6 +217,38 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     t.collapse_all();
                 }
             }
+            ui.separator();
+            // P41-3：选择操作（DirTab 分支，BC 编辑菜单「选择较新项/独有项/反向选择」）
+            if ui.button(t(I18nKey::MenuSelectAll)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.select_all();
+                }
+            }
+            if ui.button(t(I18nKey::MenuSelectNone)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.select_none();
+                }
+            }
+            if ui.button(t(I18nKey::MenuSelectNewer)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.select_newer();
+                }
+            }
+            if ui.button(t(I18nKey::MenuSelectOrphans)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.select_orphans();
+                }
+            }
+            if ui.button(t(I18nKey::MenuInvertSelection)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.invert_selection();
+                }
+            }
         }
     });
 }

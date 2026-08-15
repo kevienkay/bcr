@@ -677,6 +677,16 @@ pub enum Key {
     ViewLeftNewer,
     /// P41-2：仅右侧较新
     ViewRightNewer,
+    /// P41-3：选择较新项
+    MenuSelectNewer,
+    /// P41-3：选择独有项
+    MenuSelectOrphans,
+    /// P41-3：反向选择
+    MenuInvertSelection,
+    /// P41-3：全选
+    MenuSelectAll,
+    /// P41-3：取消选择
+    MenuSelectNone,
 
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比

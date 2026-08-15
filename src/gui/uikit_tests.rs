@@ -2445,6 +2445,103 @@ fn dirtab_view_filter_left_right_newer() {
     }
 }
 
+// ---- P41-3：选择操作（D5） ----------------
+
+#[test]
+fn dirtab_selection_ops_select_all_invert_orphans() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "same.txt", "x");
+    write(d1.path(), "only_left.txt", "L");
+    write(d1.path(), "newer.txt", "N1");
+    write(d2.path(), "same.txt", "x");
+    write(d2.path(), "only_right.txt", "R");
+    write(d2.path(), "newer.txt", "N2");
+    // 让 newer.txt 左侧 mtime 更新（判 LeftNewer）
+    let _ = filetime::set_file_mtime(
+        d1.path().join("newer.txt"),
+        filetime::FileTime::from_system_time(
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_100),
+        ),
+    );
+    let _ = filetime::set_file_mtime(
+        d2.path().join("newer.txt"),
+        filetime::FileTime::from_system_time(
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000),
+        ),
+    );
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().compare_content = true; // 快速模式 same.txt 两侧 mtime 不同会误判 Differ
+    tab.borrow_mut().view_filter = ViewFilter::All;
+    tab.borrow_mut().only_diff = false;
+    tab.borrow_mut().show_same = true;
+    tab.borrow_mut().refresh_sync();
+    // 全选：文件全进 selected_set（same.txt 也选，目录不选）
+    tab.borrow_mut().select_all();
+    let rels = tab.borrow().selected_set_rels();
+    assert!(
+        rels.iter().any(|s| s == "same.txt"),
+        "全选应含 same.txt: {:?}",
+        rels
+    );
+    assert!(
+        rels.iter().any(|s| s == "only_left.txt"),
+        "全选应含 only_left.txt"
+    );
+    assert!(
+        rels.iter().any(|s| s == "only_right.txt"),
+        "全选应含 only_right.txt"
+    );
+    assert!(!rels.iter().any(|s| s.is_empty()), "目录不应被选中");
+    // 反向选择：清空后全选（同文件集合）
+    tab.borrow_mut().invert_selection();
+    let rels2 = tab.borrow().selected_set_rels();
+    assert!(
+        rels2.is_empty(),
+        "反向选择后应无选中（原来全选）: {:?}",
+        rels2
+    );
+    tab.borrow_mut().invert_selection();
+    // 选择独有项：only_left + only_right，不含 same/newer
+    tab.borrow_mut().select_orphans();
+    let rels3 = tab.borrow().selected_set_rels();
+    assert!(
+        rels3.iter().any(|s| s == "only_left.txt"),
+        "独有应含 only_left: {:?}",
+        rels3
+    );
+    assert!(
+        rels3.iter().any(|s| s == "only_right.txt"),
+        "独有应含 only_right"
+    );
+    assert!(
+        !rels3.iter().any(|s| s == "same.txt"),
+        "独有不应含 same.txt"
+    );
+    assert!(
+        !rels3.iter().any(|s| s == "newer.txt"),
+        "独有不应含 newer.txt"
+    );
+    // 选择较新项：newer.txt（LeftNewer）
+    tab.borrow_mut().select_newer();
+    let rels4 = tab.borrow().selected_set_rels();
+    assert!(
+        rels4.iter().any(|s| s == "newer.txt"),
+        "较新应含 newer.txt: {:?}",
+        rels4
+    );
+    assert!(
+        !rels4.iter().any(|s| s == "only_left.txt"),
+        "较新不应含 only_left"
+    );
+    assert!(!rels4.iter().any(|s| s == "same.txt"), "较新不应含 same");
+    // 取消选择
+    tab.borrow_mut().select_none();
+    assert!(tab.borrow().selected_set_rels().is_empty());
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

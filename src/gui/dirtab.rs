@@ -50,8 +50,10 @@ pub struct DirTab {
     pub open_pair: Option<(String, String)>,
     /// 折叠的目录路径集合（空字符串表示根）
     pub(crate) collapsed: HashSet<String>,
-    /// 选中的展平行索引
+    /// 选中的展平行索引（单选，键盘导航）
     pub(crate) selected: Option<usize>,
+    /// P41-3：多选集合（flat 索引，选择操作）
+    pub(crate) selected_set: std::collections::HashSet<usize>,
     /// 展平后的行
     pub(crate) flat: Vec<FlatRow>,
     /// 需要滚动到选中行的标记
@@ -222,6 +224,7 @@ impl DirTab {
             open_pair: None,
             collapsed: HashSet::new(),
             selected: None,
+            selected_set: std::collections::HashSet::new(),
             flat: Vec::new(),
             scroll_to_selected: false,
             show_sync: false,
@@ -921,6 +924,81 @@ impl DirTab {
     pub fn expand_all(&mut self) {
         self.collapsed.clear();
         self.rebuild_tree();
+    }
+
+    /// P41-3：全选（当前 flat 全部文件加入多选集合）
+    pub fn select_all(&mut self) {
+        for (idx, r) in self.flat.iter().enumerate() {
+            if !r.is_dir {
+                self.selected_set.insert(idx);
+            }
+        }
+    }
+
+    /// P41-3：取消选择（清空多选集合）
+    pub fn select_none(&mut self) {
+        self.selected_set.clear();
+    }
+
+    /// P41-3：反向选择（多选集合在可见文件间翻转）
+    pub fn invert_selection(&mut self) {
+        for (idx, r) in self.flat.iter().enumerate() {
+            if r.is_dir {
+                continue;
+            }
+            if !self.selected_set.remove(&idx) {
+                self.selected_set.insert(idx);
+            }
+        }
+    }
+
+    /// P41-3：选择独有项（LeftOnly/RightOnly 文件）
+    pub fn select_orphans(&mut self) {
+        self.selected_set.clear();
+        let Some(r) = &self.result else { return };
+        for (idx, row) in self.flat.iter().enumerate() {
+            let Some(ei) = row.entry else { continue };
+            if let Some(e) = r.entries.get(ei) {
+                if matches!(e.status, FileStatus::LeftOnly | FileStatus::RightOnly) {
+                    self.selected_set.insert(idx);
+                }
+            }
+        }
+    }
+
+    /// P41-3：选择较新项（LeftNewer/RightNewer 文件，即 Differ 且一侧 mtime 更新）
+    pub fn select_newer(&mut self) {
+        self.selected_set.clear();
+        let Some(r) = &self.result else { return };
+        for (idx, row) in self.flat.iter().enumerate() {
+            let Some(ei) = row.entry else { continue };
+            if let Some(e) = r.entries.get(ei) {
+                if is_left_newer(e) || is_right_newer(e) {
+                    self.selected_set.insert(idx);
+                }
+            }
+        }
+    }
+
+    /// P41-3：当前多选集合中的文件相对路径（供批量操作/测试）
+    #[cfg(test)]
+    pub(crate) fn selected_set_rels(&self) -> Vec<String> {
+        let Some(r) = &self.result else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        let mut idxs: Vec<usize> = self.selected_set.iter().copied().collect();
+        idxs.sort_unstable();
+        for idx in idxs {
+            if let Some(row) = self.flat.get(idx) {
+                if let Some(ei) = row.entry {
+                    if let Some(e) = r.entries.get(ei) {
+                        out.push(e.rel.clone());
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// P41-1：折叠全部（把全部目录路径加入折叠集合，重建树）
@@ -1769,7 +1847,7 @@ impl DirTab {
                         Vec2::new(ui.available_width().max(400.0), ROW_H),
                         egui::Sense::click(),
                     );
-                    let is_sel = selected == Some(idx);
+                    let is_sel = selected == Some(idx) || self.selected_set.contains(&idx);
                     let bg = if is_sel {
                         Some(bg_match_current())
                     } else if resp.hovered() {
