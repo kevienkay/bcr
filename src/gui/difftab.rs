@@ -2903,8 +2903,8 @@ impl DiffTab {
                     .as_ref()
                     .map(|(p, _)| p.clone())
                     .unwrap_or_else(|| t(I18nKey::OpenRight).to_string());
-                let l_name = truncate_path(&l_path, ((head_l_w - 20.0) / 7.0) as usize);
-                let r_name = truncate_path(&r_path, ((head_r_w - 20.0) / 7.0) as usize);
+                let l_name = truncate_path(&l_path, ((head_l_w - 42.0) / 7.0) as usize);
+                let r_name = truncate_path(&r_path, ((head_r_w - 42.0) / 7.0) as usize);
                 let l_detail = l_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
                 let r_detail = r_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
                 ui.horizontal(|ui| {
@@ -2912,8 +2912,16 @@ impl DiffTab {
                     let (l_rect, l_resp) =
                         ui.allocate_exact_size(Vec2::new(head_l_w, head_h), egui::Sense::click());
                     paint_bg(ui, l_rect, head_bg);
+                    // 📁 文件夹图标：点击可更换文件路径（BC 风格）
                     ui.painter().text(
                         Pos2::new(l_rect.left() + 10.0, l_rect.top() + 11.0),
+                        egui::Align2::LEFT_CENTER,
+                        "📁",
+                        egui::FontId::proportional(13.0),
+                        head_fg,
+                    );
+                    ui.painter().text(
+                        Pos2::new(l_rect.left() + 30.0, l_rect.top() + 11.0),
                         egui::Align2::LEFT_CENTER,
                         l_name,
                         egui::FontId::proportional(13.0),
@@ -2939,8 +2947,16 @@ impl DiffTab {
                     let (r_rect, r_resp) =
                         ui.allocate_exact_size(Vec2::new(head_r_w, head_h), egui::Sense::click());
                     paint_bg(ui, r_rect, head_bg);
+                    // 📁 文件夹图标：点击可更换文件路径（BC 风格）
                     ui.painter().text(
                         Pos2::new(r_rect.left() + 10.0, r_rect.top() + 11.0),
+                        egui::Align2::LEFT_CENTER,
+                        "📁",
+                        egui::FontId::proportional(13.0),
+                        head_fg,
+                    );
+                    ui.painter().text(
+                        Pos2::new(r_rect.left() + 30.0, r_rect.top() + 11.0),
                         egui::Align2::LEFT_CENTER,
                         r_name,
                         egui::FontId::proportional(13.0),
