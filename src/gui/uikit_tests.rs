@@ -418,10 +418,10 @@ fn difftab_mid_gap_renders_with_connector_lines() {
     );
     // 连接线颜色映射：有差异→有颜色，无差异→None
     use crate::sideview::RowTag;
-    assert!(super::difftab::diff_mid_line_color(RowTag::Delete).is_some());
-    assert!(super::difftab::diff_mid_line_color(RowTag::Insert).is_some());
-    assert!(super::difftab::diff_mid_line_color(RowTag::Replace).is_some());
-    assert!(super::difftab::diff_mid_line_color(RowTag::Equal).is_none());
+    assert!(super::difftab::diff_mid_line_color(true, RowTag::Delete).is_some());
+    assert!(super::difftab::diff_mid_line_color(true, RowTag::Insert).is_some());
+    assert!(super::difftab::diff_mid_line_color(true, RowTag::Replace).is_some());
+    assert!(super::difftab::diff_mid_line_color(true, RowTag::Equal).is_none());
     // mid_gap 布局常量生效（左右面板之间有空隙）
     const _: () = assert!(crate::gui::theme::MID_GAP > 0.0);
 }
@@ -3454,4 +3454,99 @@ fn menubar_session_new_merge_creates_merge_tab() {
         matches!(app.borrow().tabs[0], super::Tab::Merge(_)),
         "新标签应为 Merge"
     );
+}
+
+// ---- 拖放注入验证（Bug 1：拖拽导入不成功） ----------------
+
+/// 模拟拖放文件的测试桩：实现 egui::DroppedFile（path + bytes）
+#[derive(Debug)]
+struct TestDroppedFile(std::path::PathBuf);
+
+impl eframe::egui::DroppedFile for TestDroppedFile {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
+
+fn inject_dropped(h: &mut Harness, paths: &[String]) {
+    for p in paths {
+        h.input_mut()
+            .dropped_files
+            .push(std::sync::Arc::new(TestDroppedFile(
+                std::path::PathBuf::from(p),
+            )));
+    }
+}
+
+#[test]
+fn dropped_single_file_creates_diff_tab_with_left_loaded() {
+    let d = tempdir().unwrap();
+    let f = write(d.path(), "a.txt", "hello\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().handle_dropped(ui.ctx()));
+    inject_dropped(&mut h, &[f]);
+    h.run_steps(2);
+    {
+        let b = app.borrow();
+        assert_eq!(b.tabs.len(), 1, "拖入单文件应创建标签");
+        match &b.tabs[0] {
+            super::Tab::Diff(t) => assert!(t.left.is_some(), "左侧应加载"),
+            _ => panic!("应为 DiffTab"),
+        }
+    }
+}
+
+#[test]
+fn dropped_two_files_creates_diff_tab_with_both_sides() {
+    let d = tempdir().unwrap();
+    let f1 = write(d.path(), "a.txt", "a\n");
+    let f2 = write(d.path(), "b.txt", "b\n");
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().handle_dropped(ui.ctx()));
+    inject_dropped(&mut h, &[f1, f2]);
+    h.run_steps(2);
+    {
+        let b = app.borrow();
+        assert_eq!(b.tabs.len(), 1, "拖入双文件应创建标签");
+        match &b.tabs[0] {
+            super::Tab::Diff(t) => {
+                assert!(t.left.is_some(), "左侧应加载");
+                assert!(t.right.is_some(), "右侧应加载");
+            }
+            _ => panic!("应为 DiffTab"),
+        }
+    }
+}
+
+#[test]
+fn dropped_two_dirs_creates_dir_tab() {
+    let d = tempdir().unwrap();
+    let dir1 = d.path().join("d1");
+    let dir2 = d.path().join("d2");
+    fs::create_dir_all(&dir1).unwrap();
+    fs::create_dir_all(&dir2).unwrap();
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().handle_dropped(ui.ctx()));
+    inject_dropped(
+        &mut h,
+        &[
+            dir1.to_string_lossy().into_owned(),
+            dir2.to_string_lossy().into_owned(),
+        ],
+    );
+    h.run_steps(2);
+    {
+        let b = app.borrow();
+        assert_eq!(b.tabs.len(), 1, "拖入双目录应创建标签");
+        match &b.tabs[0] {
+            super::Tab::Dir(t) => {
+                assert!(!t.left.is_empty());
+                assert!(!t.right.is_empty());
+            }
+            _ => panic!("应为 DirTab"),
+        }
+    }
 }

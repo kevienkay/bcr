@@ -787,7 +787,7 @@ fn paint_merge_row(
         ui.painter().rect_filled(
             Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H)),
             0.0,
-            super::theme::diff_modify(),
+            super::theme::diff_modify(ui.visuals().dark_mode),
         );
     }
 

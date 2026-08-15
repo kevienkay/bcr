@@ -628,10 +628,19 @@ impl DiffApp {
                 .show(ui.ctx(), |ui| {
                     ui.label(RichText::new("文本比较").strong());
                     for (color, label) in [
-                        (theme::diff_delete(), "删除 / 仅左侧（淡红）"),
-                        (theme::diff_insert(), "插入 / 仅右侧（淡绿）"),
-                        (theme::diff_modify(), "修改（淡黄）"),
-                        (theme::current_bar(), "当前差异行竖条（蓝）"),
+                        (
+                            theme::diff_delete(ui.visuals().dark_mode),
+                            "删除 / 仅左侧（淡红）",
+                        ),
+                        (
+                            theme::diff_insert(ui.visuals().dark_mode),
+                            "插入 / 仅右侧（淡绿）",
+                        ),
+                        (theme::diff_modify(ui.visuals().dark_mode), "修改（淡黄）"),
+                        (
+                            theme::current_bar(ui.visuals().dark_mode),
+                            "当前差异行竖条（蓝）",
+                        ),
                     ] {
                         ui.horizontal(|ui| {
                             let (rect, _) = ui.allocate_exact_size(
@@ -951,21 +960,41 @@ impl DiffApp {
     }
 
     fn open_diff_files(&mut self) {
-        let Some(l) = pick_file() else { return };
-        let Some(r) = pick_file() else { return };
-        // 两侧均为图片 → 图片对比标签
-        if crate::imgcmp::is_image_file(&l) && crate::imgcmp::is_image_file(&r) {
-            self.add_tab(Tab::Image(ImageTab::new(&l, &r)));
+        // 支持多选：选 1 个 → 立即显示左侧（先导入的显示在左边）；
+        // 选 2 个 → 双文件逻辑；≥3 个 → 三路合并（与拖拽一致）
+        let Some(files) = rfd::FileDialog::new().pick_files() else {
             return;
+        };
+        let paths: Vec<String> = files
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        match paths.len() {
+            0 => {}
+            1 => self.drop_single_file(&paths[0]),
+            2 => {
+                let (l, r) = (&paths[0], &paths[1]);
+                // 两侧均为图片 → 图片对比标签
+                if crate::imgcmp::is_image_file(l) && crate::imgcmp::is_image_file(r) {
+                    self.add_tab(Tab::Image(ImageTab::new(l, r)));
+                    return;
+                }
+                // 两侧均为 CSV/TSV → 表格对比标签（P29）
+                if crate::csvcmp::is_csv_file(l) && crate::csvcmp::is_csv_file(r) {
+                    self.add_tab(Tab::Csv(CsvTab::new(l, r)));
+                    return;
+                }
+                let mut t = DiffTab::new();
+                t.load_pair(l, r, ViewOptions::default());
+                self.add_tab(Tab::Diff(t));
+            }
+            _ => {
+                // ≥3 个：三路合并（前三个），与拖拽一致
+                if let Some(merge) = self.try_merge(&paths) {
+                    self.add_tab(Tab::Merge(merge));
+                }
+            }
         }
-        // 两侧均为 CSV/TSV → 表格对比标签（P29）
-        if crate::csvcmp::is_csv_file(&l) && crate::csvcmp::is_csv_file(&r) {
-            self.add_tab(Tab::Csv(CsvTab::new(&l, &r)));
-            return;
-        }
-        let mut t = DiffTab::new();
-        t.load_pair(&l, &r, ViewOptions::default());
-        self.add_tab(Tab::Diff(t));
     }
 
     fn open_dir_compare(&mut self) {
@@ -1565,7 +1594,7 @@ impl eframe::App for DiffApp {
                     }
                     // 关闭按钮（hover 变色；当前标签 hover 时红色提示）
                     let close_color = if resp.hovered() {
-                        theme::diff_delete()
+                        theme::diff_delete(ui.visuals().dark_mode)
                     } else if selected {
                         ui.visuals().strong_text_color()
                     } else {

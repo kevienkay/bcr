@@ -26,21 +26,38 @@ pub const CURRENT_BAR: f32 = 3.0;
 pub const MID_GAP: f32 = 14.0;
 
 /// 差异色（BC 语义：仅左/删除=红，仅右/插入=绿，修改=黄）
-/// P39-2b：对齐 BC 5.2.5 柔和色调（浅色：删除 rgb(253,224,223) 系淡红/插入淡绿/修改淡黄）
-pub fn diff_delete() -> Color32 {
-    Color32::from_rgb(226, 110, 110)
+/// P39-2b：对齐 BC 5.2.5 柔和色调（深色主题：淡红/淡绿/淡黄）
+/// P50-fix：浅色主题下用深色系，保证白底上文字对比度（BC 浅色主题差异文字为深红/深绿/深黄）
+pub fn diff_delete(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(226, 110, 110)
+    } else {
+        Color32::from_rgb(196, 60, 60)
+    }
 }
 #[allow(dead_code)]
-pub fn diff_insert() -> Color32 {
-    Color32::from_rgb(110, 196, 128)
+pub fn diff_insert(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(110, 196, 128)
+    } else {
+        Color32::from_rgb(40, 140, 80)
+    }
 }
-pub fn diff_modify() -> Color32 {
-    Color32::from_rgb(224, 190, 96)
+pub fn diff_modify(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(224, 190, 96)
+    } else {
+        Color32::from_rgb(176, 140, 40)
+    }
 }
 
 /// P39-2b：当前差异行左侧竖条（BC 蓝色系，代替原黄色）
-pub fn current_bar() -> Color32 {
-    Color32::from_rgb(86, 148, 240)
+pub fn current_bar(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(86, 148, 240)
+    } else {
+        Color32::from_rgb(40, 90, 200)
+    }
 }
 
 /// 行级底色（半透明，深浅主题通用；BC 5.2.5 实测浅红/浅绿/浅黄）
@@ -87,10 +104,11 @@ pub const GUTTER: Color32 = Color32::from_gray(128);
 /// 状态徽标前景色（目录对比/合并视图，批次 3 使用）
 #[allow(dead_code)]
 pub fn status_fg(ui: &egui::Ui, letter: char) -> Color32 {
+    let dark = ui.visuals().dark_mode;
     match letter {
-        'L' => diff_delete(),
+        'L' => diff_delete(dark),
         'R' => Color32::from_rgb(110, 150, 240),
-        'C' | 'M' => diff_modify(),
+        'C' | 'M' => diff_modify(dark),
         _ => ui.visuals().weak_text_color(),
     }
 }

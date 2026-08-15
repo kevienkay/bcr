@@ -3136,7 +3136,7 @@ impl DiffTab {
                         ui.painter().circle_filled(
                             Pos2::new(rect.right() - 8.0, rect.top() + 8.0),
                             3.0,
-                            crate::gui::theme::diff_modify(),
+                            crate::gui::theme::diff_modify(ui.visuals().dark_mode),
                         );
                     }
                     // P38-1b：对齐模式下点击行 → 记录目标行号（另一侧行号）
@@ -3533,7 +3533,7 @@ fn paint_diff_row(
         let arrow_color = if ignored {
             ui.visuals().weak_text_color()
         } else {
-            super::theme::diff_modify()
+            super::theme::diff_modify(ui.visuals().dark_mode)
         };
         ui.painter().text(
             arrow_rect.center(),
@@ -3553,7 +3553,7 @@ fn paint_diff_row(
         ui.painter().rect_filled(
             Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H)),
             0.0,
-            super::theme::current_bar(),
+            super::theme::current_bar(ui.visuals().dark_mode),
         );
     }
 
@@ -3598,7 +3598,7 @@ fn paint_diff_row(
     // P32-A1：左右面板空隙画差异连接线（有差异的行画线连接两侧，BC 观感）
     let mid_x = x + gutter_l + content_w;
     let mid_rect = Rect::from_min_size(Pos2::new(mid_x, y), vec2(mid_gap, ROW_H));
-    let mid_color = diff_mid_line_color(row.tag);
+    let mid_color = diff_mid_line_color(ui.visuals().dark_mode, row.tag);
     if let Some(c) = mid_color {
         // 空隙底色（比 gutter 略深一档，突出连接线）
         paint_bg(
@@ -3729,7 +3729,7 @@ fn paint_diff_row_v(
         ui.painter().rect_filled(
             Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, row_h)),
             0.0,
-            super::theme::current_bar(),
+            super::theme::current_bar(ui.visuals().dark_mode),
         );
     }
     // ---- 上半：左 gutter + 左内容 ----
@@ -3812,12 +3812,12 @@ fn paint_diff_row_v(
 }
 
 /// P32-A1：差异连接线颜色（有差异的行返回对应颜色，无差异返回 None）
-pub(crate) fn diff_mid_line_color(tag: RowTag) -> Option<Color32> {
+pub(crate) fn diff_mid_line_color(dark: bool, tag: RowTag) -> Option<Color32> {
     match tag {
         RowTag::Equal => None,
-        RowTag::Delete => Some(super::theme::diff_delete()),
-        RowTag::Insert => Some(super::theme::diff_insert()),
-        RowTag::Replace => Some(super::theme::diff_modify()),
+        RowTag::Delete => Some(super::theme::diff_delete(dark)),
+        RowTag::Insert => Some(super::theme::diff_insert(dark)),
+        RowTag::Replace => Some(super::theme::diff_modify(dark)),
     }
 }
 
