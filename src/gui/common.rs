@@ -5,6 +5,9 @@
 use crate::sideview::Cell;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Vec2};
 
+/// P42-4：工具栏全局开关（BC View>工具栏，各 tab 工具栏渲染统一受控）
+pub static SHOW_TOOLBAR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
 /// 虚拟化行高
 pub const ROW_H: f32 = super::theme::ROW_H;
 /// 等宽字体大小

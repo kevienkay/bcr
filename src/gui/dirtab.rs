@@ -1113,257 +1113,260 @@ impl DirTab {
             self.last_auto_refresh = now;
             self.refresh();
         }
-        egui::Panel::top("dirtab_tools").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                // P31 路径栏：左路径 ⇄ 右路径（弱色只读，BC 观感）
-                ui.label(
-                    egui::RichText::new(&self.left)
-                        .color(ui.visuals().weak_text_color())
-                        .monospace(),
-                );
-                ui.label(egui::RichText::new("⇄").color(ui.visuals().weak_text_color()));
-                ui.label(
-                    egui::RichText::new(&self.right)
-                        .color(ui.visuals().weak_text_color())
-                        .monospace(),
-                );
-                ui.separator();
-                // B2 后台任务指示与暂停/取消控制
-                if let Some(bg) = &self.bg {
-                    let done = bg.done.load(std::sync::atomic::Ordering::SeqCst);
-                    let paused = bg.pause.load(std::sync::atomic::Ordering::SeqCst);
-                    ui.label(format!(
-                        "⏳ {} {}",
-                        bg.label,
+        if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("dirtab_tools").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    // P31 路径栏：左路径 ⇄ 右路径（弱色只读，BC 观感）
+                    ui.label(
+                        egui::RichText::new(&self.left)
+                            .color(ui.visuals().weak_text_color())
+                            .monospace(),
+                    );
+                    ui.label(egui::RichText::new("⇄").color(ui.visuals().weak_text_color()));
+                    ui.label(
+                        egui::RichText::new(&self.right)
+                            .color(ui.visuals().weak_text_color())
+                            .monospace(),
+                    );
+                    ui.separator();
+                    // B2 后台任务指示与暂停/取消控制
+                    if let Some(bg) = &self.bg {
+                        let done = bg.done.load(std::sync::atomic::Ordering::SeqCst);
+                        let paused = bg.pause.load(std::sync::atomic::Ordering::SeqCst);
+                        ui.label(format!(
+                            "⏳ {} {}",
+                            bg.label,
+                            if bg.total > 0 {
+                                format!("{done}/{}", bg.total)
+                            } else {
+                                "…".to_string()
+                            }
+                        ));
                         if bg.total > 0 {
-                            format!("{done}/{}", bg.total)
+                            let frac = (done as f32 / bg.total as f32).clamp(0.0, 1.0);
+                            ui.add(egui::ProgressBar::new(frac).desired_width(120.0));
                         } else {
-                            "…".to_string()
+                            ui.spinner();
                         }
-                    ));
-                    if bg.total > 0 {
-                        let frac = (done as f32 / bg.total as f32).clamp(0.0, 1.0);
-                        ui.add(egui::ProgressBar::new(frac).desired_width(120.0));
-                    } else {
-                        ui.spinner();
+                        if ui
+                            .button(if paused { "▶ 继续" } else { "⏸ 暂停" })
+                            .clicked()
+                        {
+                            bg.toggle_pause();
+                        }
+                        if ui.button("✕ 取消").clicked() {
+                            bg.request_cancel();
+                        }
+                        ui.separator();
                     }
                     if ui
-                        .button(if paused { "▶ 继续" } else { "⏸ 暂停" })
+                        .button(format!("⟳ {}", t(I18nKey::Refresh)))
+                        .on_hover_text("刷新 (F5)")
                         .clicked()
                     {
-                        bg.toggle_pause();
+                        self.refresh();
                     }
-                    if ui.button("✕ 取消").clicked() {
-                        bg.request_cancel();
+                    // P36-D1：交换左右两侧（BC 会话菜单「交换两边」）
+                    if ui
+                        .button(format!("⇄ {}", t(I18nKey::SwapSides)))
+                        .on_hover_text("交换左右两侧目录")
+                        .clicked()
+                    {
+                        self.swap_sides();
+                    }
+                    // B2：过滤/显示面板开关（左侧 SidePanel）
+                    if ui
+                        .selectable_label(self.show_filter_panel, "⛭ 过滤")
+                        .on_hover_text("扩展名/大小/时间过滤面板")
+                        .clicked()
+                    {
+                        self.show_filter_panel = !self.show_filter_panel;
                     }
                     ui.separator();
-                }
-                if ui
-                    .button(format!("⟳ {}", t(I18nKey::Refresh)))
-                    .on_hover_text("刷新 (F5)")
-                    .clicked()
-                {
-                    self.refresh();
-                }
-                // P36-D1：交换左右两侧（BC 会话菜单「交换两边」）
-                if ui
-                    .button(format!("⇄ {}", t(I18nKey::SwapSides)))
-                    .on_hover_text("交换左右两侧目录")
-                    .clicked()
-                {
-                    self.swap_sides();
-                }
-                // B2：过滤/显示面板开关（左侧 SidePanel）
-                if ui
-                    .selectable_label(self.show_filter_panel, "⛭ 过滤")
-                    .on_hover_text("扩展名/大小/时间过滤面板")
-                    .clicked()
-                {
-                    self.show_filter_panel = !self.show_filter_panel;
-                }
-                ui.separator();
-                if ui
-                    .checkbox(&mut self.compare_content, t(I18nKey::ContentHash))
-                    .changed()
-                {
-                    self.refresh();
-                }
-                if ui
-                    .checkbox(&mut self.only_diff, t(I18nKey::OnlyDiff))
-                    .changed()
-                {
-                    self.rebuild_tree();
-                }
-                if ui
-                    .checkbox(&mut self.show_same, t(I18nKey::ShowSame))
-                    .changed()
-                    && !self.only_diff
-                {
-                    self.rebuild_tree();
-                }
-                // B1 状态过滤下拉（BC 显示过滤器）
-                let filter_labels = [
-                    (ViewFilter::All, "全部"),
-                    (ViewFilter::Diff, "仅差异"),
-                    (ViewFilter::LeftOnly, "仅左侧"),
-                    (ViewFilter::RightOnly, "仅右侧"),
-                    (ViewFilter::Moved, "仅移动"),
-                    (ViewFilter::Same, "仅相同"),
-                    // P41-2：较新维度（Differ + mtime 比较）
-                    (ViewFilter::LeftNewer, t(I18nKey::ViewLeftNewer)),
-                    (ViewFilter::RightNewer, t(I18nKey::ViewRightNewer)),
-                ];
-                let cur = self.view_filter;
-                egui::ComboBox::from_id_salt("dir_view_filter")
-                    .selected_text(
-                        filter_labels
-                            .iter()
-                            .find(|(v, _)| *v == cur)
-                            .map(|(_, l)| *l)
-                            .unwrap_or("全部"),
-                    )
-                    .show_ui(ui, |ui| {
-                        for (v, l) in filter_labels {
-                            if ui.selectable_label(cur == v, l).clicked() {
-                                self.view_filter = v;
-                                self.rebuild_tree();
+                    if ui
+                        .checkbox(&mut self.compare_content, t(I18nKey::ContentHash))
+                        .changed()
+                    {
+                        self.refresh();
+                    }
+                    if ui
+                        .checkbox(&mut self.only_diff, t(I18nKey::OnlyDiff))
+                        .changed()
+                    {
+                        self.rebuild_tree();
+                    }
+                    if ui
+                        .checkbox(&mut self.show_same, t(I18nKey::ShowSame))
+                        .changed()
+                        && !self.only_diff
+                    {
+                        self.rebuild_tree();
+                    }
+                    // B1 状态过滤下拉（BC 显示过滤器）
+                    let filter_labels = [
+                        (ViewFilter::All, "全部"),
+                        (ViewFilter::Diff, "仅差异"),
+                        (ViewFilter::LeftOnly, "仅左侧"),
+                        (ViewFilter::RightOnly, "仅右侧"),
+                        (ViewFilter::Moved, "仅移动"),
+                        (ViewFilter::Same, "仅相同"),
+                        // P41-2：较新维度（Differ + mtime 比较）
+                        (ViewFilter::LeftNewer, t(I18nKey::ViewLeftNewer)),
+                        (ViewFilter::RightNewer, t(I18nKey::ViewRightNewer)),
+                    ];
+                    let cur = self.view_filter;
+                    egui::ComboBox::from_id_salt("dir_view_filter")
+                        .selected_text(
+                            filter_labels
+                                .iter()
+                                .find(|(v, _)| *v == cur)
+                                .map(|(_, l)| *l)
+                                .unwrap_or("全部"),
+                        )
+                        .show_ui(ui, |ui| {
+                            for (v, l) in filter_labels {
+                                if ui.selectable_label(cur == v, l).clicked() {
+                                    self.view_filter = v;
+                                    self.rebuild_tree();
+                                }
                             }
-                        }
-                    });
-                ui.separator();
-                // P40-2：include/exclude glob 已收进过滤面板（原工具栏输入移除）
-                if let Some(r) = &self.result {
-                    let s = r.stats;
-                    ui.label(fmt(
-                        I18nKey::DirStats,
-                        &[
-                            &s.same.to_string(),
-                            &s.left_only.to_string(),
-                            &s.right_only.to_string(),
-                            &s.differ.to_string(),
-                        ],
-                    ));
-                }
-                ui.separator();
-                if ui
-                    .button("⇄ 同步")
-                    .on_hover_text("生成同步计划（update/mirror/two-way）")
-                    .clicked()
-                {
-                    self.show_sync = !self.show_sync;
-                    if self.show_sync && self.sync_plan.is_none() {
-                        self.gen_sync_plan();
-                    }
-                }
-                if ui
-                    .button("⇱ 手动对齐")
-                    .on_hover_text("左右各选一个文件配对对比")
-                    .clicked()
-                {
-                    self.show_align = !self.show_align;
-                    if self.show_align {
-                        // 默认选中第一个可对齐项
-                        if self.align_left.is_none() {
-                            self.align_left =
-                                self.flat.iter().find(|r| !r.is_dir).map(|r| r.path.clone());
-                        }
-                    }
-                }
-                // 批量操作：作用于全部差异文件（only_diff 视图）
-                if let Some(r) = &self.result {
-                    let has_diff = r.entries.iter().any(|e| e.status != FileStatus::Same);
-                    if has_diff {
-                        ui.separator();
-                        if ui
-                            .button("⧉ 批量复制→右")
-                            .on_hover_text("把全部差异/仅左侧文件复制到右侧")
-                            .clicked()
-                        {
-                            self.run_batch_copy_to_right();
-                        }
-                        // P37-1f：批量复制→左（BC 复制右边到左边）
-                        if ui
-                            .button("⧉ 批量复制→左")
-                            .on_hover_text(t(I18nKey::CopyBatchToLeft))
-                            .clicked()
-                        {
-                            self.run_batch_copy_to_left();
-                        }
-                        if ui
-                            .button("🗑 批量删除右侧")
-                            .on_hover_text("删除右侧全部差异文件")
-                            .clicked()
-                        {
-                            self.run_batch_delete_right();
-                        }
-                        // P37-1f：批量删除左侧（BC 删除左边）
-                        if ui
-                            .button("🗑 批量删除左侧")
-                            .on_hover_text(t(I18nKey::DeleteBatchLeft))
-                            .clicked()
-                        {
-                            self.run_batch_delete_left();
-                        }
-                        // P37-1f：立即同步（BC Sync Now：生成计划并直接执行）
-                        ui.separator();
-                        if ui
-                            .button(format!("⚡ {}", t(I18nKey::SyncNow)))
-                            .on_hover_text("生成同步计划并立即执行（update/mirror/two-way）")
-                            .clicked()
-                        {
-                            if self.sync_plan.is_none() {
-                                self.gen_sync_plan();
-                            }
-                            self.run_sync_checked();
-                        }
-                    }
-                }
-                // 选中文件单项操作
-                if let Some(rel) = self.selected_rel() {
+                        });
                     ui.separator();
-                    ui.label(format!("选中: {}", rel));
-                    if ui.button("→ 复制到右").clicked() {
-                        let op = SyncOp::Copy {
-                            rel: rel.clone(),
-                            src_rel: None,
-                            from_src: true,
-                        };
-                        self.run_single_op(op);
+                    // P40-2：include/exclude glob 已收进过滤面板（原工具栏输入移除）
+                    if let Some(r) = &self.result {
+                        let s = r.stats;
+                        ui.label(fmt(
+                            I18nKey::DirStats,
+                            &[
+                                &s.same.to_string(),
+                                &s.left_only.to_string(),
+                                &s.right_only.to_string(),
+                                &s.differ.to_string(),
+                            ],
+                        ));
                     }
-                    if ui.button("← 复制到左").clicked() {
-                        let op = SyncOp::Copy {
-                            rel: rel.clone(),
-                            src_rel: None,
-                            from_src: false,
-                        };
-                        self.run_single_op(op);
+                    ui.separator();
+                    if ui
+                        .button("⇄ 同步")
+                        .on_hover_text("生成同步计划（update/mirror/two-way）")
+                        .clicked()
+                    {
+                        self.show_sync = !self.show_sync;
+                        if self.show_sync && self.sync_plan.is_none() {
+                            self.gen_sync_plan();
+                        }
                     }
-                    if ui.button("🗑 删除右侧").clicked() {
-                        let op = SyncOp::Delete { rel: rel.clone() };
-                        self.run_single_op(op);
+                    if ui
+                        .button("⇱ 手动对齐")
+                        .on_hover_text("左右各选一个文件配对对比")
+                        .clicked()
+                    {
+                        self.show_align = !self.show_align;
+                        if self.show_align {
+                            // 默认选中第一个可对齐项
+                            if self.align_left.is_none() {
+                                self.align_left =
+                                    self.flat.iter().find(|r| !r.is_dir).map(|r| r.path.clone());
+                            }
+                        }
                     }
-                    if ui.button("🗑 删除左侧").clicked() {
-                        // 删除左侧 = 把右侧当源、左侧当目标执行 Delete
-                        let (l, r) =
-                            match (crate::vfs::open(&self.right), crate::vfs::open(&self.left)) {
-                                (Ok(r), Ok(l)) => (l, r),
-                                _ => return,
+                    // 批量操作：作用于全部差异文件（only_diff 视图）
+                    if let Some(r) = &self.result {
+                        let has_diff = r.entries.iter().any(|e| e.status != FileStatus::Same);
+                        if has_diff {
+                            ui.separator();
+                            if ui
+                                .button("⧉ 批量复制→右")
+                                .on_hover_text("把全部差异/仅左侧文件复制到右侧")
+                                .clicked()
+                            {
+                                self.run_batch_copy_to_right();
+                            }
+                            // P37-1f：批量复制→左（BC 复制右边到左边）
+                            if ui
+                                .button("⧉ 批量复制→左")
+                                .on_hover_text(t(I18nKey::CopyBatchToLeft))
+                                .clicked()
+                            {
+                                self.run_batch_copy_to_left();
+                            }
+                            if ui
+                                .button("🗑 批量删除右侧")
+                                .on_hover_text("删除右侧全部差异文件")
+                                .clicked()
+                            {
+                                self.run_batch_delete_right();
+                            }
+                            // P37-1f：批量删除左侧（BC 删除左边）
+                            if ui
+                                .button("🗑 批量删除左侧")
+                                .on_hover_text(t(I18nKey::DeleteBatchLeft))
+                                .clicked()
+                            {
+                                self.run_batch_delete_left();
+                            }
+                            // P37-1f：立即同步（BC Sync Now：生成计划并直接执行）
+                            ui.separator();
+                            if ui
+                                .button(format!("⚡ {}", t(I18nKey::SyncNow)))
+                                .on_hover_text("生成同步计划并立即执行（update/mirror/two-way）")
+                                .clicked()
+                            {
+                                if self.sync_plan.is_none() {
+                                    self.gen_sync_plan();
+                                }
+                                self.run_sync_checked();
+                            }
+                        }
+                    }
+                    // 选中文件单项操作
+                    if let Some(rel) = self.selected_rel() {
+                        ui.separator();
+                        ui.label(format!("选中: {}", rel));
+                        if ui.button("→ 复制到右").clicked() {
+                            let op = SyncOp::Copy {
+                                rel: rel.clone(),
+                                src_rel: None,
+                                from_src: true,
                             };
-                        match execute_op(
-                            &SyncOp::Delete { rel: rel.clone() },
-                            l.as_ref(),
-                            r.as_ref(),
-                        ) {
-                            Some(e) => self.sync_msg = Some(format!("操作失败: {}", e)),
-                            None => {
-                                self.sync_msg = Some(format!("完成: 删除 {}", rel));
-                                self.refresh();
+                            self.run_single_op(op);
+                        }
+                        if ui.button("← 复制到左").clicked() {
+                            let op = SyncOp::Copy {
+                                rel: rel.clone(),
+                                src_rel: None,
+                                from_src: false,
+                            };
+                            self.run_single_op(op);
+                        }
+                        if ui.button("🗑 删除右侧").clicked() {
+                            let op = SyncOp::Delete { rel: rel.clone() };
+                            self.run_single_op(op);
+                        }
+                        if ui.button("🗑 删除左侧").clicked() {
+                            // 删除左侧 = 把右侧当源、左侧当目标执行 Delete
+                            let (l, r) =
+                                match (crate::vfs::open(&self.right), crate::vfs::open(&self.left))
+                                {
+                                    (Ok(r), Ok(l)) => (l, r),
+                                    _ => return,
+                                };
+                            match execute_op(
+                                &SyncOp::Delete { rel: rel.clone() },
+                                l.as_ref(),
+                                r.as_ref(),
+                            ) {
+                                Some(e) => self.sync_msg = Some(format!("操作失败: {}", e)),
+                                None => {
+                                    self.sync_msg = Some(format!("完成: 删除 {}", rel));
+                                    self.refresh();
+                                }
                             }
                         }
                     }
-                }
+                });
             });
-        });
+        } // dirtab_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
             egui::Window::new(t(I18nKey::Hint))

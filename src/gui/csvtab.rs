@@ -559,114 +559,116 @@ impl CsvTab {
     }
 
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::top("csvtab_tools").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                // 主键下拉
-                let opts = self.key_options();
-                ui.label(t(I18nKey::CsvKeyCol));
-                let mut key = self.key.clone();
-                let selected = if key.is_empty() {
-                    t(I18nKey::CsvRowAlign).to_string()
-                } else {
-                    key.clone()
-                };
-                egui::ComboBox::from_id_salt("csv_key")
-                    .selected_text(selected)
-                    .show_ui(ui, |ui| {
-                        if ui
-                            .selectable_label(key.is_empty(), t(I18nKey::CsvRowAlign))
-                            .clicked()
-                        {
-                            key.clear();
-                        }
-                        for h in &opts {
-                            if ui.selectable_label(self.key == *h, h).clicked() {
-                                key = h.clone();
+        if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("csvtab_tools").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    // 主键下拉
+                    let opts = self.key_options();
+                    ui.label(t(I18nKey::CsvKeyCol));
+                    let mut key = self.key.clone();
+                    let selected = if key.is_empty() {
+                        t(I18nKey::CsvRowAlign).to_string()
+                    } else {
+                        key.clone()
+                    };
+                    egui::ComboBox::from_id_salt("csv_key")
+                        .selected_text(selected)
+                        .show_ui(ui, |ui| {
+                            if ui
+                                .selectable_label(key.is_empty(), t(I18nKey::CsvRowAlign))
+                                .clicked()
+                            {
+                                key.clear();
                             }
-                        }
-                    });
-                if key != self.key {
-                    self.key = key;
-                    self.reload();
-                }
-                // 分隔符
-                ui.separator();
-                ui.label(t(I18nKey::CsvDelimiter));
-                let mut delim = self.delimiter.clone();
-                egui::ComboBox::from_id_salt("csv_delim")
-                    .selected_text(delim.clone())
-                    .show_ui(ui, |ui| {
-                        for d in [",", "\\t"] {
-                            if ui.selectable_label(delim == d, d).clicked() {
-                                delim = d.to_string();
+                            for h in &opts {
+                                if ui.selectable_label(self.key == *h, h).clicked() {
+                                    key = h.clone();
+                                }
                             }
-                        }
-                    });
-                if delim != self.delimiter {
-                    self.delimiter = delim;
-                    self.reload();
-                }
-                // 显示相同 + 过滤
-                ui.separator();
-                if ui
-                    .checkbox(&mut self.show_same, t(I18nKey::ShowSame))
-                    .changed()
-                {
-                    // 仅刷新显示，不需重排
-                }
-                let filter_labels = [
-                    (CsvFilter::All, t(I18nKey::CsvFilterAll)),
-                    (CsvFilter::Diff, t(I18nKey::CsvFilterDiff)),
-                    (CsvFilter::LeftOnly, t(I18nKey::CsvFilterLeft)),
-                    (CsvFilter::RightOnly, t(I18nKey::CsvFilterRight)),
-                    (CsvFilter::Modified, t(I18nKey::CsvFilterModified)),
-                    (CsvFilter::Same, t(I18nKey::CsvFilterSame)),
-                ];
-                let cur = self.filter;
-                egui::ComboBox::from_id_salt("csv_filter")
-                    .selected_text(
-                        filter_labels
-                            .iter()
-                            .find(|(v, _)| *v == cur)
-                            .map(|(_, l)| *l)
-                            .unwrap_or(""),
-                    )
-                    .show_ui(ui, |ui| {
-                        for (v, l) in &filter_labels {
-                            if ui.selectable_label(cur == *v, *l).clicked() {
-                                self.filter = *v;
+                        });
+                    if key != self.key {
+                        self.key = key;
+                        self.reload();
+                    }
+                    // 分隔符
+                    ui.separator();
+                    ui.label(t(I18nKey::CsvDelimiter));
+                    let mut delim = self.delimiter.clone();
+                    egui::ComboBox::from_id_salt("csv_delim")
+                        .selected_text(delim.clone())
+                        .show_ui(ui, |ui| {
+                            for d in [",", "\\t"] {
+                                if ui.selectable_label(delim == d, d).clicked() {
+                                    delim = d.to_string();
+                                }
                             }
-                        }
-                    });
-                // 重新加载
-                if ui.button(t(I18nKey::Reload)).clicked() {
-                    self.reload();
-                }
-                // P37-1c：隐藏相同列 / 列宽自适应
-                ui.separator();
-                ui.checkbox(&mut self.hide_same_cols, t(I18nKey::HideSameCols));
-                ui.checkbox(&mut self.auto_fit, t(I18nKey::FitColumns));
-                // P37-1c：复制单元格至右侧（需先选中单元格）
-                ui.separator();
-                if ui
-                    .button(format!("→ {}", t(I18nKey::CopyCellRight)))
-                    .on_hover_text("把左侧单元格复制到右侧对应位置（需先点击选中单元格）")
-                    .clicked()
-                {
-                    self.copy_cell_right();
-                }
-                // 统计
-                let s = self.stats;
-                ui.separator();
-                ui.label(format!(
-                    "{} / {} / {} / {}",
-                    fmt(I18nKey::StatSame, &[&s.same.to_string()]),
-                    fmt(I18nKey::StatDelete, &[&s.left_only.to_string()]),
-                    fmt(I18nKey::StatInsert, &[&s.right_only.to_string()]),
-                    fmt(I18nKey::StatReplace, &[&s.modified.to_string()]),
-                ));
+                        });
+                    if delim != self.delimiter {
+                        self.delimiter = delim;
+                        self.reload();
+                    }
+                    // 显示相同 + 过滤
+                    ui.separator();
+                    if ui
+                        .checkbox(&mut self.show_same, t(I18nKey::ShowSame))
+                        .changed()
+                    {
+                        // 仅刷新显示，不需重排
+                    }
+                    let filter_labels = [
+                        (CsvFilter::All, t(I18nKey::CsvFilterAll)),
+                        (CsvFilter::Diff, t(I18nKey::CsvFilterDiff)),
+                        (CsvFilter::LeftOnly, t(I18nKey::CsvFilterLeft)),
+                        (CsvFilter::RightOnly, t(I18nKey::CsvFilterRight)),
+                        (CsvFilter::Modified, t(I18nKey::CsvFilterModified)),
+                        (CsvFilter::Same, t(I18nKey::CsvFilterSame)),
+                    ];
+                    let cur = self.filter;
+                    egui::ComboBox::from_id_salt("csv_filter")
+                        .selected_text(
+                            filter_labels
+                                .iter()
+                                .find(|(v, _)| *v == cur)
+                                .map(|(_, l)| *l)
+                                .unwrap_or(""),
+                        )
+                        .show_ui(ui, |ui| {
+                            for (v, l) in &filter_labels {
+                                if ui.selectable_label(cur == *v, *l).clicked() {
+                                    self.filter = *v;
+                                }
+                            }
+                        });
+                    // 重新加载
+                    if ui.button(t(I18nKey::Reload)).clicked() {
+                        self.reload();
+                    }
+                    // P37-1c：隐藏相同列 / 列宽自适应
+                    ui.separator();
+                    ui.checkbox(&mut self.hide_same_cols, t(I18nKey::HideSameCols));
+                    ui.checkbox(&mut self.auto_fit, t(I18nKey::FitColumns));
+                    // P37-1c：复制单元格至右侧（需先选中单元格）
+                    ui.separator();
+                    if ui
+                        .button(format!("→ {}", t(I18nKey::CopyCellRight)))
+                        .on_hover_text("把左侧单元格复制到右侧对应位置（需先点击选中单元格）")
+                        .clicked()
+                    {
+                        self.copy_cell_right();
+                    }
+                    // 统计
+                    let s = self.stats;
+                    ui.separator();
+                    ui.label(format!(
+                        "{} / {} / {} / {}",
+                        fmt(I18nKey::StatSame, &[&s.same.to_string()]),
+                        fmt(I18nKey::StatDelete, &[&s.left_only.to_string()]),
+                        fmt(I18nKey::StatInsert, &[&s.right_only.to_string()]),
+                        fmt(I18nKey::StatReplace, &[&s.modified.to_string()]),
+                    ));
+                });
             });
-        });
+        } // csvtab_tools 门控闭合
 
         if let Some(err) = &self.error {
             ui.colored_label(Color32::from_rgb(235, 90, 90), err);

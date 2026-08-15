@@ -572,6 +572,20 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
         }
         ui.separator();
+        // P42-4：图例 / 日志 / 工具栏开关（BC 视图菜单）
+        if ui.button(t(I18nKey::MenuLegend)).clicked() {
+            ui.close();
+            app.show_legend = !app.show_legend;
+        }
+        if ui.button(t(I18nKey::MenuLog)).clicked() {
+            ui.close();
+            app.show_log = !app.show_log;
+        }
+        let mut tb = crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed);
+        if ui.checkbox(&mut tb, t(I18nKey::MenuToolbar)).changed() {
+            crate::gui::common::SHOW_TOOLBAR.store(tb, std::sync::atomic::Ordering::Relaxed);
+        }
+        ui.separator();
         // P39-2d：细节三模式（BC 视图菜单「细节」）
         ui.label(t(I18nKey::MenuDetail));
         let cur_detail = app.tabs.get(app.active).and_then(|t| match t {

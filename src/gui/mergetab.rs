@@ -325,127 +325,129 @@ impl MergeTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::top("mergetab_tools").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
-                    self.reload();
-                }
-                if ui
-                    .button(format!("💾 {}", t(I18nKey::SaveMerged)))
-                    .clicked()
-                {
-                    self.save();
-                }
-                ui.separator();
-                ui.checkbox(&mut self.show_preview, t(I18nKey::LivePreview))
-                    .changed();
-                ui.separator();
-                ui.label(fmt(
-                    I18nKey::ConflictsCount,
-                    &[&self.view.conflicts.to_string()],
-                ));
-                if ui
-                    .button(format!("⬇ {}", t(I18nKey::NextConflict)))
-                    .on_hover_text("下一冲突 (F7)")
-                    .clicked()
-                {
-                    self.next_conflict();
-                }
-                if ui
-                    .button(format!("⬆ {}", t(I18nKey::PrevConflict)))
-                    .on_hover_text("上一冲突 (Shift+F7)")
-                    .clicked()
-                {
-                    self.prev_conflict();
-                }
-                // P37-1b：清除冲突区段并跳下一（BC Clear Conflict Section, Next）
-                if ui
-                    .button(format!("✖ {}", t(I18nKey::ClearConflictNext)))
-                    .on_hover_text("清除当前冲突（未解决默认取左）并跳到下一冲突区段")
-                    .clicked()
-                {
-                    self.clear_conflict_next();
-                }
-                ui.separator();
-                // P37-1b：差异导航（非 Context 块，BC Next/Previous Difference）
-                if ui
-                    .button(format!("↡ {}", t(I18nKey::MergeNextDiff)))
-                    .on_hover_text("下一差异")
-                    .clicked()
-                {
-                    self.next_diff();
-                }
-                if ui
-                    .button(format!("↟ {}", t(I18nKey::MergePrevDiff)))
-                    .on_hover_text("上一差异")
-                    .clicked()
-                {
-                    self.prev_diff();
-                }
-                ui.separator();
-                // P37-1b：左/右采用导航（BC Next/Previous Left/Right Taken）
-                if ui
-                    .button(format!("◀ {}", t(I18nKey::NextLeftTaken)))
-                    .on_hover_text("下一处采用左侧的区段")
-                    .clicked()
-                {
-                    self.next_taken_left();
-                }
-                if ui
-                    .button(format!("▶ {}", t(I18nKey::NextRightTaken)))
-                    .on_hover_text("下一处采用右侧的区段")
-                    .clicked()
-                {
-                    self.next_taken_right();
-                }
-                ui.separator();
-                if ui.button(format!("← {}", t(I18nKey::TakeLeft))).clicked() {
-                    self.resolve_current(Resolution::Left);
-                }
-                if ui.button(format!("→ {}", t(I18nKey::TakeRight))).clicked() {
-                    self.resolve_current(Resolution::Right);
-                }
-                if ui.button(format!("B {}", t(I18nKey::TakeBase))).clicked() {
-                    self.resolve_current(Resolution::Base);
-                }
-                // P37-1：顺序合并（BC 采用左边然后右边/采用右边然后左边）
-                if ui
-                    .button(format!("⇉ {}", t(I18nKey::TakeLeftThenRight)))
-                    .on_hover_text("先采用左边内容，再追加右边内容")
-                    .clicked()
-                {
-                    self.resolve_current(Resolution::LeftThenRight);
-                }
-                if ui
-                    .button(format!("⇇ {}", t(I18nKey::TakeRightThenLeft)))
-                    .on_hover_text("先采用右边内容，再追加左边内容")
-                    .clicked()
-                {
-                    self.resolve_current(Resolution::RightThenLeft);
-                }
-                // 显示当前冲突块的解决状态（P31：已解决 ✓ 绿标）
-                if let Some(bi) = self.current_conflict_block() {
-                    if let Some(blk) = self.view.blocks.get(bi) {
-                        ui.separator();
-                        let (mark, color) = match blk.resolution {
-                            Resolution::Auto => (
-                                t(I18nKey::ResAuto).to_string(),
-                                Color32::from_rgb(240, 180, 60),
-                            ),
-                            Resolution::Left
-                            | Resolution::Right
-                            | Resolution::Base
-                            | Resolution::LeftThenRight
-                            | Resolution::RightThenLeft => (
-                                format!("✓ {}", t(I18nKey::Resolved)),
-                                Color32::from_rgb(110, 230, 120),
-                            ),
-                        };
-                        ui.colored_label(color, mark);
+        if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("mergetab_tools").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
+                        self.reload();
                     }
-                }
+                    if ui
+                        .button(format!("💾 {}", t(I18nKey::SaveMerged)))
+                        .clicked()
+                    {
+                        self.save();
+                    }
+                    ui.separator();
+                    ui.checkbox(&mut self.show_preview, t(I18nKey::LivePreview))
+                        .changed();
+                    ui.separator();
+                    ui.label(fmt(
+                        I18nKey::ConflictsCount,
+                        &[&self.view.conflicts.to_string()],
+                    ));
+                    if ui
+                        .button(format!("⬇ {}", t(I18nKey::NextConflict)))
+                        .on_hover_text("下一冲突 (F7)")
+                        .clicked()
+                    {
+                        self.next_conflict();
+                    }
+                    if ui
+                        .button(format!("⬆ {}", t(I18nKey::PrevConflict)))
+                        .on_hover_text("上一冲突 (Shift+F7)")
+                        .clicked()
+                    {
+                        self.prev_conflict();
+                    }
+                    // P37-1b：清除冲突区段并跳下一（BC Clear Conflict Section, Next）
+                    if ui
+                        .button(format!("✖ {}", t(I18nKey::ClearConflictNext)))
+                        .on_hover_text("清除当前冲突（未解决默认取左）并跳到下一冲突区段")
+                        .clicked()
+                    {
+                        self.clear_conflict_next();
+                    }
+                    ui.separator();
+                    // P37-1b：差异导航（非 Context 块，BC Next/Previous Difference）
+                    if ui
+                        .button(format!("↡ {}", t(I18nKey::MergeNextDiff)))
+                        .on_hover_text("下一差异")
+                        .clicked()
+                    {
+                        self.next_diff();
+                    }
+                    if ui
+                        .button(format!("↟ {}", t(I18nKey::MergePrevDiff)))
+                        .on_hover_text("上一差异")
+                        .clicked()
+                    {
+                        self.prev_diff();
+                    }
+                    ui.separator();
+                    // P37-1b：左/右采用导航（BC Next/Previous Left/Right Taken）
+                    if ui
+                        .button(format!("◀ {}", t(I18nKey::NextLeftTaken)))
+                        .on_hover_text("下一处采用左侧的区段")
+                        .clicked()
+                    {
+                        self.next_taken_left();
+                    }
+                    if ui
+                        .button(format!("▶ {}", t(I18nKey::NextRightTaken)))
+                        .on_hover_text("下一处采用右侧的区段")
+                        .clicked()
+                    {
+                        self.next_taken_right();
+                    }
+                    ui.separator();
+                    if ui.button(format!("← {}", t(I18nKey::TakeLeft))).clicked() {
+                        self.resolve_current(Resolution::Left);
+                    }
+                    if ui.button(format!("→ {}", t(I18nKey::TakeRight))).clicked() {
+                        self.resolve_current(Resolution::Right);
+                    }
+                    if ui.button(format!("B {}", t(I18nKey::TakeBase))).clicked() {
+                        self.resolve_current(Resolution::Base);
+                    }
+                    // P37-1：顺序合并（BC 采用左边然后右边/采用右边然后左边）
+                    if ui
+                        .button(format!("⇉ {}", t(I18nKey::TakeLeftThenRight)))
+                        .on_hover_text("先采用左边内容，再追加右边内容")
+                        .clicked()
+                    {
+                        self.resolve_current(Resolution::LeftThenRight);
+                    }
+                    if ui
+                        .button(format!("⇇ {}", t(I18nKey::TakeRightThenLeft)))
+                        .on_hover_text("先采用右边内容，再追加左边内容")
+                        .clicked()
+                    {
+                        self.resolve_current(Resolution::RightThenLeft);
+                    }
+                    // 显示当前冲突块的解决状态（P31：已解决 ✓ 绿标）
+                    if let Some(bi) = self.current_conflict_block() {
+                        if let Some(blk) = self.view.blocks.get(bi) {
+                            ui.separator();
+                            let (mark, color) = match blk.resolution {
+                                Resolution::Auto => (
+                                    t(I18nKey::ResAuto).to_string(),
+                                    Color32::from_rgb(240, 180, 60),
+                                ),
+                                Resolution::Left
+                                | Resolution::Right
+                                | Resolution::Base
+                                | Resolution::LeftThenRight
+                                | Resolution::RightThenLeft => (
+                                    format!("✓ {}", t(I18nKey::Resolved)),
+                                    Color32::from_rgb(110, 230, 120),
+                                ),
+                            };
+                            ui.colored_label(color, mark);
+                        }
+                    }
+                });
             });
-        });
+        } // mergetab_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
             egui::Window::new(t(I18nKey::Hint))

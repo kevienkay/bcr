@@ -1862,248 +1862,251 @@ impl DiffTab {
         self.handle_keys(ui);
 
         // 搜索/跳转工具条
-        egui::Panel::top("difftab_tools").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                // ---- 打开（BC: Open 按钮组）----
-                if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                    self.open_left_dialog();
-                }
-                if ui.button(t(I18nKey::OpenRight)).clicked() {
-                    self.open_right_dialog();
-                }
-                ui.separator();
-                // ---- 显示过滤（BC: All▾ Diffs Context 组）----
-                // P35-A3：视图过滤下拉（Show All/Diff/Same/Context）
-                {
-                    let filters = [
-                        (DiffViewFilter::All, t(I18nKey::ShowAll)),
-                        (DiffViewFilter::Diff, t(I18nKey::OnlyDiff)),
-                        (DiffViewFilter::Same, t(I18nKey::ShowSame)),
-                        (DiffViewFilter::Context, t(I18nKey::ShowContext)),
-                    ];
-                    let cur = self.view_filter;
-                    egui::ComboBox::from_id_salt("diff_view_filter")
-                        .selected_text(
-                            filters
-                                .iter()
-                                .find(|(v, _)| *v == cur)
-                                .map(|(_, l)| *l)
-                                .unwrap_or(""),
-                        )
-                        .show_ui(ui, |ui| {
-                            for (v, l) in &filters {
-                                if ui.selectable_label(cur == *v, *l).clicked() {
-                                    self.view_filter = *v;
+        // P42-4：工具栏开关（BC View>工具栏）
+        if super::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("difftab_tools").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    // ---- 打开（BC: Open 按钮组）----
+                    if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                        self.open_left_dialog();
+                    }
+                    if ui.button(t(I18nKey::OpenRight)).clicked() {
+                        self.open_right_dialog();
+                    }
+                    ui.separator();
+                    // ---- 显示过滤（BC: All▾ Diffs Context 组）----
+                    // P35-A3：视图过滤下拉（Show All/Diff/Same/Context）
+                    {
+                        let filters = [
+                            (DiffViewFilter::All, t(I18nKey::ShowAll)),
+                            (DiffViewFilter::Diff, t(I18nKey::OnlyDiff)),
+                            (DiffViewFilter::Same, t(I18nKey::ShowSame)),
+                            (DiffViewFilter::Context, t(I18nKey::ShowContext)),
+                        ];
+                        let cur = self.view_filter;
+                        egui::ComboBox::from_id_salt("diff_view_filter")
+                            .selected_text(
+                                filters
+                                    .iter()
+                                    .find(|(v, _)| *v == cur)
+                                    .map(|(_, l)| *l)
+                                    .unwrap_or(""),
+                            )
+                            .show_ui(ui, |ui| {
+                                for (v, l) in &filters {
+                                    if ui.selectable_label(cur == *v, *l).clicked() {
+                                        self.view_filter = *v;
+                                    }
                                 }
+                            });
+                    }
+                    // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
+                    ui.separator();
+                    // ---- 编辑（BC: Copy/编辑组）----
+                    // P40-1：编辑左/右收进 Edit 菜单（start_edit）；撤销/重做保留（测试与高频操作依赖）
+                    // P32-A6：撤销/重做按钮
+                    let can_undo = !self.undo_stack.is_empty();
+                    let can_redo = !self.redo_stack.is_empty();
+                    if ui
+                        .add_enabled(can_undo, egui::Button::new("↩ 撤销"))
+                        .on_hover_text("Ctrl+Z")
+                        .clicked()
+                    {
+                        self.undo();
+                    }
+                    if ui
+                        .add_enabled(can_redo, egui::Button::new("↪ 重做"))
+                        .on_hover_text("Ctrl+Y")
+                        .clicked()
+                    {
+                        self.redo();
+                    }
+                    ui.separator();
+                    ui.separator();
+                    // ---- 操作（BC: Copy/Swap/Reload 组）----
+                    // P35-A1：复制差异块到另一侧（BC Copy to Other Side）
+                    let has_diff = self.diff_pos.is_some();
+                    if ui
+                        .add_enabled(
+                            has_diff,
+                            egui::Button::new(format!("→ {}", t(I18nKey::CopyToRight))),
+                        )
+                        .on_hover_text("复制当前差异块左侧内容到右侧")
+                        .clicked()
+                    {
+                        self.copy_block_to(EditSide::Right);
+                    }
+                    if ui
+                        .add_enabled(
+                            has_diff,
+                            egui::Button::new(format!("← {}", t(I18nKey::CopyToLeft))),
+                        )
+                        .on_hover_text("复制当前差异块右侧内容到左侧")
+                        .clicked()
+                    {
+                        self.copy_block_to(EditSide::Left);
+                    }
+                    if ui
+                        .button(format!("⟳ {}", t(I18nKey::Reload)))
+                        .on_hover_text("重新加载 (F5)")
+                        .clicked()
+                    {
+                        self.reload();
+                    }
+                    // P35-A2：交换左右两侧（BC Swap Sides）
+                    if ui
+                        .button(format!("⇄ {}", t(I18nKey::SwapSides)))
+                        .on_hover_text("交换左右两侧文件")
+                        .clicked()
+                    {
+                        self.swap_sides();
+                    }
+                    ui.separator();
+                    // ---- 差异导航（BC: Next Section/Prev Section 组）----
+                    ui.label(fmt(
+                        I18nKey::DiffCount,
+                        &[
+                            &self.diff_rows.len().to_string(),
+                            &self.rows.len().to_string(),
+                        ],
+                    ));
+                    if ui
+                        .button(format!("⬇ {}", t(I18nKey::NextDiff)))
+                        .on_hover_text("下一差异 (F6)")
+                        .clicked()
+                    {
+                        self.next_diff();
+                    }
+                    if ui
+                        .button(format!("⬆ {}", t(I18nKey::PrevDiff)))
+                        .on_hover_text("上一差异 (F7)")
+                        .clicked()
+                    {
+                        self.prev_diff();
+                    }
+                    // 跳转行
+                    let mut goto_text = self.goto_line.map(|l| l.to_string()).unwrap_or_default();
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(&mut goto_text)
+                            .hint_text(t(I18nKey::GotoHint))
+                            .desired_width(70.0),
+                    );
+                    if self.goto_focus {
+                        resp.request_focus();
+                        self.goto_focus = false;
+                    }
+                    self.goto_line = goto_text.parse().ok();
+                    if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
+                        || ui.button(format!("🎯 {}", t(I18nKey::Goto))).clicked()
+                    {
+                        if let Some(line) = self.goto_line {
+                            if line >= 1 {
+                                self.jump_to_row(line - 1);
                             }
-                        });
-                }
-                // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
-                ui.separator();
-                // ---- 编辑（BC: Copy/编辑组）----
-                // P40-1：编辑左/右收进 Edit 菜单（start_edit）；撤销/重做保留（测试与高频操作依赖）
-                // P32-A6：撤销/重做按钮
-                let can_undo = !self.undo_stack.is_empty();
-                let can_redo = !self.redo_stack.is_empty();
-                if ui
-                    .add_enabled(can_undo, egui::Button::new("↩ 撤销"))
-                    .on_hover_text("Ctrl+Z")
-                    .clicked()
-                {
-                    self.undo();
-                }
-                if ui
-                    .add_enabled(can_redo, egui::Button::new("↪ 重做"))
-                    .on_hover_text("Ctrl+Y")
-                    .clicked()
-                {
-                    self.redo();
-                }
-                ui.separator();
-                ui.separator();
-                // ---- 操作（BC: Copy/Swap/Reload 组）----
-                // P35-A1：复制差异块到另一侧（BC Copy to Other Side）
-                let has_diff = self.diff_pos.is_some();
-                if ui
-                    .add_enabled(
-                        has_diff,
-                        egui::Button::new(format!("→ {}", t(I18nKey::CopyToRight))),
-                    )
-                    .on_hover_text("复制当前差异块左侧内容到右侧")
-                    .clicked()
-                {
-                    self.copy_block_to(EditSide::Right);
-                }
-                if ui
-                    .add_enabled(
-                        has_diff,
-                        egui::Button::new(format!("← {}", t(I18nKey::CopyToLeft))),
-                    )
-                    .on_hover_text("复制当前差异块右侧内容到左侧")
-                    .clicked()
-                {
-                    self.copy_block_to(EditSide::Left);
-                }
-                if ui
-                    .button(format!("⟳ {}", t(I18nKey::Reload)))
-                    .on_hover_text("重新加载 (F5)")
-                    .clicked()
-                {
-                    self.reload();
-                }
-                // P35-A2：交换左右两侧（BC Swap Sides）
-                if ui
-                    .button(format!("⇄ {}", t(I18nKey::SwapSides)))
-                    .on_hover_text("交换左右两侧文件")
-                    .clicked()
-                {
-                    self.swap_sides();
-                }
-                ui.separator();
-                // ---- 差异导航（BC: Next Section/Prev Section 组）----
-                ui.label(fmt(
-                    I18nKey::DiffCount,
-                    &[
-                        &self.diff_rows.len().to_string(),
-                        &self.rows.len().to_string(),
-                    ],
-                ));
-                if ui
-                    .button(format!("⬇ {}", t(I18nKey::NextDiff)))
-                    .on_hover_text("下一差异 (F6)")
-                    .clicked()
-                {
-                    self.next_diff();
-                }
-                if ui
-                    .button(format!("⬆ {}", t(I18nKey::PrevDiff)))
-                    .on_hover_text("上一差异 (F7)")
-                    .clicked()
-                {
-                    self.prev_diff();
-                }
-                // 跳转行
-                let mut goto_text = self.goto_line.map(|l| l.to_string()).unwrap_or_default();
-                let resp = ui.add(
-                    egui::TextEdit::singleline(&mut goto_text)
-                        .hint_text(t(I18nKey::GotoHint))
-                        .desired_width(70.0),
-                );
-                if self.goto_focus {
-                    resp.request_focus();
-                    self.goto_focus = false;
-                }
-                self.goto_line = goto_text.parse().ok();
-                if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                    || ui.button(format!("🎯 {}", t(I18nKey::Goto))).clicked()
-                {
-                    if let Some(line) = self.goto_line {
-                        if line >= 1 {
-                            self.jump_to_row(line - 1);
                         }
                     }
-                }
-                ui.separator();
-                // ---- 搜索/替换（BC: 搜索组）----
-                let resp = ui.add(
-                    egui::TextEdit::singleline(&mut self.search.query)
-                        .id(egui::Id::new("diff_search"))
-                        .hint_text(t(I18nKey::SearchHint))
-                        .desired_width(220.0),
-                );
-                if self.search.focus {
-                    resp.request_focus();
-                    self.search.focus = false;
-                }
-                if resp.changed() {
-                    self.update_search();
-                }
-                if ui
-                    .button("⬆")
-                    .on_hover_text(t(I18nKey::PrevMatch))
-                    .clicked()
-                {
-                    self.prev_match();
-                }
-                if ui
-                    .button("⬇")
-                    .on_hover_text(t(I18nKey::NextMatch))
-                    .clicked()
-                {
-                    self.next_match();
-                }
-                if let Some(k) = self.search.current {
-                    ui.label(format!("{}/{}", k + 1, self.search.matches.len()));
-                }
-                // A4 文本替换
-                let rep_resp = ui.add(
-                    egui::TextEdit::singleline(&mut self.search.replace)
-                        .id(egui::Id::new("diff_replace"))
-                        .hint_text("替换为")
-                        .desired_width(100.0),
-                );
-                if self.search.replace_focus {
-                    rep_resp.request_focus();
-                    self.search.replace_focus = false;
-                }
-                if ui
-                    .button("🔁 替换")
-                    .on_hover_text("替换当前匹配（写回文件并自动备份）")
-                    .clicked()
-                {
-                    self.replace_current();
-                }
-                if ui
-                    .button("🔁 全部替换")
-                    .on_hover_text("替换所有匹配（写回文件并自动备份）")
-                    .clicked()
-                {
-                    self.replace_all();
-                }
-                // P33：长行横向滚动条（两栏固定各半屏，超长行栏内左右滑动查看）
-                if !self.rows.is_empty() && self.hex.is_none() {
-                    let max_chars = self
-                        .rows
-                        .iter()
-                        .flat_map(|r| [r.left.as_ref(), r.right.as_ref()])
-                        .flatten()
-                        .map(|c| c.text.chars().count())
-                        .max()
-                        .unwrap_or(0);
-                    let max_line_w = max_chars as f32 * 9.0 + 24.0;
-                    let avail = ui.available_width();
-                    let max_no_l = self
-                        .rows
-                        .iter()
-                        .filter_map(|r| r.left_no)
-                        .max()
-                        .unwrap_or(0);
-                    let max_no_r = self
-                        .rows
-                        .iter()
-                        .filter_map(|r| r.right_no)
-                        .max()
-                        .unwrap_or(0);
-                    let gutter_l = crate::gui::common::gutter_width(max_no_l);
-                    let gutter_r = crate::gui::common::gutter_width(max_no_r);
-                    let mid_gap = super::theme::MID_GAP;
-                    let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
-                    let h_max = (max_line_w - half).max(0.0);
-                    if h_max > 0.0 {
-                        ui.separator();
-                        ui.label("↔")
-                            .on_hover_text("长行横向滚动：拖动查看超宽内容");
-                        ui.add(
-                            egui::Slider::new(&mut self.h_scroll, 0.0..=h_max)
-                                .show_value(false)
-                                .custom_formatter(|v, _| format!("{:.0}px", v)),
-                        );
-                    } else {
-                        self.h_scroll = 0.0;
+                    ui.separator();
+                    // ---- 搜索/替换（BC: 搜索组）----
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(&mut self.search.query)
+                            .id(egui::Id::new("diff_search"))
+                            .hint_text(t(I18nKey::SearchHint))
+                            .desired_width(220.0),
+                    );
+                    if self.search.focus {
+                        resp.request_focus();
+                        self.search.focus = false;
                     }
-                }
+                    if resp.changed() {
+                        self.update_search();
+                    }
+                    if ui
+                        .button("⬆")
+                        .on_hover_text(t(I18nKey::PrevMatch))
+                        .clicked()
+                    {
+                        self.prev_match();
+                    }
+                    if ui
+                        .button("⬇")
+                        .on_hover_text(t(I18nKey::NextMatch))
+                        .clicked()
+                    {
+                        self.next_match();
+                    }
+                    if let Some(k) = self.search.current {
+                        ui.label(format!("{}/{}", k + 1, self.search.matches.len()));
+                    }
+                    // A4 文本替换
+                    let rep_resp = ui.add(
+                        egui::TextEdit::singleline(&mut self.search.replace)
+                            .id(egui::Id::new("diff_replace"))
+                            .hint_text("替换为")
+                            .desired_width(100.0),
+                    );
+                    if self.search.replace_focus {
+                        rep_resp.request_focus();
+                        self.search.replace_focus = false;
+                    }
+                    if ui
+                        .button("🔁 替换")
+                        .on_hover_text("替换当前匹配（写回文件并自动备份）")
+                        .clicked()
+                    {
+                        self.replace_current();
+                    }
+                    if ui
+                        .button("🔁 全部替换")
+                        .on_hover_text("替换所有匹配（写回文件并自动备份）")
+                        .clicked()
+                    {
+                        self.replace_all();
+                    }
+                    // P33：长行横向滚动条（两栏固定各半屏，超长行栏内左右滑动查看）
+                    if !self.rows.is_empty() && self.hex.is_none() {
+                        let max_chars = self
+                            .rows
+                            .iter()
+                            .flat_map(|r| [r.left.as_ref(), r.right.as_ref()])
+                            .flatten()
+                            .map(|c| c.text.chars().count())
+                            .max()
+                            .unwrap_or(0);
+                        let max_line_w = max_chars as f32 * 9.0 + 24.0;
+                        let avail = ui.available_width();
+                        let max_no_l = self
+                            .rows
+                            .iter()
+                            .filter_map(|r| r.left_no)
+                            .max()
+                            .unwrap_or(0);
+                        let max_no_r = self
+                            .rows
+                            .iter()
+                            .filter_map(|r| r.right_no)
+                            .max()
+                            .unwrap_or(0);
+                        let gutter_l = crate::gui::common::gutter_width(max_no_l);
+                        let gutter_r = crate::gui::common::gutter_width(max_no_r);
+                        let mid_gap = super::theme::MID_GAP;
+                        let half = ((avail - gutter_l - gutter_r - mid_gap) / 2.0).max(200.0);
+                        let h_max = (max_line_w - half).max(0.0);
+                        if h_max > 0.0 {
+                            ui.separator();
+                            ui.label("↔")
+                                .on_hover_text("长行横向滚动：拖动查看超宽内容");
+                            ui.add(
+                                egui::Slider::new(&mut self.h_scroll, 0.0..=h_max)
+                                    .show_value(false)
+                                    .custom_formatter(|v, _| format!("{:.0}px", v)),
+                            );
+                        } else {
+                            self.h_scroll = 0.0;
+                        }
+                    }
+                });
             });
-        });
+        } // P42-4：difftab_tools 门控闭合
 
         // 错误弹窗
         if let Some(err) = self.error.clone() {

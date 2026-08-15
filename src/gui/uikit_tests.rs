@@ -2640,6 +2640,40 @@ fn difftab_ruler_toggle_renders() {
     );
 }
 
+// ---- P42-4：图例 / 日志 / 工具栏开关 ----------------
+
+#[test]
+fn legend_and_log_windows_render() {
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    app.borrow_mut()
+        .log
+        .push("打开对比: a.txt ↔ b.txt".to_string());
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().legend_log_windows(ui));
+    h.run();
+    // 打开图例弹窗
+    app.borrow_mut().show_legend = true;
+    h.run();
+    assert!(
+        h.query_by_label("图例").is_some() || h.query_by_label("Legend").is_some(),
+        "图例弹窗应渲染"
+    );
+    app.borrow_mut().show_legend = false;
+    // 打开日志面板
+    app.borrow_mut().show_log = true;
+    h.run();
+    assert!(
+        h.query_all_by_label_contains("1 条").next().is_some()
+            || h.query_all_by_label_contains("1").next().is_some(),
+        "日志面板应显示条目数"
+    );
+    app.borrow_mut().show_log = false;
+    // 全局工具栏开关默认开启（并发测试中不可改全局值，避免干扰其他工具栏测试）
+    assert!(
+        super::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed),
+        "工具栏开关默认开启"
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]

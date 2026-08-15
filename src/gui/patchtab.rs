@@ -161,72 +161,74 @@ impl PatchTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::top("patch_tools").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui.button(t(I18nKey::OpenFile)).clicked() {
-                    self.open_dialog();
-                }
-                if ui
-                    .button(format!("⚡ {}", t(I18nKey::ApplyPatch)))
-                    .on_hover_text("把右侧（新）内容写回目标文件")
-                    .clicked()
-                {
-                    self.apply_req = true;
-                }
-                ui.separator();
-                if let Some(p) = &self.parsed {
-                    ui.label(fmt(I18nKey::PatchAdded, &[&p.added.to_string()]));
-                    ui.label(fmt(I18nKey::PatchRemoved, &[&p.removed.to_string()]));
-                }
-                // P37-1k：书签（BC 搜索菜单 切换/转到/清除书签）
-                if !self.path.is_empty() {
+        if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("patch_tools").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(t(I18nKey::OpenFile)).clicked() {
+                        self.open_dialog();
+                    }
+                    if ui
+                        .button(format!("⚡ {}", t(I18nKey::ApplyPatch)))
+                        .on_hover_text("把右侧（新）内容写回目标文件")
+                        .clicked()
+                    {
+                        self.apply_req = true;
+                    }
                     ui.separator();
-                    let mut no = self.bookmark_no.clone();
-                    ui.label("#");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut no)
-                            .desired_width(30.0)
-                            .hint_text("0-9"),
-                    );
-                    if no != self.bookmark_no {
-                        self.bookmark_no = no;
+                    if let Some(p) = &self.parsed {
+                        ui.label(fmt(I18nKey::PatchAdded, &[&p.added.to_string()]));
+                        ui.label(fmt(I18nKey::PatchRemoved, &[&p.removed.to_string()]));
                     }
-                    let parsed_no = self.bookmark_no.trim().parse::<u8>().ok();
-                    if ui
-                        .add_enabled(
-                            parsed_no.is_some(),
-                            egui::Button::new(t(I18nKey::ToggleBookmark)),
-                        )
-                        .on_hover_text("当前顶部行绑定/取消书签编号")
-                        .clicked()
-                    {
-                        if let Some(n) = parsed_no {
-                            self.toggle_bookmark(n);
+                    // P37-1k：书签（BC 搜索菜单 切换/转到/清除书签）
+                    if !self.path.is_empty() {
+                        ui.separator();
+                        let mut no = self.bookmark_no.clone();
+                        ui.label("#");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut no)
+                                .desired_width(30.0)
+                                .hint_text("0-9"),
+                        );
+                        if no != self.bookmark_no {
+                            self.bookmark_no = no;
+                        }
+                        let parsed_no = self.bookmark_no.trim().parse::<u8>().ok();
+                        if ui
+                            .add_enabled(
+                                parsed_no.is_some(),
+                                egui::Button::new(t(I18nKey::ToggleBookmark)),
+                            )
+                            .on_hover_text("当前顶部行绑定/取消书签编号")
+                            .clicked()
+                        {
+                            if let Some(n) = parsed_no {
+                                self.toggle_bookmark(n);
+                            }
+                        }
+                        if ui
+                            .add_enabled(
+                                parsed_no.is_some(),
+                                egui::Button::new(t(I18nKey::GoToBookmark)),
+                            )
+                            .clicked()
+                        {
+                            if let Some(n) = parsed_no {
+                                self.goto_bookmark(n);
+                            }
+                        }
+                        if ui
+                            .add_enabled(
+                                !self.bookmarks.is_empty(),
+                                egui::Button::new(t(I18nKey::ClearBookmarks)),
+                            )
+                            .clicked()
+                        {
+                            self.clear_bookmarks();
                         }
                     }
-                    if ui
-                        .add_enabled(
-                            parsed_no.is_some(),
-                            egui::Button::new(t(I18nKey::GoToBookmark)),
-                        )
-                        .clicked()
-                    {
-                        if let Some(n) = parsed_no {
-                            self.goto_bookmark(n);
-                        }
-                    }
-                    if ui
-                        .add_enabled(
-                            !self.bookmarks.is_empty(),
-                            egui::Button::new(t(I18nKey::ClearBookmarks)),
-                        )
-                        .clicked()
-                    {
-                        self.clear_bookmarks();
-                    }
-                }
+                });
             });
-        });
+        } // patch_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
             egui::Window::new(t(I18nKey::Hint))

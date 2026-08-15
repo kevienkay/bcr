@@ -383,83 +383,85 @@ impl TextEditTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::top("textedit_tools").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui.button(t(I18nKey::OpenFile)).clicked() {
-                    self.open_dialog();
-                }
-                if ui
-                    .button(t(I18nKey::SaveFile))
-                    .on_hover_text("Ctrl+S")
-                    .clicked()
-                {
-                    self.save_req = true;
-                }
-                ui.separator();
-                if ui
-                    .add_enabled(!self.undo_stack.is_empty(), egui::Button::new("↩ 撤销"))
-                    .on_hover_text("Ctrl+Z")
-                    .clicked()
-                {
-                    self.undo();
-                }
-                if ui
-                    .add_enabled(!self.redo_stack.is_empty(), egui::Button::new("↪ 重做"))
-                    .on_hover_text("Ctrl+Y")
-                    .clicked()
-                {
-                    self.redo();
-                }
-                ui.separator();
-                if ui.button("🔍 查找/替换").clicked() {
-                    self.show_search = !self.show_search;
-                }
-                ui.separator();
-                // BC Convert File
-                if ui
-                    .button(t(I18nKey::ConvertTrim))
-                    .on_hover_text("移除每行行尾空白")
-                    .clicked()
-                {
-                    self.convert_trim();
-                }
-                if ui
-                    .button(t(I18nKey::ConvertTabs))
-                    .on_hover_text("制表符 → 4 空格")
-                    .clicked()
-                {
-                    self.convert_tabs();
-                }
-                if ui
-                    .button(t(I18nKey::ConvertCrlf))
-                    .on_hover_text("行尾 → CRLF")
-                    .clicked()
-                {
-                    self.convert_line_ending(true);
-                }
-                if ui
-                    .button(t(I18nKey::ConvertLf))
-                    .on_hover_text("行尾 → LF")
-                    .clicked()
-                {
-                    self.convert_line_ending(false);
-                }
-                ui.separator();
-                ui.checkbox(&mut self.show_ws, t(I18nKey::VisibleWs));
-                ui.checkbox(&mut self.show_syntax, t(I18nKey::TextEditSyntax));
-                ui.separator();
-                if !self.path.is_empty() {
-                    ui.label(fmt(
-                        I18nKey::TextEditStatus,
-                        &[
-                            self.encoding.name(),
-                            &self.line_count().to_string(),
-                            &self.char_count().to_string(),
-                        ],
-                    ));
-                }
+        if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("textedit_tools").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(t(I18nKey::OpenFile)).clicked() {
+                        self.open_dialog();
+                    }
+                    if ui
+                        .button(t(I18nKey::SaveFile))
+                        .on_hover_text("Ctrl+S")
+                        .clicked()
+                    {
+                        self.save_req = true;
+                    }
+                    ui.separator();
+                    if ui
+                        .add_enabled(!self.undo_stack.is_empty(), egui::Button::new("↩ 撤销"))
+                        .on_hover_text("Ctrl+Z")
+                        .clicked()
+                    {
+                        self.undo();
+                    }
+                    if ui
+                        .add_enabled(!self.redo_stack.is_empty(), egui::Button::new("↪ 重做"))
+                        .on_hover_text("Ctrl+Y")
+                        .clicked()
+                    {
+                        self.redo();
+                    }
+                    ui.separator();
+                    if ui.button("🔍 查找/替换").clicked() {
+                        self.show_search = !self.show_search;
+                    }
+                    ui.separator();
+                    // BC Convert File
+                    if ui
+                        .button(t(I18nKey::ConvertTrim))
+                        .on_hover_text("移除每行行尾空白")
+                        .clicked()
+                    {
+                        self.convert_trim();
+                    }
+                    if ui
+                        .button(t(I18nKey::ConvertTabs))
+                        .on_hover_text("制表符 → 4 空格")
+                        .clicked()
+                    {
+                        self.convert_tabs();
+                    }
+                    if ui
+                        .button(t(I18nKey::ConvertCrlf))
+                        .on_hover_text("行尾 → CRLF")
+                        .clicked()
+                    {
+                        self.convert_line_ending(true);
+                    }
+                    if ui
+                        .button(t(I18nKey::ConvertLf))
+                        .on_hover_text("行尾 → LF")
+                        .clicked()
+                    {
+                        self.convert_line_ending(false);
+                    }
+                    ui.separator();
+                    ui.checkbox(&mut self.show_ws, t(I18nKey::VisibleWs));
+                    ui.checkbox(&mut self.show_syntax, t(I18nKey::TextEditSyntax));
+                    ui.separator();
+                    if !self.path.is_empty() {
+                        ui.label(fmt(
+                            I18nKey::TextEditStatus,
+                            &[
+                                self.encoding.name(),
+                                &self.line_count().to_string(),
+                                &self.char_count().to_string(),
+                            ],
+                        ));
+                    }
+                });
             });
-        });
+        } // textedit_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
             egui::Window::new(t(I18nKey::Hint))

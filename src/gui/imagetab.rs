@@ -335,190 +335,192 @@ impl ImageTab {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.ensure_textures(ui.ctx());
         // 工具栏
-        egui::Panel::top("img-toolbar").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("↺").on_hover_text("重新加载").clicked() {
-                    let (l, r) = (self.left.clone(), self.right.clone());
-                    self.load_pair(&l, &r);
-                }
-                ui.separator();
-                // 多帧导航
-                let total = self.total_frames();
-                if total > 1 {
-                    if ui.button("⏮").on_hover_text("第一帧").clicked() {
-                        self.goto_frame(0);
-                    }
-                    if ui.button("◀").on_hover_text("上一帧").clicked() {
-                        self.goto_frame(self.frame_idx.saturating_sub(1));
-                    }
-                    ui.label(format!("{}/{}", self.frame_idx + 1, total));
-                    if ui.button("▶").on_hover_text("下一帧").clicked() {
-                        self.goto_frame(self.frame_idx + 1);
-                    }
-                    if ui.button("⏭").on_hover_text("最后一帧").clicked() {
-                        self.goto_frame(total);
-                    }
-                    // 差异帧导航：跳到下一个/上一个有差异的帧
-                    let diff_count = self.frame_diffs.iter().filter(|&&d| d).count();
-                    if diff_count > 0 {
-                        ui.separator();
-                        if ui.button("⏮!").on_hover_text("上一个差异帧").clicked() {
-                            self.prev_diff_frame();
-                        }
-                        if ui.button("!▶").on_hover_text("下一个差异帧").clicked() {
-                            self.next_diff_frame();
-                        }
-                        ui.label(format!("差异帧 {}/{}", diff_count, total));
+        if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("img-toolbar").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("↺").on_hover_text("重新加载").clicked() {
+                        let (l, r) = (self.left.clone(), self.right.clone());
+                        self.load_pair(&l, &r);
                     }
                     ui.separator();
-                }
-                // 定位差异区域（当前帧）
-                let has_diff = self
-                    .pair
-                    .as_ref()
-                    .map(|p| p.stats.has_differences())
-                    .unwrap_or(false);
-                if has_diff
-                    && ui
-                        .button("🎯 定位差异")
-                        .on_hover_text("缩放并滚动到差异区域")
-                        .clicked()
-                {
-                    self.locate_diff_req = true;
-                }
-                ui.label("缩放");
-                if ui.button("−").clicked() {
-                    self.fit = false;
-                    self.zoom = (self.zoom * 0.8).max(0.05);
-                }
-                ui.add(
-                    egui::Slider::new(&mut self.zoom, 0.05..=8.0)
-                        .logarithmic(true)
-                        .show_value(true),
-                );
-                if ui.button("+").clicked() {
-                    self.fit = false;
-                    self.zoom = (self.zoom * 1.25).min(8.0);
-                }
-                if ui.button("100%").clicked() {
-                    self.fit = false;
-                    self.zoom = 1.0;
-                }
-                if ui.selectable_label(self.fit, "适应窗口").clicked() {
-                    self.fit = !self.fit;
-                }
-                ui.separator();
-                // P37-1e：变换（BC 旋转/翻转/重置差异偏移）
-                if ui
-                    .button("↻")
-                    .on_hover_text(t(I18nKey::ImgRotateCw))
-                    .clicked()
-                {
-                    self.rotate_cw();
-                }
-                if ui
-                    .button("↺")
-                    .on_hover_text(t(I18nKey::ImgRotateCcw))
-                    .clicked()
-                {
-                    self.rotate_ccw();
-                }
-                if ui.button("⇋").on_hover_text(t(I18nKey::ImgFlipH)).clicked() {
-                    self.flip_horizontal();
-                }
-                if ui.button("⇵").on_hover_text(t(I18nKey::ImgFlipV)).clicked() {
-                    self.flip_vertical();
-                }
-                if ui
-                    .button("↩")
-                    .on_hover_text(t(I18nKey::ImgResetTransform))
-                    .clicked()
-                {
-                    self.reset_transform();
-                }
-                ui.separator();
-                // P37-1e：差异判定模式（BC 容差/不匹配范围/混合）
-                {
-                    use crate::imgcmp::DiffMode;
-                    let cur = self.diff_mode;
-                    let label = match cur {
-                        DiffMode::Exact => t(I18nKey::ImgModeExact),
-                        DiffMode::Tolerance => t(I18nKey::ImgModeTolerance),
-                        DiffMode::MismatchRange => t(I18nKey::ImgModeMismatch),
-                        DiffMode::Mixed => t(I18nKey::ImgModeMixed),
-                    };
-                    egui::ComboBox::from_id_salt("img_diff_mode")
-                        .selected_text(label)
-                        .show_ui(ui, |ui| {
-                            for (mode, k) in [
-                                (DiffMode::Exact, I18nKey::ImgModeExact),
-                                (DiffMode::Tolerance, I18nKey::ImgModeTolerance),
-                                (DiffMode::MismatchRange, I18nKey::ImgModeMismatch),
-                                (DiffMode::Mixed, I18nKey::ImgModeMixed),
-                            ] {
-                                if ui.selectable_label(cur == mode, t(k)).clicked() {
-                                    self.diff_mode = mode;
-                                }
+                    // 多帧导航
+                    let total = self.total_frames();
+                    if total > 1 {
+                        if ui.button("⏮").on_hover_text("第一帧").clicked() {
+                            self.goto_frame(0);
+                        }
+                        if ui.button("◀").on_hover_text("上一帧").clicked() {
+                            self.goto_frame(self.frame_idx.saturating_sub(1));
+                        }
+                        ui.label(format!("{}/{}", self.frame_idx + 1, total));
+                        if ui.button("▶").on_hover_text("下一帧").clicked() {
+                            self.goto_frame(self.frame_idx + 1);
+                        }
+                        if ui.button("⏭").on_hover_text("最后一帧").clicked() {
+                            self.goto_frame(total);
+                        }
+                        // 差异帧导航：跳到下一个/上一个有差异的帧
+                        let diff_count = self.frame_diffs.iter().filter(|&&d| d).count();
+                        if diff_count > 0 {
+                            ui.separator();
+                            if ui.button("⏮!").on_hover_text("上一个差异帧").clicked() {
+                                self.prev_diff_frame();
                             }
-                        });
-                    // 容差 / 最小差异块滑块（对应模式生效）
-                    if matches!(self.diff_mode, DiffMode::Tolerance | DiffMode::Mixed) {
-                        ui.separator();
-                        ui.label(t(I18nKey::ImgTolerance));
-                        let old = self.tolerance;
-                        ui.add(egui::Slider::new(&mut self.tolerance, 0..=64));
-                        if old != self.tolerance {
-                            self.recompute_current();
+                            if ui.button("!▶").on_hover_text("下一个差异帧").clicked() {
+                                self.next_diff_frame();
+                            }
+                            ui.label(format!("差异帧 {}/{}", diff_count, total));
                         }
-                    }
-                    if matches!(self.diff_mode, DiffMode::MismatchRange | DiffMode::Mixed) {
                         ui.separator();
-                        ui.label(t(I18nKey::ImgMinArea));
-                        let old = self.min_diff_area;
-                        ui.add(egui::Slider::new(&mut self.min_diff_area, 1..=256));
-                        if old != self.min_diff_area {
-                            self.recompute_current();
-                        }
                     }
-                }
-                ui.checkbox(&mut self.show_overlay, "差异叠加");
-                ui.checkbox(&mut self.show_stats, "统计");
-                // P37-1k：元数据展示（尺寸/格式/文件大小）
-                ui.checkbox(&mut self.show_meta, t(I18nKey::ImgMetadata));
-                if let Some(p) = &self.pair {
-                    let s = p.stats;
-                    let st = if s.has_differences() {
-                        RichText::new(format!(
-                            "差异像素 {} / {} ({:.2}%)",
-                            s.diff_pixels,
-                            s.total_pixels,
-                            s.diff_ratio * 100.0
-                        ))
-                        .color(Color32::from_rgb(230, 80, 80))
-                    } else {
-                        RichText::new("完全相同").color(Color32::from_rgb(90, 190, 90))
-                    };
+                    // 定位差异区域（当前帧）
+                    let has_diff = self
+                        .pair
+                        .as_ref()
+                        .map(|p| p.stats.has_differences())
+                        .unwrap_or(false);
+                    if has_diff
+                        && ui
+                            .button("🎯 定位差异")
+                            .on_hover_text("缩放并滚动到差异区域")
+                            .clicked()
+                    {
+                        self.locate_diff_req = true;
+                    }
+                    ui.label("缩放");
+                    if ui.button("−").clicked() {
+                        self.fit = false;
+                        self.zoom = (self.zoom * 0.8).max(0.05);
+                    }
+                    ui.add(
+                        egui::Slider::new(&mut self.zoom, 0.05..=8.0)
+                            .logarithmic(true)
+                            .show_value(true),
+                    );
+                    if ui.button("+").clicked() {
+                        self.fit = false;
+                        self.zoom = (self.zoom * 1.25).min(8.0);
+                    }
+                    if ui.button("100%").clicked() {
+                        self.fit = false;
+                        self.zoom = 1.0;
+                    }
+                    if ui.selectable_label(self.fit, "适应窗口").clicked() {
+                        self.fit = !self.fit;
+                    }
                     ui.separator();
-                    ui.label(st);
-                    ui.label(format!(
-                        "{}x{} → {}x{}",
-                        s.left_w, s.left_h, s.right_w, s.right_h
-                    ));
-                    // P37-1k：元数据（尺寸/格式/文件大小）
-                    if self.show_meta {
-                        ui.separator();
-                        let fmt_l = crate::imgcmp::image_format_name(&self.left);
-                        let fmt_r = crate::imgcmp::image_format_name(&self.right);
-                        let sz_l = std::fs::metadata(&self.left).map(|m| m.len()).unwrap_or(0);
-                        let sz_r = std::fs::metadata(&self.right).map(|m| m.len()).unwrap_or(0);
-                        ui.label(format!(
-                            "{} {}x{} · {}B  →  {} {}x{} · {}B",
-                            fmt_l, s.left_w, s.left_h, sz_l, fmt_r, s.right_w, s.right_h, sz_r,
-                        ));
+                    // P37-1e：变换（BC 旋转/翻转/重置差异偏移）
+                    if ui
+                        .button("↻")
+                        .on_hover_text(t(I18nKey::ImgRotateCw))
+                        .clicked()
+                    {
+                        self.rotate_cw();
                     }
-                }
+                    if ui
+                        .button("↺")
+                        .on_hover_text(t(I18nKey::ImgRotateCcw))
+                        .clicked()
+                    {
+                        self.rotate_ccw();
+                    }
+                    if ui.button("⇋").on_hover_text(t(I18nKey::ImgFlipH)).clicked() {
+                        self.flip_horizontal();
+                    }
+                    if ui.button("⇵").on_hover_text(t(I18nKey::ImgFlipV)).clicked() {
+                        self.flip_vertical();
+                    }
+                    if ui
+                        .button("↩")
+                        .on_hover_text(t(I18nKey::ImgResetTransform))
+                        .clicked()
+                    {
+                        self.reset_transform();
+                    }
+                    ui.separator();
+                    // P37-1e：差异判定模式（BC 容差/不匹配范围/混合）
+                    {
+                        use crate::imgcmp::DiffMode;
+                        let cur = self.diff_mode;
+                        let label = match cur {
+                            DiffMode::Exact => t(I18nKey::ImgModeExact),
+                            DiffMode::Tolerance => t(I18nKey::ImgModeTolerance),
+                            DiffMode::MismatchRange => t(I18nKey::ImgModeMismatch),
+                            DiffMode::Mixed => t(I18nKey::ImgModeMixed),
+                        };
+                        egui::ComboBox::from_id_salt("img_diff_mode")
+                            .selected_text(label)
+                            .show_ui(ui, |ui| {
+                                for (mode, k) in [
+                                    (DiffMode::Exact, I18nKey::ImgModeExact),
+                                    (DiffMode::Tolerance, I18nKey::ImgModeTolerance),
+                                    (DiffMode::MismatchRange, I18nKey::ImgModeMismatch),
+                                    (DiffMode::Mixed, I18nKey::ImgModeMixed),
+                                ] {
+                                    if ui.selectable_label(cur == mode, t(k)).clicked() {
+                                        self.diff_mode = mode;
+                                    }
+                                }
+                            });
+                        // 容差 / 最小差异块滑块（对应模式生效）
+                        if matches!(self.diff_mode, DiffMode::Tolerance | DiffMode::Mixed) {
+                            ui.separator();
+                            ui.label(t(I18nKey::ImgTolerance));
+                            let old = self.tolerance;
+                            ui.add(egui::Slider::new(&mut self.tolerance, 0..=64));
+                            if old != self.tolerance {
+                                self.recompute_current();
+                            }
+                        }
+                        if matches!(self.diff_mode, DiffMode::MismatchRange | DiffMode::Mixed) {
+                            ui.separator();
+                            ui.label(t(I18nKey::ImgMinArea));
+                            let old = self.min_diff_area;
+                            ui.add(egui::Slider::new(&mut self.min_diff_area, 1..=256));
+                            if old != self.min_diff_area {
+                                self.recompute_current();
+                            }
+                        }
+                    }
+                    ui.checkbox(&mut self.show_overlay, "差异叠加");
+                    ui.checkbox(&mut self.show_stats, "统计");
+                    // P37-1k：元数据展示（尺寸/格式/文件大小）
+                    ui.checkbox(&mut self.show_meta, t(I18nKey::ImgMetadata));
+                    if let Some(p) = &self.pair {
+                        let s = p.stats;
+                        let st = if s.has_differences() {
+                            RichText::new(format!(
+                                "差异像素 {} / {} ({:.2}%)",
+                                s.diff_pixels,
+                                s.total_pixels,
+                                s.diff_ratio * 100.0
+                            ))
+                            .color(Color32::from_rgb(230, 80, 80))
+                        } else {
+                            RichText::new("完全相同").color(Color32::from_rgb(90, 190, 90))
+                        };
+                        ui.separator();
+                        ui.label(st);
+                        ui.label(format!(
+                            "{}x{} → {}x{}",
+                            s.left_w, s.left_h, s.right_w, s.right_h
+                        ));
+                        // P37-1k：元数据（尺寸/格式/文件大小）
+                        if self.show_meta {
+                            ui.separator();
+                            let fmt_l = crate::imgcmp::image_format_name(&self.left);
+                            let fmt_r = crate::imgcmp::image_format_name(&self.right);
+                            let sz_l = std::fs::metadata(&self.left).map(|m| m.len()).unwrap_or(0);
+                            let sz_r = std::fs::metadata(&self.right).map(|m| m.len()).unwrap_or(0);
+                            ui.label(format!(
+                                "{} {}x{} · {}B  →  {} {}x{} · {}B",
+                                fmt_l, s.left_w, s.left_h, sz_l, fmt_r, s.right_w, s.right_h, sz_r,
+                            ));
+                        }
+                    }
+                });
             });
-        });
+        } // img-toolbar 门控闭合
 
         if let Some(err) = &self.error {
             egui::CentralPanel::default().show(ui, |ui| {

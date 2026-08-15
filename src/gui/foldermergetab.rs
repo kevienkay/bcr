@@ -202,39 +202,41 @@ impl FolderMergeTab {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::top("foldermerge_tools").show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .button(format!("🗂 {}", t(I18nKey::GeneratePlan)))
-                    .on_hover_text("重新扫描三目录并生成合并计划")
-                    .clicked()
-                {
-                    self.gen_req = true;
-                }
-                if ui
-                    .button(format!("⚡ {}", t(I18nKey::ExecuteMerge)))
-                    .on_hover_text("把合并结果写入输出目录")
-                    .clicked()
-                {
-                    self.exec_req = true;
-                }
-                ui.separator();
-                let s = self.stats;
-                ui.label(fmt(
-                    I18nKey::MergeStats,
-                    &[
-                        &s.copied.to_string(),
-                        &s.merged.to_string(),
-                        &s.deleted.to_string(),
-                        &s.conflicts.to_string(),
-                    ],
-                ));
-                ui.separator();
-                if !self.out.is_empty() {
-                    ui.label(format!("→ {}", self.out));
-                }
+        if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            egui::Panel::top("foldermerge_tools").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if ui
+                        .button(format!("🗂 {}", t(I18nKey::GeneratePlan)))
+                        .on_hover_text("重新扫描三目录并生成合并计划")
+                        .clicked()
+                    {
+                        self.gen_req = true;
+                    }
+                    if ui
+                        .button(format!("⚡ {}", t(I18nKey::ExecuteMerge)))
+                        .on_hover_text("把合并结果写入输出目录")
+                        .clicked()
+                    {
+                        self.exec_req = true;
+                    }
+                    ui.separator();
+                    let s = self.stats;
+                    ui.label(fmt(
+                        I18nKey::MergeStats,
+                        &[
+                            &s.copied.to_string(),
+                            &s.merged.to_string(),
+                            &s.deleted.to_string(),
+                            &s.conflicts.to_string(),
+                        ],
+                    ));
+                    ui.separator();
+                    if !self.out.is_empty() {
+                        ui.label(format!("→ {}", self.out));
+                    }
+                });
             });
-        });
+        } // foldermerge_tools 门控闭合
 
         if let Some(err) = self.error.clone() {
             egui::Window::new(t(I18nKey::Hint))

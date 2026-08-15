@@ -215,6 +215,12 @@ struct DiffApp {
     report_error: Option<String>,
     /// P39-2c：会话中心「保存当前会话」名称输入
     session_save_name: String,
+    /// P42-4：图例弹窗开关
+    show_legend: bool,
+    /// P42-4：日志面板开关
+    show_log: bool,
+    /// P42-4：日志条目（最近 N 条操作/错误）
+    log: Vec<String>,
 }
 
 impl DiffApp {
@@ -241,6 +247,9 @@ impl DiffApp {
             report_format: "txt".to_string(),
             report_error: None,
             session_save_name: String::new(),
+            show_legend: false,
+            show_log: false,
+            log: Vec::new(),
         }
     }
 
@@ -324,6 +333,99 @@ impl DiffApp {
         if cmd && ui.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
             // ⌥⌘C 清除会话（重置当前标签为空会话）
             self.clear_active_tab();
+        }
+    }
+
+    /// P42-4：图例弹窗 + 日志面板（BC View>图例/日志；抽为独立方法便于测试直接调用）
+    fn legend_log_windows(&mut self, ui: &mut egui::Ui) {
+        // 图例弹窗：差异色/状态徽标含义说明
+        if self.show_legend {
+            let mut keep = true;
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuLegend))
+                .collapsible(false)
+                .default_size([360.0, 300.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.label(RichText::new("文本比较").strong());
+                    for (color, label) in [
+                        (theme::diff_delete(), "删除 / 仅左侧（淡红）"),
+                        (theme::diff_insert(), "插入 / 仅右侧（淡绿）"),
+                        (theme::diff_modify(), "修改（淡黄）"),
+                        (theme::current_bar(), "当前差异行竖条（蓝）"),
+                    ] {
+                        ui.horizontal(|ui| {
+                            let (rect, _) = ui.allocate_exact_size(
+                                egui::Vec2::new(14.0, 14.0),
+                                egui::Sense::hover(),
+                            );
+                            ui.painter().rect_filled(rect, 2.0, color);
+                            ui.label(label);
+                        });
+                    }
+                    ui.separator();
+                    ui.label(RichText::new("文件夹比较状态徽标").strong());
+                    for (letter, color, label) in [
+                        ('S', ui.visuals().text_color(), "相同"),
+                        ('C', Color32::from_rgb(246, 39, 16), "差异"),
+                        ('L', Color32::from_rgb(83, 44, 199), "仅左侧"),
+                        ('R', Color32::from_rgb(83, 44, 199), "仅右侧"),
+                        ('M', Color32::from_rgb(246, 39, 16), "移动/重命名"),
+                    ] {
+                        ui.horizontal(|ui| {
+                            let badge_c = ui.cursor().min + egui::vec2(9.0, 10.0);
+                            ui.painter()
+                                .circle_filled(badge_c, 9.0, color.gamma_multiply(0.25));
+                            ui.painter().text(
+                                badge_c,
+                                egui::Align2::CENTER_CENTER,
+                                letter.to_string(),
+                                egui::FontId::monospace(12.0),
+                                color,
+                            );
+                            ui.add_space(16.0);
+                            ui.label(label);
+                        });
+                    }
+                });
+            if !keep {
+                self.show_legend = false;
+            }
+        }
+        // 日志面板：最近操作/错误记录
+        if self.show_log {
+            let mut keep = true;
+            egui::Window::new(crate::i18n::t(crate::i18n::Key::MenuLog))
+                .collapsible(false)
+                .resizable(true)
+                .default_size([520.0, 280.0])
+                .open(&mut keep)
+                .show(ui.ctx(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(format!("{} 条", self.log.len()))
+                                .size(12.0)
+                                .color(ui.visuals().weak_text_color()),
+                        );
+                        if ui.button("清空").clicked() {
+                            self.log.clear();
+                        }
+                    });
+                    ui.separator();
+                    if self.log.is_empty() {
+                        ui.label("暂无日志");
+                    }
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .stick_to_bottom(true)
+                        .show(ui, |ui| {
+                            for line in self.log.iter().rev().take(200) {
+                                ui.monospace(line);
+                            }
+                        });
+                });
+            if !keep {
+                self.show_log = false;
+            }
         }
     }
 
@@ -1399,6 +1501,9 @@ impl eframe::App for DiffApp {
                 self.report_error = None;
             }
         }
+
+        // P42-4：图例弹窗 + 日志面板（BC View>图例/日志）
+        self.legend_log_windows(ui);
 
         // P33：外部工具说明弹窗（Tools > 外部工具）
         if self.show_external {
