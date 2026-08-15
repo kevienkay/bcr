@@ -6,6 +6,12 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### UI 精修续（P48）
+
+- **主页卡片 hover 动效**：animate_bool 动画插值 3px 上浮 + 阴影叠层模拟（兼容深浅主题），hover 平滑过渡
+- **标签栏 BC 风格**：选中标签 Frame 高亮底色 + 圆角 6px + 内边距；关闭按钮颜色分层（hover 红 / 选中强色 / 普通弱色）
+- **对话框统一**：设置/报告/信息/会话中心 default_size 对齐（460/460/460/560）+ inner_margin 14 统一边距
+
 ### 优化与 UI 精修（P47）
 
 - **CI 稳定性根治**：Windows 构建依赖不再用 chocolatey（community.chocolatey.org 反复 499/504 超时导致 P45/P46 多次首轮失败）——cmake 用 windows-latest 预装（`C:\Program Files\CMake\bin` 入 PATH），nasm 从官方直链 zip 固定版本 2.16.03 下载解压
