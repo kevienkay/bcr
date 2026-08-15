@@ -2490,6 +2490,10 @@ impl DiffTab {
             }
         }
 
+        // P50：点击文件信息头 → 更换该侧文件请求（闭包内赋值，闭包结束后处理，
+        // 避免与渲染区 &self.rows 借用冲突）
+        let mut header_click: Option<EditSide> = None;
+
         egui::CentralPanel::default().show(ui, |ui| {
             // 二进制 hex 对比模式（克隆到局部，渲染基于局部副本，保存时可自由 &mut self）
             let hex_owned = self.hex.clone();
@@ -2878,32 +2882,35 @@ impl DiffTab {
                     Color32::from_rgb(60, 110, 190)
                 };
                 let detail_fg = ui.visuals().weak_text_color();
-                // 每侧头部信息：文件名 + 详情行
-                let l_info = self
-                    .left
-                    .as_ref()
-                    .map(|f| (basename(&f.path), file_detail_line(f)));
-                let r_info = self
-                    .right
-                    .as_ref()
-                    .map(|f| (basename(&f.path), file_detail_line(f)));
-                let l_name = l_info
-                    .as_ref()
-                    .map(|(n, _)| n.clone())
-                    .unwrap_or_else(|| t(I18nKey::OpenLeft).to_string());
-                let r_name = r_info
-                    .as_ref()
-                    .map(|(n, _)| n.clone())
-                    .unwrap_or_else(|| t(I18nKey::OpenRight).to_string());
-                let l_detail = l_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
-                let r_detail = r_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
                 // 头部两栏各占视口半宽（gutter + half），长行内容超宽时头部不跟随滚动
                 let head_l_w = gutter_l + half;
                 let head_r_w = gutter_r + half;
+                // 每侧头部信息：全路径（BC 风格，可点击更换）+ 详情行
+                let l_info = self
+                    .left
+                    .as_ref()
+                    .map(|f| (f.path.clone(), file_detail_line(f)));
+                let r_info = self
+                    .right
+                    .as_ref()
+                    .map(|f| (f.path.clone(), file_detail_line(f)));
+                // 全路径截断：超宽时保留头部目录 + … + 文件名（BC 行为）
+                let l_path = l_info
+                    .as_ref()
+                    .map(|(p, _)| p.clone())
+                    .unwrap_or_else(|| t(I18nKey::OpenLeft).to_string());
+                let r_path = r_info
+                    .as_ref()
+                    .map(|(p, _)| p.clone())
+                    .unwrap_or_else(|| t(I18nKey::OpenRight).to_string());
+                let l_name = truncate_path(&l_path, ((head_l_w - 20.0) / 7.0) as usize);
+                let r_name = truncate_path(&r_path, ((head_r_w - 20.0) / 7.0) as usize);
+                let l_detail = l_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
+                let r_detail = r_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
                 ui.horizontal(|ui| {
-                    // 左头部：两行（文件名 13px + 详情 11px）
-                    let (l_rect, _) =
-                        ui.allocate_exact_size(Vec2::new(head_l_w, head_h), egui::Sense::hover());
+                    // 左头部：两行（路径 13px + 详情 11px）
+                    let (l_rect, l_resp) =
+                        ui.allocate_exact_size(Vec2::new(head_l_w, head_h), egui::Sense::click());
                     paint_bg(ui, l_rect, head_bg);
                     ui.painter().text(
                         Pos2::new(l_rect.left() + 10.0, l_rect.top() + 11.0),
@@ -2919,11 +2926,18 @@ impl DiffTab {
                         egui::FontId::proportional(11.0),
                         detail_fg,
                     );
+                    if l_resp.clicked() {
+                        header_click = Some(EditSide::Left);
+                    }
+                    // hover 提示：完整路径 + 更换说明（BC 风格）
+                    l_resp
+                        .clone()
+                        .on_hover_text(format!("{}\n点击更换文件", l_path));
                     // 中间空隙
                     ui.allocate_exact_size(Vec2::new(mid_gap, head_h), egui::Sense::hover());
                     // 右头部
-                    let (r_rect, _) =
-                        ui.allocate_exact_size(Vec2::new(head_r_w, head_h), egui::Sense::hover());
+                    let (r_rect, r_resp) =
+                        ui.allocate_exact_size(Vec2::new(head_r_w, head_h), egui::Sense::click());
                     paint_bg(ui, r_rect, head_bg);
                     ui.painter().text(
                         Pos2::new(r_rect.left() + 10.0, r_rect.top() + 11.0),
@@ -2939,6 +2953,13 @@ impl DiffTab {
                         egui::FontId::proportional(11.0),
                         detail_fg,
                     );
+                    if r_resp.clicked() {
+                        header_click = Some(EditSide::Right);
+                    }
+                    // hover 提示：完整路径 + 更换说明（BC 风格）
+                    r_resp
+                        .clone()
+                        .on_hover_text(format!("{}\n点击更换文件", r_path));
                 });
                 ui.separator();
             }
@@ -3495,6 +3516,15 @@ impl DiffTab {
                 });
             }
         });
+
+        // 点击文件信息头 → 打开文件对话框更换该侧文件（BC：点路径换文件）
+        // 必须在 CentralPanel 闭包外处理：渲染区持有 &self.rows 借用
+        if let Some(side) = header_click {
+            match side {
+                EditSide::Left => self.open_left_dialog(),
+                EditSide::Right => self.open_right_dialog(),
+            }
+        }
     }
 }
 
@@ -3847,6 +3877,23 @@ fn basename(p: &str) -> String {
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| p.to_string())
+}
+
+/// P50：全路径截断显示（BC 风格）——超宽时保留「目录…文件名」，
+/// 避免长路径溢出头部区域；完整路径在 hover 提示中可见。
+fn truncate_path(p: &str, max_chars: usize) -> String {
+    let count = p.chars().count();
+    if count <= max_chars || max_chars < 16 {
+        return p.to_string();
+    }
+    let file = basename(p);
+    let file_len = file.chars().count();
+    // 保留尾部文件名 + 前段目录（… 占 1 字符）
+    let head = max_chars.saturating_sub(file_len + 3).max(4);
+    let mut out: String = p.chars().take(head).collect();
+    out.push('…');
+    out.push_str(&file);
+    out
 }
 
 /// P33：文件大小（详情行显示，BC 式 "12,345 bytes"）
