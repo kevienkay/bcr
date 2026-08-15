@@ -885,6 +885,38 @@ impl DirTab {
         self.rebuild_tree();
     }
 
+    /// P41-1：展开全部（清空折叠集合，重建树）
+    pub fn expand_all(&mut self) {
+        self.collapsed.clear();
+        self.rebuild_tree();
+    }
+
+    /// P41-1：折叠全部（把全部目录路径加入折叠集合，重建树）
+    pub fn collapse_all(&mut self) {
+        self.collapsed.clear();
+        let Some(r) = &self.result else {
+            return;
+        };
+        // 从 entries 收集所有目录路径（文件 rel 的父路径逐级累加）
+        let mut dirs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for e in &r.entries {
+            let mut parts: Vec<&str> = e.rel.split('/').collect();
+            parts.pop(); // 去掉文件名，剩目录段
+            let mut cur = String::new();
+            for p in parts {
+                if cur.is_empty() {
+                    cur = p.to_string();
+                } else {
+                    cur.push('/');
+                    cur.push_str(p);
+                }
+                dirs.insert(cur.clone());
+            }
+        }
+        self.collapsed = dirs.into_iter().collect();
+        self.rebuild_tree();
+    }
+
     pub(crate) fn open_selected(&mut self) {
         let Some(idx) = self.selected else { return };
         let Some(row) = self.flat.get(idx) else {

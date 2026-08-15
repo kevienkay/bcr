@@ -669,6 +669,10 @@ pub enum Key {
     MenuSnapshot,
     /// P39-2e：比较文件使用（视图切换）
     MenuCompareUsing,
+    /// P41-1：展开全部
+    MenuExpandAll,
+    /// P41-1：折叠全部
+    MenuCollapseAll,
 
     // ---- P32-A7：会话类型起始页 ----
     /// 文本对比

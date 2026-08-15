@@ -202,6 +202,22 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_search());
         }
+        ui.separator();
+        // P41-1：展开/折叠全部（DirTab 分支，BC 编辑菜单）
+        if matches!(app.tabs.get(app.active), Some(Tab::Dir(_))) {
+            if ui.button(t(I18nKey::MenuExpandAll)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.expand_all();
+                }
+            }
+            if ui.button(t(I18nKey::MenuCollapseAll)).clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.collapse_all();
+                }
+            }
+        }
     });
 }
 

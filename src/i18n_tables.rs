@@ -325,6 +325,8 @@ i18n_table!(t_zh,
     IgnoreMinor => "忽略不重要差异",
     MenuSnapshot => "保存快照",
     MenuCompareUsing => "比较文件使用…",
+    MenuExpandAll => "展开全部",
+    MenuCollapseAll => "折叠全部",
 );
 i18n_table!(t_en,
     // CLI
@@ -622,6 +624,8 @@ i18n_table!(t_en,
     IgnoreMinor => "Ignore Minor Differences",
     MenuSnapshot => "Save Snapshot",
     MenuCompareUsing => "Compare Using…",
+    MenuExpandAll => "Expand All",
+    MenuCollapseAll => "Collapse All",
 );
 i18n_table!(t_de,
     // CLI
@@ -919,6 +923,8 @@ i18n_table!(t_de,
     IgnoreMinor => "Unbedeutende Unterschiede ignorieren",
     MenuSnapshot => "Schnappschuss speichern",
     MenuCompareUsing => "Vergleichen mit…",
+    MenuExpandAll => "Alle erweitern",
+    MenuCollapseAll => "Alle einklappen",
 );
 i18n_table!(t_ja,
     // CLI
@@ -1216,6 +1222,8 @@ i18n_table!(t_ja,
     IgnoreMinor => "重要でない差異を無視",
     MenuSnapshot => "スナップショットを保存",
     MenuCompareUsing => "比較に使用…",
+    MenuExpandAll => "すべて展開",
+    MenuCollapseAll => "すべて折りたたむ",
 );
 i18n_table!(t_ko,
     // CLI
@@ -1513,6 +1521,8 @@ i18n_table!(t_ko,
     IgnoreMinor => "사소한 차이 무시",
     MenuSnapshot => "스냅샷 저장",
     MenuCompareUsing => "다음을 사용하여 비교…",
+    MenuExpandAll => "모두 펼치기",
+    MenuCollapseAll => "모두 접기",
 );
 i18n_table!(t_es,
     // CLI
@@ -1810,6 +1820,8 @@ i18n_table!(t_es,
     IgnoreMinor => "Ignorar diferencias menores",
     MenuSnapshot => "Guardar instantánea",
     MenuCompareUsing => "Comparar usando…",
+    MenuExpandAll => "Expandir todo",
+    MenuCollapseAll => "Contraer todo",
 );
 i18n_table!(t_pt,
     // CLI
@@ -2107,6 +2119,8 @@ i18n_table!(t_pt,
     IgnoreMinor => "Ignorar diferenças menores",
     MenuSnapshot => "Salvar instantâneo",
     MenuCompareUsing => "Comparar usando…",
+    MenuExpandAll => "Expandir tudo",
+    MenuCollapseAll => "Recolher tudo",
 );
 i18n_table!(t_ar,
     // CLI
@@ -2404,6 +2418,8 @@ i18n_table!(t_ar,
     IgnoreMinor => "تجاهل الاختلافات الطفيفة",
     MenuSnapshot => "حفظ لقطة",
     MenuCompareUsing => "قارن باستخدام…",
+    MenuExpandAll => "توسيع الكل",
+    MenuCollapseAll => "طي الكل",
 );
 i18n_table!(t_ru,
     // CLI
@@ -2701,6 +2717,8 @@ i18n_table!(t_ru,
     IgnoreMinor => "Игнорировать незначительные различия",
     MenuSnapshot => "Сохранить снимок",
     MenuCompareUsing => "Сравнить с помощью…",
+    MenuExpandAll => "Развернуть все",
+    MenuCollapseAll => "Свернуть все",
 );
 i18n_table!(t_fr,
     // CLI
@@ -2998,4 +3016,6 @@ i18n_table!(t_fr,
     IgnoreMinor => "Ignorer les différences mineures",
     MenuSnapshot => "Enregistrer l'instantané",
     MenuCompareUsing => "Comparer avec…",
+    MenuExpandAll => "Tout développer",
+    MenuCollapseAll => "Tout réduire",
 );

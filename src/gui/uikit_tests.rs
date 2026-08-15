@@ -2316,6 +2316,52 @@ fn compare_using_reopen_views() {
     }
 }
 
+// ---- P41-1：展开/折叠全部（D7） ----------------
+
+#[test]
+fn dirtab_expand_collapse_all() {
+    let d1 = tempdir().unwrap();
+    let d2 = tempdir().unwrap();
+    write(d1.path(), "sub/a.txt", "x");
+    write(d1.path(), "sub/deep/b.txt", "y");
+    write(d1.path(), "root.txt", "z");
+    write(d2.path(), "sub/a.txt", "x");
+    write(d2.path(), "sub/deep/b.txt", "y");
+    write(d2.path(), "root.txt", "z");
+    let p1 = d1.path().to_str().unwrap().to_string();
+    let p2 = d2.path().to_str().unwrap().to_string();
+    let tab = RefCell::new(DirTab::new(&p1, &p2));
+    tab.borrow_mut().compare_content = true;
+    tab.borrow_mut().view_filter = ViewFilter::All;
+    tab.borrow_mut().only_diff = false; // only_diff=true 会把相同文件全过滤
+    tab.borrow_mut().show_same = true;
+    tab.borrow_mut().refresh_sync();
+    // 初始全部展开（flat 含全部文件）
+    assert!(
+        tab.borrow().flat.iter().any(|r| r.name == "b.txt"),
+        "初始应展开到深层文件"
+    );
+    // 折叠全部 → 深层文件消失
+    tab.borrow_mut().collapse_all();
+    assert!(
+        !tab.borrow().flat.iter().any(|r| r.name == "b.txt"),
+        "折叠全部后深层文件应隐藏"
+    );
+    assert!(
+        tab.borrow()
+            .flat
+            .iter()
+            .any(|r| r.is_dir && r.name == "sub/"),
+        "折叠全部后仍显示顶层目录"
+    );
+    // 展开全部 → 深层文件恢复
+    tab.borrow_mut().expand_all();
+    assert!(
+        tab.borrow().flat.iter().any(|r| r.name == "b.txt"),
+        "展开全部后深层文件应恢复"
+    );
+}
+
 // ---- P36-D3：视图过滤快捷键 1/2/3 ----------------
 
 #[test]
