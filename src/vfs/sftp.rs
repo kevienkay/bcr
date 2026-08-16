@@ -73,6 +73,12 @@ impl Handler for KeyVerify {
             return Ok(true);
         }
         let key_openssh = server_public_key.to_openssh().unwrap_or_default();
+        // OpenSSH 格式形如 "ssh-ed25519 AAAA..."；known_hosts 行把类型与密钥
+        // 分成两列存储，比较时必须用 base64 段（整串比较永远不相等）
+        let (_ktype, key_b64) = match key_openssh.split_once(' ') {
+            Some((t, k)) => (t.to_string(), k.to_string()),
+            None => (String::new(), key_openssh.clone()),
+        };
         let mut matched = false;
         for path in Self::known_hosts_paths() {
             let Ok(content) = std::fs::read_to_string(&path) else {
@@ -96,8 +102,8 @@ impl Handler for KeyVerify {
                     continue;
                 }
                 matched = true;
-                // 密钥一致 → 可信
-                if key == key_openssh {
+                // 密钥一致 → 可信（按 base64 段比较）
+                if key == key_b64 {
                     return Ok(true);
                 }
             }
@@ -115,7 +121,8 @@ impl Handler for KeyVerify {
             .map(std::path::PathBuf::from)
             .unwrap_or_default();
         let path = home.join(".bcr-known-hosts");
-        let line = format!("{} {}\n", self.target, key_openssh);
+        // 三段格式（target 类型 base64），与 known_hosts 一致，可被自身读取回环
+        let line = format!("{} {} {}\n", self.target, _ktype, key_b64);
         if std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -546,5 +553,105 @@ mod tests {
             "[example.com]:22",
             "example.com"
         ));
+    }
+
+    // ---- C3 host key 匹配修复（回归） ----
+
+    /// 固定 ed25519 测试公钥（ssh-key crate 测试向量，authorized_keys 格式）
+    const TEST_KEY_A: &str =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILM+rvN+ot98qgEN796jTiQfZfG1KaT0PtFDJ/XFSqti";
+    /// 另一把 ed25519 公钥（密钥不同，用于不匹配用例）
+    const TEST_KEY_B: &str =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB9dG4kjRhQTtWTVzd2t27+t0DEHBPW7iOD23TUiYLio";
+
+    fn test_pubkey(openssh: &str) -> russh::keys::ssh_key::PublicKey {
+        russh::keys::ssh_key::PublicKey::from_openssh(openssh).expect("固定测试密钥应可解析")
+    }
+
+    /// HOME 环境变量互斥锁：三个 host key 测试都改写 HOME，
+    /// 并行执行会互相污染（读到对方临时目录的 known_hosts），必须串行。
+    /// 用 tokio Mutex：await 点持有 std MutexGuard 会被 clippy 拒绝。
+    static HOME_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[tokio::test]
+    async fn host_key_matches_known_hosts_entry() {
+        let _guard = HOME_LOCK.lock().await;
+        // 已知主机（~/.ssh/known_hosts 记录正确密钥）→ 应接受。
+        // 回归：此前用整串 openssh 格式比较，known_hosts 的 base64 段永远不等 → 误拒。
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("HOME", dir.path());
+        let pk = test_pubkey(TEST_KEY_A);
+        let b64 = TEST_KEY_A.rsplit(' ').next().unwrap();
+        let kh_dir = dir.path().join(".ssh");
+        std::fs::create_dir_all(&kh_dir).unwrap();
+        std::fs::write(
+            kh_dir.join("known_hosts"),
+            format!("[example.com]:2222 ssh-ed25519 {}\n", b64),
+        )
+        .unwrap();
+        let mut kv = KeyVerify {
+            target: "[example.com]:2222".to_string(),
+            host: "example.com".to_string(),
+            insecure: false,
+        };
+        assert!(
+            kv.check_server_key(&pk).await.unwrap(),
+            "known_hosts 中正确密钥应通过校验"
+        );
+        std::env::remove_var("HOME");
+    }
+
+    #[tokio::test]
+    async fn host_key_mismatch_rejected() {
+        let _guard = HOME_LOCK.lock().await;
+        // 已知主机但密钥不同（中间人/换钥）→ 拒绝
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("HOME", dir.path());
+        let pk = test_pubkey(TEST_KEY_A);
+        let b642 = TEST_KEY_B.rsplit(' ').next().unwrap();
+        let kh_dir = dir.path().join(".ssh");
+        std::fs::create_dir_all(&kh_dir).unwrap();
+        std::fs::write(
+            kh_dir.join("known_hosts"),
+            format!("[example.com]:2222 ssh-ed25519 {}\n", b642),
+        )
+        .unwrap();
+        let mut kv = KeyVerify {
+            target: "[example.com]:2222".to_string(),
+            host: "example.com".to_string(),
+            insecure: false,
+        };
+        assert!(
+            !kv.check_server_key(&pk).await.unwrap(),
+            "密钥不同应拒绝连接"
+        );
+        std::env::remove_var("HOME");
+    }
+
+    #[tokio::test]
+    async fn host_key_tofu_saves_and_roundtrips() {
+        let _guard = HOME_LOCK.lock().await;
+        // TOFU：首次连接保存三段格式（target 类型 base64），第二次连接读回可匹配
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("HOME", dir.path());
+        let pk = test_pubkey(TEST_KEY_A);
+        let mut kv = KeyVerify {
+            target: "[tofu.example.com]:22".to_string(),
+            host: "tofu.example.com".to_string(),
+            insecure: false,
+        };
+        // 首次：无记录 → TOFU 接受并保存
+        assert!(kv.check_server_key(&pk).await.unwrap());
+        let saved = std::fs::read_to_string(dir.path().join(".bcr-known-hosts")).unwrap();
+        let toks: Vec<&str> = saved.split_whitespace().collect();
+        assert_eq!(toks.len(), 3, "TOFU 保存应为三段格式: {saved}");
+        assert_eq!(toks[0], "[tofu.example.com]:22");
+        assert_eq!(toks[1], "ssh-ed25519");
+        // 第二次：读回保存的条目 → 密钥一致 → 接受（回归：整串比较会误拒）
+        assert!(
+            kv.check_server_key(&pk).await.unwrap(),
+            "TOFU 保存后二次连接应通过校验"
+        );
+        std::env::remove_var("HOME");
     }
 }
