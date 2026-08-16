@@ -111,6 +111,42 @@ impl Tab {
             Tab::Media(t) => t.title(),
         }
     }
+
+    /// P53-1：标签类型图标（与主页卡片/空状态同风格，单色 emoji 按类型着色）
+    fn icon(&self) -> &'static str {
+        match self {
+            Tab::Diff(t) => {
+                if t.hex.is_some() {
+                    "🔢"
+                } else {
+                    "📄"
+                }
+            }
+            Tab::Dir(_) => "📁",
+            Tab::Merge(_) => "🔀",
+            Tab::Image(_) => "🖼",
+            Tab::Csv(_) => "📊",
+            Tab::TextEdit(_) => "✏️",
+            Tab::Patch(_) => "🩹",
+            Tab::FolderMerge(_) => "🗂",
+            Tab::Media(_) => "🎵",
+        }
+    }
+
+    /// 标签类型图标色（与主页卡片 card_icon_colors 同源）
+    fn icon_color(&self) -> egui::Color32 {
+        match self {
+            Tab::Diff(_) => theme::card_icon_colors()[0],
+            Tab::Dir(_) => theme::card_icon_colors()[1],
+            Tab::Merge(_) => theme::card_icon_colors()[2],
+            Tab::Image(_) => theme::card_icon_colors()[3],
+            Tab::Csv(_) => theme::card_icon_colors()[4],
+            Tab::TextEdit(_) => theme::card_icon_colors()[0],
+            Tab::Patch(_) => theme::card_icon_colors()[5],
+            Tab::FolderMerge(_) => theme::card_icon_colors()[2],
+            Tab::Media(_) => theme::card_icon_colors()[6],
+        }
+    }
 }
 
 /// 持久化设置
@@ -1617,11 +1653,19 @@ impl eframe::App for DiffApp {
                     } else {
                         RichText::new(self.tabs[i].title())
                     };
+                    // P53-1：标签前加类型图标（单色 emoji 按类型着色，与主页卡片呼应）
+                    let icon = self.tabs[i].icon();
+                    let icon_c = self.tabs[i].icon_color();
                     let resp = egui::Frame::new()
                         .fill(tab_bg)
                         .corner_radius(6.0)
                         .inner_margin(egui::Margin::symmetric(8, 4))
-                        .show(ui, |ui| ui.selectable_label(selected, text))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(icon).size(14.0).color(icon_c));
+                                ui.selectable_label(selected, text);
+                            });
+                        })
                         .response
                         .interact(egui::Sense::click())
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
