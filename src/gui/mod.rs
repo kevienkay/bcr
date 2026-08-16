@@ -2549,7 +2549,6 @@ impl eframe::App for DiffApp {
             }
         }
 
-
         if let Some((l_rel, r_rel)) = open_pair_req {
             // 手动对齐：左右相对路径配对打开并排 diff（可不同文件名）
             if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
