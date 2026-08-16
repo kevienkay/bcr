@@ -7,11 +7,11 @@ use super::common::*;
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::patchview::{parse_patch, ParsedPatch};
 use crate::sideview::{build_rows, RowTag, SideRow, ViewOptions};
-use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
+use eframe::egui::{self, Pos2, Rect, Vec2};
 
 /// 补丁标签页
 pub struct PatchTab {
-    path: String,
+    pub(crate) path: String,
     /// 解析结果（状态栏展示统计）
     pub(crate) parsed: Option<ParsedPatch>,
     /// 渲染行（build_rows 结果）
@@ -412,7 +412,7 @@ impl PatchTab {
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
-                    ui.colored_label(Color32::from_rgb(240, 110, 110), err);
+                    ui.colored_label(super::theme::error_color(), err);
                     if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }
@@ -501,13 +501,13 @@ impl PatchTab {
                             egui::Align2::LEFT_CENTER,
                             format!("🔖{}", no),
                             egui::FontId::monospace(11.0),
-                            Color32::from_rgb(230, 170, 60),
+                            super::theme::plan_color(ui.visuals().dark_mode),
                         );
                     }
                     // 左列
                     let lr = Rect::from_min_size(rect.min, vec2(gutter + half, ROW_H));
                     let bg_use = if sel_bg {
-                        Some(Color32::from_rgba_unmultiplied(86, 148, 240, 60))
+                        Some(super::theme::selection_overlay())
                     } else {
                         bg
                     };

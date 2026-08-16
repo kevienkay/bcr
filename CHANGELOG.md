@@ -6,6 +6,16 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### UI 精修美化（P51）
+
+- **颜色系统收敛**：theme.rs 新增 25 个语义函数（`head_bg/gutter_bg/mid_bg/stat_*/folder_color/plan_*/img_*/banner_*` 等），收编 difftab/mod/dirtab/csvtab/mergetab/imagetab/mediatab/patchtab/foldermergetab/textedit/common 全部 ~70 处硬编码 Color32；统计色（difftab 底部 vs 全局状态栏）与错误色（三种 240,110,110/230,100,100/235,90,90）统一；移除 hex 死代码颜色
+- **状态栏 BC 分区扩展**：Dir/Csv/Merge/Image/TextEdit/Patch/FolderMerge/Media 8 个 tab 全部改为「路径弱色 + 彩色统计（同绿/删红/增绿/改黄）+ 右对齐元数据」，对齐 DiffTab 既有分区；新增 StatsSelected i18n key（10 语言）
+- **工具栏统一**：DiffTab 移除重复分隔符；CsvTab 刷新按钮加 ⟳ 图标；MergeTab 空状态打开 BASE/LEFT/RIGHT 加 📂 图标
+- **菜单快捷键显示**：Session/File/Edit/Search/View/Window 菜单项加 `shortcut_text`（⌘T/⌘N/⌥⌘O/⌘R/⌘P/⌥⌘S/⌥⌘C/⌘,/⌘Z/⌘Y/⌘F/⇧⌘F/⌘G/⇧⌘G/⌘L/⌘E/⌘A/F5/F6/F7/⇧⌃↓↑/⌘]/⌘[/⌘M/⌘⇧W/⌘0-9/⇧L 等），按平台 macOS ⌘ 系 / Windows-Linux Ctrl 系
+- **主页精修**：会话列表项 hover 高亮 + ✕ 删除按钮（持久化）；会话卡片网格按可用宽度自适应列数（原固定 4 列）
+- **DiffTab 行 hover 高亮**：左右内容区叠加半透明弱色（与 DirTab 观感一致），SideBySide 与上-下布局同步
+- **i18n 收敛**：工具栏 hover/右键菜单/提示文本 15 个硬编码中文转 i18n key（OpenLeftFile/OpenRightFile/CopyLeftPath/CopyRightPath/ReloadHint/DeleteSession/LineCount/RevealLeft/RevealRight/SystemOpenLeft/SystemOpenRight/PlanFirst/NoDiffToCopy/NoDiffToDelete/ClipboardUnavailable），覆盖 10 语言
+
 ### 修复（P50）
 
 - **打开文件对比多选**：`打开文件对比` 改 `pick_files()` 多选——选 1 个立即显示在左侧（不再等两个文件才创建标签），选 2 个走双文件逻辑（图片/CSV 专用标签），≥3 个走三路合并（与拖拽一致）

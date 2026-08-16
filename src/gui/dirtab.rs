@@ -5,7 +5,7 @@ use crate::compare::{compare_dirs, CompareResult, FileStatus};
 use crate::fsscan::Filter;
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::sync::{build_plan, execute_op, SyncOp};
-use eframe::egui::{self, Color32, Key, Pos2, Vec2};
+use eframe::egui::{self, Key, Pos2, Vec2};
 use std::collections::HashSet;
 
 /// 目录视图状态过滤（B1 显示过滤，对齐 BC 显示过滤器）
@@ -892,7 +892,7 @@ impl DirTab {
             return;
         }
         let Some(plan) = self.sync_plan.clone() else {
-            self.sync_msg = Some("请先生成计划".to_string());
+            self.sync_msg = Some(t(I18nKey::PlanFirst).to_string());
             return;
         };
         let checked: Vec<usize> = self.sync_checked.iter().copied().collect();
@@ -943,7 +943,7 @@ impl DirTab {
     #[cfg(test)]
     pub fn run_sync_checked_sync(&mut self) {
         let Some(plan) = self.sync_plan.clone() else {
-            self.sync_msg = Some("请先生成计划".to_string());
+            self.sync_msg = Some(t(I18nKey::PlanFirst).to_string());
             return;
         };
         let checked: Vec<usize> = self.sync_checked.iter().copied().collect();
@@ -994,7 +994,7 @@ impl DirTab {
             .map(|e| e.rel.clone())
             .collect();
         if rels.is_empty() {
-            self.sync_msg = Some("没有可复制的差异文件".to_string());
+            self.sync_msg = Some(t(I18nKey::NoDiffToCopy).to_string());
             return;
         }
         let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
@@ -1029,7 +1029,7 @@ impl DirTab {
             .map(|e| e.rel.clone())
             .collect();
         if rels.is_empty() {
-            self.sync_msg = Some("没有可复制的差异文件".to_string());
+            self.sync_msg = Some(t(I18nKey::NoDiffToCopy).to_string());
             return;
         }
         let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
@@ -1066,7 +1066,7 @@ impl DirTab {
             .map(|e| e.rel.clone())
             .collect();
         if rels.is_empty() {
-            self.sync_msg = Some("没有可删除的差异文件".to_string());
+            self.sync_msg = Some(t(I18nKey::NoDiffToDelete).to_string());
             return;
         }
         let (l, r) = match (crate::vfs::open(&self.left), crate::vfs::open(&self.right)) {
@@ -1099,7 +1099,7 @@ impl DirTab {
             .map(|e| e.rel.clone())
             .collect();
         if rels.is_empty() {
-            self.sync_msg = Some("没有可删除的差异文件".to_string());
+            self.sync_msg = Some(t(I18nKey::NoDiffToDelete).to_string());
             return;
         }
         // 删除左侧 = 把右侧当源、左侧当目标执行 Delete
@@ -1594,7 +1594,7 @@ impl DirTab {
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
-                    ui.colored_label(Color32::from_rgb(240, 110, 110), err);
+                    ui.colored_label(super::theme::error_color(), err);
                     if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }
@@ -1804,7 +1804,7 @@ impl DirTab {
                         }
                     });
                     if let Some(msg) = &self.sync_msg {
-                        ui.colored_label(Color32::from_rgb(230, 180, 80), msg);
+                        ui.colored_label(super::theme::sync_msg_color(ui.visuals().dark_mode), msg);
                     }
                     ui.separator();
                     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -2040,9 +2040,9 @@ impl DirTab {
             {
                 let head_h = 22.0;
                 let head_bg = if ui.visuals().dark_mode {
-                    Color32::from_gray(42)
+                    super::theme::column_head_bg(true)
                 } else {
-                    Color32::from_rgb(251, 252, 252)
+                    super::theme::column_head_bg(false)
                 };
                 let (h_rect, _) = ui.allocate_exact_size(
                     Vec2::new(ui.available_width(), head_h),
@@ -2099,11 +2099,7 @@ impl DirTab {
                     if row.is_dir {
                         let arrow = if row.expanded { "▼" } else { "▶" };
                         // BC 风格：目录名用文件夹色（浅蓝），与文件区分
-                        let dir_color = if ui.visuals().dark_mode {
-                            Color32::from_rgb(140, 180, 235)
-                        } else {
-                            Color32::from_rgb(60, 110, 190)
-                        };
+                        let dir_color = super::theme::folder_color(ui.visuals().dark_mode);
                         ui.painter().text(
                             Pos2::new(x0, rect.center().y),
                             egui::Align2::LEFT_CENTER,
@@ -2176,31 +2172,31 @@ impl DirTab {
                             resp.context_menu(|ui| {
                                 let full_l = std::path::Path::new(&self.left).join(&e.rel);
                                 let full_r = std::path::Path::new(&self.right).join(&e.rel);
-                                if ui.button("复制左侧路径").clicked() {
+                                if ui.button(t(I18nKey::CopyLeftPath)).clicked() {
                                     ui.ctx().copy_text(full_l.to_string_lossy().into_owned());
                                     ui.close();
                                 }
-                                if ui.button("复制右侧路径").clicked() {
+                                if ui.button(t(I18nKey::CopyRightPath)).clicked() {
                                     ui.ctx().copy_text(full_r.to_string_lossy().into_owned());
                                     ui.close();
                                 }
                                 ui.separator();
-                                if ui.button("打开左侧文件").clicked() {
+                                if ui.button(t(I18nKey::OpenLeftFile)).clicked() {
                                     open_with_system_app(&full_l.to_string_lossy());
                                     ui.close();
                                 }
-                                if ui.button("打开右侧文件").clicked() {
+                                if ui.button(t(I18nKey::OpenRightFile)).clicked() {
                                     open_with_system_app(&full_r.to_string_lossy());
                                     ui.close();
                                 }
                                 ui.separator();
-                                if ui.button("打开所在位置（左）").clicked() {
+                                if ui.button(t(I18nKey::RevealLeft)).clicked() {
                                     super::common::reveal_in_file_manager(
                                         &full_l.to_string_lossy(),
                                     );
                                     ui.close();
                                 }
-                                if ui.button("打开所在位置（右）").clicked() {
+                                if ui.button(t(I18nKey::RevealRight)).clicked() {
                                     super::common::reveal_in_file_manager(
                                         &full_r.to_string_lossy(),
                                     );

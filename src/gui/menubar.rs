@@ -23,6 +23,24 @@ pub fn menu_bar(app: &mut DiffApp, ui: &mut egui::Ui) {
     });
 }
 
+/// P51-3：平台快捷键文本（macOS 用 ⌘ 系，Windows/Linux 用 Ctrl 系）
+fn sc(mac: &str, win: &str) -> String {
+    if cfg!(target_os = "macos") {
+        mac.to_string()
+    } else {
+        win.to_string()
+    }
+}
+
+/// P51-3：菜单项按钮（带右侧快捷键文本，BC 观感）
+fn menu_item(
+    ui: &mut egui::Ui,
+    label: impl Into<egui::WidgetText>,
+    shortcut: String,
+) -> egui::Response {
+    ui.add(egui::Button::new(label).shortcut_text(shortcut))
+}
+
 /// 对当前标签为 DiffTab 时执行操作（菜单转发撤销/重做/跳转等）
 fn with_diff_tab(app: &mut DiffApp, f: impl FnOnce(&mut super::difftab::DiffTab)) {
     if let Some(Tab::Diff(t)) = app.tabs.get_mut(app.active) {
@@ -100,27 +118,27 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         ui.separator();
         // P39-2a：新建标签页 / 新建窗口（BC Session 菜单）
-        if ui.button(t(I18nKey::MenuNewTab)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuNewTab), sc("⌘T", "Ctrl+T")).clicked() {
             ui.close();
             app.new_tab_like_current();
         }
-        if ui.button(t(I18nKey::MenuNewWindow)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuNewWindow), sc("⌘N", "Ctrl+N")).clicked() {
             ui.close();
             super::DiffApp::open_new_window();
         }
         ui.separator();
         // 保存会话：打开会话中心（GUI 内管理已保存会话）
-        if ui.button(t(I18nKey::MenuSaveSession)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuSaveSession), sc("⌥⌘S", "Ctrl+Alt+S")).clicked() {
             ui.close();
             app.show_sessions = true;
         }
         // P44-4：打开会话（BC Session>打开会话，⌥⌘O；打开会话中心）
-        if ui.button(t(I18nKey::MenuOpenSession)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuOpenSession), sc("⌥⌘O", "Ctrl+Alt+O")).clicked() {
             ui.close();
             app.show_sessions = true;
         }
         // P44-4：重新比较文件（BC Session>重新比较文件，⌘R）
-        if ui.button(t(I18nKey::MenuRecompare)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuRecompare), sc("⌘R", "Ctrl+R")).clicked() {
             ui.close();
             app.reload_current();
         }
@@ -149,13 +167,13 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.checkbox(&mut lock_tab.locked, crate::i18n::t(I18nKey::MenuLocked));
         }
         // P39-2a：清除会话（重置当前标签为空会话）
-        if ui.button(t(I18nKey::MenuClearSession)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuClearSession), sc("⌥⌘C", "Ctrl+Alt+C")).clicked() {
             ui.close();
             app.clear_active_tab();
         }
         ui.separator();
         // P39-2c：报告生成（⌘P）
-        if ui.button(t(I18nKey::MenuReport)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuReport), sc("⌘P", "Ctrl+P")).clicked() {
             ui.close();
             app.show_report = true;
             app.report_error = None;
@@ -266,7 +284,7 @@ fn file_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         ui.separator();
         // P44-4：保存文件为（BC File>保存文件为...，⌘⇧S；TextEdit 另存对话框）
         if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))
-            && ui.button(t(I18nKey::MenuSaveFileAs)).clicked()
+            && menu_item(ui, t(I18nKey::MenuSaveFileAs), sc("⌘⇧S", "Ctrl+Shift+S")).clicked()
         {
             ui.close();
             if let Some(Tab::TextEdit(t)) = app.tabs.get_mut(app.active) {
@@ -313,11 +331,11 @@ fn file_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
 /// Edit：撤销/重做（转发当前文本标签）
 fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuEdit), |ui| {
-        if ui.button(t(I18nKey::MenuUndo)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuUndo), sc("⌘Z", "Ctrl+Z")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.undo());
         }
-        if ui.button(t(I18nKey::MenuRedo)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuRedo), sc("⌘Y", "Ctrl+Y")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.redo());
         }
@@ -425,19 +443,19 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
             ui.separator();
             // P44-2：对齐方式/缩进（BC 编辑菜单 对齐方式.../增加缩进/减少缩进）
-            if ui.button(t(I18nKey::MenuAlign)).clicked() {
+            if menu_item(ui, t(I18nKey::MenuAlign), sc("⌘A", "Ctrl+A")).clicked() {
                 ui.close();
                 if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
                     tab.align_current();
                 }
             }
-            if ui.button(t(I18nKey::MenuIndentIncrease)).clicked() {
+            if menu_item(ui, t(I18nKey::MenuIndentIncrease), sc("]", "]")).clicked() {
                 ui.close();
                 if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
                     tab.indent_current(1);
                 }
             }
-            if ui.button(t(I18nKey::MenuIndentDecrease)).clicked() {
+            if menu_item(ui, t(I18nKey::MenuIndentDecrease), sc("[", "[")).clicked() {
                 ui.close();
                 if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
                     tab.indent_current(-1);
@@ -597,20 +615,20 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             return;
         }
         // DiffTab：查找 / 差异导航 / 编辑导航 / 重载
-        if ui.button(t(I18nKey::MenuFind)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuFind), sc("⌘F", "Ctrl+F")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_search());
         }
         // P44-2：使用选择内容进行查找（BC 搜索>使用选择内容进行查找，⌘E）
         if matches!(app.tabs.get(app.active), Some(Tab::Diff(_)))
-            && ui.button(t(I18nKey::MenuFindSelection)).clicked()
+            && menu_item(ui, t(I18nKey::MenuFindSelection), sc("⌘E", "Ctrl+E")).clicked()
         {
             ui.close();
             with_diff_tab(app, |tab| tab.find_selection());
         }
         // P45-5：文本编辑 使用选择内容进行查找（BC 搜索>使用选择内容进行查找，⌘E）
         if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))
-            && ui.button(t(I18nKey::MenuFindSelection)).clicked()
+            && menu_item(ui, t(I18nKey::MenuFindSelection), sc("⌘E", "Ctrl+E")).clicked()
         {
             ui.close();
             if let Some(Tab::TextEdit(t)) = app.tabs.get_mut(app.active) {
@@ -618,39 +636,39 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
         }
         // P39-2e：替换…（⇧⌘F）
-        if ui.button(t(I18nKey::MenuReplace)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuReplace), sc("⇧⌘F", "Ctrl+Shift+F")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.focus_replace());
         }
         // P39-2a：查找下一 / 上一（⌘G / ⇧⌘G）
-        if ui.button(t(I18nKey::MenuFindNext)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuFindNext), sc("⌘G", "Ctrl+G")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.next_match());
         }
-        if ui.button(t(I18nKey::MenuFindPrev)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuFindPrev), sc("⇧⌘G", "Ctrl+Shift+G")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.prev_match());
         }
         // P39-2a：转到行…（⌘L）
-        if ui.button(t(I18nKey::MenuGotoLine)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuGotoLine), sc("⌘L", "Ctrl+L")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.goto_focus = true);
         }
         ui.separator();
-        if ui.button(t(I18nKey::MenuNextDiff)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuNextDiff), sc("F6", "F6")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.next_diff());
         }
-        if ui.button(t(I18nKey::MenuPrevDiff)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuPrevDiff), sc("F7", "F7")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.prev_diff());
         }
         // P39-2c：差异部分导航（区块级跳转，BC ⇧⌃↓/↑）
-        if ui.button(t(I18nKey::MenuNextSection)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuNextSection), sc("⇧⌃↓", "Ctrl+Shift+↓")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.next_diff_section());
         }
-        if ui.button(t(I18nKey::MenuPrevSection)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuPrevSection), sc("⇧⌃↑", "Ctrl+Shift+↑")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.prev_diff_section());
         }
@@ -701,14 +719,14 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             with_diff_tab(app, |tab| tab.prev_replace());
         }
         ui.separator();
-        if ui.button(t(I18nKey::MenuReload)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuReload), sc("F5", "F5")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.reload());
         }
         // P43-3：差异文件导航（DirTab 分支，BC 搜索菜单 下一个/上一个差异文件）
         if matches!(app.tabs.get(app.active), Some(Tab::Dir(_))) {
             // P44-7：查找文件名（⌘F，BC 文件夹比较搜索菜单）
-            if ui.button(t(I18nKey::MenuFindFileName)).clicked() {
+            if menu_item(ui, t(I18nKey::MenuFindFileName), sc("⌘F", "Ctrl+F")).clicked() {
                 ui.close();
                 if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
                     t.show_filter_panel = true;
@@ -729,7 +747,7 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         // P44-7：在多个文件中查找（⌘⇧F，BC 文本编辑搜索菜单；已有 P37-1n 弹窗补入口）
         if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))
-            && ui.button(t(I18nKey::MenuFindInFiles)).clicked()
+            && menu_item(ui, t(I18nKey::MenuFindInFiles), sc("⌘⇧F", "Ctrl+Shift+F")).clicked()
         {
             ui.close();
             if let Some(Tab::TextEdit(t)) = app.tabs.get_mut(app.active) {
@@ -743,7 +761,7 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
 fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuView), |ui| {
         // P39-2a：设置…（⌘,）集中管理对话框
-        if ui.button(t(I18nKey::MenuSettings)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuSettings), sc("⌘,", "Ctrl+,")).clicked() {
             ui.close();
             app.show_settings = true;
         }
@@ -1002,7 +1020,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         ui.separator();
         // P42-4：图例 / 日志 / 工具栏开关（BC 视图菜单）
-        if ui.button(t(I18nKey::MenuLegend)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuLegend), sc("⇧L", "Shift+L")).clicked() {
             ui.close();
             app.show_legend = !app.show_legend;
         }
@@ -1201,11 +1219,17 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         ui.separator();
         // P39-2d：书签（BC 书签 0-9，⌘⌥⌃0-9 切换 / ⌘0-9 跳转）
         ui.label(t(I18nKey::MenuBookmark));
-        if ui.button(t(I18nKey::MenuToggleBookmark)).clicked() {
+        if menu_item(
+            ui,
+            t(I18nKey::MenuToggleBookmark),
+            sc("⌘⌥⌃0-9", "Ctrl+Alt+Shift+0-9"),
+        )
+        .clicked()
+        {
             ui.close();
             with_diff_tab(app, |tab| tab.toggle_bookmark(0));
         }
-        if ui.button(t(I18nKey::MenuGotoBookmark)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuGotoBookmark), sc("⌘0-9", "Ctrl+0-9")).clicked() {
             ui.close();
             with_diff_tab(app, |tab| tab.goto_bookmark(0));
         }
@@ -1296,21 +1320,27 @@ fn window_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.add_enabled(false, egui::Button::new(t(I18nKey::MenuCloseAllWindows)));
             return;
         }
-        if ui.button(t(I18nKey::MenuNextTab)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuNextTab), sc("⌘]", "Ctrl+]")).clicked() {
             ui.close();
             app.next_tab();
         }
-        if ui.button(t(I18nKey::MenuPrevTab)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuPrevTab), sc("⌘[", "Ctrl+[")).clicked() {
             ui.close();
             app.prev_tab();
         }
         ui.separator();
-        if ui.button(t(I18nKey::MenuMinimize)).clicked() {
+        if menu_item(ui, t(I18nKey::MenuMinimize), sc("⌘M", "Ctrl+M")).clicked() {
             ui.close();
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
         }
-        if ui.button(t(I18nKey::MenuCloseAllWindows)).clicked() {
+        if menu_item(
+            ui,
+            t(I18nKey::MenuCloseAllWindows),
+            sc("⌘⇧W", "Ctrl+Shift+W"),
+        )
+        .clicked()
+        {
             ui.close();
             app.close_all_tabs();
         }

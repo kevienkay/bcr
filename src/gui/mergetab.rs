@@ -483,7 +483,7 @@ impl MergeTab {
                             let (mark, color) = match blk.resolution {
                                 Resolution::Auto => (
                                     t(I18nKey::ResAuto).to_string(),
-                                    Color32::from_rgb(240, 180, 60),
+                                    super::theme::conflict_color(ui.visuals().dark_mode),
                                 ),
                                 Resolution::Left
                                 | Resolution::Right
@@ -491,7 +491,7 @@ impl MergeTab {
                                 | Resolution::LeftThenRight
                                 | Resolution::RightThenLeft => (
                                     format!("✓ {}", t(I18nKey::Resolved)),
-                                    Color32::from_rgb(110, 230, 120),
+                                    super::theme::resolved_color(ui.visuals().dark_mode),
                                 ),
                             };
                             ui.colored_label(color, mark);
@@ -583,12 +583,12 @@ impl MergeTab {
                     ui.label(fmt(I18nKey::MergeLines, &[&lines.len().to_string()]));
                     if unresolved > 0 {
                         ui.colored_label(
-                            Color32::from_rgb(240, 180, 60),
+                            super::theme::conflict_color(ui.visuals().dark_mode),
                             fmt(I18nKey::MergeUnresolved, &[&unresolved.to_string()]),
                         );
                     } else {
                         ui.colored_label(
-                            Color32::from_rgb(110, 230, 120),
+                            super::theme::resolved_color(ui.visuals().dark_mode),
                             t(I18nKey::MergeAllResolved),
                         );
                     }
@@ -629,13 +629,25 @@ impl MergeTab {
                         ui.add_space(12.0);
                         // P34：分别打开 BASE/LEFT/RIGHT（BC 式：不强求一次选满三个）
                         ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenBase)).clicked() {
+                            if ui
+                                .button(format!("📂 {}", t(I18nKey::OpenBase)))
+                                .on_hover_text("打开 BASE 文件")
+                                .clicked()
+                            {
                                 self.open_base();
                             }
-                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                            if ui
+                                .button(format!("📂 {}", t(I18nKey::OpenLeft)))
+                                .on_hover_text(t(I18nKey::OpenLeftFile))
+                                .clicked()
+                            {
                                 self.open_left();
                             }
-                            if ui.button(t(I18nKey::OpenRight)).clicked() {
+                            if ui
+                                .button(format!("📂 {}", t(I18nKey::OpenRight)))
+                                .on_hover_text(t(I18nKey::OpenRightFile))
+                                .clicked()
+                            {
                                 self.open_right();
                             }
                         });
@@ -692,11 +704,11 @@ impl MergeTab {
                                 ui.ctx().copy_text(bp2.clone());
                                 ui.close();
                             }
-                            if ui.button("复制左侧路径").clicked() {
+                            if ui.button(t(I18nKey::CopyLeftPath)).clicked() {
                                 ui.ctx().copy_text(lp2.clone());
                                 ui.close();
                             }
-                            if ui.button("复制右侧路径").clicked() {
+                            if ui.button(t(I18nKey::CopyRightPath)).clicked() {
                                 ui.ctx().copy_text(rp2.clone());
                                 ui.close();
                             }
@@ -705,11 +717,11 @@ impl MergeTab {
                                 super::common::reveal_in_file_manager(&bp2);
                                 ui.close();
                             }
-                            if ui.button("打开所在位置（左）").clicked() {
+                            if ui.button(t(I18nKey::RevealLeft)).clicked() {
                                 super::common::reveal_in_file_manager(&lp2);
                                 ui.close();
                             }
-                            if ui.button("打开所在位置（右）").clicked() {
+                            if ui.button(t(I18nKey::RevealRight)).clicked() {
                                 super::common::reveal_in_file_manager(&rp2);
                                 ui.close();
                             }
@@ -718,11 +730,11 @@ impl MergeTab {
                                 super::common::open_with_system_app(&bp2);
                                 ui.close();
                             }
-                            if ui.button("系统打开（左）").clicked() {
+                            if ui.button(t(I18nKey::SystemOpenLeft)).clicked() {
                                 super::common::open_with_system_app(&lp2);
                                 ui.close();
                             }
-                            if ui.button("系统打开（右）").clicked() {
+                            if ui.button(t(I18nKey::SystemOpenRight)).clicked() {
                                 super::common::open_with_system_app(&rp2);
                                 ui.close();
                             }
@@ -746,7 +758,7 @@ fn merge_row_bg(
     if row.in_conflict {
         // 冲突行：base 灰红、left 红、right 绿
         return (
-            Some(Color32::from_rgba_unmultiplied(120, 90, 90, 60)),
+            Some(super::theme::merge_conflict_bg()),
             Some(bg_replace_l()),
             Some(bg_replace_r()),
         );

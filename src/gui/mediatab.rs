@@ -6,7 +6,7 @@
 
 use crate::i18n::{t, Key as I18nKey};
 use crate::mediacmp::{compare_media, MediaFieldDiff};
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 
 /// 媒体标签页
 pub struct MediaTab {
@@ -115,7 +115,7 @@ impl MediaTab {
                 return;
             }
             if let Some(err) = &self.error {
-                ui.colored_label(Color32::from_rgb(240, 110, 110), err);
+                ui.colored_label(super::theme::error_color(), err);
             }
             let li = self.left_info();
             let ri = self.right_info();
@@ -141,8 +141,14 @@ impl MediaTab {
                             let lv_disp = lv.clone().unwrap_or_else(|| "—".to_string());
                             let rv_disp = rv.clone().unwrap_or_else(|| "—".to_string());
                             if is_diff {
-                                ui.colored_label(Color32::from_rgb(226, 110, 110), lv_disp);
-                                ui.colored_label(Color32::from_rgb(226, 110, 110), rv_disp);
+                                ui.colored_label(
+                                    super::theme::diff_delete(ui.visuals().dark_mode),
+                                    lv_disp,
+                                );
+                                ui.colored_label(
+                                    super::theme::diff_delete(ui.visuals().dark_mode),
+                                    rv_disp,
+                                );
                             } else {
                                 ui.monospace(lv_disp);
                                 ui.monospace(rv_disp);
@@ -156,7 +162,7 @@ impl MediaTab {
                 } else {
                     ui.label(
                         RichText::new(format!("⚠ {} 个字段不同", self.diffs.len()))
-                            .color(Color32::from_rgb(226, 110, 110)),
+                            .color(super::theme::diff_delete(ui.visuals().dark_mode)),
                     );
                 }
             });

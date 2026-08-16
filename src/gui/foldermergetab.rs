@@ -5,7 +5,7 @@
 
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::merge3::{build_merge3_plan, execute_plan, Merge3PlanItem, Merge3Stats};
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 
 /// P45-2：文件夹合并视图过滤（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -179,7 +179,7 @@ impl FolderMergeTab {
     /// 执行合并计划到输出目录（复用 execute_plan）
     pub fn execute(&mut self) {
         let Some(plan) = self.plan.clone() else {
-            self.msg = Some("请先生成计划".to_string());
+            self.msg = Some(t(I18nKey::PlanFirst).to_string());
             return;
         };
         if self.out.is_empty() {
@@ -288,7 +288,7 @@ impl FolderMergeTab {
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
-                    ui.colored_label(Color32::from_rgb(240, 110, 110), err);
+                    ui.colored_label(super::theme::error_color(), err);
                     if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }
@@ -370,14 +370,14 @@ impl FolderMergeTab {
                                 "copy"
                             },
                             if item.conflicted {
-                                Color32::from_rgb(230, 80, 80)
+                                super::theme::img_diff(ui.visuals().dark_mode)
                             } else {
-                                Color32::from_rgb(80, 160, 255)
+                                super::theme::plan_copy(ui.visuals().dark_mode)
                             },
                         ),
-                        "merge" => ("merge", Color32::from_rgb(200, 160, 60)),
-                        "delete" => ("delete", Color32::from_rgb(230, 80, 80)),
-                        _ => ("same", Color32::from_gray(120)),
+                        "merge" => ("merge", super::theme::plan_merge(ui.visuals().dark_mode)),
+                        "delete" => ("delete", super::theme::img_diff(ui.visuals().dark_mode)),
+                        _ => ("same", super::theme::frame_normal(ui.visuals().dark_mode)),
                     };
                     ui.painter().text(
                         egui::Pos2::new(rect.left() + 6.0, rect.center().y),

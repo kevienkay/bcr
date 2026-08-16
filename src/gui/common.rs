@@ -217,9 +217,9 @@ pub fn show_rows_offset<R>(
 pub fn status_color(ui: &egui::Ui, letter: char) -> Color32 {
     match letter {
         // 仅左侧/仅右侧 = 孤儿（BC 紫）
-        'L' | 'R' => Color32::from_rgb(83, 44, 199),
+        'L' | 'R' => super::theme::status_orphan(),
         // 内容不同/移动 = 差异（BC 红）
-        'C' | 'M' => Color32::from_rgb(246, 39, 16),
+        'C' | 'M' => super::theme::status_differ(),
         // 相同 = 默认文本色（BC 黑）
         'S' => ui.visuals().text_color(),
         // 未知/其他 = 弱色（BC 灰）

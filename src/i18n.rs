@@ -285,6 +285,36 @@ pub enum Key {
     OpenLeft,
     /// 打开右侧…
     OpenRight,
+    /// P51-5：打开左侧文件（工具栏 hover/右键）
+    OpenLeftFile,
+    /// P51-5：打开右侧文件（工具栏 hover/右键）
+    OpenRightFile,
+    /// P51-5：复制左侧路径（右键菜单）
+    CopyLeftPath,
+    /// P51-5：复制右侧路径（右键菜单）
+    CopyRightPath,
+    /// P51-5：重新加载 (F5)（工具栏 hover）
+    ReloadHint,
+    /// P51-5：删除会话（主页会话列表）
+    DeleteSession,
+    /// P51-5：行数（信息弹窗）
+    LineCount,
+    /// P51-5：打开所在位置（左）
+    RevealLeft,
+    /// P51-5：打开所在位置（右）
+    RevealRight,
+    /// P51-5：系统打开（左）
+    SystemOpenLeft,
+    /// P51-5：系统打开（右）
+    SystemOpenRight,
+    /// P51-5：请先生成计划
+    PlanFirst,
+    /// P51-5：没有可复制的差异文件
+    NoDiffToCopy,
+    /// P51-5：没有可删除的差异文件
+    NoDiffToDelete,
+    /// P51-5：无法读取系统剪贴板（非文本内容或不可用）
+    ClipboardUnavailable,
     /// 复制到右侧（P35-A1：把当前差异块左侧内容复制到右侧）
     CopyToRight,
     /// 复制到左侧（P35-A1：把当前差异块右侧内容复制到左侧）
@@ -301,8 +331,8 @@ pub enum Key {
     CopyBatchToLeft,
     /// P37-1f：批量删除左侧
     DeleteBatchLeft,
-    /// 统计栏
-    StatsPanel,
+    /// P51-2：选中项数（状态栏）
+    StatsSelected,
     /// 忽略空白
     IgnoreWs,
     /// 显示空白符（P35-A4：空格→·、制表符→→）

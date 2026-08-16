@@ -765,7 +765,7 @@ impl DiffTab {
                     self.error = Some("写入剪贴板临时文件失败".to_string());
                 }
             }
-            None => self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string()),
+            None => self.error = Some(t(I18nKey::ClipboardUnavailable).to_string()),
         }
     }
 
@@ -779,7 +779,7 @@ impl DiffTab {
                     self.error = Some("写入剪贴板临时文件失败".to_string());
                 }
             }
-            None => self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string()),
+            None => self.error = Some(t(I18nKey::ClipboardUnavailable).to_string()),
         }
     }
 
@@ -2133,14 +2133,14 @@ impl DiffTab {
                     // ---- 打开（BC: Open 按钮组）----
                     if ui
                         .button(format!("◀ {}", t(I18nKey::OpenLeft)))
-                        .on_hover_text("打开左侧文件")
+                        .on_hover_text(t(I18nKey::OpenLeftFile))
                         .clicked()
                     {
                         self.open_left_dialog();
                     }
                     if ui
                         .button(format!("▶ {}", t(I18nKey::OpenRight)))
-                        .on_hover_text("打开右侧文件")
+                        .on_hover_text(t(I18nKey::OpenRightFile))
                         .clicked()
                     {
                         self.open_right_dialog();
@@ -2194,7 +2194,6 @@ impl DiffTab {
                         self.redo();
                     }
                     ui.separator();
-                    ui.separator();
                     // ---- 操作（BC: Copy/Swap/Reload 组）----
                     // P35-A1：复制差异块到另一侧（BC Copy to Other Side）
                     let has_diff = self.diff_pos.is_some();
@@ -2220,7 +2219,7 @@ impl DiffTab {
                     }
                     if ui
                         .button(format!("⟳ {}", t(I18nKey::Reload)))
-                        .on_hover_text("重新加载 (F5)")
+                        .on_hover_text(t(I18nKey::ReloadHint))
                         .clicked()
                     {
                         self.reload();
@@ -2386,7 +2385,7 @@ impl DiffTab {
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
-                    ui.colored_label(Color32::from_rgb(240, 110, 110), err);
+                    ui.colored_label(super::theme::error_color(), err);
                     if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }
@@ -2871,16 +2870,8 @@ impl DiffTab {
             // P33：两行结构 — 第一行文件名，第二行详情（时间 | 大小 | 编码），对标 BC 5
             {
                 let head_h = 42.0;
-                let head_bg = if ui.visuals().dark_mode {
-                    Some(Color32::from_gray(38))
-                } else {
-                    Some(Color32::from_gray(230))
-                };
-                let head_fg = if ui.visuals().dark_mode {
-                    Color32::from_rgb(150, 190, 240)
-                } else {
-                    Color32::from_rgb(60, 110, 190)
-                };
+                let head_bg = Some(super::theme::head_bg(ui.visuals().dark_mode));
+                let head_fg = super::theme::head_fg(ui.visuals().dark_mode);
                 let detail_fg = ui.visuals().weak_text_color();
                 // 头部两栏各占视口半宽（gutter + half），长行内容超宽时头部不跟随滚动
                 let head_l_w = gutter_l + half;
@@ -2985,11 +2976,7 @@ impl DiffTab {
                 let ruler_h = 16.0;
                 let (ruler_rect, _) =
                     ui.allocate_exact_size(Vec2::new(total_w, ruler_h), egui::Sense::hover());
-                let ruler_bg = if ui.visuals().dark_mode {
-                    Color32::from_gray(32)
-                } else {
-                    Color32::from_gray(244)
-                };
+                let ruler_bg = super::theme::ruler_bg(ui.visuals().dark_mode);
                 paint_bg(ui, ruler_rect, Some(ruler_bg));
                 let tick_fg = ui.visuals().weak_text_color();
                 let font = egui::FontId::monospace(9.0);
@@ -3018,11 +3005,7 @@ impl DiffTab {
             if let Some((s, e)) = self.isolated {
                 let (rect, resp) =
                     ui.allocate_exact_size(Vec2::new(total_w, 26.0), egui::Sense::click());
-                let bg = if ui.visuals().dark_mode {
-                    Color32::from_rgb(46, 42, 20)
-                } else {
-                    Color32::from_rgb(255, 248, 210)
-                };
+                let bg = super::theme::banner_isolate_bg(ui.visuals().dark_mode);
                 ui.painter().rect_filled(rect, 2.0, bg);
                 let fg = ui.visuals().strong_text_color();
                 ui.painter().text(
@@ -3049,11 +3032,7 @@ impl DiffTab {
             if let Some((side, src_no)) = self.align_pick {
                 let (rect, resp) =
                     ui.allocate_exact_size(Vec2::new(total_w, 26.0), egui::Sense::click());
-                let bg = if ui.visuals().dark_mode {
-                    Color32::from_rgb(22, 46, 42)
-                } else {
-                    Color32::from_rgb(215, 248, 240)
-                };
+                let bg = super::theme::banner_align_bg(ui.visuals().dark_mode);
                 ui.painter().rect_filled(rect, 2.0, bg);
                 let fg = ui.visuals().strong_text_color();
                 let side_name = match side {
@@ -3098,11 +3077,7 @@ impl DiffTab {
                         paint_bg(
                             ui,
                             rect,
-                            if ui.visuals().dark_mode {
-                                Some(Color32::from_gray(26))
-                            } else {
-                                Some(Color32::from_gray(240))
-                            },
+                            Some(super::theme::fold_bg(ui.visuals().dark_mode)),
                         );
                         let fg = ui.visuals().weak_text_color();
                         ui.painter().text(
@@ -3126,7 +3101,7 @@ impl DiffTab {
                     };
                     // P43-2：文本选区高亮（蓝色系叠加）
                     let (bg_l, bg_r) = if self.selection.is_some_and(|(s, e)| oi >= s && oi <= e) {
-                        let sel = Some(Color32::from_rgba_unmultiplied(86, 148, 240, 60));
+                        let sel = Some(super::theme::selection_overlay());
                         (bg_l.or(sel), bg_r.or(sel))
                     } else {
                         (bg_l, bg_r)
@@ -3151,11 +3126,7 @@ impl DiffTab {
                     // P32-B5：忽略行弱化显示（半透明灰）
                     let ignored = self.ignored_rows.contains(&oi);
                     let (bg_l, bg_r) = if ignored {
-                        let dim = if ui.visuals().dark_mode {
-                            Color32::from_gray(42)
-                        } else {
-                            Color32::from_gray(226)
-                        };
+                        let dim = super::theme::ignored_dim(ui.visuals().dark_mode);
                         (Some(dim), Some(dim))
                     } else {
                         (bg_l, bg_r)
@@ -3307,26 +3278,26 @@ impl DiffTab {
                             ui.separator();
                         }
                         if let Some(p) = &lp {
-                            if ui.button("复制左侧路径").clicked() {
+                            if ui.button(t(I18nKey::CopyLeftPath)).clicked() {
                                 ui.ctx().copy_text(p.clone());
                                 ui.close();
                             }
                         }
                         if let Some(p) = &rp {
-                            if ui.button("复制右侧路径").clicked() {
+                            if ui.button(t(I18nKey::CopyRightPath)).clicked() {
                                 ui.ctx().copy_text(p.clone());
                                 ui.close();
                             }
                         }
                         ui.separator();
                         if let Some(p) = &lp {
-                            if ui.button("打开左侧文件").clicked() {
+                            if ui.button(t(I18nKey::OpenLeftFile)).clicked() {
                                 super::common::open_with_system_app(p);
                                 ui.close();
                             }
                         }
                         if let Some(p) = &rp {
-                            if ui.button("打开右侧文件").clicked() {
+                            if ui.button(t(I18nKey::OpenRightFile)).clicked() {
                                 super::common::open_with_system_app(p);
                                 ui.close();
                             }
@@ -3467,9 +3438,9 @@ impl DiffTab {
                 for (i, row) in display_rows.iter().enumerate() {
                     let color = match row.tag {
                         RowTag::Equal => Color32::TRANSPARENT,
-                        RowTag::Delete => Color32::from_rgb(220, 90, 90),
-                        RowTag::Insert => Color32::from_rgb(90, 200, 110),
-                        RowTag::Replace => Color32::from_rgb(235, 200, 90),
+                        RowTag::Delete => super::theme::stat_delete(ui.visuals().dark_mode),
+                        RowTag::Insert => super::theme::stat_insert(ui.visuals().dark_mode),
+                        RowTag::Replace => super::theme::stat_modify(ui.visuals().dark_mode),
                     };
                     if color != Color32::TRANSPARENT {
                         let y = ov_rect.top() + i as f32 * row_h;
@@ -3505,15 +3476,15 @@ impl DiffTab {
                     let st = self.stats;
                     ui.label(format!("{} {}", t(I18nKey::StatSame), st.equal));
                     ui.colored_label(
-                        Color32::from_rgb(240, 120, 120),
+                        super::theme::stat_delete(ui.visuals().dark_mode),
                         format!("{} {}", t(I18nKey::StatDelete), st.delete),
                     );
                     ui.colored_label(
-                        Color32::from_rgb(120, 230, 130),
+                        super::theme::stat_insert(ui.visuals().dark_mode),
                         format!("{} {}", t(I18nKey::StatInsert), st.insert),
                     );
                     ui.colored_label(
-                        Color32::from_rgb(235, 210, 100),
+                        super::theme::stat_modify(ui.visuals().dark_mode),
                         format!("{} {}", t(I18nKey::StatReplace), st.replace),
                     );
                     ui.separator();
@@ -3626,16 +3597,17 @@ fn paint_diff_row(
 
     // 左 gutter + 内容（P31：gutter 用微灰底色与内容区分，BC 观感）
     // P39-2b：深色下 gutter 底色略亮于内容区，行号更易读
-    let gutter_bg = if ui.visuals().dark_mode {
-        Some(Color32::from_gray(38))
-    } else {
-        Some(Color32::from_gray(238))
-    };
+    let gutter_bg = Some(super::theme::gutter_bg(ui.visuals().dark_mode));
     let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H));
     paint_bg(ui, gutter_rect, gutter_bg);
     paint_line_no(ui, gutter_rect, row.left_no);
     let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_l);
+    // P51-4：行 hover 高亮（半透明弱色叠加，与 DirTab 观感一致）
+    if resp.hovered() && !ignored {
+        ui.painter()
+            .rect_filled(content_rect, 0.0, super::theme::bg_match());
+    }
     // P32-A2：行内编辑命中左侧 → 就地 TextEdit
     let editing_side = inline.as_ref().map(|ie| ie.side);
     match editing_side {
@@ -3671,11 +3643,7 @@ fn paint_diff_row(
         paint_bg(
             ui,
             mid_rect,
-            if ui.visuals().dark_mode {
-                Some(Color32::from_gray(24))
-            } else {
-                Some(Color32::from_gray(244))
-            },
+            Some(super::theme::mid_bg(ui.visuals().dark_mode)),
         );
         // 水平连接线（行垂直居中，左右各留 2px）
         let cy = y + ROW_H / 2.0;
@@ -3688,11 +3656,7 @@ fn paint_diff_row(
         );
     } else {
         // 无差异行：弱色垂直分隔线（延续面板分隔感）
-        let sep = if ui.visuals().dark_mode {
-            Color32::from_gray(48)
-        } else {
-            Color32::from_gray(210)
-        };
+        let sep = super::theme::mid_sep(ui.visuals().dark_mode);
         ui.painter().line_segment(
             [
                 Pos2::new(mid_x + mid_gap / 2.0, y),
@@ -3709,6 +3673,11 @@ fn paint_diff_row(
     paint_line_no(ui, gutter_rect, row.right_no);
     let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
     paint_bg(ui, content_rect, bg_r);
+    // P51-4：行 hover 高亮（右栏同步）
+    if resp.hovered() && !ignored {
+        ui.painter()
+            .rect_filled(content_rect, 0.0, super::theme::bg_match());
+    }
     // P32-A2：行内编辑命中右侧 → 就地 TextEdit
     let editing_side = inline.as_ref().map(|ie| ie.side);
     match editing_side {
@@ -3781,16 +3750,8 @@ fn paint_diff_row_v(
     let x = rect.left();
     let y = rect.top();
     // 忽略行弱化色
-    let dim = if ui.visuals().dark_mode {
-        Color32::from_gray(42)
-    } else {
-        Color32::from_gray(226)
-    };
-    let gutter_bg = if ui.visuals().dark_mode {
-        Color32::from_gray(38)
-    } else {
-        Color32::from_gray(238)
-    };
+    let dim = super::theme::ignored_dim(ui.visuals().dark_mode);
+    let gutter_bg = super::theme::gutter_bg(ui.visuals().dark_mode);
     // BC 风格当前差异行：左侧 3px 竖条（整行高）
     if is_current {
         ui.painter().rect_filled(
@@ -3807,6 +3768,11 @@ fn paint_diff_row_v(
         paint_line_no(ui, gutter_rect, row.left_no);
         let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
         paint_bg(ui, content_rect, l_bg);
+        // P51-4：行 hover 高亮（半透明弱色叠加，与 SideBySide 布局一致）
+        if resp.hovered() && !ignored {
+            ui.painter()
+                .rect_filled(content_rect, 0.0, super::theme::bg_match());
+        }
         let editing_side = inline.as_ref().map(|ie| ie.side);
         match editing_side {
             Some(EditSide::Left) => {
@@ -3841,6 +3807,11 @@ fn paint_diff_row_v(
         paint_line_no(ui, gutter_rect, row.right_no);
         let content_rect = Rect::from_min_size(Pos2::new(x + gutter_r, y2), vec2(content_w, ROW_H));
         paint_bg(ui, content_rect, r_bg);
+        // P51-4：行 hover 高亮（右栏同步）
+        if resp.hovered() && !ignored {
+            ui.painter()
+                .rect_filled(content_rect, 0.0, super::theme::bg_match());
+        }
         let editing_side = inline.as_ref().map(|ie| ie.side);
         match editing_side {
             Some(EditSide::Right) => {
@@ -4076,23 +4047,14 @@ fn paint_hex_row(
 }
 
 /// hex 字节文本：16 字节宽、8 字节处空格；与本侧不同的字节用颜色标记
-fn hex_bytes_text(bytes: &[u8], other: &[u8], is_left: bool) -> String {
+fn hex_bytes_text(bytes: &[u8], _other: &[u8], _is_left: bool) -> String {
     let mut s = String::new();
     for i in 0..16 {
         if i == 8 {
             s.push(' ');
         }
         if i < bytes.len() {
-            let diff = i < other.len() && bytes[i] != other[i];
-            if diff {
-                let c = if is_left {
-                    Color32::from_rgb(255, 120, 120)
-                } else {
-                    Color32::from_rgb(120, 255, 140)
-                };
-                // egui 文本内嵌颜色：用 ANSI 不生效，返回纯文本即可（底色已表达差异）
-                let _ = c;
-            }
+            // 差异字节由底色表达（egui 文本内嵌颜色不生效，返回纯文本）
             s.push_str(&format!("{:02X} ", bytes[i]));
         } else {
             s.push_str("   ");

@@ -25,7 +25,7 @@ use common::*;
 use csvtab::CsvTab;
 use difftab::DiffTab;
 use dirtab::DirTab;
-use eframe::egui::{self, Color32, RichText, ThemePreference};
+use eframe::egui::{self, RichText, ThemePreference};
 use foldermergetab::FolderMergeTab;
 use imagetab::ImageTab;
 use mediatab::MediaTab;
@@ -527,7 +527,10 @@ impl DiffApp {
                         if let Some(r) = &t.right {
                             rows.push(("右侧文件".to_string(), r.path.clone()));
                         }
-                        rows.push(("行数".to_string(), t.rows.len().to_string()));
+                        rows.push((
+                            crate::i18n::t(crate::i18n::Key::LineCount).to_string(),
+                            t.rows.len().to_string(),
+                        ));
                         rows.push(("差异行".to_string(), t.diff_rows.len().to_string()));
                         rows.push(("相同".to_string(), t.stats.equal.to_string()));
                         rows.push(("仅左".to_string(), t.stats.delete.to_string()));
@@ -556,7 +559,10 @@ impl DiffApp {
                         rows.push(("左侧".to_string(), t.left_path.clone()));
                         rows.push(("右侧".to_string(), t.right_path.clone()));
                         rows.push(("冲突".to_string(), t.view.conflicts.to_string()));
-                        rows.push(("行数".to_string(), t.view.blocks.len().to_string()));
+                        rows.push((
+                            crate::i18n::t(crate::i18n::Key::LineCount).to_string(),
+                            t.view.blocks.len().to_string(),
+                        ));
                     }
                     Some(Tab::Image(t)) => {
                         rows.push(("视图".to_string(), "图片对比".to_string()));
@@ -570,14 +576,20 @@ impl DiffApp {
                     }
                     Some(Tab::Csv(t)) => {
                         rows.push(("视图".to_string(), "表格对比".to_string()));
-                        rows.push(("行数".to_string(), t.row_count().to_string()));
+                        rows.push((
+                            crate::i18n::t(crate::i18n::Key::LineCount).to_string(),
+                            t.row_count().to_string(),
+                        ));
                         rows.push(("列数".to_string(), t.col_count().to_string()));
                     }
                     Some(Tab::TextEdit(t)) => {
                         rows.push(("视图".to_string(), "文本编辑".to_string()));
                         rows.push(("标题".to_string(), t.title()));
                         rows.push(("字符".to_string(), t.content.chars().count().to_string()));
-                        rows.push(("行数".to_string(), t.content.lines().count().to_string()));
+                        rows.push((
+                            crate::i18n::t(crate::i18n::Key::LineCount).to_string(),
+                            t.content.lines().count().to_string(),
+                        ));
                     }
                     Some(Tab::Patch(t)) => {
                         rows.push(("视图".to_string(), "补丁".to_string()));
@@ -655,10 +667,10 @@ impl DiffApp {
                 ui.label(RichText::new("文件夹比较状态徽标").strong());
                 for (letter, color, label) in [
                     ('S', ui.visuals().text_color(), "相同"),
-                    ('C', Color32::from_rgb(246, 39, 16), "差异"),
-                    ('L', Color32::from_rgb(83, 44, 199), "仅左侧"),
-                    ('R', Color32::from_rgb(83, 44, 199), "仅右侧"),
-                    ('M', Color32::from_rgb(246, 39, 16), "移动/重命名"),
+                    ('C', theme::status_differ(), "差异"),
+                    ('L', theme::status_orphan(), "仅左侧"),
+                    ('R', theme::status_orphan(), "仅右侧"),
+                    ('M', theme::status_differ(), "移动/重命名"),
                 ] {
                     ui.horizontal(|ui| {
                         let badge_c = ui.cursor().min + egui::vec2(9.0, 10.0);
@@ -1168,7 +1180,7 @@ impl DiffApp {
                                     .size(14.0),
                             );
                             ui.add_space(4.0);
-                            let sessions = crate::session::load();
+                            let mut sessions = crate::session::load();
                             if sessions.sessions.is_empty() {
                                 ui.label(
                                     RichText::new(
@@ -1179,10 +1191,13 @@ impl DiffApp {
                                 );
                             } else {
                                 let mut open_req: Option<(String, String)> = None;
+                                let mut delete_req: Option<String> = None;
                                 egui::ScrollArea::vertical()
                                     .max_height(320.0)
+                                    .auto_shrink([false, true])
                                     .show(ui, |ui| {
                                         for (name, s) in &sessions.sessions {
+                                            // P51-4：会话列表项 hover 高亮（Frame 包裹 + 半透明底色）
                                             let label = format!(
                                                 "▶ {}\n{}",
                                                 name,
@@ -1199,17 +1214,76 @@ impl DiffApp {
                                                     format!("{} ↔ {}", s.left, s.right)
                                                 }
                                             );
-                                            if ui
-                                                .button(RichText::new(label).size(12.0))
-                                                .on_hover_text(format!("{} ↔ {}", s.left, s.right))
-                                                .clicked()
-                                            {
-                                                open_req = Some((s.left.clone(), s.right.clone()));
+                                            let row = egui::Frame::new()
+                                                .corner_radius(4.0)
+                                                .inner_margin(egui::Margin::symmetric(8, 4))
+                                                .show(ui, |ui| {
+                                                    ui.horizontal(|ui| {
+                                                        let resp = ui
+                                                            .add(
+                                                                egui::Button::new(
+                                                                    RichText::new(label).size(12.0),
+                                                                )
+                                                                .frame(false)
+                                                                .wrap_mode(
+                                                                    egui::TextWrapMode::Truncate,
+                                                                ),
+                                                            )
+                                                            .on_hover_text(format!(
+                                                                "{} ↔ {}",
+                                                                s.left, s.right
+                                                            ));
+                                                        if resp.clicked() {
+                                                            open_req = Some((
+                                                                s.left.clone(),
+                                                                s.right.clone(),
+                                                            ));
+                                                        }
+                                                        // ✕ 删除（hover 红色提示）
+                                                        let del = ui
+                                                            .add(
+                                                                egui::Button::new(
+                                                                    RichText::new("✕")
+                                                                        .size(11.0)
+                                                                        .color(if resp.hovered() {
+                                                                            theme::stat_delete(
+                                                                                ui.visuals()
+                                                                                    .dark_mode,
+                                                                            )
+                                                                        } else {
+                                                                            ui.visuals()
+                                                                                .weak_text_color()
+                                                                        }),
+                                                                )
+                                                                .small()
+                                                                .frame(false),
+                                                            )
+                                                            .on_hover_text(crate::i18n::t(
+                                                                crate::i18n::Key::DeleteSession,
+                                                            ));
+                                                        if del.clicked() {
+                                                            delete_req = Some(name.clone());
+                                                        }
+                                                    });
+                                                })
+                                                .response;
+                                            // hover 高亮：整行半透明底色（BC 列表 hover 观感）
+                                            if row.hovered() {
+                                                ui.painter().rect_filled(
+                                                    row.rect,
+                                                    4.0,
+                                                    theme::bg_match(),
+                                                );
                                             }
+                                            ui.add_space(2.0);
                                         }
                                     });
                                 if let Some((l, r)) = open_req {
                                     self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
+                                }
+                                if let Some(del) = delete_req {
+                                    sessions.sessions.remove(&del);
+                                    let _ = crate::session::save_all(&sessions);
                                 }
                             }
                         });
@@ -1217,13 +1291,12 @@ impl DiffApp {
                 ui.add_space(12.0);
                 // ---- 主区：会话类型大按钮（BC 式竖排/网格 + 拖放提示）----
                 ui.vertical(|ui| {
-                    ui.label(RichText::new("bcr").size(34.0).strong().color(
-                        if ui.visuals().dark_mode {
-                            egui::Color32::from_rgb(140, 180, 235)
-                        } else {
-                            egui::Color32::from_rgb(60, 110, 190)
-                        },
-                    ));
+                    ui.label(
+                        RichText::new("bcr")
+                            .size(34.0)
+                            .strong()
+                            .color(theme::folder_color(ui.visuals().dark_mode)),
+                    );
                     ui.label(
                         RichText::new(crate::i18n::t(crate::i18n::Key::MainHint))
                             .size(13.0)
@@ -1298,6 +1371,9 @@ impl DiffApp {
                     ];
                     let card_w = 170.0;
                     let card_h = 76.0;
+                    // P51-4：卡片网格自适应列数（min 170px/列，按可用宽度计算，BC 主页观感）
+                    let avail_w = ui.available_width();
+                    let cols = ((avail_w + 10.0) / (card_w + 10.0)).floor().max(1.0) as usize;
                     let mut card_click: Option<u32> = None;
                     egui::Grid::new("session-cards")
                         .spacing([10.0, 10.0])
@@ -1309,11 +1385,7 @@ impl DiffApp {
                                 let frame = egui::Frame::group(ui.style())
                                     .corner_radius(8.0)
                                     .inner_margin(egui::Margin::same(10))
-                                    .fill(if ui.visuals().dark_mode {
-                                        Color32::from_gray(36)
-                                    } else {
-                                        Color32::from_gray(250)
-                                    });
+                                    .fill(theme::card_bg(ui.visuals().dark_mode));
                                 let resp = frame
                                     .show(ui, |ui| {
                                         ui.set_min_size(egui::vec2(card_w, card_h));
@@ -1357,15 +1429,18 @@ impl DiffApp {
                                     ui.painter().rect_stroke(
                                         rect,
                                         8.0,
-                                        egui::Stroke::new(1.5, Color32::from_rgb(86, 148, 240)),
+                                        egui::Stroke::new(
+                                            1.5,
+                                            theme::current_bar(ui.visuals().dark_mode),
+                                        ),
                                         egui::StrokeKind::Outside,
                                     );
                                 }
                                 if resp.clicked() {
                                     card_click = Some(*id);
                                 }
-                                // 每行 4 张卡片（8 张 → 4+4）
-                                if i % 4 == 3 {
+                                // P51-4：按可用宽度自适应换行（原固定 4 列）
+                                if (i + 1) % cols == 0 {
                                     ui.end_row();
                                 }
                             }
@@ -1556,11 +1631,7 @@ impl eframe::App for DiffApp {
                     let selected = i == self.active;
                     // P48-2：标签用 Frame 包裹——选中标签高亮底色+圆角（BC 观感），普通标签弱色
                     let tab_bg = if selected {
-                        if ui.visuals().dark_mode {
-                            Color32::from_rgb(52, 58, 70)
-                        } else {
-                            Color32::from_rgb(228, 232, 240)
-                        }
+                        theme::tab_selected_bg(ui.visuals().dark_mode)
                     } else {
                         egui::Color32::TRANSPARENT
                     };
@@ -2105,7 +2176,11 @@ impl eframe::App for DiffApp {
                                     RichText::new(format!("{} ↔ {}{}", s.left, s.right, opts))
                                         .size(12.0),
                                 );
-                                if ui.small_button("✕").on_hover_text("删除会话").clicked() {
+                                if ui
+                                    .small_button("✕")
+                                    .on_hover_text(crate::i18n::t(crate::i18n::Key::DeleteSession))
+                                    .clicked()
+                                {
                                     delete_req = Some(name.clone());
                                 }
                             });
@@ -2387,7 +2462,7 @@ impl eframe::App for DiffApp {
                             });
                     }
                     if let Some(err) = &self.cloud_err {
-                        ui.colored_label(Color32::from_rgb(230, 100, 100), err);
+                        ui.colored_label(theme::error_color(), err);
                     }
                     ui.separator();
                     ui.horizontal(|ui| {
@@ -2492,19 +2567,19 @@ impl eframe::App for DiffApp {
                             );
                             ui.label(
                                 RichText::new(format!("{} {}", sc, s.equal))
-                                    .color(egui::Color32::from_rgb(120, 190, 120)),
+                                    .color(theme::stat_same(ui.visuals().dark_mode)),
                             );
                             ui.label(
                                 RichText::new(format!("{} {}", sd, s.delete))
-                                    .color(egui::Color32::from_rgb(220, 120, 120)),
+                                    .color(theme::stat_delete(ui.visuals().dark_mode)),
                             );
                             ui.label(
                                 RichText::new(format!("{} {}", si, s.insert))
-                                    .color(egui::Color32::from_rgb(120, 190, 120)),
+                                    .color(theme::stat_insert(ui.visuals().dark_mode)),
                             );
                             ui.label(
                                 RichText::new(format!("{} {}", sr, s.replace))
-                                    .color(egui::Color32::from_rgb(220, 190, 110)),
+                                    .color(theme::stat_modify(ui.visuals().dark_mode)),
                             );
                             // P47-3：右侧编码/大小弱色（右对齐）
                             if let Some(l) = &t.left {
@@ -2524,109 +2599,316 @@ impl eframe::App for DiffApp {
                             }
                         }
                         Tab::Dir(t) => {
-                            // B3：选中项数
-                            let sel = t.selected.map(|i| i + 1).unwrap_or(0);
+                            let dark = ui.visuals().dark_mode;
+                            // 左：路径弱色（BC 分区观感）
+                            let paths = format!(
+                                "{} ↔ {}",
+                                std::path::Path::new(&t.left)
+                                    .file_name()
+                                    .map(|s| s.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| t.left.clone()),
+                                std::path::Path::new(&t.right)
+                                    .file_name()
+                                    .map(|s| s.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| t.right.clone()),
+                            );
+                            ui.label(RichText::new(paths).weak());
+                            ui.separator();
                             if let Some(r) = &t.result {
                                 let s = &r.stats;
-                                ui.label(format!(
-                                    "{}  {} {}  {} {}  {} {}  {} {}  | 选中 {}/{}",
-                                    crate::i18n::t(crate::i18n::Key::StatsPanel),
-                                    crate::i18n::t(crate::i18n::Key::StatSame),
-                                    s.same,
-                                    crate::i18n::t(crate::i18n::Key::StatDelete),
-                                    s.left_only,
-                                    crate::i18n::t(crate::i18n::Key::StatInsert),
-                                    s.right_only,
-                                    crate::i18n::t(crate::i18n::Key::StatReplace),
-                                    s.differ,
-                                    sel,
-                                    t.flat.len(),
-                                ));
+                                // 彩色统计（同绿/仅左红/仅右绿/修改黄）
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::StatSame),
+                                        s.same
+                                    ))
+                                    .color(theme::stat_same(dark)),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::StatDelete),
+                                        s.left_only
+                                    ))
+                                    .color(theme::stat_delete(dark)),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::StatInsert),
+                                        s.right_only
+                                    ))
+                                    .color(theme::stat_insert(dark)),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::StatReplace),
+                                        s.differ
+                                    ))
+                                    .color(theme::stat_modify(dark)),
+                                );
+                                // 右对齐：选中项数
+                                let sel = t.selected.map(|i| i + 1).unwrap_or(0);
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "{} {}/{}",
+                                                crate::i18n::t(crate::i18n::Key::StatsSelected),
+                                                sel,
+                                                t.flat.len()
+                                            ))
+                                            .weak(),
+                                        );
+                                    },
+                                );
                             } else {
                                 ui.label(crate::i18n::t(crate::i18n::Key::Hint));
                             }
                         }
                         Tab::Csv(t) => {
+                            let dark = ui.visuals().dark_mode;
                             let s = t.stats();
-                            // B3：行列数
-                            let ncols = t.col_count();
-                            let nrows = t.row_count();
-                            ui.label(format!(
-                                "{} × {}  |  {}  {} {}  {} {}  {} {}  {} {}",
-                                nrows,
-                                ncols,
-                                crate::i18n::t(crate::i18n::Key::StatsPanel),
-                                crate::i18n::t(crate::i18n::Key::StatSame),
-                                s.same,
-                                crate::i18n::t(crate::i18n::Key::StatDelete),
-                                s.left_only,
-                                crate::i18n::t(crate::i18n::Key::StatInsert),
-                                s.right_only,
-                                crate::i18n::t(crate::i18n::Key::StatReplace),
-                                s.modified,
-                            ));
+                            // 左：路径弱色
+                            let bn = |p: &str| {
+                                std::path::Path::new(p)
+                                    .file_name()
+                                    .map(|x| x.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| p.to_string())
+                            };
+                            ui.label(
+                                RichText::new(format!("{} ↔ {}", bn(&t.left), bn(&t.right))).weak(),
+                            );
+                            ui.separator();
+                            ui.label(
+                                RichText::new(format!("{} × {}", t.row_count(), t.col_count()))
+                                    .weak(),
+                            );
+                            ui.separator();
+                            // 彩色统计
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} {}",
+                                    crate::i18n::t(crate::i18n::Key::StatSame),
+                                    s.same
+                                ))
+                                .color(theme::stat_same(dark)),
+                            );
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} {}",
+                                    crate::i18n::t(crate::i18n::Key::StatDelete),
+                                    s.left_only
+                                ))
+                                .color(theme::stat_delete(dark)),
+                            );
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} {}",
+                                    crate::i18n::t(crate::i18n::Key::StatInsert),
+                                    s.right_only
+                                ))
+                                .color(theme::stat_insert(dark)),
+                            );
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} {}",
+                                    crate::i18n::t(crate::i18n::Key::StatReplace),
+                                    s.modified
+                                ))
+                                .color(theme::stat_modify(dark)),
+                            );
                         }
                         Tab::Merge(t) => {
-                            ui.label(format!(
-                                "{}  {}",
-                                crate::i18n::t(crate::i18n::Key::ConflictsCount),
-                                t.view.conflicts,
-                            ));
+                            let dark = ui.visuals().dark_mode;
+                            // 左：路径弱色
+                            let bn = |p: &str| {
+                                std::path::Path::new(p)
+                                    .file_name()
+                                    .map(|x| x.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| p.to_string())
+                            };
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} ↔ {} ↔ {}",
+                                    bn(&t.base_path),
+                                    bn(&t.left_path),
+                                    bn(&t.right_path)
+                                ))
+                                .weak(),
+                            );
+                            ui.separator();
+                            // 冲突数（有冲突黄 / 无冲突绿）
+                            let (label, color) = if t.view.conflicts > 0 {
+                                (
+                                    format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::ConflictsCount),
+                                        t.view.conflicts
+                                    ),
+                                    theme::conflict_color(dark),
+                                )
+                            } else {
+                                (
+                                    crate::i18n::t(crate::i18n::Key::MergeAllResolved).to_string(),
+                                    theme::resolved_color(dark),
+                                )
+                            };
+                            ui.label(RichText::new(label).color(color));
                         }
                         Tab::Image(t) => {
+                            let dark = ui.visuals().dark_mode;
+                            let bn = |p: &str| {
+                                std::path::Path::new(p)
+                                    .file_name()
+                                    .map(|x| x.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| p.to_string())
+                            };
+                            ui.label(
+                                RichText::new(format!("{} ↔ {}", bn(&t.left), bn(&t.right))).weak(),
+                            );
+                            ui.separator();
                             let diff_frames = t.frame_diffs.iter().filter(|d| **d).count();
-                            ui.label(format!(
-                                "{}  {} {}/{}",
-                                crate::i18n::t(crate::i18n::Key::StatsPanel),
-                                crate::i18n::t(crate::i18n::Key::StatReplace),
-                                diff_frames,
-                                t.frame_diffs.len(),
-                            ));
+                            // 有差异红 / 无差异绿
+                            let (label, color) = if diff_frames > 0 {
+                                (
+                                    format!(
+                                        "{} {}/{}",
+                                        crate::i18n::t(crate::i18n::Key::StatReplace),
+                                        diff_frames,
+                                        t.frame_diffs.len()
+                                    ),
+                                    theme::img_diff(dark),
+                                )
+                            } else {
+                                (
+                                    format!(
+                                        "{} {}/{}",
+                                        crate::i18n::t(crate::i18n::Key::StatSame),
+                                        diff_frames,
+                                        t.frame_diffs.len()
+                                    ),
+                                    theme::img_same(dark),
+                                )
+                            };
+                            ui.label(RichText::new(label).color(color));
                         }
                         Tab::TextEdit(t) => {
-                            ui.label(format!(
-                                "{} | {} | {}",
-                                t.line_count(),
-                                t.char_count(),
-                                crate::i18n::t(crate::i18n::Key::OpenFile),
-                            ));
+                            // 左：路径弱色 + 行/字符数
+                            let bn = std::path::Path::new(&t.path)
+                                .file_name()
+                                .map(|x| x.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| t.path.clone());
+                            ui.label(RichText::new(bn).weak());
+                            ui.separator();
+                            ui.label(
+                                RichText::new(format!("{} | {}", t.line_count(), t.char_count()))
+                                    .weak(),
+                            );
                         }
                         Tab::Patch(t) => {
+                            let dark = ui.visuals().dark_mode;
                             if let Some(p) = &t.parsed {
-                                ui.label(format!(
-                                    "{} {}  {} {}",
-                                    crate::i18n::t(crate::i18n::Key::PatchAdded),
-                                    p.added,
-                                    crate::i18n::t(crate::i18n::Key::PatchRemoved),
-                                    p.removed,
-                                ));
+                                // 左：路径弱色 + 新增绿/删除红
+                                let bn = std::path::Path::new(&t.path)
+                                    .file_name()
+                                    .map(|x| x.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| t.path.clone());
+                                ui.label(RichText::new(bn).weak());
+                                ui.separator();
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::PatchAdded),
+                                        p.added
+                                    ))
+                                    .color(theme::stat_insert(dark)),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::PatchRemoved),
+                                        p.removed
+                                    ))
+                                    .color(theme::stat_delete(dark)),
+                                );
                             } else {
                                 ui.label(crate::i18n::t(crate::i18n::Key::PatchTitle));
                             }
                         }
                         Tab::FolderMerge(t) => {
+                            let dark = ui.visuals().dark_mode;
                             let s = t.stats;
-                            ui.label(format!(
-                                "{} | {} | {} | {}",
-                                crate::i18n::t(crate::i18n::Key::MergeStats),
-                                s.copied,
-                                s.merged,
-                                s.conflicts,
-                            ));
+                            // 左：路径弱色 + 彩色统计（复制蓝/合并黄/冲突红）
+                            let bn = |p: &str| {
+                                std::path::Path::new(p)
+                                    .file_name()
+                                    .map(|x| x.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| p.to_string())
+                            };
+                            ui.label(
+                                RichText::new(format!("{} ↔ {}", bn(&t.left), bn(&t.right))).weak(),
+                            );
+                            ui.separator();
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} {}",
+                                    crate::i18n::t(crate::i18n::Key::StatInsert),
+                                    s.copied
+                                ))
+                                .color(theme::plan_copy(dark)),
+                            );
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} {}",
+                                    crate::i18n::t(crate::i18n::Key::StatReplace),
+                                    s.merged
+                                ))
+                                .color(theme::plan_merge(dark)),
+                            );
+                            if s.conflicts > 0 {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::ConflictsCount),
+                                        s.conflicts
+                                    ))
+                                    .color(theme::img_diff(dark)),
+                                );
+                            }
                         }
                         Tab::Media(t) => {
+                            let dark = ui.visuals().dark_mode;
                             let bn = |p: &str| {
                                 std::path::Path::new(p)
                                     .file_name()
                                     .map(|s| s.to_string_lossy().into_owned())
                                     .unwrap_or_else(|| p.to_string())
                             };
-                            ui.label(format!(
-                                "{} ↔ {} | {} 个差异字段",
-                                bn(&t.left),
-                                bn(&t.right),
-                                t.diffs.len(),
-                            ));
+                            ui.label(
+                                RichText::new(format!("{} ↔ {}", bn(&t.left), bn(&t.right))).weak(),
+                            );
+                            ui.separator();
+                            // 差异字段数（有差异红/无差异绿）
+                            let (label, color) = if t.diffs.is_empty() {
+                                (
+                                    crate::i18n::t(crate::i18n::Key::StatSame).to_string(),
+                                    theme::img_same(dark),
+                                )
+                            } else {
+                                (
+                                    format!(
+                                        "{} {}",
+                                        crate::i18n::t(crate::i18n::Key::StatReplace),
+                                        t.diffs.len()
+                                    ),
+                                    theme::img_diff(dark),
+                                )
+                            };
+                            ui.label(RichText::new(label).color(color));
                         }
                     }
                 } else {

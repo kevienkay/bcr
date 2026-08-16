@@ -9,7 +9,7 @@
 use super::common::*;
 use crate::csvcmp::{align_tables, serialize_csv, RowStats, RowStatus, Table};
 use crate::i18n::{fmt, t, Key as I18nKey};
-use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
+use eframe::egui::{self, Pos2, Rect, Vec2};
 
 /// CSV 表格行过滤（对齐 BC 显示过滤器；CSV 无 Moved 状态）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,8 +45,8 @@ struct SortKey {
 
 /// CSV 表格标签页
 pub(crate) struct CsvTab {
-    left: String,
-    right: String,
+    pub(crate) left: String,
+    pub(crate) right: String,
     table_a: Option<Table>,
     table_b: Option<Table>,
     aligned: Vec<crate::csvcmp::AlignedRow>,
@@ -782,7 +782,11 @@ impl CsvTab {
                             }
                         });
                     // 重新加载
-                    if ui.button(t(I18nKey::Reload)).clicked() {
+                    if ui
+                        .button(format!("⟳ {}", t(I18nKey::Reload)))
+                        .on_hover_text(t(I18nKey::ReloadHint))
+                        .clicked()
+                    {
                         self.reload();
                     }
                     // P37-1c：隐藏相同列 / 列宽自适应
@@ -813,7 +817,7 @@ impl CsvTab {
         } // csvtab_tools 门控闭合
 
         if let Some(err) = &self.error {
-            ui.colored_label(Color32::from_rgb(235, 90, 90), err);
+            ui.colored_label(super::theme::error_color(), err);
             return;
         }
         let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
@@ -861,9 +865,9 @@ impl CsvTab {
         egui::Panel::top("csvtab_header").show(ui, |ui| {
             // P31 表头底色：与内容区区分
             let header_bg = if ui.visuals().dark_mode {
-                Color32::from_rgb(40, 44, 52)
+                super::theme::column_head_bg(true)
             } else {
-                Color32::from_rgb(236, 238, 242)
+                super::theme::column_head_bg(false)
             };
             let hrect = ui.max_rect();
             ui.painter().rect_filled(hrect, 0.0, header_bg);
@@ -949,11 +953,11 @@ impl CsvTab {
                         // P32-A4：行右键菜单（复制路径/打开文件）+ P37-1c 复制单元格至右侧
                         let (lp, rp) = (self.left.clone(), self.right.clone());
                         resp.context_menu(|ui| {
-                            if ui.button("复制左侧路径").clicked() {
+                            if ui.button(t(I18nKey::CopyLeftPath)).clicked() {
                                 ui.ctx().copy_text(lp.clone());
                                 ui.close();
                             }
-                            if ui.button("复制右侧路径").clicked() {
+                            if ui.button(t(I18nKey::CopyRightPath)).clicked() {
                                 ui.ctx().copy_text(rp.clone());
                                 ui.close();
                             }
@@ -985,11 +989,11 @@ impl CsvTab {
                                 ui.close();
                             }
                             ui.separator();
-                            if ui.button("打开左侧文件").clicked() {
+                            if ui.button(t(I18nKey::OpenLeftFile)).clicked() {
                                 super::common::open_with_system_app(&lp);
                                 ui.close();
                             }
-                            if ui.button("打开右侧文件").clicked() {
+                            if ui.button(t(I18nKey::OpenRightFile)).clicked() {
                                 super::common::open_with_system_app(&rp);
                                 ui.close();
                             }

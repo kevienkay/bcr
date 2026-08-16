@@ -7,7 +7,7 @@
 
 use super::common::*;
 use crate::i18n::{fmt, t, Key as I18nKey};
-use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
+use eframe::egui::{self, Key, Pos2, Rect, Vec2};
 
 /// P42-1：转换文件模式（BC Convert File）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,7 +48,7 @@ pub fn convert_content(content: &str, mode: ConvertMode) -> String {
 
 /// 文本编辑标签页
 pub struct TextEditTab {
-    path: String,
+    pub(crate) path: String,
     /// 编辑缓冲区（测试直接读写）
     pub(crate) content: String,
     error: Option<String>,
@@ -180,7 +180,7 @@ impl TextEditTab {
                 self.redo_stack.clear();
             }
             None => {
-                self.error = Some("无法读取系统剪贴板（非文本内容或不可用）".to_string());
+                self.error = Some(t(I18nKey::ClipboardUnavailable).to_string());
             }
         }
     }
@@ -550,7 +550,7 @@ impl TextEditTab {
                 .collapsible(false)
                 .resizable(false)
                 .show(ui.ctx(), |ui| {
-                    ui.colored_label(Color32::from_rgb(240, 110, 110), err);
+                    ui.colored_label(super::theme::error_color(), err);
                     if ui.button(t(I18nKey::Close)).clicked() {
                         self.error = None;
                     }

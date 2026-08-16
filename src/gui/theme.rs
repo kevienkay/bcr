@@ -119,6 +119,237 @@ pub fn error_color() -> Color32 {
     Color32::from_rgb(240, 110, 110)
 }
 
+// ===== P51 批次 1：语义化颜色收敛（替代各 tab 散落硬编码）=====
+
+/// BC 状态徽标：孤儿（仅左/仅右）紫
+pub fn status_orphan() -> Color32 {
+    Color32::from_rgb(83, 44, 199)
+}
+/// BC 状态徽标：差异/移动红
+pub fn status_differ() -> Color32 {
+    Color32::from_rgb(246, 39, 16)
+}
+/// 文件信息头背景（DiffTab 头部两栏）
+pub fn head_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(38)
+    } else {
+        Color32::from_gray(230)
+    }
+}
+/// 文件信息头前景（蓝色系，BC 观感）
+pub fn head_fg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(150, 190, 240)
+    } else {
+        Color32::from_rgb(60, 110, 190)
+    }
+}
+/// 目录名/文件夹蓝（DirTab 树、主页标题）
+pub fn folder_color(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(140, 180, 235)
+    } else {
+        Color32::from_rgb(60, 110, 190)
+    }
+}
+/// 列头背景（DirTab 名称/大小/时间列头；浅色对标 BC #fbfcfc）
+pub fn column_head_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(42)
+    } else {
+        Color32::from_rgb(251, 252, 252)
+    }
+}
+/// 统计色：相同（绿）——全局状态栏与 DiffTab 底部统计栏统一
+pub fn stat_same(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(120, 190, 120)
+    } else {
+        Color32::from_rgb(50, 140, 80)
+    }
+}
+/// 统计色：仅左/删除（红）
+pub fn stat_delete(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(220, 120, 120)
+    } else {
+        Color32::from_rgb(190, 70, 70)
+    }
+}
+/// 统计色：仅右/插入（绿）
+pub fn stat_insert(dark: bool) -> Color32 {
+    stat_same(dark)
+}
+/// 统计色：修改（黄）
+pub fn stat_modify(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(220, 190, 110)
+    } else {
+        Color32::from_rgb(170, 130, 40)
+    }
+}
+/// 行号栏（gutter）底色
+pub fn gutter_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(38)
+    } else {
+        Color32::from_gray(238)
+    }
+}
+/// 左右面板空隙（连接线区）底色，比 gutter 略深一档
+pub fn mid_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(24)
+    } else {
+        Color32::from_gray(244)
+    }
+}
+/// 无差异行空隙垂直分隔线
+pub fn mid_sep(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(48)
+    } else {
+        Color32::from_gray(210)
+    }
+}
+/// 字符列标尺底色
+pub fn ruler_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(32)
+    } else {
+        Color32::from_gray(244)
+    }
+}
+/// 忽略行弱化底色
+pub fn ignored_dim(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(42)
+    } else {
+        Color32::from_gray(226)
+    }
+}
+/// 折叠行提示条底色
+pub fn fold_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(26)
+    } else {
+        Color32::from_gray(240)
+    }
+}
+/// 主页卡片底色
+pub fn card_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(36)
+    } else {
+        Color32::from_gray(250)
+    }
+}
+/// 标签栏选中标签底色
+pub fn tab_selected_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(52, 58, 70)
+    } else {
+        Color32::from_rgb(228, 232, 240)
+    }
+}
+/// 隔离提示条底色（黄褐系）
+pub fn banner_isolate_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(46, 42, 20)
+    } else {
+        Color32::from_rgb(255, 248, 210)
+    }
+}
+/// 对齐提示条底色（青绿系）
+pub fn banner_align_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(22, 46, 42)
+    } else {
+        Color32::from_rgb(215, 248, 240)
+    }
+}
+/// 合并冲突标记（未解决，黄）
+pub fn conflict_color(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(240, 180, 60)
+    } else {
+        Color32::from_rgb(200, 140, 40)
+    }
+}
+/// 合并已解决标记（绿）
+pub fn resolved_color(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(110, 230, 120)
+    } else {
+        Color32::from_rgb(60, 160, 80)
+    }
+}
+/// 图片差异/错误红
+pub fn img_diff(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(230, 80, 80)
+    } else {
+        Color32::from_rgb(200, 60, 60)
+    }
+}
+/// 图片相同绿
+pub fn img_same(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(90, 190, 90)
+    } else {
+        Color32::from_rgb(50, 150, 70)
+    }
+}
+/// 同步消息提示（黄）
+pub fn sync_msg_color(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(230, 180, 80)
+    } else {
+        Color32::from_rgb(200, 150, 50)
+    }
+}
+/// 补丁行/计划行提示（黄）
+pub fn plan_color(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(230, 170, 60)
+    } else {
+        Color32::from_rgb(200, 140, 40)
+    }
+}
+/// 选中叠加色（文本选区/补丁选中行，蓝色半透明）
+pub fn selection_overlay() -> Color32 {
+    Color32::from_rgba_unmultiplied(86, 148, 240, 60)
+}
+/// 同步计划：复制操作（蓝）
+pub fn plan_copy(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(80, 160, 255)
+    } else {
+        Color32::from_rgb(40, 100, 220)
+    }
+}
+/// 同步计划：合并操作（黄）
+pub fn plan_merge(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(200, 160, 60)
+    } else {
+        Color32::from_rgb(170, 130, 40)
+    }
+}
+/// 图片帧：普通帧边框（灰）
+pub fn frame_normal(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(90)
+    } else {
+        Color32::from_gray(140)
+    }
+}
+/// 合并冲突行 base 侧底色（灰红半透明）
+pub fn merge_conflict_bg() -> Color32 {
+    Color32::from_rgba_unmultiplied(120, 90, 90, 60)
+}
+
 /// 对某主题应用统一样式（间距/圆角/选中态/面板层次）
 fn apply_style(style: &mut egui::Style, dark: bool) {
     use egui::epaint::CornerRadius;

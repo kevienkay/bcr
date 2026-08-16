@@ -5,7 +5,7 @@
 
 use crate::i18n::{t, Key as I18nKey};
 use crate::imgcmp::ImgPair;
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 use image::RgbaImage;
 
 /// GPU 纹理最大边长（超限先缩小再转纹理，统计仍基于原始像素）
@@ -514,9 +514,10 @@ impl ImageTab {
                                 s.total_pixels,
                                 s.diff_ratio * 100.0
                             ))
-                            .color(Color32::from_rgb(230, 80, 80))
+                            .color(super::theme::img_diff(ui.visuals().dark_mode))
                         } else {
-                            RichText::new("完全相同").color(Color32::from_rgb(90, 190, 90))
+                            RichText::new("完全相同")
+                                .color(super::theme::img_same(ui.visuals().dark_mode))
                         };
                         ui.separator();
                         ui.label(st);
@@ -544,7 +545,7 @@ impl ImageTab {
         if let Some(err) = &self.error {
             egui::CentralPanel::default().show(ui, |ui| {
                 ui.colored_label(
-                    Color32::from_rgb(230, 80, 80),
+                    super::theme::error_color(),
                     RichText::new(format!("错误: {}", err)).size(14.0),
                 );
             });
@@ -589,7 +590,7 @@ impl ImageTab {
                                     ui.monospace(l);
                                     ui.monospace(r);
                                 } else {
-                                    let c = Color32::from_rgb(226, 110, 110);
+                                    let c = super::theme::diff_delete(ui.visuals().dark_mode);
                                     ui.colored_label(c, l);
                                     ui.colored_label(c, r);
                                 }
@@ -678,29 +679,29 @@ impl ImageTab {
                         let (lp, rp) = (self.left.clone(), self.right.clone());
                         for resp in [rl, rr] {
                             resp.context_menu(|ui| {
-                                if ui.button("复制左侧路径").clicked() {
+                                if ui.button(t(I18nKey::CopyLeftPath)).clicked() {
                                     ui.ctx().copy_text(lp.clone());
                                     ui.close();
                                 }
-                                if ui.button("复制右侧路径").clicked() {
+                                if ui.button(t(I18nKey::CopyRightPath)).clicked() {
                                     ui.ctx().copy_text(rp.clone());
                                     ui.close();
                                 }
                                 ui.separator();
-                                if ui.button("打开所在位置（左）").clicked() {
+                                if ui.button(t(I18nKey::RevealLeft)).clicked() {
                                     super::common::reveal_in_file_manager(&lp);
                                     ui.close();
                                 }
-                                if ui.button("打开所在位置（右）").clicked() {
+                                if ui.button(t(I18nKey::RevealRight)).clicked() {
                                     super::common::reveal_in_file_manager(&rp);
                                     ui.close();
                                 }
                                 ui.separator();
-                                if ui.button("系统打开（左）").clicked() {
+                                if ui.button(t(I18nKey::SystemOpenLeft)).clicked() {
                                     super::common::open_with_system_app(&lp);
                                     ui.close();
                                 }
-                                if ui.button("系统打开（右）").clicked() {
+                                if ui.button(t(I18nKey::SystemOpenRight)).clicked() {
                                     super::common::open_with_system_app(&rp);
                                     ui.close();
                                 }
@@ -765,11 +766,11 @@ impl ImageTab {
                             // 差异帧红色边框，当前帧蓝色边框（优先差异色）
                             let is_diff = self.frame_diffs.get(i).copied().unwrap_or(false);
                             let stroke_color = if is_diff {
-                                Color32::from_rgb(230, 80, 80)
+                                super::theme::img_diff(ui.visuals().dark_mode)
                             } else if i == sel {
-                                Color32::from_rgb(80, 160, 255)
+                                super::theme::plan_copy(ui.visuals().dark_mode)
                             } else {
-                                Color32::from_gray(90)
+                                super::theme::frame_normal(ui.visuals().dark_mode)
                             };
                             let width = if is_diff || i == sel { 2.5 } else { 1.0 };
                             ui.painter().rect_stroke(
