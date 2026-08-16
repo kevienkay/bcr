@@ -98,10 +98,10 @@ fn snap_app_difftab_light() {
     let (_d, l, r) = write_pair("snap-diff-l", SAMPLE_L, SAMPLE_R);
     let mut h = Harness::builder()
         .with_size(egui::vec2(1360.0, 860.0))
+        .with_theme(egui::Theme::Light)
         .build_eframe(|cc| {
             install_cjk_fonts(&cc.egui_ctx);
             theme::apply(&cc.egui_ctx);
-            cc.egui_ctx.set_theme(egui::Theme::Light);
             let mut app = DiffApp::new(Settings::default());
             let mut t = crate::gui::difftab::DiffTab::new();
             t.load_pair(&l, &r, ViewOptions::default());

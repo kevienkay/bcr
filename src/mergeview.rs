@@ -287,11 +287,24 @@ pub fn render_merged(view: &MergeView, label_l: &str, label_r: &str) -> (Vec<Str
                                 }
                             }
                             // 行级未解决 → 跟随块 resolution（未设行取整块语义）
-                            _ => {
-                                if let Some(l) = blk.left.get(i) {
-                                    out.push(l.clone());
+                            _ => match blk.resolution {
+                                Resolution::Right => {
+                                    if let Some(r) = blk.right.get(i) {
+                                        out.push(r.clone());
+                                    }
                                 }
-                            }
+                                Resolution::Base => {
+                                    if let Some(b) = blk.base.get(i) {
+                                        out.push(b.clone());
+                                    }
+                                }
+                                // Auto/Left/顺序合并 → 默认取左（与块级 Auto 默认一致）
+                                _ => {
+                                    if let Some(l) = blk.left.get(i) {
+                                        out.push(l.clone());
+                                    }
+                                }
+                            },
                         }
                     }
                 }
@@ -453,6 +466,32 @@ mod tests {
         let (out, unresolved) = render_merged(&v, "LEFT", "RIGHT");
         assert_eq!(unresolved, 0);
         assert_eq!(out, vec!["L1", "l2", "l3", "l4", "R5"]);
+    }
+
+    #[test]
+    fn render_merged_unresolved_line_follows_block_resolution() {
+        // 冲突块：第 1 行行级取右，第 2 行未解决；块 resolution=Right
+        // → 未解决行应跟随块 resolution 取右（回归：此前恒取左）
+        let mut v = build_merge_view(
+            "b1\nb2\n",
+            "L1\nL2\n",
+            "R1\nR2\n",
+        );
+        assert_eq!(v.conflicts, 1);
+        let bi = v.conflict_block_indices[0];
+        v.blocks[bi].resolution = Resolution::Right;
+        v.blocks[bi].line_res = vec![Some(Resolution::Right), None];
+        let (out, unresolved) = render_merged(&v, "LEFT", "RIGHT");
+        assert_eq!(unresolved, 0);
+        assert_eq!(out, vec!["R1", "R2"], "未解决行应跟随块级取右");
+
+        // 块 resolution=Base 时同样跟随
+        let mut v2 = build_merge_view("b1\nb2\n", "L1\nL2\n", "R1\nR2\n");
+        let bi2 = v2.conflict_block_indices[0];
+        v2.blocks[bi2].resolution = Resolution::Base;
+        v2.blocks[bi2].line_res = vec![Some(Resolution::Left), None];
+        let (out2, _) = render_merged(&v2, "LEFT", "RIGHT");
+        assert_eq!(out2, vec!["L1", "b2"], "未解决行应跟随块级取 base");
     }
 
     #[test]
