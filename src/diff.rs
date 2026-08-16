@@ -94,14 +94,11 @@ pub fn run(args: &DiffArgs) -> i32 {
     // Profile 合并：忽略选项默认值来自 Profile，命令显式参数优先
     let merged = merge_profile(args);
     let args = &merged;
-    let left = match read_input(&args.left) {
-        Ok(s) => {
-            if args.convert {
-                normalize_eol(&s)
-            } else {
-                s
-            }
-        }
+    // 原始文本（--convert 之前）用于计算 No newline 标记：
+    // --convert 会把末尾 CR 转成 LF，若按转换后文本判定会凭空出现"行尾换行差异"，
+    // 与 --convert 归一化行尾的语义冲突（两侧原始行尾风格不同 ≠ 内容不同）。
+    let left_raw = match read_input(&args.left) {
+        Ok(s) => s,
         Err(ReadErr::Binary) => {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.left]));
             return 2;
@@ -121,14 +118,8 @@ pub fn run(args: &DiffArgs) -> i32 {
             return 2;
         }
     };
-    let right = match read_input(&args.right) {
-        Ok(s) => {
-            if args.convert {
-                normalize_eol(&s)
-            } else {
-                s
-            }
-        }
+    let right_raw = match read_input(&args.right) {
+        Ok(s) => s,
         Err(ReadErr::Binary) => {
             eprintln!("bcr: {}", fmt(Key::BinaryFile, &[&args.right]));
             return 2;
@@ -147,6 +138,19 @@ pub fn run(args: &DiffArgs) -> i32 {
             );
             return 2;
         }
+    };
+    // 文件是否不以换行结尾（GNU diff 的 No newline 标记；按原文判定）
+    let no_newline_l = !left_raw.ends_with('\n') && !left_raw.is_empty();
+    let no_newline_r = !right_raw.ends_with('\n') && !right_raw.is_empty();
+    let left = if args.convert {
+        normalize_eol(&left_raw)
+    } else {
+        left_raw
+    };
+    let right = if args.convert {
+        normalize_eol(&right_raw)
+    } else {
+        right_raw
     };
 
     let algo = match args.algo.as_str() {
@@ -211,20 +215,57 @@ pub fn run(args: &DiffArgs) -> i32 {
                 (tag.to_string(), r0.start, r0.end, r1.start, r1.end)
             })
             .collect();
-        let v = crate::jsonout::envelope_diff(&args.left, &args.right, &json_ops);
+        let v = crate::jsonout::envelope_diff(
+            &args.left,
+            &args.right,
+            &json_ops,
+            no_newline_l,
+            no_newline_r,
+        );
         println!("{}", serde_json::to_string(&v).unwrap_or_default());
-        let has_diff = json_ops.iter().any(|(t, ..)| t != "equal");
+        let has_diff =
+            json_ops.iter().any(|(t, ..)| t != "equal") || no_newline_l != no_newline_r;
         return if has_diff { 1 } else { 0 };
     }
 
-    // capture_diff_slices 对完全相同的输入返回全 Equal op，而非空 vec，需显式判断
+    // capture_diff_slices 对完全相同的输入返回全 Equal op，而非空 vec，需显式判断。
+    // 注意：仅行尾换行不同（一侧缺结尾换行）也是差异（GNU diff 兼容），
+    // 此时把最后一行合成为 Replace op 渲染并输出 \ No newline 标记，退出码 1。
     if ops.iter().all(|op| op.tag() == similar::DiffTag::Equal) {
-        return 0; // 无差异
+        let newline_only_diff = no_newline_l != no_newline_r;
+        if !newline_only_diff {
+            return 0; // 无差异
+        }
+        if !lines_l.is_empty() && !lines_r.is_empty() {
+            let last = lines_l.len() - 1;
+            let fake = vec![
+                similar::DiffOp::Equal {
+                    old_index: 0,
+                    new_index: 0,
+                    len: last,
+                },
+                similar::DiffOp::Replace {
+                    old_index: last,
+                    old_len: 1,
+                    new_index: last,
+                    new_len: 1,
+                },
+            ];
+            render::render_unified(
+                &fake,
+                &lines_l,
+                &lines_r,
+                &label_l,
+                &label_r,
+                color,
+                syntax,
+                no_newline_l,
+                no_newline_r,
+            );
+        }
+        return 1;
     }
 
-    // 文件是否不以换行结尾（GNU diff 的 No newline 标记）
-    let no_newline_l = !left.ends_with('\n') && !left.is_empty();
-    let no_newline_r = !right.ends_with('\n') && !right.is_empty();
     render::render_unified(
         &ops,
         &lines_l,
@@ -446,6 +487,54 @@ mod tests {
         a.left = "/nonexistent/bcr-test-l".into();
         a.right = "/nonexistent/bcr-test-r".into();
         assert_eq!(run(&a), 2);
+    }
+
+    #[test]
+    fn run_newline_only_diff_exit_one() {
+        // 仅行尾换行不同（左侧无结尾换行、右侧有）：GNU diff 兼容，退出码应为 1
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "a\nb").unwrap(); // 无结尾换行
+        fs::write(&r, "a\nb\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        assert_eq!(run(&a), 1, "行尾换行差异应退出码 1");
+    }
+
+    #[test]
+    fn run_newline_only_diff_json_has_differences() {
+        // --json：仅行尾换行差异 → has_differences=true 且退出码 1（契约含 no_newline 字段）
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "a\nb").unwrap();
+        fs::write(&r, "a\nb\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        a.json = true;
+        // run 的 json 分支 println 输出到 stdout（测试日志可见），退出码可断言
+        let code = run(&a);
+        assert_eq!(code, 1);
+    }
+
+    #[test]
+    fn run_same_newline_no_diff() {
+        // 两侧都有（或都无）结尾换行且行一致 → 无差异
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "a\nb\n").unwrap();
+        fs::write(&r, "a\nb\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        assert_eq!(run(&a), 0);
+        fs::write(&l, "a\nb").unwrap();
+        fs::write(&r, "a\nb").unwrap();
+        assert_eq!(run(&a), 0);
     }
 
     #[test]

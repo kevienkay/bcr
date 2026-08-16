@@ -258,10 +258,14 @@ pub fn envelope_imgcmp(
 /// diff 结果 → JSON 契约(diff.v1)
 /// ops 为 (tag, old_start, old_end, new_start, new_end) 五元组，
 /// tag ∈ equal/delete/insert/replace，range 为左/右行号区间（0 基，半开）。
+/// no_newline_l/no_newline_r：对应侧文件是否不以换行结尾（GNU diff 兼容：
+/// 仅行尾换行不同也是差异，has_differences 与退出码需一并反映）。
 pub fn envelope_diff(
     left: &str,
     right: &str,
     ops: &[(String, usize, usize, usize, usize)],
+    no_newline_l: bool,
+    no_newline_r: bool,
 ) -> Value {
     envelope(
         "diff.v1",
@@ -276,7 +280,12 @@ pub fn envelope_diff(
                     "new_range": [ns, ne],
                 }))
                 .collect::<Vec<_>>(),
-            "has_differences": ops.iter().any(|(t, ..)| t != "equal"),
+            "no_newline": {
+                "left": no_newline_l,
+                "right": no_newline_r,
+            },
+            "has_differences": ops.iter().any(|(t, ..)| t != "equal")
+                || no_newline_l != no_newline_r,
         }),
     )
 }
@@ -612,18 +621,29 @@ mod tests {
             ("equal".to_string(), 0usize, 2usize, 0usize, 2usize),
             ("replace".to_string(), 2usize, 3usize, 2usize, 3usize),
         ];
-        let v = envelope_diff("/l.txt", "/r.txt", &ops);
+        let v = envelope_diff("/l.txt", "/r.txt", &ops, false, false);
         assert_eq!(v["schema"], "diff.v1");
         assert_eq!(v["result"]["has_differences"], true);
         assert_eq!(v["result"]["ops"][1]["tag"], "replace");
         assert_eq!(v["result"]["ops"][0]["old_range"][0], 0);
+        assert_eq!(v["result"]["no_newline"]["left"], false);
     }
 
     #[test]
     fn diff_envelope_no_difference() {
         let ops = vec![("equal".to_string(), 0usize, 2usize, 0usize, 2usize)];
-        let v = envelope_diff("/l.txt", "/r.txt", &ops);
+        let v = envelope_diff("/l.txt", "/r.txt", &ops, false, false);
         assert_eq!(v["result"]["has_differences"], false);
+    }
+
+    #[test]
+    fn diff_envelope_newline_only_difference() {
+        // 仅行尾换行不同（左侧无结尾换行、右侧有）→ has_differences=true（GNU diff 兼容）
+        let ops = vec![("equal".to_string(), 0usize, 2usize, 0usize, 2usize)];
+        let v = envelope_diff("/l.txt", "/r.txt", &ops, true, false);
+        assert_eq!(v["result"]["has_differences"], true);
+        assert_eq!(v["result"]["no_newline"]["left"], true);
+        assert_eq!(v["result"]["no_newline"]["right"], false);
     }
 
     #[test]
