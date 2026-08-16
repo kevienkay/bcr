@@ -1663,7 +1663,8 @@ impl eframe::App for DiffApp {
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new(icon).size(14.0).color(icon_c));
-                                ui.selectable_label(selected, text);
+                                // 选中态视觉由 selectable_label 提供，点击交给外层 Frame interact
+                                let _ = ui.selectable_label(selected, text);
                             });
                         })
                         .response
