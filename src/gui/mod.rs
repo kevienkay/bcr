@@ -1236,8 +1236,9 @@ impl DiffApp {
                                     .show(ui, |ui| {
                                         for (name, s) in &sessions.sessions {
                                             // P51-4：会话列表项 hover 高亮（Frame 包裹 + 半透明底色）
+                                            // P53-2：类型图标（会话均为目录对比 → 📁，与主页卡片同风格）
                                             let label = format!(
-                                                "▶ {}\n{}",
+                                                "{}\n{}",
                                                 name,
                                                 if s.left.len() + s.right.len() > 60 {
                                                     format!(
@@ -1252,11 +1253,18 @@ impl DiffApp {
                                                     format!("{} ↔ {}", s.left, s.right)
                                                 }
                                             );
+                                            let icon_c = theme::card_icon_colors()[1];
                                             let row = egui::Frame::new()
                                                 .corner_radius(4.0)
                                                 .inner_margin(egui::Margin::symmetric(8, 4))
                                                 .show(ui, |ui| {
                                                     ui.horizontal(|ui| {
+                                                        ui.label(
+                                                            RichText::new("📁")
+                                                                .size(12.0)
+                                                                .color(icon_c),
+                                                        );
+                                                        ui.add_space(2.0);
                                                         let resp = ui
                                                             .add(
                                                                 egui::Button::new(
