@@ -130,34 +130,32 @@ pub fn decode(data: &[u8]) -> TextFile {
     if let Ok(name) = std::env::var("BCR_ENCODING") {
         if !name.is_empty() {
             if let Some(kind) = kind_for_label(&name) {
-                return decode_with(kind, data);
+                return decode_with(kind, data, false);
             }
         }
     }
 
     // 1. BOM 嗅探（注意 UTF-32LE 的 BOM 是 FF FE 00 00，须先于 UTF-16LE 判断）
     if data.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        let mut tf = decode_with(EncodingKind::Utf8, &data[3..]);
-        tf.had_bom = true;
-        return tf;
+        return decode_with(EncodingKind::Utf8, &data[3..], true);
     }
     if data.starts_with(&[0xFF, 0xFE, 0x00, 0x00]) {
-        return decode_with(EncodingKind::Utf32Le, &data[4..]);
+        return decode_with(EncodingKind::Utf32Le, &data[4..], true);
     }
     if data.starts_with(&[0x00, 0x00, 0xFE, 0xFF]) {
-        return decode_with(EncodingKind::Utf32Be, &data[4..]);
+        return decode_with(EncodingKind::Utf32Be, &data[4..], true);
     }
     if data.starts_with(&[0xFF, 0xFE]) {
-        return decode_with(EncodingKind::Utf16Le, &data[2..]);
+        return decode_with(EncodingKind::Utf16Le, &data[2..], true);
     }
     if data.starts_with(&[0xFE, 0xFF]) {
-        return decode_with(EncodingKind::Utf16Be, &data[2..]);
+        return decode_with(EncodingKind::Utf16Be, &data[2..], true);
     }
 
     // 2. UTF-16 无 BOM 嗅探（必须在严格 UTF-8 验证之前：UTF-16 的 ASCII 内容
     //    含 NUL 字节，而 NUL 是合法 UTF-8 码点，先验 UTF-8 会把它误吞）
     if let Some(kind) = sniff_utf16(data) {
-        return decode_with(kind, data);
+        return decode_with(kind, data, false);
     }
     // 2.5. UTF-16 无 BOM 试解码兜底（NUL 分布嗅探对中文等高字节非零内容失效：
     //    汉字 UTF-16 高字节多在 0x4E-0x9F，NUL 稀疏；此时 chardetng 兜底会把
@@ -181,14 +179,14 @@ pub fn decode(data: &[u8]) -> TextFile {
 
     // 4. 严格 UTF-8
     if std::str::from_utf8(data).is_ok() {
-        return decode_with(EncodingKind::Utf8, data);
+        return decode_with(EncodingKind::Utf8, data, false);
     }
 
     // 5. chardetng 多字节编码检测（GBK/Big5/Shift_JIS 等）
     let mut det = chardetng::EncodingDetector::new();
     det.feed(data, true);
     let enc = det.guess(None, true);
-    let tf = decode_with(EncodingKind::Other(enc), data);
+    let tf = decode_with(EncodingKind::Other(enc), data, false);
     // 替换字符过多说明猜错，退回 Latin-1 保底
     let repl = tf.text.chars().filter(|&c| c == '\u{FFFD}').count();
     let total = tf.text.chars().count().max(1);
@@ -197,11 +195,13 @@ pub fn decode(data: &[u8]) -> TextFile {
     }
 
     // 6. Latin-1 保底（永不失败）
-    decode_with(EncodingKind::Other(encoding_rs::WINDOWS_1252), data)
+    decode_with(EncodingKind::Other(encoding_rs::WINDOWS_1252), data, false)
 }
 
-/// 用指定编码解码（无 BOM 处理）
-fn decode_with(kind: EncodingKind, data: &[u8]) -> TextFile {
+/// 用指定编码解码（无 BOM 处理）。`had_bom` 由调用点显式给出：
+/// 只有真正从数据中剥离了 BOM 的分支才为 true，避免无 BOM 的 UTF-16/32
+/// 文件被误标（GUI 文件头误显示 BOM、保存时凭空补 BOM 破坏文件）。
+fn decode_with(kind: EncodingKind, data: &[u8], had_bom: bool) -> TextFile {
     let text = match kind {
         EncodingKind::Utf32Le => decode_utf32(data, true),
         EncodingKind::Utf32Be => decode_utf32(data, false),
@@ -214,13 +214,6 @@ fn decode_with(kind: EncodingKind, data: &[u8]) -> TextFile {
             }
         }
     };
-    let had_bom = matches!(
-        kind,
-        EncodingKind::Utf16Le
-            | EncodingKind::Utf16Be
-            | EncodingKind::Utf32Le
-            | EncodingKind::Utf32Be
-    );
     TextFile {
         text,
         encoding: kind,
@@ -335,7 +328,7 @@ fn try_decode_utf16(data: &[u8]) -> Option<TextFile> {
         if readable * 100 < total * 80 {
             continue;
         }
-        return Some(decode_with(kind, data));
+        return Some(decode_with(kind, data, false));
     }
     None
 }
@@ -788,7 +781,7 @@ mod tests {
         // 直接验证 kind_for_label + decode_with 组合，避免 set_var 污染并行测试
         let kind = kind_for_label("gbk").unwrap();
         let data = [0xD6, 0xD0, 0xCE, 0xC4];
-        let tf = decode_with(kind, &data);
+        let tf = decode_with(kind, &data, false);
         assert_eq!(tf.text, "中文");
     }
 
@@ -807,7 +800,7 @@ mod tests {
     #[test]
     fn gbk_roundtrip_via_label() {
         let kind = kind_for_label("gbk").unwrap();
-        let tf = decode_with(kind, &[0xD6, 0xD0, 0xCE, 0xC4]);
+        let tf = decode_with(kind, &[0xD6, 0xD0, 0xCE, 0xC4], false);
         let out = encode_back(&tf, "中文");
         assert_eq!(out, [0xD6, 0xD0, 0xCE, 0xC4]);
     }
@@ -856,6 +849,61 @@ mod repro {
         assert!(!tf.is_binary);
         assert_eq!(tf.text, "这是一行测试文本\n");
         assert_eq!(tf.encoding.name(), "GBK");
+    }
+
+    #[test]
+    fn utf16le_no_bom_not_marked_had_bom() {
+        // ASCII UTF-16LE 无 BOM（NUL 分布嗅探路径）：不得误标 had_bom
+        let data: Vec<u8> = "hello world\n".bytes().flat_map(|b| [b, 0x00]).collect();
+        let tf = decode(&data);
+        assert!(!tf.is_binary);
+        assert_eq!(tf.encoding.name(), "UTF-16LE");
+        assert!(!tf.had_bom, "无 BOM 文件不应标记 had_bom");
+    }
+
+    #[test]
+    fn utf16le_cn_no_bom_not_marked_had_bom() {
+        // 中文 UTF-16LE 无 BOM（试解码兜底路径）：同样不得误标
+        let mut data = Vec::new();
+        for u in "这是一行测试文本\n".encode_utf16() {
+            data.push((u & 0xFF) as u8);
+            data.push((u >> 8) as u8);
+        }
+        let tf = decode(&data);
+        assert_eq!(tf.encoding.name(), "UTF-16LE");
+        assert!(!tf.had_bom);
+    }
+
+    #[test]
+    fn encode_back_roundtrip_utf16le_no_bom() {
+        // 关键回归：无 BOM UTF-16LE 编辑保存后不得凭空多出 BOM（字节级不变）
+        let data: Vec<u8> = "hello world\n".bytes().flat_map(|b| [b, 0x00]).collect();
+        let tf = decode(&data);
+        let out = encode_back(&tf, "hello world\n");
+        assert_eq!(out, data, "无 BOM UTF-16LE 保存后应保持无 BOM");
+    }
+
+    #[test]
+    fn utf16le_cn_roundtrip_no_bom_added() {
+        let mut data = Vec::new();
+        for u in "这是一行测试文本\n".encode_utf16() {
+            data.push((u & 0xFF) as u8);
+            data.push((u >> 8) as u8);
+        }
+        let tf = decode(&data);
+        let out = encode_back(&tf, "这是一行测试文本\n");
+        assert_eq!(out, data, "中文 UTF-16LE 无 BOM round-trip 应字节级不变");
+    }
+
+    #[test]
+    fn bom_still_marked_when_present() {
+        // 带 BOM 的 UTF-16LE 仍然标记 had_bom（不能误伤）
+        let mut data = vec![0xFF, 0xFE];
+        data.extend_from_slice(&[b'h', 0x00, b'i', 0x00]);
+        let tf = decode(&data);
+        assert!(tf.had_bom);
+        let out = encode_back(&tf, "hi");
+        assert_eq!(out, data);
     }
 }
 
