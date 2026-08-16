@@ -110,12 +110,7 @@ pub fn empty_state(
         ui.painter().rect_filled(
             rect,
             14.0,
-            Color32::from_rgba_unmultiplied(
-                icon_color.r(),
-                icon_color.g(),
-                icon_color.b(),
-                38,
-            ),
+            Color32::from_rgba_unmultiplied(icon_color.r(), icon_color.g(), icon_color.b(), 38),
         );
         ui.painter().text(
             rect.center(),

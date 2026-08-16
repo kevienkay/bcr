@@ -191,4 +191,3 @@ fn snap_app_mergetab() {
         });
     save(&mut h, "app_mergetab");
 }
-

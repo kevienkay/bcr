@@ -1383,8 +1383,7 @@ impl DiffApp {
                                             ui.horizontal(|ui| {
                                                 // P52-1：彩色图标底片——半透明品牌色圆角块 + 同色符号。
                                                 // egui 无彩色 emoji 字形（NotoEmoji 单色），着色后获得品牌色观感。
-                                                let chip_c =
-                                                    theme::card_icon_colors()[i.min(6)];
+                                                let chip_c = theme::card_icon_colors()[i.min(6)];
                                                 let (chip_rect, _) = ui.allocate_exact_size(
                                                     egui::vec2(32.0, 32.0),
                                                     egui::Sense::hover(),
