@@ -1459,36 +1459,6 @@ impl DiffApp {
                         Some(8) => self.open_empty_media(),
                         _ => {}
                     }
-                    ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        if ui
-                            .button(format!(
-                                "📁 {}",
-                                crate::i18n::t(crate::i18n::Key::MenuOpenFiles)
-                            ))
-                            .clicked()
-                        {
-                            self.open_diff_files();
-                        }
-                        if ui
-                            .button(format!(
-                                "📂 {}",
-                                crate::i18n::t(crate::i18n::Key::MenuOpenDir)
-                            ))
-                            .clicked()
-                        {
-                            self.open_dir_compare();
-                        }
-                        if ui
-                            .button(format!(
-                                "🔀 {}",
-                                crate::i18n::t(crate::i18n::Key::MenuOpenMerge)
-                            ))
-                            .clicked()
-                        {
-                            self.open_merge();
-                        }
-                    });
                 });
             });
         });
