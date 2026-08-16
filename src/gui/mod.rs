@@ -19,6 +19,8 @@ mod textedit;
 mod theme;
 #[cfg(test)]
 mod uikit_tests;
+#[cfg(test)]
+mod ui_snap;
 
 use crate::sideview::ViewOptions;
 use common::*;
@@ -1310,8 +1312,8 @@ impl DiffApp {
                             .color(ui.visuals().weak_text_color()),
                     );
                     ui.add_space(12.0);
-                    // 会话类型卡片（8 类，BC 主页语义）
-                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 9] = [
+                    // 会话类型卡片（7 类，BC 主页语义）
+                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 7] = [
                         (
                             "📄",
                             crate::i18n::Key::SessionText,
@@ -1349,24 +1351,12 @@ impl DiffApp {
                             crate::i18n::Key::MenuNewHex,
                             5,
                         ),
-                        (
-                            "🔄",
-                            crate::i18n::Key::MenuNewDir,
-                            crate::i18n::Key::SessionDirDesc,
-                            6,
-                        ),
-                        (
-                            "🗂",
-                            crate::i18n::Key::MenuNewMerge,
-                            crate::i18n::Key::SessionMergeDesc,
-                            7,
-                        ),
                         // P43-6：媒体比较（音视频元数据）
                         (
                             "🎵",
                             crate::i18n::Key::SessionMedia,
                             crate::i18n::Key::SessionMediaDesc,
-                            8,
+                            6,
                         ),
                     ];
                     let card_w = 170.0;
@@ -1453,10 +1443,8 @@ impl DiffApp {
                         Some(4) => self.open_empty_csv(),
                         // Hex：空文本对比会话（二进制自动切 hex）
                         Some(5) => self.open_empty_diff(),
-                        // 文件夹合并/同步：空目录对比
-                        Some(6) => self.open_empty_dir(),
-                        Some(7) => self.open_empty_merge(),
-                        Some(8) => self.open_empty_media(),
+                        // 媒体比较
+                        Some(6) => self.open_empty_media(),
                         _ => {}
                     }
                 });

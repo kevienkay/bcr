@@ -62,14 +62,6 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             app.open_empty_diff();
         }
-        if ui.button(t(I18nKey::MenuNewDir)).clicked() {
-            ui.close();
-            app.open_empty_dir();
-        }
-        if ui.button(t(I18nKey::MenuNewMerge)).clicked() {
-            ui.close();
-            app.open_empty_merge();
-        }
         if ui.button(t(I18nKey::MenuNewImage)).clicked() {
             ui.close();
             app.open_empty_image();
@@ -197,9 +189,9 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.menu_button(t(I18nKey::MenuCompareUsing), |ui| {
                 let targets: [(&str, crate::i18n::Key); 4] = [
                     ("文本对比", crate::i18n::Key::SessionText),
-                    ("16进制对比", crate::i18n::Key::MenuNewHex),
+                    ("16 进制比较", crate::i18n::Key::MenuNewHex),
                     ("图片对比", crate::i18n::Key::SessionImage),
-                    ("表格对比", crate::i18n::Key::SessionCsv),
+                    ("表格比较", crate::i18n::Key::SessionCsv),
                 ];
                 for (label, key) in targets {
                     if ui.button(label).clicked() {

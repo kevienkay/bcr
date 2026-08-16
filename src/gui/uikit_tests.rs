@@ -1000,7 +1000,7 @@ fn welcome_page_shows_session_cards() {
     let mut h = Harness::new_ui(|ui| app.borrow_mut().welcome_ui(ui));
     h.run();
     // 五种会话类型卡片齐全（标题与描述）
-    for label in ["文本对比", "文件夹对比", "三路合并", "图片对比", "CSV 表格"] {
+    for label in ["文本对比", "文件夹对比", "三路合并", "图片对比", "表格比较"] {
         assert!(
             h.query_all_by_label_contains(label).next().is_some(),
             "欢迎页应有卡片: {}",
@@ -1035,14 +1035,14 @@ fn welcome_page_card_click_opens_session() {
         matches!(app.borrow().tabs[0], super::Tab::Diff(_)),
         "文本对比卡片应创建 Diff 标签"
     );
-    // 点击「CSV 表格」卡片（第二行首列，视口内）→ 创建 Csv 标签（同一 Harness 继续点击）
-    h.get_by_label_contains("CSV 表格").click();
+    // 点击「表格比较」卡片（第二行首列，视口内）→ 创建 Csv 标签（同一 Harness 继续点击）
+    h.get_by_label_contains("表格比较").click();
     h.run();
     let n = app.borrow().tabs.len();
     assert_eq!(n, 2, "点击后应再创建 1 个标签页");
     assert!(
         matches!(app.borrow().tabs[n - 1], super::Tab::Csv(_)),
-        "CSV 卡片应创建 Csv 标签"
+        "表格比较卡片应创建 Csv 标签"
     );
 }
 
@@ -3417,42 +3417,6 @@ fn menubar_session_new_text_creates_diff_tab() {
     assert!(
         matches!(app.borrow().tabs[0], super::Tab::Diff(_)),
         "新标签应为 Diff"
-    );
-}
-
-#[test]
-fn menubar_session_new_dir_creates_dir_tab() {
-    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
-    let mut h = Harness::new_ui(|ui| crate::gui::menubar::menu_bar(&mut app.borrow_mut(), ui));
-    h.run();
-    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuSession))
-        .click();
-    h.run_steps(2);
-    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuNewDir))
-        .click();
-    h.run_steps(2);
-    assert_eq!(app.borrow().tabs.len(), 1, "菜单新建文件夹对比应创建标签");
-    assert!(
-        matches!(app.borrow().tabs[0], super::Tab::Dir(_)),
-        "新标签应为 Dir"
-    );
-}
-
-#[test]
-fn menubar_session_new_merge_creates_merge_tab() {
-    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
-    let mut h = Harness::new_ui(|ui| crate::gui::menubar::menu_bar(&mut app.borrow_mut(), ui));
-    h.run();
-    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuSession))
-        .click();
-    h.run_steps(2);
-    h.get_by_label(crate::i18n::t(crate::i18n::Key::MenuNewMerge))
-        .click();
-    h.run_steps(2);
-    assert_eq!(app.borrow().tabs.len(), 1, "菜单新建三路合并应创建标签");
-    assert!(
-        matches!(app.borrow().tabs[0], super::Tab::Merge(_)),
-        "新标签应为 Merge"
     );
 }
 

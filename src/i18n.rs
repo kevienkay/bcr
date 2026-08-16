@@ -722,10 +722,6 @@ pub enum Key {
     MenuCloseAllWindows,
     /// 新建文本对比
     MenuNewText,
-    /// 新建文件夹对比
-    MenuNewDir,
-    /// 新建三路合并
-    MenuNewMerge,
     /// 新建图片对比
     MenuNewImage,
     /// P37-1e：图片差异模式 精确
