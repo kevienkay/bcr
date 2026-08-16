@@ -182,12 +182,18 @@ pub fn run(args: &DiffArgs) -> i32 {
         .unwrap_or_else(|| args.right.clone());
 
     // 原始行（用于输出）与比较键（用于 diff，按选项归一化）
-    // 编译内容过滤正则（--ignore-lines）
-    let ignore_lines: Vec<regex::Regex> = args
-        .ignore_lines
-        .iter()
-        .filter_map(|p| regex::Regex::new(p).ok())
-        .collect();
+    // 编译内容过滤正则（--ignore-lines）：非法正则必须报错 exit 2，
+    // 静默丢弃会让用户以为行被忽略而实际没有（比较结果错误）
+    let mut ignore_lines: Vec<regex::Regex> = Vec::new();
+    for p in &args.ignore_lines {
+        match regex::Regex::new(p) {
+            Ok(re) => ignore_lines.push(re),
+            Err(e) => {
+                eprintln!("bcr: 内容过滤正则无效: {p} ({e})");
+                return 2;
+            }
+        }
+    }
     let lines_l: Vec<&str> = left.lines().collect();
     let lines_r: Vec<&str> = right.lines().collect();
     let keys_l: Vec<String> = lines_l
@@ -478,6 +484,36 @@ mod tests {
         a.left = l.to_str().unwrap().into();
         a.right = r.to_str().unwrap().into();
         assert_eq!(run(&a), 1);
+    }
+
+    #[test]
+    fn run_invalid_ignore_lines_exit_two() {
+        // 非法正则必须报错 exit 2，不能静默丢弃（否则用户以为行被忽略实际没有）
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "a\nb\n").unwrap();
+        fs::write(&r, "a\nb\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        a.ignore_lines = vec!["[".to_string()]; // 非法正则（未闭合字符类）
+        assert_eq!(run(&a), 2, "非法 --ignore-lines 正则应退出码 2");
+    }
+
+    #[test]
+    fn run_valid_ignore_lines_still_works() {
+        // 合法正则不影响正常比较
+        let dir = tempdir().unwrap();
+        let l = dir.path().join("l.txt");
+        let r = dir.path().join("r.txt");
+        fs::write(&l, "time: 1\nreal\n").unwrap();
+        fs::write(&r, "time: 2\nreal\n").unwrap();
+        let mut a = args();
+        a.left = l.to_str().unwrap().into();
+        a.right = r.to_str().unwrap().into();
+        a.ignore_lines = vec![r"^time: \d+$".to_string()];
+        assert_eq!(run(&a), 0, "忽略时间戳行后应无差异");
     }
 
     #[test]
