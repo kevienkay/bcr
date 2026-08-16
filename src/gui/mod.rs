@@ -18,9 +18,9 @@ mod patchtab;
 mod textedit;
 mod theme;
 #[cfg(test)]
-mod uikit_tests;
-#[cfg(test)]
 mod ui_snap;
+#[cfg(test)]
+mod uikit_tests;
 
 use crate::sideview::ViewOptions;
 use common::*;

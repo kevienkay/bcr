@@ -1000,7 +1000,8 @@ fn welcome_page_shows_session_cards() {
     let mut h = Harness::new_ui(|ui| app.borrow_mut().welcome_ui(ui));
     h.run();
     // 五种会话类型卡片齐全（标题与描述）
-    for label in ["文本对比", "文件夹对比", "三路合并", "图片对比", "表格比较"] {
+    for label in ["文本对比", "文件夹对比", "三路合并", "图片对比", "表格比较"]
+    {
         assert!(
             h.query_all_by_label_contains(label).next().is_some(),
             "欢迎页应有卡片: {}",

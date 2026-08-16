@@ -223,8 +223,7 @@ pub fn run(args: &DiffArgs) -> i32 {
             no_newline_r,
         );
         println!("{}", serde_json::to_string(&v).unwrap_or_default());
-        let has_diff =
-            json_ops.iter().any(|(t, ..)| t != "equal") || no_newline_l != no_newline_r;
+        let has_diff = json_ops.iter().any(|(t, ..)| t != "equal") || no_newline_l != no_newline_r;
         return if has_diff { 1 } else { 0 };
     }
 

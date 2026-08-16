@@ -30,14 +30,16 @@ fn save<State>(h: &mut Harness<'_, State>, name: &str) {
     }
 }
 
-/// 临时目录里写两个文本文件，返回 (左路径, 右路径)
-fn write_pair(prefix: &str, left: &str, right: &str) -> (String, String) {
+/// 临时目录里写两个文本文件，返回 (左路径, 右路径, 保持目录存活的句柄)
+/// 注意：tempdir 句柄必须存活到截图结束，否则路径指向的文件会被删除
+fn write_pair(prefix: &str, left: &str, right: &str) -> (tempfile::TempDir, String, String) {
     let d = tempfile::tempdir().unwrap();
     let l = d.path().join(format!("{prefix}-l.txt"));
     let r = d.path().join(format!("{prefix}-r.txt"));
     std::fs::write(&l, left).unwrap();
     std::fs::write(&r, right).unwrap();
     (
+        d,
         l.to_str().unwrap().to_string(),
         r.to_str().unwrap().to_string(),
     )
@@ -74,7 +76,7 @@ fn snap_welcome_light() {
 #[test]
 #[ignore]
 fn snap_app_difftab() {
-    let (l, r) = write_pair("snap-diff", SAMPLE_L, SAMPLE_R);
+    let (_d, l, r) = write_pair("snap-diff", SAMPLE_L, SAMPLE_R);
     let mut h = Harness::builder()
         .with_size(egui::vec2(1360.0, 860.0))
         .build_eframe(|cc| {
@@ -92,7 +94,7 @@ fn snap_app_difftab() {
 #[test]
 #[ignore]
 fn snap_app_difftab_light() {
-    let (l, r) = write_pair("snap-diff-l", SAMPLE_L, SAMPLE_R);
+    let (_d, l, r) = write_pair("snap-diff-l", SAMPLE_L, SAMPLE_R);
     let mut h = Harness::builder()
         .with_size(egui::vec2(1360.0, 860.0))
         .build_eframe(|cc| {

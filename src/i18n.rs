@@ -746,9 +746,9 @@ pub enum Key {
     ImgFlipV,
     /// P37-1e：重置变换
     ImgResetTransform,
-    /// 新建 CSV 表格
+    /// 新建表格比较
     MenuNewCsv,
-    /// 新建 Hex 对比
+    /// 16 进制比较
     MenuNewHex,
     /// 保存会话
     MenuSaveSession,
@@ -896,7 +896,7 @@ pub enum Key {
     SessionImage,
     /// 像素级差异叠加
     SessionImageDesc,
-    /// CSV 表格
+    /// 表格比较
     SessionCsv,
     /// 行级表格对比
     SessionCsvDesc,
