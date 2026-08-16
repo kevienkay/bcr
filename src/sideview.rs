@@ -147,16 +147,25 @@ pub struct ViewOptions {
 ///
 /// 行级 diff 基于归一化后的比较键（与 CLI 一致），但单元格内容始终是原始行。
 /// Replace 行对做字符级 diff 得到行内高亮分段。
-pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, Stats) {
+/// 非法内容过滤正则返回 Err（GUI 显示错误，不静默丢弃导致忽略失效）。
+pub fn build_rows(
+    left: &str,
+    right: &str,
+    opts: ViewOptions,
+) -> Result<(Vec<SideRow>, Stats), String> {
     let algo = Algorithm::Patience;
     let lines_l: Vec<&str> = left.lines().collect();
     let lines_r: Vec<&str> = right.lines().collect();
-    // 编译内容过滤正则
-    let ignore_lines: Vec<regex::Regex> = opts
-        .ignore_lines
-        .iter()
-        .filter_map(|p| regex::Regex::new(p).ok())
-        .collect();
+    // 编译内容过滤正则：非法即报错（与 CLI diff --ignore-lines 一致）
+    let mut ignore_lines: Vec<regex::Regex> = Vec::new();
+    for p in &opts.ignore_lines {
+        match regex::Regex::new(p) {
+            Ok(re) => ignore_lines.push(re),
+            Err(e) => {
+                return Err(format!("内容过滤正则无效: {p} ({e})"));
+            }
+        }
+    }
     let keys_l: Vec<String> = lines_l
         .iter()
         .map(|l| {
@@ -283,7 +292,7 @@ pub fn build_rows(left: &str, right: &str, opts: ViewOptions) -> (Vec<SideRow>, 
         }
     }
 
-    (rows, stats)
+    Ok((rows, stats))
 }
 
 #[cfg(test)]
@@ -291,8 +300,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn invalid_ignore_regex_errors() {
+        // 非法内容过滤正则 → Err（GUI 显示错误，不静默丢弃导致忽略失效）
+        let opts = ViewOptions {
+            ignore_lines: vec!["[".to_string()],
+            ..Default::default()
+        };
+        assert!(build_rows("a\n", "a\n", opts).is_err());
+    }
+
+    #[test]
     fn identical_files_all_equal_rows() {
-        let (rows, stats) = build_rows("a\nb\nc\n", "a\nb\nc\n", ViewOptions::default());
+        let (rows, stats) = build_rows("a\nb\nc\n", "a\nb\nc\n", ViewOptions::default()).unwrap();
         assert_eq!(rows.len(), 3);
         assert!(rows.iter().all(|r| r.tag == RowTag::Equal));
         assert_eq!(rows[0].left_no, Some(1));
@@ -311,14 +330,14 @@ mod tests {
 
     #[test]
     fn empty_files_no_rows() {
-        let (rows, stats) = build_rows("", "", ViewOptions::default());
+        let (rows, stats) = build_rows("", "", ViewOptions::default()).unwrap();
         assert!(rows.is_empty());
         assert_eq!(stats, Stats::default());
     }
 
     #[test]
     fn pure_insert_rows() {
-        let (rows, stats) = build_rows("a\n", "a\nX\nY\n", ViewOptions::default());
+        let (rows, stats) = build_rows("a\n", "a\nX\nY\n", ViewOptions::default()).unwrap();
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[1].tag, RowTag::Insert);
         assert_eq!(rows[1].left, None);
@@ -331,7 +350,7 @@ mod tests {
 
     #[test]
     fn pure_delete_rows() {
-        let (rows, stats) = build_rows("a\nb\nc\n", "a\n", ViewOptions::default());
+        let (rows, stats) = build_rows("a\nb\nc\n", "a\n", ViewOptions::default()).unwrap();
         assert_eq!(rows[1].tag, RowTag::Delete);
         assert_eq!(rows[1].right, None);
         assert_eq!(rows[1].left.as_ref().unwrap().text, "b");
@@ -342,7 +361,7 @@ mod tests {
 
     #[test]
     fn replace_rows_carry_intra_segments() {
-        let (rows, stats) = build_rows("foo bar\n", "foo baz\n", ViewOptions::default());
+        let (rows, stats) = build_rows("foo bar\n", "foo baz\n", ViewOptions::default()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].tag, RowTag::Replace);
         let l = rows[0].left.as_ref().unwrap();
@@ -364,7 +383,7 @@ mod tests {
             ignore_whitespace: true,
             ..Default::default()
         };
-        let (rows, stats) = build_rows("a b\n", "ab\n", opts);
+        let (rows, stats) = build_rows("a b\n", "ab\n", opts).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].tag, RowTag::Equal);
         assert_eq!(
@@ -377,7 +396,7 @@ mod tests {
             }
         );
         // 不忽略时是 Replace
-        let (rows2, _) = build_rows("a b\n", "ab\n", ViewOptions::default());
+        let (rows2, _) = build_rows("a b\n", "ab\n", ViewOptions::default()).unwrap();
         assert_eq!(rows2[0].tag, RowTag::Replace);
     }
 
@@ -387,7 +406,7 @@ mod tests {
             ignore_case: true,
             ..Default::default()
         };
-        let (rows, _) = build_rows("Hello\n", "hello\n", opts);
+        let (rows, _) = build_rows("Hello\n", "hello\n", opts).unwrap();
         assert_eq!(rows[0].tag, RowTag::Equal);
     }
 
@@ -397,7 +416,7 @@ mod tests {
             ignore_trailing: true,
             ..Default::default()
         };
-        let (rows, _) = build_rows("hello  \n", "hello\n", opts);
+        let (rows, _) = build_rows("hello  \n", "hello\n", opts).unwrap();
         assert_eq!(rows[0].tag, RowTag::Equal);
     }
 
@@ -407,7 +426,7 @@ mod tests {
             "中文第一行\n中文第二行\n",
             "中文第一行\n中文第二行改\n",
             ViewOptions::default(),
-        );
+        ).unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].tag, RowTag::Replace);
         assert_eq!(stats.replace, 1);
@@ -416,7 +435,7 @@ mod tests {
     #[test]
     fn unpaired_replace_split_into_delete_and_insert() {
         // 替换 1 行为 2 行：1 对 Replace + 1 个 Insert
-        let (rows, stats) = build_rows("x\ny\n", "x\na\nb\n", ViewOptions::default());
+        let (rows, stats) = build_rows("x\ny\n", "x\na\nb\n", ViewOptions::default()).unwrap();
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[1].tag, RowTag::Replace);
         assert_eq!(rows[2].tag, RowTag::Insert);
@@ -426,7 +445,7 @@ mod tests {
 
     #[test]
     fn line_numbers_track_per_side() {
-        let (rows, _) = build_rows("a\nb\nc\nd\n", "a\nc\nd\n", ViewOptions::default());
+        let (rows, _) = build_rows("a\nb\nc\nd\n", "a\nc\nd\n", ViewOptions::default()).unwrap();
         // a(1,1) b删除(2,-) c(3,2) d(4,3)
         assert_eq!(rows[0].left_no, Some(1));
         assert_eq!(rows[0].right_no, Some(1));

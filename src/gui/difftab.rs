@@ -451,7 +451,13 @@ impl DiffTab {
                 return;
             }
         };
-        let (mut rows, stats) = build_rows(l, r, self.opts.clone());
+        let (mut rows, stats) = match build_rows(l, r, self.opts.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                self.error = Some(e);
+                return;
+            }
+        };
         // P38-1b：应用手动对齐（强制左侧/右侧行配对）
         Self::apply_manual_aligns(&mut rows, &self.manual_aligns);
         // P32-B5：忽略行从差异行/统计中排除（会话级）
