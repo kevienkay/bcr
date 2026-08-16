@@ -1405,9 +1405,7 @@ impl DiffApp {
                         .spacing([10.0, 10.0])
                         .show(ui, |ui| {
                             for (i, (icon, title, desc, id)) in cards.iter().enumerate() {
-                                // P39-2d：卡片 hover 高亮（浅色/深色主题各自适配）+ 圆角
-                                let hovered = ui.rect_contains_pointer(ui.max_rect());
-                                let _ = hovered;
+                                // P53-2：卡片 hover 高亮（浅色/深色主题各自适配）+ 圆角
                                 let frame = egui::Frame::group(ui.style())
                                     .corner_radius(8.0)
                                     .inner_margin(egui::Margin::same(10))
@@ -2517,6 +2515,12 @@ impl eframe::App for DiffApp {
             }
         }
 
+        // 底部全局状态栏（P31，对标 BC 状态栏）——面板须在 CentralPanel 之前声明：
+        // egui 的 CentralPanel 会占满全部剩余空间，其后声明的 bottom 面板拿不到高度（实测不渲染）。
+        if !self.tabs.is_empty() {
+            self.status_bar(ui);
+        }
+
         // 当前标签内容
         if self.tabs.is_empty() {
             self.welcome_ui(ui);
@@ -2545,6 +2549,61 @@ impl eframe::App for DiffApp {
             }
         }
 
+
+        if let Some((l_rel, r_rel)) = open_pair_req {
+            // 手动对齐：左右相对路径配对打开并排 diff（可不同文件名）
+            if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
+                let (l_root, r_root) = (dir_tab.left.clone(), dir_tab.right.clone());
+                let l = std::path::Path::new(&l_root).join(&l_rel);
+                let r = std::path::Path::new(&r_root).join(&r_rel);
+                let ls = l.to_string_lossy();
+                let rs = r.to_string_lossy();
+                if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
+                    self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
+                } else if crate::csvcmp::is_csv_file(&ls) && crate::csvcmp::is_csv_file(&rs) {
+                    self.add_tab(Tab::Csv(CsvTab::new(&ls, &rs)));
+                } else {
+                    let mut t = DiffTab::new();
+                    t.load_pair(&ls, &rs, ViewOptions::default());
+                    self.add_tab(Tab::Diff(t));
+                }
+                return;
+            }
+        }
+
+        if let Some(rel) = open_diff_req {
+            // 目录对比双击 → 打开该文件的并排 diff（用 Path::join 保证跨平台分隔符）
+            if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
+                let (l, r) = (dir_tab.left.clone(), dir_tab.right.clone());
+                let l = std::path::Path::new(&l).join(&rel);
+                let r = std::path::Path::new(&r).join(&rel);
+                // 图片文件 → 图片对比标签
+                let ls = l.to_string_lossy();
+                let rs = r.to_string_lossy();
+                if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
+                    self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
+                    return;
+                }
+                // CSV 表格 → 表格对比标签（P29）
+                if crate::csvcmp::is_csv_file(&ls) && crate::csvcmp::is_csv_file(&rs) {
+                    self.add_tab(Tab::Csv(CsvTab::new(&ls, &rs)));
+                    return;
+                }
+                let mut t = DiffTab::new();
+                t.load_pair(&ls, &rs, ViewOptions::default());
+                self.add_tab(Tab::Diff(t));
+            }
+        }
+    }
+
+    fn on_exit(&mut self) {
+        self.settings.save();
+    }
+}
+
+/// P39-2c：保存当前标签报告到用户选择的文件
+impl DiffApp {
+    fn status_bar(&self, ui: &mut egui::Ui) {
         // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总；B3 补路径/行列数/选中项数）
         egui::Panel::bottom("status_bar").show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -2938,60 +2997,8 @@ impl eframe::App for DiffApp {
                 }
             });
         });
-
-        if let Some((l_rel, r_rel)) = open_pair_req {
-            // 手动对齐：左右相对路径配对打开并排 diff（可不同文件名）
-            if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
-                let (l_root, r_root) = (dir_tab.left.clone(), dir_tab.right.clone());
-                let l = std::path::Path::new(&l_root).join(&l_rel);
-                let r = std::path::Path::new(&r_root).join(&r_rel);
-                let ls = l.to_string_lossy();
-                let rs = r.to_string_lossy();
-                if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
-                    self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
-                } else if crate::csvcmp::is_csv_file(&ls) && crate::csvcmp::is_csv_file(&rs) {
-                    self.add_tab(Tab::Csv(CsvTab::new(&ls, &rs)));
-                } else {
-                    let mut t = DiffTab::new();
-                    t.load_pair(&ls, &rs, ViewOptions::default());
-                    self.add_tab(Tab::Diff(t));
-                }
-                return;
-            }
-        }
-
-        if let Some(rel) = open_diff_req {
-            // 目录对比双击 → 打开该文件的并排 diff（用 Path::join 保证跨平台分隔符）
-            if let Some(Tab::Dir(dir_tab)) = self.tabs.get(self.active) {
-                let (l, r) = (dir_tab.left.clone(), dir_tab.right.clone());
-                let l = std::path::Path::new(&l).join(&rel);
-                let r = std::path::Path::new(&r).join(&rel);
-                // 图片文件 → 图片对比标签
-                let ls = l.to_string_lossy();
-                let rs = r.to_string_lossy();
-                if crate::imgcmp::is_image_file(&ls) && crate::imgcmp::is_image_file(&rs) {
-                    self.add_tab(Tab::Image(ImageTab::new(&ls, &rs)));
-                    return;
-                }
-                // CSV 表格 → 表格对比标签（P29）
-                if crate::csvcmp::is_csv_file(&ls) && crate::csvcmp::is_csv_file(&rs) {
-                    self.add_tab(Tab::Csv(CsvTab::new(&ls, &rs)));
-                    return;
-                }
-                let mut t = DiffTab::new();
-                t.load_pair(&ls, &rs, ViewOptions::default());
-                self.add_tab(Tab::Diff(t));
-            }
-        }
     }
 
-    fn on_exit(&mut self) {
-        self.settings.save();
-    }
-}
-
-/// P39-2c：保存当前标签报告到用户选择的文件
-impl DiffApp {
     fn save_current_report(&mut self) {
         self.report_error = None;
         let (content, default_name) = match self.tabs.get(self.active) {

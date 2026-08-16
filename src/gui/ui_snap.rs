@@ -13,8 +13,9 @@ use egui_kittest::Harness;
 
 /// 渲染当前帧并保存 PNG 到 BCR_SNAP_DIR（未设置环境变量时静默跳过）
 fn save<State>(h: &mut Harness<'_, State>, name: &str) {
-    // run_steps 而非 run()：spinner 等持续重绘场景下 run() 会因 max_steps 超限 panic
-    h.run_steps(3);
+    // 多跑几帧：build_eframe 下首帧视口尺寸尚未应用，面板（含底部状态栏）
+    // 要到后续帧才落到最终位置；run_steps 而非 run() 避免 spinner 超限 panic
+    h.run_steps(12);
     let Ok(dir) = std::env::var("BCR_SNAP_DIR") else {
         return;
     };
@@ -190,4 +191,29 @@ fn snap_app_mergetab() {
             app
         });
     save(&mut h, "app_mergetab");
+}
+
+
+
+
+
+#[test]
+#[ignore]
+fn snap_app_difftab_many_frames() {
+    let (_d, l, r) = write_pair("snap-diff-many", SAMPLE_L, SAMPLE_R);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1360.0, 860.0))
+        .build_eframe(|cc| {
+            install_cjk_fonts(&cc.egui_ctx);
+            theme::apply(&cc.egui_ctx);
+            let mut app = DiffApp::new(Settings::default());
+            let mut t = crate::gui::difftab::DiffTab::new();
+            t.load_pair(&l, &r, ViewOptions::default());
+            app.add_tab(Tab::Diff(t));
+            app
+        });
+    for _ in 0..40 {
+        h.run_steps(2);
+    }
+    save(&mut h, "app_difftab_many");
 }
