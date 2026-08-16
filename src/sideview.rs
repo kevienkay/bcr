@@ -426,7 +426,8 @@ mod tests {
             "中文第一行\n中文第二行\n",
             "中文第一行\n中文第二行改\n",
             ViewOptions::default(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1].tag, RowTag::Replace);
         assert_eq!(stats.replace, 1);

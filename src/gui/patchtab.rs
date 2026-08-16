@@ -206,8 +206,8 @@ impl PatchTab {
                 Some(p) => {
                     self.path = path.to_string();
                     self.parsed = Some(p.clone());
-                    let (rows, _) = build_rows(&p.left, &p.right, ViewOptions::default())
-                        .unwrap_or_default();
+                    let (rows, _) =
+                        build_rows(&p.left, &p.right, ViewOptions::default()).unwrap_or_default();
                     self.rows = rows;
                     self.error = None;
                     self.msg = None;

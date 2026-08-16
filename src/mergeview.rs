@@ -472,11 +472,7 @@ mod tests {
     fn render_merged_unresolved_line_follows_block_resolution() {
         // 冲突块：第 1 行行级取右，第 2 行未解决；块 resolution=Right
         // → 未解决行应跟随块 resolution 取右（回归：此前恒取左）
-        let mut v = build_merge_view(
-            "b1\nb2\n",
-            "L1\nL2\n",
-            "R1\nR2\n",
-        );
+        let mut v = build_merge_view("b1\nb2\n", "L1\nL2\n", "R1\nR2\n");
         assert_eq!(v.conflicts, 1);
         let bi = v.conflict_block_indices[0];
         v.blocks[bi].resolution = Resolution::Right;
