@@ -5,7 +5,7 @@
 
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::merge3::{build_merge3_plan, execute_plan, Merge3PlanItem, Merge3Stats};
-use eframe::egui::{self, RichText};
+use eframe::egui::{self};
 
 /// P45-2：文件夹合并视图过滤（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -308,14 +308,14 @@ impl FolderMergeTab {
 
         egui::CentralPanel::default().show(ui, |ui| {
             if self.is_empty() {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new(t(I18nKey::FolderMergeTitle))
-                                .size(16.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(12.0);
+                // P52-2：统一空状态（文件夹合并用橙色系）
+                super::common::empty_state(
+                    ui,
+                    "🗂",
+                    super::theme::card_icon_colors()[2],
+                    t(I18nKey::FolderMergeTitle),
+                    t(I18nKey::DragHint),
+                    |ui| {
                         // P34：分别打开 BASE/LEFT/RIGHT/OUT
                         ui.horizontal(|ui| {
                             if ui.button("BASE…").clicked() {
@@ -331,21 +331,21 @@ impl FolderMergeTab {
                                 self.open_out();
                             }
                         });
-                        ui.add_space(8.0);
-                        ui.label(
-                            RichText::new(t(I18nKey::DragHint))
-                                .size(11.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
-                });
+                    },
+                );
                 return;
             }
 
             let Some(plan) = &self.plan else {
-                ui.centered_and_justified(|ui| {
-                    ui.label("点击「生成计划」扫描三目录");
-                });
+                // P52-2：未生成计划提示
+                super::common::empty_state(
+                    ui,
+                    "⟳",
+                    super::theme::card_icon_colors()[1],
+                    "点击「生成计划」扫描三目录",
+                    "",
+                    |_ui| {},
+                );
                 return;
             };
             let fg = ui.visuals().text_color();

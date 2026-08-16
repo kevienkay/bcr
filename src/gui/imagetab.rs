@@ -617,14 +617,14 @@ impl ImageTab {
         }
         if self.pair.is_none() && self.left.is_empty() {
             egui::CentralPanel::default().show(ui, |ui| {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new(t(I18nKey::DiffEmptyHint))
-                                .size(16.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(12.0);
+                // P52-2：统一空状态（图片用紫色系）
+                super::common::empty_state(
+                    ui,
+                    "🖼",
+                    super::theme::card_icon_colors()[3],
+                    t(I18nKey::DiffEmptyHint),
+                    t(I18nKey::DragHint),
+                    |ui| {
                         // P34：分别打开左右图片（BC 式）
                         ui.horizontal(|ui| {
                             if ui.button(t(I18nKey::OpenLeft)).clicked() {
@@ -634,14 +634,8 @@ impl ImageTab {
                                 self.open_right();
                             }
                         });
-                        ui.add_space(8.0);
-                        ui.label(
-                            RichText::new(t(I18nKey::DragHint))
-                                .size(11.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
-                });
+                    },
+                );
             });
             return;
         }

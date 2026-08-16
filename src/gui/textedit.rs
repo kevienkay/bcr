@@ -695,27 +695,19 @@ impl TextEditTab {
 
         egui::CentralPanel::default().show(ui, |ui| {
             if self.path.is_empty() {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::TextEditTitle))
-                                .size(16.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(12.0);
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenFile)).clicked() {
-                                self.open_dialog();
-                            }
-                        });
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DragHint))
-                                .size(11.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
-                });
+                // P52-2：统一空状态（文本编辑用蓝色系）
+                super::common::empty_state(
+                    ui,
+                    "✏️",
+                    super::theme::card_icon_colors()[0],
+                    t(I18nKey::TextEditTitle),
+                    t(I18nKey::DragHint),
+                    |ui| {
+                        if ui.button(t(I18nKey::OpenFile)).clicked() {
+                            self.open_dialog();
+                        }
+                    },
+                );
                 return;
             }
 

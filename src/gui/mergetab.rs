@@ -619,14 +619,14 @@ impl MergeTab {
 
         egui::CentralPanel::default().show(ui, |ui| {
             if self.view.rows.is_empty() && self.view.conflicts == 0 {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::MergeEmpty))
-                                .size(16.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(12.0);
+                // P52-2：统一空状态（三路合并用橙色系）
+                super::common::empty_state(
+                    ui,
+                    "🔀",
+                    super::theme::card_icon_colors()[2],
+                    t(I18nKey::MergeEmpty),
+                    t(I18nKey::DragHint),
+                    |ui| {
                         // P34：分别打开 BASE/LEFT/RIGHT（BC 式：不强求一次选满三个）
                         ui.horizontal(|ui| {
                             if ui
@@ -651,14 +651,8 @@ impl MergeTab {
                                 self.open_right();
                             }
                         });
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DragHint))
-                                .size(11.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
-                });
+                    },
+                );
                 return;
             }
 

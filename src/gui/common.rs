@@ -68,6 +68,81 @@ pub fn hl_replace_r() -> Color32 {
 /// 行号颜色
 pub const GUTTER: Color32 = super::theme::GUTTER;
 
+/// P52-2：统一空状态面板（BC 观感）——大号柔和色图标底片 + 标题 + 可选提示与操作行。
+/// 各 tab 空会话（未选择文件/目录）复用，取代裸文字提示。
+///
+/// 注意：不用 `centered_and_justified`——其 main_justify 会把子组拉伸到全高、
+/// 内容仍从顶部堆叠（实测不垂直居中）。这里先测量文本高度算出内容总高，
+/// 再用顶部占位实现真正的垂直居中。
+pub fn empty_state(
+    ui: &mut egui::Ui,
+    icon: &str,
+    icon_color: Color32,
+    title: &str,
+    hint: &str,
+    actions: impl FnOnce(&mut egui::Ui),
+) {
+    let avail = ui.available_rect_before_wrap();
+    // 测量标题/提示文本高度（与实际渲染一致，避免估算偏差）
+    let title_g = ui.painter().layout_no_wrap(
+        title.to_string(),
+        egui::FontId::proportional(16.0),
+        ui.visuals().text_color(),
+    );
+    let hint_g = if hint.is_empty() {
+        None
+    } else {
+        Some(ui.painter().layout_no_wrap(
+            hint.to_string(),
+            egui::FontId::proportional(11.0),
+            ui.visuals().weak_text_color(),
+        ))
+    };
+    let hint_h = hint_g.as_ref().map(|g| 4.0 + g.size().y).unwrap_or(0.0);
+    let btn_h = 28.0;
+    let content_h = 64.0 + 14.0 + title_g.size().y + hint_h + 14.0 + btn_h;
+    let top = ((avail.height() - content_h) / 2.0).max(0.0);
+
+    ui.vertical_centered(|ui| {
+        ui.add_space(top);
+        // 大号图标底片：64px 圆角色块 + 32px 同色符号（与主页卡片同风格）
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(64.0, 64.0), egui::Sense::hover());
+        ui.painter().rect_filled(
+            rect,
+            14.0,
+            Color32::from_rgba_unmultiplied(
+                icon_color.r(),
+                icon_color.g(),
+                icon_color.b(),
+                38,
+            ),
+        );
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            icon,
+            egui::FontId::proportional(32.0),
+            icon_color,
+        );
+        ui.add_space(14.0);
+        ui.label(
+            egui::RichText::new(title)
+                .size(16.0)
+                .color(ui.visuals().weak_text_color()),
+        );
+        if let Some(_g) = hint_g {
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(hint)
+                    .size(11.0)
+                    .color(ui.visuals().weak_text_color()),
+            );
+        }
+        ui.add_space(14.0);
+        actions(ui);
+    });
+}
+
 /// 绘制一行单元格的背景
 pub fn paint_bg(ui: &egui::Ui, rect: Rect, bg: Option<Color32>) {
     if let Some(c) = bg {

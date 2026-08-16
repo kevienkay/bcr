@@ -1985,14 +1985,14 @@ impl DirTab {
             }
             // P34：空会话（两侧均未选择目录）→ 显示打开入口 + 拖拽提示
             if self.left.is_empty() && self.right.is_empty() {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DirEmpty))
-                                .size(16.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(12.0);
+                // P52-2：统一空状态（文件夹用青色系）
+                super::common::empty_state(
+                    ui,
+                    "📁",
+                    super::theme::card_icon_colors()[1],
+                    t(I18nKey::DirEmpty),
+                    t(I18nKey::DragHint),
+                    |ui| {
                         ui.horizontal(|ui| {
                             if ui.button(t(I18nKey::OpenLeftDir)).clicked() {
                                 self.open_left_dir();
@@ -2001,14 +2001,8 @@ impl DirTab {
                                 self.open_right_dir();
                             }
                         });
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DragHint))
-                                .size(11.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
-                });
+                    },
+                );
                 return;
             }
             if self.flat.is_empty() {

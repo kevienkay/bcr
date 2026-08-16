@@ -823,14 +823,14 @@ impl CsvTab {
         let (Some(a), Some(b)) = (&self.table_a, &self.table_b) else {
             // P34：空会话（两侧均未选择文件）→ 显示打开入口 + 拖拽提示
             egui::CentralPanel::default().show(ui, |ui| {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DiffEmptyHint))
-                                .size(16.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(12.0);
+                // P52-2：统一空状态（表格用绿色系）
+                super::common::empty_state(
+                    ui,
+                    "📊",
+                    super::theme::card_icon_colors()[4],
+                    t(I18nKey::DiffEmptyHint),
+                    t(I18nKey::DragHint),
+                    |ui| {
                         ui.horizontal(|ui| {
                             if ui.button(t(I18nKey::OpenLeft)).clicked() {
                                 self.open_left();
@@ -839,14 +839,8 @@ impl CsvTab {
                                 self.open_right();
                             }
                         });
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DragHint))
-                                .size(11.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
-                });
+                    },
+                );
             });
             return;
         };

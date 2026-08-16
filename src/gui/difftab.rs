@@ -2498,13 +2498,15 @@ impl DiffTab {
             let hex_owned = self.hex.clone();
             if let Some(h) = &hex_owned {
                 if h.rows.is_empty() {
-                    ui.centered_and_justified(|ui| {
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DiffEmptyHint))
-                                .size(18.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
+                    // P52-2：统一空状态（hex 用靛蓝色系）
+                    super::common::empty_state(
+                        ui,
+                        "0F",
+                        super::theme::card_icon_colors()[5],
+                        t(I18nKey::DiffEmptyHint),
+                        t(I18nKey::DragHint),
+                        |_ui| {},
+                    );
                     return;
                 }
                 let fg = text_color(ui);
@@ -2682,14 +2684,14 @@ impl DiffTab {
             }
 
             if self.rows.is_empty() {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DiffEmptyHint))
-                                .size(16.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                        ui.add_space(12.0);
+                // P52-2：统一空状态（大图标底片 + 标题 + 操作）
+                super::common::empty_state(
+                    ui,
+                    "⇄",
+                    super::theme::card_icon_colors()[0],
+                    t(I18nKey::DiffEmptyHint),
+                    t(I18nKey::DragHint),
+                    |ui| {
                         // P34：分别打开左右两侧（BC 式：不强求一次选满两个）
                         ui.horizontal(|ui| {
                             if ui.button(t(I18nKey::OpenLeft)).clicked() {
@@ -2699,14 +2701,8 @@ impl DiffTab {
                                 self.open_right_dialog();
                             }
                         });
-                        ui.add_space(8.0);
-                        ui.label(
-                            egui::RichText::new(t(I18nKey::DragHint))
-                                .size(11.0)
-                                .color(ui.visuals().weak_text_color()),
-                        );
-                    });
-                });
+                    },
+                );
                 return;
             }
 
