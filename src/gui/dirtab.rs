@@ -2006,13 +2006,15 @@ impl DirTab {
                 return;
             }
             if self.flat.is_empty() {
-                ui.centered_and_justified(|ui| {
-                    ui.label(
-                        egui::RichText::new(t(I18nKey::NoDiff))
-                            .size(16.0)
-                            .color(ui.visuals().weak_text_color()),
-                    );
-                });
+                // P52-2：统一空状态（无差异：绿色 ✓）
+                super::common::empty_state(
+                    ui,
+                    "✓",
+                    super::theme::card_icon_colors()[4],
+                    t(I18nKey::NoDiff),
+                    "",
+                    |_ui| {},
+                );
                 return;
             }
 
