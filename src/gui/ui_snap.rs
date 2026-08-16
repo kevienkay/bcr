@@ -197,23 +197,3 @@ fn snap_app_mergetab() {
 
 
 
-#[test]
-#[ignore]
-fn snap_app_difftab_many_frames() {
-    let (_d, l, r) = write_pair("snap-diff-many", SAMPLE_L, SAMPLE_R);
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(1360.0, 860.0))
-        .build_eframe(|cc| {
-            install_cjk_fonts(&cc.egui_ctx);
-            theme::apply(&cc.egui_ctx);
-            let mut app = DiffApp::new(Settings::default());
-            let mut t = crate::gui::difftab::DiffTab::new();
-            t.load_pair(&l, &r, ViewOptions::default());
-            app.add_tab(Tab::Diff(t));
-            app
-        });
-    for _ in 0..40 {
-        h.run_steps(2);
-    }
-    save(&mut h, "app_difftab_many");
-}
