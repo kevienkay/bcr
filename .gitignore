@@ -5,3 +5,6 @@
 .bcr-profiles.toml
 .bcr-gui.toml
 /dist
+
+# UI 截图分析临时产物
+ui_review/
