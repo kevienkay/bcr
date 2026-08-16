@@ -350,6 +350,21 @@ pub fn merge_conflict_bg() -> Color32 {
     Color32::from_rgba_unmultiplied(120, 90, 90, 60)
 }
 
+/// 主页会话卡片图标色（7 类：文本/文件夹/三路合并/图片/CSV/Hex/媒体）。
+/// 配合"彩色图标底片"（半透明色块 + 同色符号）使用，弥补 egui 无彩色 emoji
+/// 字形的限制——单色 NotoEmoji 符号经此着色后获得品牌色观感。
+pub fn card_icon_colors() -> [Color32; 7] {
+    [
+        Color32::from_rgb(96, 158, 240),  // 0 文本对比（蓝）
+        Color32::from_rgb(74, 184, 160),  // 1 文件夹对比（青）
+        Color32::from_rgb(238, 158, 74),  // 2 三路合并（橙）
+        Color32::from_rgb(168, 122, 230), // 3 图片对比（紫）
+        Color32::from_rgb(104, 186, 108), // 4 CSV 表格（绿）
+        Color32::from_rgb(92, 118, 222),  // 5 Hex 对比（靛）
+        Color32::from_rgb(226, 118, 178), // 6 媒体比较（粉）
+    ]
+}
+
 /// 对某主题应用统一样式（间距/圆角/选中态/面板层次）
 fn apply_style(style: &mut egui::Style, dark: bool) {
     use egui::epaint::CornerRadius;
