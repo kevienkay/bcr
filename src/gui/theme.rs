@@ -422,6 +422,20 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
     };
     style.visuals.widgets.inactive.bg_stroke = border;
     style.visuals.widgets.hovered.bg_stroke = border;
+    // P55 按钮背景（BC 工具栏观感：浅色主题按钮浅灰圆角底，深色主题深灰底）
+    if dark {
+        style.visuals.widgets.noninteractive.weak_bg_fill = Color32::from_gray(34);
+        style.visuals.widgets.inactive.weak_bg_fill = Color32::from_gray(42);
+        style.visuals.widgets.hovered.weak_bg_fill = Color32::from_gray(58);
+        style.visuals.widgets.active.weak_bg_fill = Color32::from_gray(50);
+        style.visuals.widgets.open.weak_bg_fill = Color32::from_gray(46);
+    } else {
+        style.visuals.widgets.noninteractive.weak_bg_fill = Color32::from_gray(246);
+        style.visuals.widgets.inactive.weak_bg_fill = Color32::from_gray(229);
+        style.visuals.widgets.hovered.weak_bg_fill = Color32::from_gray(212);
+        style.visuals.widgets.active.weak_bg_fill = Color32::from_gray(206);
+        style.visuals.widgets.open.weak_bg_fill = Color32::from_gray(220);
+    }
 }
 
 /// 应用主题样式（启动时调用，对 Dark/Light 两套都设置）
