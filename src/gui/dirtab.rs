@@ -1407,7 +1407,8 @@ impl DirTab {
                     // P55-2：过滤开关改为 BC 式 toggle 按钮（.selected 显示按下态，比 checkbox 紧凑一行）
                     if ui
                         .add(
-                            egui::Button::new(t(I18nKey::ContentHash)).selected(self.compare_content),
+                            egui::Button::new(t(I18nKey::ContentHash))
+                                .selected(self.compare_content),
                         )
                         .on_hover_text("内容比较：对大小相同的文件做 blake3 哈希")
                         .clicked()
