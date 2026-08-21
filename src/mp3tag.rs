@@ -581,8 +581,10 @@ fn decode_v2_comment(frame_data: &[u8]) -> Option<String> {
         1 | 2 => {
             // UTF-16 描述以 00 00 结束
             payload
-                .chunks_exact(2)
-                .position(|c| c == [0, 0])
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .position(|&c| c == [0, 0])
                 .map(|i| i * 2)
         }
         _ => payload.iter().position(|&b| b == 0),
@@ -627,12 +629,16 @@ fn decode_text(encoding: u8, raw: &[u8]) -> Option<String> {
                 (true, raw)
             };
             let units: Vec<u16> = if bom_le {
-                body.chunks_exact(2)
-                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                body.as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|&c| u16::from_le_bytes(c))
                     .collect()
             } else {
-                body.chunks_exact(2)
-                    .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                body.as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|&c| u16::from_be_bytes(c))
                     .collect()
             };
             let end = units.iter().position(|&u| u == 0).unwrap_or(units.len());
@@ -646,8 +652,10 @@ fn decode_text(encoding: u8, raw: &[u8]) -> Option<String> {
         2 => {
             // UTF-16BE without BOM
             let units: Vec<u16> = raw
-                .chunks_exact(2)
-                .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&c| u16::from_be_bytes(c))
                 .collect();
             let end = units.iter().position(|&u| u == 0).unwrap_or(units.len());
             let s = String::from_utf16_lossy(&units[..end]).trim().to_string();

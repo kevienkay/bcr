@@ -79,8 +79,10 @@ fn extract_field_ascii(data: &[u8], field: &[u8]) -> Option<String> {
             // 若字段后是 UTF-16LE 的版本号，ASCII 窗口可能夹 0x00；再做一次宽字符扫描
             let wide_window = &head[p..window_end];
             let wide_bytes: Vec<u8> = wide_window
-                .chunks_exact(2)
-                .filter_map(|c| (c[1] == 0).then_some(c[0]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .filter_map(|&c| (c[1] == 0).then_some(c[0]))
                 .collect();
             let wide_str = String::from_utf8_lossy(&wide_bytes);
             if let Some(m) = re.find(&wide_str) {
