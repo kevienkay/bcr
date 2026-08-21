@@ -2193,7 +2193,7 @@ impl DirTab {
                                     ui.painter().text(
                                         Pos2::new(mid_x - 108.0, rect.center().y),
                                         egui::Align2::RIGHT_CENTER,
-                                        format!("{}", crate::report::fmt_size_raw(l.size)),
+                                        crate::report::fmt_size_raw(l.size),
                                         egui::FontId::monospace(12.0),
                                         ui.visuals().weak_text_color(),
                                     );
@@ -2244,7 +2244,7 @@ impl DirTab {
                                 ui.painter().text(
                                     Pos2::new(rect.right() - 108.0, rect.center().y),
                                     egui::Align2::RIGHT_CENTER,
-                                    format!("{}", crate::report::fmt_size_raw(r.size)),
+                                    crate::report::fmt_size_raw(r.size),
                                     egui::FontId::monospace(12.0),
                                     ui.visuals().weak_text_color(),
                                 );
