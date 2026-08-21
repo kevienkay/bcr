@@ -160,41 +160,34 @@ fn dirtab_filter_dropdown_changes_view() {
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run_steps(4);
     // 视图过滤是唯一 ComboBox（批量已改菜单按钮），role 定位即可
-    h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
-        .click();
-    // 跨平台 headless 渲染时序差异：菜单展开后轮询重试点击「仅左侧」（macOS CI 偶发慢，需更多轮询）
-    let mut clicked = false;
-    for _ in 0..25 {
-        h.run_steps(2);
-        if let Some(node) = h.query_by_label("仅左侧") {
-            node.click();
-            clicked = true;
-            break;
-        }
-    }
-    assert!(clicked, "下拉菜单应展开并出现「仅左侧」选项");
-    // 轮询等待过滤生效（Windows/macOS CI 偶发时序：点击后多帧才应用；并发测试下需真实 sleep）
-    // 加固（P40-2 CI 第 4 次撞 flaky）：首次点击可能因菜单自动关闭时序未命中 → 整轮重试最多 3 次
+    // 跨平台 headless 渲染时序差异：菜单展开后轮询重试点击「仅左侧」
+    // 加固：首次点击可能因菜单未展开/自动关闭时序未命中 → 整轮重试最多 3 次
     let mut applied = false;
     for attempt in 0..3 {
-        if attempt > 0 {
+        if attempt == 0 {
+            // 首次打开下拉
+            h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
+                .click();
+        } else {
             // 重新打开下拉再点（上一轮点击可能落在已关闭的菜单上）
             h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
                 .click();
             h.run_steps(4);
-            let mut reclicked = false;
-            for _ in 0..30 {
-                h.run_steps(2);
-                if let Some(node) = h.query_by_label("仅左侧") {
-                    node.click();
-                    reclicked = true;
-                    break;
-                }
-            }
-            if !reclicked {
-                continue;
+        }
+        h.run_steps(4);
+        let mut reclicked = false;
+        for _ in 0..30 {
+            h.run_steps(2);
+            if let Some(node) = h.query_by_label("仅左侧") {
+                node.click();
+                reclicked = true;
+                break;
             }
         }
+        if !reclicked {
+            continue;
+        }
+        // 轮询等待过滤生效（Windows/macOS CI 偶发时序：点击后多帧才应用；并发测试下需真实 sleep）
         for _ in 0..60 {
             h.run_steps(2);
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -207,7 +200,7 @@ fn dirtab_filter_dropdown_changes_view() {
             break;
         }
     }
-    assert!(applied, "点击「仅左侧」后 view_filter 应变为 LeftOnly");
+    assert!(applied, "下拉菜单应展开并点击「仅左侧」，view_filter 应变为 LeftOnly");
     let t = tab.borrow();
     assert!(t
         .flat
