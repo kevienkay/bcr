@@ -200,7 +200,10 @@ fn dirtab_filter_dropdown_changes_view() {
             break;
         }
     }
-    assert!(applied, "下拉菜单应展开并点击「仅左侧」，view_filter 应变为 LeftOnly");
+    assert!(
+        applied,
+        "下拉菜单应展开并点击「仅左侧」，view_filter 应变为 LeftOnly"
+    );
     let t = tab.borrow();
     assert!(t
         .flat
