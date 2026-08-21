@@ -200,16 +200,8 @@ fn snap_app_mergetab() {
 fn snap_app_csvtab() {
     let d = tempfile::tempdir().unwrap();
     let (l, r) = (d.path().join("l.csv"), d.path().join("r.csv"));
-    std::fs::write(
-        &l,
-        "id,name,age\n1,alice,30\n2,bob,25\n3,carol,40\n",
-    )
-    .unwrap();
-    std::fs::write(
-        &r,
-        "id,name,age\n1,alice,31\n2,bob,25\n4,dave,22\n",
-    )
-    .unwrap();
+    std::fs::write(&l, "id,name,age\n1,alice,30\n2,bob,25\n3,carol,40\n").unwrap();
+    std::fs::write(&r, "id,name,age\n1,alice,31\n2,bob,25\n4,dave,22\n").unwrap();
     let mut h = Harness::builder()
         .with_size(egui::vec2(1360.0, 860.0))
         .build_eframe(|cc| {

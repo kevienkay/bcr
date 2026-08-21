@@ -921,172 +921,174 @@ impl CsvTab {
         let mut insert_col_req = false;
         let mut edit_cell_req = false;
         egui::CentralPanel::default().show(ui, |ui| {
-        ui.columns(2, |cols| {
-            for (ci, side) in [(0usize, true), (1, false)].into_iter() {
-                let ui = &mut cols[ci];
-                let table = if side { a } else { b };
-                let out = super::show_rows(ui, total, ROW_H, |ui, range| {
-                    let fg = text_color(ui);
-                    for vi in range {
-                        let aligned_idx = visible[vi];
-                        let ar = &self.aligned[aligned_idx];
-                        let (row, row_no) = if side {
-                            (
-                                ar.a_no.and_then(|n| table.rows.get(n)),
-                                ar.a_no.map(|n| n + 1),
-                            )
-                        } else {
-                            (
-                                ar.b_no.and_then(|n| table.rows.get(n)),
-                                ar.b_no.map(|n| n + 1),
-                            )
-                        };
-                        let (rect, resp) = ui.allocate_exact_size(
-                            Vec2::new(ui.available_width().max(200.0), ROW_H),
-                            egui::Sense::click(),
-                        );
-                        // P32-A4：行右键菜单（复制路径/打开文件）+ P37-1c 复制单元格至右侧
-                        let (lp, rp) = (self.left.clone(), self.right.clone());
-                        resp.context_menu(|ui| {
-                            if ui.button(t(I18nKey::CopyLeftPath)).clicked() {
-                                ui.ctx().copy_text(lp.clone());
-                                ui.close();
-                            }
-                            if ui.button(t(I18nKey::CopyRightPath)).clicked() {
-                                ui.ctx().copy_text(rp.clone());
-                                ui.close();
-                            }
-                            ui.separator();
-                            if ui.button(t(I18nKey::CopyCellRight)).clicked() {
-                                copy_cell_req = true;
-                                ui.close();
-                            }
-                            // P37-1l：行列操作（BC 编辑菜单 删除/插入行列、修改单元格）
-                            ui.separator();
-                            if ui.button(t(I18nKey::CsvDeleteRow)).clicked() {
-                                delete_row_req = true;
-                                ui.close();
-                            }
-                            if ui.button(t(I18nKey::CsvInsertRow)).clicked() {
-                                insert_row_req = true;
-                                ui.close();
-                            }
-                            if ui.button(t(I18nKey::CsvDeleteCol)).clicked() {
-                                delete_col_req = true;
-                                ui.close();
-                            }
-                            if ui.button(t(I18nKey::CsvInsertCol)).clicked() {
-                                insert_col_req = true;
-                                ui.close();
-                            }
-                            if ui.button(t(I18nKey::CsvEditCell)).clicked() {
-                                edit_cell_req = true;
-                                ui.close();
-                            }
-                            ui.separator();
-                            if ui.button(t(I18nKey::OpenLeftFile)).clicked() {
-                                super::common::open_with_system_app(&lp);
-                                ui.close();
-                            }
-                            if ui.button(t(I18nKey::OpenRightFile)).clicked() {
-                                super::common::open_with_system_app(&rp);
-                                ui.close();
-                            }
-                        });
-                        // 行级底色（P31：hover 浅色 + 状态色）
-                        let bg = match (ar.status, side) {
-                            (RowStatus::LeftOnly, true) | (RowStatus::RightOnly, false) => {
-                                Some(bg_replace_l())
-                            }
-                            (RowStatus::RightOnly, true) | (RowStatus::LeftOnly, false) => {
-                                Some(bg_match())
-                            }
-                            (RowStatus::Modified, _) => Some(bg_match()),
-                            _ => None,
-                        };
-                        let bg = if resp.hovered() {
-                            Some(bg.unwrap_or(bg_match()))
-                        } else {
-                            bg
-                        };
-                        paint_bg(ui, rect, bg);
-                        // 行号
-                        paint_line_no(
-                            ui,
-                            Rect::from_min_size(rect.min, vec2(gutter_width(total), ROW_H)),
-                            row_no,
-                        );
-                        // 状态字母
-                        let letter = match ar.status {
-                            RowStatus::Same => 'S',
-                            RowStatus::LeftOnly => 'L',
-                            RowStatus::RightOnly => 'R',
-                            RowStatus::Modified => 'M',
-                        };
-                        let sc = status_color(ui, letter);
-                        ui.painter().text(
-                            Pos2::new(rect.left() + gutter_width(total) + 8.0, rect.center().y),
-                            egui::Align2::LEFT_CENTER,
-                            letter.to_string(),
-                            egui::FontId::monospace(12.0),
-                            sc,
-                        );
-                        // 单元格（P37-1c：隐藏相同列过滤 + 自适应宽度 + 点击选中）
-                        let mut x0 = rect.left() + gutter_width(total) + 24.0;
-                        for (col_idx, cell) in
-                            row.map(|r| r.iter().enumerate()).into_iter().flatten()
-                        {
-                            // 隐藏相同列时跳过
-                            if let Some(vc) = &vis_cols {
-                                if !vc.contains(&col_idx) {
-                                    continue;
-                                }
-                            }
-                            let col_w = widths.get(col_idx).copied().unwrap_or(110.0);
-                            let crect =
-                                Rect::from_min_size(Pos2::new(x0, rect.top()), vec2(col_w, ROW_H));
-                            // 单元格点击选中（P37-1c）
-                            let cell_resp = ui.interact(
-                                crect,
-                                ui.id().with(("csvcell", aligned_idx, col_idx)),
+            ui.columns(2, |cols| {
+                for (ci, side) in [(0usize, true), (1, false)].into_iter() {
+                    let ui = &mut cols[ci];
+                    let table = if side { a } else { b };
+                    let out = super::show_rows(ui, total, ROW_H, |ui, range| {
+                        let fg = text_color(ui);
+                        for vi in range {
+                            let aligned_idx = visible[vi];
+                            let ar = &self.aligned[aligned_idx];
+                            let (row, row_no) = if side {
+                                (
+                                    ar.a_no.and_then(|n| table.rows.get(n)),
+                                    ar.a_no.map(|n| n + 1),
+                                )
+                            } else {
+                                (
+                                    ar.b_no.and_then(|n| table.rows.get(n)),
+                                    ar.b_no.map(|n| n + 1),
+                                )
+                            };
+                            let (rect, resp) = ui.allocate_exact_size(
+                                Vec2::new(ui.available_width().max(200.0), ROW_H),
                                 egui::Sense::click(),
                             );
-                            if cell_resp.clicked() {
-                                click_cell = Some((aligned_idx, col_idx));
-                            }
-                            // 选中高亮（浅蓝）
-                            if self.selected == Some((aligned_idx, col_idx)) {
-                                paint_bg(ui, crect, Some(bg_select()));
-                            }
-                            // 修改列高亮：左侧红、右侧黄
-                            let hl = if ar.status == RowStatus::Modified
-                                && ar.changed_cols.contains(&col_idx)
-                            {
-                                Some(if side { hl_replace_l() } else { hl_replace_r() })
-                            } else {
-                                None
+                            // P32-A4：行右键菜单（复制路径/打开文件）+ P37-1c 复制单元格至右侧
+                            let (lp, rp) = (self.left.clone(), self.right.clone());
+                            resp.context_menu(|ui| {
+                                if ui.button(t(I18nKey::CopyLeftPath)).clicked() {
+                                    ui.ctx().copy_text(lp.clone());
+                                    ui.close();
+                                }
+                                if ui.button(t(I18nKey::CopyRightPath)).clicked() {
+                                    ui.ctx().copy_text(rp.clone());
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button(t(I18nKey::CopyCellRight)).clicked() {
+                                    copy_cell_req = true;
+                                    ui.close();
+                                }
+                                // P37-1l：行列操作（BC 编辑菜单 删除/插入行列、修改单元格）
+                                ui.separator();
+                                if ui.button(t(I18nKey::CsvDeleteRow)).clicked() {
+                                    delete_row_req = true;
+                                    ui.close();
+                                }
+                                if ui.button(t(I18nKey::CsvInsertRow)).clicked() {
+                                    insert_row_req = true;
+                                    ui.close();
+                                }
+                                if ui.button(t(I18nKey::CsvDeleteCol)).clicked() {
+                                    delete_col_req = true;
+                                    ui.close();
+                                }
+                                if ui.button(t(I18nKey::CsvInsertCol)).clicked() {
+                                    insert_col_req = true;
+                                    ui.close();
+                                }
+                                if ui.button(t(I18nKey::CsvEditCell)).clicked() {
+                                    edit_cell_req = true;
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui.button(t(I18nKey::OpenLeftFile)).clicked() {
+                                    super::common::open_with_system_app(&lp);
+                                    ui.close();
+                                }
+                                if ui.button(t(I18nKey::OpenRightFile)).clicked() {
+                                    super::common::open_with_system_app(&rp);
+                                    ui.close();
+                                }
+                            });
+                            // 行级底色（P31：hover 浅色 + 状态色）
+                            let bg = match (ar.status, side) {
+                                (RowStatus::LeftOnly, true) | (RowStatus::RightOnly, false) => {
+                                    Some(bg_replace_l())
+                                }
+                                (RowStatus::RightOnly, true) | (RowStatus::LeftOnly, false) => {
+                                    Some(bg_match())
+                                }
+                                (RowStatus::Modified, _) => Some(bg_match()),
+                                _ => None,
                             };
-                            if let Some(c) = hl {
-                                paint_bg(ui, crect, Some(c));
-                            }
-                            ui.painter().text(
-                                Pos2::new(x0 + 4.0, rect.center().y),
-                                egui::Align2::LEFT_CENTER,
-                                cell,
-                                egui::FontId::monospace(FONT_SIZE),
-                                fg,
+                            let bg = if resp.hovered() {
+                                Some(bg.unwrap_or(bg_match()))
+                            } else {
+                                bg
+                            };
+                            paint_bg(ui, rect, bg);
+                            // 行号
+                            paint_line_no(
+                                ui,
+                                Rect::from_min_size(rect.min, vec2(gutter_width(total), ROW_H)),
+                                row_no,
                             );
-                            x0 += col_w;
+                            // 状态字母
+                            let letter = match ar.status {
+                                RowStatus::Same => 'S',
+                                RowStatus::LeftOnly => 'L',
+                                RowStatus::RightOnly => 'R',
+                                RowStatus::Modified => 'M',
+                            };
+                            let sc = status_color(ui, letter);
+                            ui.painter().text(
+                                Pos2::new(rect.left() + gutter_width(total) + 8.0, rect.center().y),
+                                egui::Align2::LEFT_CENTER,
+                                letter.to_string(),
+                                egui::FontId::monospace(12.0),
+                                sc,
+                            );
+                            // 单元格（P37-1c：隐藏相同列过滤 + 自适应宽度 + 点击选中）
+                            let mut x0 = rect.left() + gutter_width(total) + 24.0;
+                            for (col_idx, cell) in
+                                row.map(|r| r.iter().enumerate()).into_iter().flatten()
+                            {
+                                // 隐藏相同列时跳过
+                                if let Some(vc) = &vis_cols {
+                                    if !vc.contains(&col_idx) {
+                                        continue;
+                                    }
+                                }
+                                let col_w = widths.get(col_idx).copied().unwrap_or(110.0);
+                                let crect = Rect::from_min_size(
+                                    Pos2::new(x0, rect.top()),
+                                    vec2(col_w, ROW_H),
+                                );
+                                // 单元格点击选中（P37-1c）
+                                let cell_resp = ui.interact(
+                                    crect,
+                                    ui.id().with(("csvcell", aligned_idx, col_idx)),
+                                    egui::Sense::click(),
+                                );
+                                if cell_resp.clicked() {
+                                    click_cell = Some((aligned_idx, col_idx));
+                                }
+                                // 选中高亮（浅蓝）
+                                if self.selected == Some((aligned_idx, col_idx)) {
+                                    paint_bg(ui, crect, Some(bg_select()));
+                                }
+                                // 修改列高亮：左侧红、右侧黄
+                                let hl = if ar.status == RowStatus::Modified
+                                    && ar.changed_cols.contains(&col_idx)
+                                {
+                                    Some(if side { hl_replace_l() } else { hl_replace_r() })
+                                } else {
+                                    None
+                                };
+                                if let Some(c) = hl {
+                                    paint_bg(ui, crect, Some(c));
+                                }
+                                ui.painter().text(
+                                    Pos2::new(x0 + 4.0, rect.center().y),
+                                    egui::Align2::LEFT_CENTER,
+                                    cell,
+                                    egui::FontId::monospace(FONT_SIZE),
+                                    fg,
+                                );
+                                x0 += col_w;
+                            }
+                            let _ = ncols;
+                            let _ = show_same;
+                            let _ = filter;
+                            let _ = sort;
                         }
-                        let _ = ncols;
-                        let _ = show_same;
-                        let _ = filter;
-                        let _ = sort;
-                    }
-                });
-                let _ = out;
-            }
-        });
+                    });
+                    let _ = out;
+                }
+            });
         });
         // P37-1c：闭包外处理单元格点击选中 / 复制请求（借用安全）
         if let Some(cell) = click_cell {
