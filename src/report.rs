@@ -318,6 +318,19 @@ pub fn render_csv(left: &str, right: &str, result: &CompareResult) -> String {
     render_csv_fields(left, right, result, &parse_fields("").unwrap())
 }
 
+/// 字节数 → 千位分隔符字符串（BC 文件列表风格，如 917,043）
+pub fn fmt_size_raw(size: u64) -> String {
+    let s = size.to_string();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// SystemTime → 可读时间串（%Y-%m-%d %H:%M:%S UTC）
 pub fn fmt_mtime_pub(t: std::time::SystemTime) -> String {
     let secs = t

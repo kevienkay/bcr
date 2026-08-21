@@ -2139,18 +2139,41 @@ impl DirTab {
                                 egui::FontId::monospace(14.0),
                                 fg,
                             );
-                            // 两侧大小
+                            // P54-1：两侧大小（BC 风格千位分隔符，位于「大小」列）
                             let size_text = match (&e.left, &e.right) {
-                                (Some(l), Some(r)) => format!("{}B → {}B", l.size, r.size),
-                                (Some(l), None) => format!("{}B → -", l.size),
-                                (None, Some(r)) => format!("- → {}B", r.size),
+                                (Some(l), Some(r)) => format!(
+                                    "{} → {}",
+                                    crate::report::fmt_size_raw(l.size),
+                                    crate::report::fmt_size_raw(r.size)
+                                ),
+                                (Some(l), None) => {
+                                    format!("{} → -", crate::report::fmt_size_raw(l.size))
+                                }
+                                (None, Some(r)) => {
+                                    format!("- → {}", crate::report::fmt_size_raw(r.size))
+                                }
                                 (None, None) => String::new(),
                             };
                             if !size_text.is_empty() {
                                 ui.painter().text(
+                                    Pos2::new(rect.right() - 150.0, rect.center().y),
+                                    egui::Align2::LEFT_CENTER,
+                                    size_text,
+                                    egui::FontId::monospace(12.0),
+                                    ui.visuals().weak_text_color(),
+                                );
+                            }
+                            // P54-1：修改时间（位于「修改时间」列，取存在侧，与列头对齐）
+                            let mtime_text = e
+                                .left
+                                .as_ref()
+                                .or(e.right.as_ref())
+                                .map(|m| crate::report::fmt_mtime_pub(m.mtime));
+                            if let Some(mt) = mtime_text {
+                                ui.painter().text(
                                     Pos2::new(rect.right() - 8.0, rect.center().y),
                                     egui::Align2::RIGHT_CENTER,
-                                    size_text,
+                                    mt,
                                     egui::FontId::monospace(12.0),
                                     ui.visuals().weak_text_color(),
                                 );
