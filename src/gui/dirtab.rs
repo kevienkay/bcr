@@ -1501,53 +1501,57 @@ impl DirTab {
                             }
                         }
                     }
-                    // 批量操作：作用于全部差异文件（only_diff 视图）
+                    // P55-3：批量操作收进「更多批量」菜单按钮（BC 工具栏精简——批量操作不占主工具栏）
                     if let Some(r) = &self.result {
                         let has_diff = r.entries.iter().any(|e| e.status != FileStatus::Same);
                         if has_diff {
                             ui.separator();
-                            if ui
-                                .button("⧉ 批量复制→右")
-                                .on_hover_text("把全部差异/仅左侧文件复制到右侧")
-                                .clicked()
-                            {
-                                self.run_batch_copy_to_right();
-                            }
-                            // P37-1f：批量复制→左（BC 复制右边到左边）
-                            if ui
-                                .button("⧉ 批量复制→左")
-                                .on_hover_text(t(I18nKey::CopyBatchToLeft))
-                                .clicked()
-                            {
-                                self.run_batch_copy_to_left();
-                            }
-                            if ui
-                                .button("🗑 批量删除右侧")
-                                .on_hover_text("删除右侧全部差异文件")
-                                .clicked()
-                            {
-                                self.run_batch_delete_right();
-                            }
-                            // P37-1f：批量删除左侧（BC 删除左边）
-                            if ui
-                                .button("🗑 批量删除左侧")
-                                .on_hover_text(t(I18nKey::DeleteBatchLeft))
-                                .clicked()
-                            {
-                                self.run_batch_delete_left();
-                            }
-                            // P37-1f：立即同步（BC Sync Now：生成计划并直接执行）
-                            ui.separator();
-                            if ui
-                                .button(format!("⚡ {}", t(I18nKey::SyncNow)))
-                                .on_hover_text("生成同步计划并立即执行（update/mirror/two-way）")
-                                .clicked()
-                            {
-                                if self.sync_plan.is_none() {
-                                    self.gen_sync_plan();
+                            ui.menu_button("⧉ 更多批量", |ui| {
+                                if ui
+                                    .button("⧉ 批量复制→右")
+                                    .on_hover_text("把全部差异/仅左侧文件复制到右侧")
+                                    .clicked()
+                                {
+                                    self.run_batch_copy_to_right();
+                                    ui.close();
                                 }
-                                self.run_sync_checked();
-                            }
+                                    if ui
+                                        .button("⧉ 批量复制→左")
+                                        .on_hover_text(t(I18nKey::CopyBatchToLeft))
+                                        .clicked()
+                                    {
+                                        self.run_batch_copy_to_left();
+                                        ui.close();
+                                    }
+                                    if ui
+                                        .button("🗑 批量删除右侧")
+                                        .on_hover_text("删除右侧全部差异文件")
+                                        .clicked()
+                                    {
+                                        self.run_batch_delete_right();
+                                        ui.close();
+                                    }
+                                    if ui
+                                        .button("🗑 批量删除左侧")
+                                        .on_hover_text(t(I18nKey::DeleteBatchLeft))
+                                        .clicked()
+                                    {
+                                        self.run_batch_delete_left();
+                                        ui.close();
+                                    }
+                                    ui.separator();
+                                    if ui
+                                        .button(format!("⚡ {}", t(I18nKey::SyncNow)))
+                                        .on_hover_text("生成同步计划并立即执行（update/mirror/two-way）")
+                                        .clicked()
+                                    {
+                                        if self.sync_plan.is_none() {
+                                            self.gen_sync_plan();
+                                        }
+                                        self.run_sync_checked();
+                                        ui.close();
+                                    }
+                                });
                         }
                     }
                     // 选中文件单项操作

@@ -159,7 +159,7 @@ fn dirtab_filter_dropdown_changes_view() {
     }
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run_steps(4);
-    // ComboBox 的选中文本在 value（非 label），用 role 定位点击打开
+    // 视图过滤是唯一 ComboBox（批量已改菜单按钮），role 定位即可
     h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
         .click();
     // 跨平台 headless 渲染时序差异：菜单展开后轮询重试点击「仅左侧」（macOS CI 偶发慢，需更多轮询）
@@ -1949,6 +1949,9 @@ fn dirtab_sync_now_button_via_ui() {
     }
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run_steps(4);
+    // P55-3：立即同步已收进「更多批量」下拉，先展开下拉再点该项
+    h.get_by_label_contains("更多批量").click();
+    h.run_steps(2);
     // 点击「⚡ 立即同步」→ 生成计划并执行（后台线程）
     h.get_by_label_contains("立即同步").click();
     h.run_steps(4);
