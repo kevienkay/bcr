@@ -1515,43 +1515,45 @@ impl DirTab {
                                     self.run_batch_copy_to_right();
                                     ui.close();
                                 }
-                                    if ui
-                                        .button("⧉ 批量复制→左")
-                                        .on_hover_text(t(I18nKey::CopyBatchToLeft))
-                                        .clicked()
-                                    {
-                                        self.run_batch_copy_to_left();
-                                        ui.close();
+                                if ui
+                                    .button("⧉ 批量复制→左")
+                                    .on_hover_text(t(I18nKey::CopyBatchToLeft))
+                                    .clicked()
+                                {
+                                    self.run_batch_copy_to_left();
+                                    ui.close();
+                                }
+                                if ui
+                                    .button("🗑 批量删除右侧")
+                                    .on_hover_text("删除右侧全部差异文件")
+                                    .clicked()
+                                {
+                                    self.run_batch_delete_right();
+                                    ui.close();
+                                }
+                                if ui
+                                    .button("🗑 批量删除左侧")
+                                    .on_hover_text(t(I18nKey::DeleteBatchLeft))
+                                    .clicked()
+                                {
+                                    self.run_batch_delete_left();
+                                    ui.close();
+                                }
+                                ui.separator();
+                                if ui
+                                    .button(format!("⚡ {}", t(I18nKey::SyncNow)))
+                                    .on_hover_text(
+                                        "生成同步计划并立即执行（update/mirror/two-way）",
+                                    )
+                                    .clicked()
+                                {
+                                    if self.sync_plan.is_none() {
+                                        self.gen_sync_plan();
                                     }
-                                    if ui
-                                        .button("🗑 批量删除右侧")
-                                        .on_hover_text("删除右侧全部差异文件")
-                                        .clicked()
-                                    {
-                                        self.run_batch_delete_right();
-                                        ui.close();
-                                    }
-                                    if ui
-                                        .button("🗑 批量删除左侧")
-                                        .on_hover_text(t(I18nKey::DeleteBatchLeft))
-                                        .clicked()
-                                    {
-                                        self.run_batch_delete_left();
-                                        ui.close();
-                                    }
-                                    ui.separator();
-                                    if ui
-                                        .button(format!("⚡ {}", t(I18nKey::SyncNow)))
-                                        .on_hover_text("生成同步计划并立即执行（update/mirror/two-way）")
-                                        .clicked()
-                                    {
-                                        if self.sync_plan.is_none() {
-                                            self.gen_sync_plan();
-                                        }
-                                        self.run_sync_checked();
-                                        ui.close();
-                                    }
-                                });
+                                    self.run_sync_checked();
+                                    ui.close();
+                                }
+                            });
                         }
                     }
                     // 选中文件单项操作
@@ -2066,7 +2068,7 @@ impl DirTab {
                 paint_bg(ui, h_rect, Some(head_bg));
                 let head_fg = ui.visuals().weak_text_color();
                 let font = egui::FontId::proportional(12.0);
-                // 左列：名称（BC: Name）
+                // P55-5：列头改为左右双组（每组 名称 | 大小 | 修改时间，对齐 BC 双栏）
                 ui.painter().text(
                     Pos2::new(h_rect.left() + 8.0, h_rect.center().y),
                     egui::Align2::LEFT_CENTER,
@@ -2074,10 +2076,30 @@ impl DirTab {
                     font.clone(),
                     head_fg,
                 );
-                // 右列：大小 / 修改时间（BC: Size / Modified）
+                let mid_hx = h_rect.center().x;
                 ui.painter().text(
-                    Pos2::new(h_rect.right() - 150.0, h_rect.center().y),
-                    egui::Align2::LEFT_CENTER,
+                    Pos2::new(mid_hx - 108.0, h_rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    "大小",
+                    font.clone(),
+                    head_fg,
+                );
+                ui.painter().text(
+                    Pos2::new(mid_hx - 8.0, h_rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
+                    "修改时间",
+                    font.clone(),
+                    head_fg,
+                );
+                // 中缝分隔线
+                ui.painter().vline(
+                    mid_hx,
+                    h_rect.y_range(),
+                    egui::Stroke::new(1.0, super::theme::mid_sep(ui.visuals().dark_mode)),
+                );
+                ui.painter().text(
+                    Pos2::new(h_rect.right() - 108.0, h_rect.center().y),
+                    egui::Align2::RIGHT_CENTER,
                     "大小",
                     font.clone(),
                     head_fg,
@@ -2134,65 +2156,102 @@ impl DirTab {
                         }
                     } else if let Some(ei) = row.entry {
                         if let Some(e) = self.result.as_ref().and_then(|r| r.entries.get(ei)) {
+                            // P55-5：BC 式左右双栏——同一 rel 路径在左右半区分别显示两侧文件，
+                            // 左半区=左侧文件(badge+名称+大小+时间)，右半区=右侧文件，中缝垂直分隔线
                             let letter = e.status.letter();
                             let color = status_color(ui, letter);
-                            // P31 状态徽标：圆形底色 + 字母（替代纯文本 [L]）
-                            let badge_r = 9.0;
-                            let badge_c = Pos2::new(x0 + badge_r, rect.center().y);
-                            ui.painter().circle_filled(
-                                badge_c,
-                                badge_r,
-                                color.gamma_multiply(0.25),
-                            );
-                            ui.painter().text(
-                                badge_c,
-                                egui::Align2::CENTER_CENTER,
-                                letter.to_string(),
-                                egui::FontId::monospace(12.0),
-                                color,
-                            );
-                            ui.painter().text(
-                                Pos2::new(x0 + 24.0, rect.center().y),
-                                egui::Align2::LEFT_CENTER,
-                                &row.name,
-                                egui::FontId::monospace(14.0),
-                                fg,
-                            );
-                            // P54-1：两侧大小（BC 风格千位分隔符，位于「大小」列）
-                            let size_text = match (&e.left, &e.right) {
-                                (Some(l), Some(r)) => format!(
-                                    "{} → {}",
-                                    crate::report::fmt_size_raw(l.size),
-                                    crate::report::fmt_size_raw(r.size)
-                                ),
-                                (Some(l), None) => {
-                                    format!("{} → -", crate::report::fmt_size_raw(l.size))
-                                }
-                                (None, Some(r)) => {
-                                    format!("- → {}", crate::report::fmt_size_raw(r.size))
-                                }
-                                (None, None) => String::new(),
-                            };
-                            if !size_text.is_empty() {
+                            let mid_x = rect.center().x;
+                            let half_w = (rect.width() / 2.0).max(120.0);
+                            // 左半区：左文件（e.left 存在时）
+                            let dl = e.left.as_ref();
+                            if dl.is_some() {
+                                let x0 = rect.left() + 4.0 + indent;
+                                let badge_r = 9.0;
+                                let badge_c = Pos2::new(x0 + badge_r, rect.center().y);
+                                ui.painter().circle_filled(
+                                    badge_c,
+                                    badge_r,
+                                    color.gamma_multiply(0.25),
+                                );
                                 ui.painter().text(
-                                    Pos2::new(rect.right() - 150.0, rect.center().y),
+                                    badge_c,
+                                    egui::Align2::CENTER_CENTER,
+                                    letter.to_string(),
+                                    egui::FontId::monospace(12.0),
+                                    color,
+                                );
+                                ui.painter().text(
+                                    Pos2::new(x0 + 24.0, rect.center().y),
                                     egui::Align2::LEFT_CENTER,
-                                    size_text,
+                                    &row.name,
+                                    egui::FontId::monospace(14.0),
+                                    fg,
+                                );
+                                // 左文件大小 + 修改时间（右对齐到中缝左侧）
+                                if let Some(l) = dl {
+                                    let mt = crate::report::fmt_mtime_pub(l.mtime);
+                                    ui.painter().text(
+                                        Pos2::new(mid_x - 108.0, rect.center().y),
+                                        egui::Align2::RIGHT_CENTER,
+                                        format!("{}", crate::report::fmt_size_raw(l.size)),
+                                        egui::FontId::monospace(12.0),
+                                        ui.visuals().weak_text_color(),
+                                    );
+                                    ui.painter().text(
+                                        Pos2::new(mid_x - 8.0, rect.center().y),
+                                        egui::Align2::RIGHT_CENTER,
+                                        mt,
+                                        egui::FontId::monospace(12.0),
+                                        ui.visuals().weak_text_color(),
+                                    );
+                                }
+                                let _ = half_w;
+                            }
+                            // 中缝垂直分隔线
+                            ui.painter().vline(
+                                mid_x,
+                                rect.y_range(),
+                                egui::Stroke::new(
+                                    1.0,
+                                    super::theme::mid_sep(ui.visuals().dark_mode),
+                                ),
+                            );
+                            // 右半区：右文件（e.right 存在时）
+                            if let Some(r) = e.right.as_ref() {
+                                let x0 = mid_x + 4.0 + indent;
+                                let badge_r = 9.0;
+                                let badge_c = Pos2::new(x0 + badge_r, rect.center().y);
+                                ui.painter().circle_filled(
+                                    badge_c,
+                                    badge_r,
+                                    color.gamma_multiply(0.25),
+                                );
+                                ui.painter().text(
+                                    badge_c,
+                                    egui::Align2::CENTER_CENTER,
+                                    letter.to_string(),
+                                    egui::FontId::monospace(12.0),
+                                    color,
+                                );
+                                ui.painter().text(
+                                    Pos2::new(x0 + 24.0, rect.center().y),
+                                    egui::Align2::LEFT_CENTER,
+                                    &row.name,
+                                    egui::FontId::monospace(14.0),
+                                    fg,
+                                );
+                                // 右文件大小 + 修改时间（右对齐到右缘）
+                                ui.painter().text(
+                                    Pos2::new(rect.right() - 108.0, rect.center().y),
+                                    egui::Align2::RIGHT_CENTER,
+                                    format!("{}", crate::report::fmt_size_raw(r.size)),
                                     egui::FontId::monospace(12.0),
                                     ui.visuals().weak_text_color(),
                                 );
-                            }
-                            // P54-1：修改时间（位于「修改时间」列，取存在侧，与列头对齐）
-                            let mtime_text = e
-                                .left
-                                .as_ref()
-                                .or(e.right.as_ref())
-                                .map(|m| crate::report::fmt_mtime_pub(m.mtime));
-                            if let Some(mt) = mtime_text {
                                 ui.painter().text(
                                     Pos2::new(rect.right() - 8.0, rect.center().y),
                                     egui::Align2::RIGHT_CENTER,
-                                    mt,
+                                    crate::report::fmt_mtime_pub(r.mtime),
                                     egui::FontId::monospace(12.0),
                                     ui.visuals().weak_text_color(),
                                 );
