@@ -253,3 +253,25 @@ fn snap_app_csvtab_light() {
     }
     save(&mut h, "app_csvtab_light");
 }
+
+// ---- P54：欢迎页（带会话数据，验证会话列表图标）----
+
+#[test]
+#[ignore]
+fn snap_welcome_with_sessions() {
+    // 临时 HOME 注入会话文件，验证会话列表 📁 图标
+    let home = tempfile::tempdir().unwrap();
+    std::env::set_var("HOME", home.path());
+    std::fs::create_dir_all(home.path().join(".bcr")).unwrap();
+    std::fs::write(
+        home.path().join(".bcr-sessions.toml"),
+        "[sessions.backup]\nleft = \"/Users/alice/projects/app/src\"\nright = \"/Users/alice/backups/app-src-2026-08-01\"\n",
+    )
+    .unwrap();
+    let mut app = DiffApp::new(Settings::default());
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1360.0, 860.0))
+        .build_ui(|ui| app.welcome_ui(ui));
+    save(&mut h, "welcome_sessions");
+    std::env::remove_var("HOME");
+}

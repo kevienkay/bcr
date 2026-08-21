@@ -1261,7 +1261,7 @@ impl DiffApp {
                                                     ui.horizontal(|ui| {
                                                         ui.label(
                                                             RichText::new("📁")
-                                                                .size(12.0)
+                                                                .size(14.0)
                                                                 .color(icon_c),
                                                         );
                                                         ui.add_space(2.0);
