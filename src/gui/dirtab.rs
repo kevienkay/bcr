@@ -1404,23 +1404,32 @@ impl DirTab {
                         self.show_filter_panel = !self.show_filter_panel;
                     }
                     ui.separator();
+                    // P55-2：过滤开关改为 BC 式 toggle 按钮（.selected 显示按下态，比 checkbox 紧凑一行）
                     if ui
-                        .checkbox(&mut self.compare_content, t(I18nKey::ContentHash))
-                        .changed()
+                        .add(
+                            egui::Button::new(t(I18nKey::ContentHash)).selected(self.compare_content),
+                        )
+                        .on_hover_text("内容比较：对大小相同的文件做 blake3 哈希")
+                        .clicked()
                     {
+                        self.compare_content = !self.compare_content;
                         self.refresh();
                     }
                     if ui
-                        .checkbox(&mut self.only_diff, t(I18nKey::OnlyDiff))
-                        .changed()
+                        .add(egui::Button::new(t(I18nKey::OnlyDiff)).selected(self.only_diff))
+                        .on_hover_text("仅显示差异文件（1）")
+                        .clicked()
                     {
+                        self.only_diff = !self.only_diff;
                         self.rebuild_tree();
                     }
                     if ui
-                        .checkbox(&mut self.show_same, t(I18nKey::ShowSame))
-                        .changed()
+                        .add(egui::Button::new(t(I18nKey::ShowSame)).selected(self.show_same))
+                        .on_hover_text("显示相同文件")
+                        .clicked()
                         && !self.only_diff
                     {
+                        self.show_same = !self.show_same;
                         self.rebuild_tree();
                     }
                     // B1 状态过滤下拉（BC 显示过滤器）
@@ -1779,10 +1788,15 @@ impl DirTab {
                         }
                     });
                     ui.horizontal(|ui| {
+                        // P55-2：同步面板内容哈希开关也改 toggle 按钮（与主工具栏一致）
                         if ui
-                            .checkbox(&mut self.compare_content, t(I18nKey::ContentHash))
-                            .changed()
+                            .add(
+                                egui::Button::new(t(I18nKey::ContentHash))
+                                    .selected(self.compare_content),
+                            )
+                            .clicked()
                         {
+                            self.compare_content = !self.compare_content;
                             // 内容哈希变化只影响下一次生成计划
                         }
                         if ui.button("生成计划").clicked() {
