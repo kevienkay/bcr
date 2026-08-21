@@ -920,6 +920,7 @@ impl CsvTab {
         let mut delete_col_req = false;
         let mut insert_col_req = false;
         let mut edit_cell_req = false;
+        egui::CentralPanel::default().show(ui, |ui| {
         ui.columns(2, |cols| {
             for (ci, side) in [(0usize, true), (1, false)].into_iter() {
                 let ui = &mut cols[ci];
@@ -1085,6 +1086,7 @@ impl CsvTab {
                 });
                 let _ = out;
             }
+        });
         });
         // P37-1c：闭包外处理单元格点击选中 / 复制请求（借用安全）
         if let Some(cell) = click_cell {

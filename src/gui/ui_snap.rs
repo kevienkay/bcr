@@ -192,3 +192,64 @@ fn snap_app_mergetab() {
         });
     save(&mut h, "app_mergetab");
 }
+
+// ---- P54：CSV 表格视图 ----
+
+#[test]
+#[ignore]
+fn snap_app_csvtab() {
+    let d = tempfile::tempdir().unwrap();
+    let (l, r) = (d.path().join("l.csv"), d.path().join("r.csv"));
+    std::fs::write(
+        &l,
+        "id,name,age\n1,alice,30\n2,bob,25\n3,carol,40\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &r,
+        "id,name,age\n1,alice,31\n2,bob,25\n4,dave,22\n",
+    )
+    .unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1360.0, 860.0))
+        .build_eframe(|cc| {
+            install_cjk_fonts(&cc.egui_ctx);
+            theme::apply(&cc.egui_ctx);
+            let mut app = DiffApp::new(Settings::default());
+            app.add_tab(Tab::Csv(crate::gui::csvtab::CsvTab::new(
+                l.to_str().unwrap(),
+                r.to_str().unwrap(),
+            )));
+            app
+        });
+    for _ in 0..6 {
+        h.run_steps(2);
+    }
+    save(&mut h, "app_csvtab");
+}
+
+#[test]
+#[ignore]
+fn snap_app_csvtab_light() {
+    let d = tempfile::tempdir().unwrap();
+    let (l, r) = (d.path().join("l.csv"), d.path().join("r.csv"));
+    std::fs::write(&l, "id,name\n1,alice\n2,bob\n").unwrap();
+    std::fs::write(&r, "id,name\n1,alice\n2,BOB\n").unwrap();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1360.0, 860.0))
+        .with_theme(egui::Theme::Light)
+        .build_eframe(|cc| {
+            install_cjk_fonts(&cc.egui_ctx);
+            theme::apply(&cc.egui_ctx);
+            let mut app = DiffApp::new(Settings::default());
+            app.add_tab(Tab::Csv(crate::gui::csvtab::CsvTab::new(
+                l.to_str().unwrap(),
+                r.to_str().unwrap(),
+            )));
+            app
+        });
+    for _ in 0..6 {
+        h.run_steps(2);
+    }
+    save(&mut h, "app_csvtab_light");
+}
