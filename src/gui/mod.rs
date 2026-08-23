@@ -249,6 +249,8 @@ struct DiffApp {
     show_git_help: bool,
     /// 会话中心窗口开关
     show_sessions: bool,
+    /// P56-2：左侧会话导航侧栏开关（BC 常驻侧栏）
+    show_sidebar: bool,
     /// 规则(Profile)管理窗口开关
     show_profiles: bool,
     /// 云盘/远程浏览窗口开关
@@ -297,6 +299,7 @@ impl DiffApp {
             settings,
             show_git_help: false,
             show_sessions: false,
+            show_sidebar: true,
             show_profiles: false,
             show_cloud: false,
             cloud_left: String::new(),
@@ -2526,6 +2529,10 @@ impl eframe::App for DiffApp {
         // 底部全局状态栏（P31，对标 BC 状态栏）——面板须在 CentralPanel 之前声明：
         // egui 的 CentralPanel 会占满全部剩余空间，其后声明的 bottom 面板拿不到高度（实测不渲染）。
         if !self.tabs.is_empty() {
+            // P56-2：左侧会话导航侧栏（面板须在 CentralPanel 之前）
+            if self.show_sidebar {
+                self.session_sidebar(ui);
+            }
             self.status_bar(ui);
         }
 
@@ -2610,6 +2617,95 @@ impl eframe::App for DiffApp {
 
 /// P39-2c：保存当前标签报告到用户选择的文件
 impl DiffApp {
+    /// P56-2：左侧会话导航侧栏（BC 常驻侧栏）——主页/最近会话/当前标签导航
+    fn session_sidebar(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::left("session_sidebar").show(ui, |ui| {
+            ui.set_min_width(180.0);
+            ui.set_max_width(240.0);
+            ui.vertical(|ui| {
+                // 主页按钮（回到欢迎页/清除会话）
+                if ui
+                    .button("🏠 主页")
+                    .on_hover_text("回到欢迎页（关闭当前标签）")
+                    .clicked()
+                {
+                    self.tabs.clear();
+                    self.active = 0;
+                }
+                ui.separator();
+                // 当前标签导航（Dir 后退/前进/上一层）
+                if let Some(tab) = self.tabs.get_mut(self.active) {
+                    if let Tab::Dir(d) = tab {
+                        ui.label(egui::RichText::new("导航").weak());
+                        ui.horizontal_wrapped(|ui| {
+                            if ui
+                                .button("← 后退")
+                                .on_hover_text("导航到历史前一项")
+                                .clicked()
+                            {
+                                d.back();
+                            }
+                            if ui
+                                .button("→ 前进")
+                                .on_hover_text("导航到历史后一项")
+                                .clicked()
+                            {
+                                d.forward();
+                            }
+                            if ui.button("↑ 上一层").on_hover_text("进入父目录").clicked()
+                            {
+                                d.up_level();
+                            }
+                        });
+                        ui.separator();
+                    }
+                }
+                // 最近会话列表
+                ui.label(
+                    egui::RichText::new(crate::i18n::t(crate::i18n::Key::MenuSaveSession)).strong(),
+                );
+                ui.add_space(4.0);
+                let sessions = crate::session::load();
+                let mut open_req: Option<(String, String)> = None;
+                if sessions.sessions.is_empty() {
+                    ui.label(
+                        egui::RichText::new("暂无会话")
+                            .size(11.0)
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                } else {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for (name, s) in &sessions.sessions {
+                                let label = format!(
+                                    "📁 {}\n{}",
+                                    name,
+                                    std::path::Path::new(&s.left)
+                                        .file_name()
+                                        .map(|x| x.to_string_lossy().into_owned())
+                                        .unwrap_or_else(|| s.left.clone())
+                                );
+                                if ui
+                                    .add(
+                                        egui::Button::new(egui::RichText::new(label).size(11.0))
+                                            .frame(false),
+                                    )
+                                    .clicked()
+                                {
+                                    open_req = Some((s.left.clone(), s.right.clone()));
+                                }
+                                ui.add_space(2.0);
+                            }
+                        });
+                }
+                if let Some((l, r)) = open_req {
+                    self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
+                }
+            });
+        });
+    }
+
     fn status_bar(&self, ui: &mut egui::Ui) {
         // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总；B3 补路径/行列数/选中项数）
         egui::Panel::bottom("status_bar").show(ui, |ui| {
