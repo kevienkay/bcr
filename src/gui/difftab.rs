@@ -2273,11 +2273,13 @@ impl DiffTab {
                     }
                     ui.separator();
                     // ---- 差异导航（BC: Next Section/Prev Section 组）----
+                    // P57-8：差异 x/y 显示当前序号/总差异数（BC 语义），非总行数
+                    let cur_pos = self.diff_pos.map(|p| p + 1).unwrap_or(0);
                     ui.label(fmt(
                         I18nKey::DiffCount,
                         &[
+                            &cur_pos.to_string(),
                             &self.diff_rows.len().to_string(),
-                            &self.rows.len().to_string(),
                         ],
                     ));
                     if ui
