@@ -251,6 +251,9 @@ struct DiffApp {
     show_sessions: bool,
     /// P56-2：左侧会话导航侧栏开关（BC 常驻侧栏）
     show_sidebar: bool,
+    /// P57-4：欢迎页快速对比输入（BC Home 输入两个路径对比）
+    quick_left: String,
+    quick_right: String,
     /// 规则(Profile)管理窗口开关
     show_profiles: bool,
     /// 云盘/远程浏览窗口开关
@@ -300,6 +303,8 @@ impl DiffApp {
             show_git_help: false,
             show_sessions: false,
             show_sidebar: true,
+            quick_left: String::new(),
+            quick_right: String::new(),
             show_profiles: false,
             show_cloud: false,
             cloud_left: String::new(),
@@ -1084,6 +1089,28 @@ impl DiffApp {
     fn open_empty_diff(&mut self) {
         self.new_diff_tab();
     }
+
+    /// P57-4：BC Home 快速对比（两侧路径 → 按类型打开对比标签）
+    fn open_quick_compare(&mut self, l: &str, r: &str) {
+        let l = l.trim().to_string();
+        let r = r.trim().to_string();
+        if l.is_empty() || r.is_empty() {
+            return;
+        }
+        let lp = std::path::Path::new(&l);
+        let rp = std::path::Path::new(&r);
+        if lp.is_dir() && rp.is_dir() {
+            self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
+        } else if crate::imgcmp::is_image_file(&l) && crate::imgcmp::is_image_file(&r) {
+            self.add_tab(Tab::Image(ImageTab::new(&l, &r)));
+        } else if crate::csvcmp::is_csv_file(&l) && crate::csvcmp::is_csv_file(&r) {
+            self.add_tab(Tab::Csv(CsvTab::new(&l, &r)));
+        } else {
+            let mut t = DiffTab::new();
+            t.load_pair(&l, &r, ViewOptions::default());
+            self.add_tab(Tab::Diff(t));
+        }
+    }
     /// 空文件夹对比会话
     fn open_empty_dir(&mut self) {
         self.add_tab(Tab::Dir(DirTab::new("", "")));
@@ -1367,6 +1394,32 @@ impl DiffApp {
                             .size(12.0)
                             .color(ui.visuals().weak_text_color()),
                     );
+                    // P57-4：BC Home 快速对比输入（两侧路径，点击对比按类型打开标签）
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("快速对比").size(12.0).strong());
+                        let w = (ui.available_width() * 0.33).max(120.0);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.quick_left)
+                                .hint_text("左侧文件/目录")
+                                .desired_width(w),
+                        );
+                        ui.label("⇄");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.quick_right)
+                                .hint_text("右侧文件/目录")
+                                .desired_width(w),
+                        );
+                        if ui.button("▶ 对比").clicked() {
+                            let l = self.quick_left.clone();
+                            let r = self.quick_right.clone();
+                            if !l.trim().is_empty() && !r.trim().is_empty() {
+                                self.quick_left.clear();
+                                self.quick_right.clear();
+                                self.open_quick_compare(&l, &r);
+                            }
+                        }
+                    });
                     ui.add_space(12.0);
                     // 会话类型卡片（7 类，BC 主页语义）
                     let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 7] = [
