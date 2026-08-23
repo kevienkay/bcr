@@ -447,13 +447,21 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     tab.copy_block_to(super::difftab::EditSide::Left);
                 }
             }
-            if ui.button(t(I18nKey::CopyLineRight)).on_hover_text("复制当前差异行到右侧").clicked() {
+            if ui
+                .button(t(I18nKey::CopyLineRight))
+                .on_hover_text("复制当前差异行到右侧")
+                .clicked()
+            {
                 ui.close();
                 if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
                     tab.copy_line_current(super::difftab::EditSide::Right);
                 }
             }
-            if ui.button(t(I18nKey::CopyLineLeft)).on_hover_text("复制当前差异行到左侧").clicked() {
+            if ui
+                .button(t(I18nKey::CopyLineLeft))
+                .on_hover_text("复制当前差异行到左侧")
+                .clicked()
+            {
                 ui.close();
                 if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
                     tab.copy_line_current(super::difftab::EditSide::Left);

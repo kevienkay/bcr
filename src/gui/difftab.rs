@@ -1490,7 +1490,8 @@ impl DiffTab {
     pub fn copy_line_at(&mut self, row: usize, target: EditSide) -> bool {
         let Some(r) = self.rows.get(row) else {
             return false;
-        };        let src_is_left = target == EditSide::Right;
+        };
+        let src_is_left = target == EditSide::Right;
         // 源侧该行文本
         let src_text = if src_is_left {
             r.left.as_ref().map(|c| c.text.clone())
