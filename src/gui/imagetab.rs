@@ -238,7 +238,7 @@ impl ImageTab {
     }
 
     /// 用当前帧重算差异对（纹理缓存失效，下次渲染重建）
-    fn recompute_current(&mut self) {
+    pub fn recompute_current(&mut self) {
         let li = self.frame_idx.min(self.frames_l.len().saturating_sub(1));
         let ri = self.frame_idx.min(self.frames_r.len().saturating_sub(1));
         if self.frames_l.is_empty() || self.frames_r.is_empty() {

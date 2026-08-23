@@ -1003,6 +1003,55 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         // P45-4：图片比较补齐（BC View 菜单 重置差异偏移/比较元数据，ImageTab 分支）
         if matches!(app.tabs.get(app.active), Some(Tab::Image(_))) {
+            // P57-5：图片旋转/翻转（BC View 菜单）
+            if ui.button(t(I18nKey::ImgRotateCw)).clicked() {
+                ui.close();
+                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                    t.rotate_cw();
+                }
+            }
+            if ui.button(t(I18nKey::ImgRotateCcw)).clicked() {
+                ui.close();
+                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                    t.rotate_ccw();
+                }
+            }
+            if ui.button(t(I18nKey::ImgFlipH)).clicked() {
+                ui.close();
+                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                    t.flip_horizontal();
+                }
+            }
+            if ui.button(t(I18nKey::ImgFlipV)).clicked() {
+                ui.close();
+                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                    t.flip_vertical();
+                }
+            }
+            // P57-5：图片差异模式子菜单（Exact/Tolerance/MismatchRange/Mixed，BC 视图菜单）
+            ui.menu_button("差异模式", |ui| {
+                let modes = [
+                    (t(I18nKey::ImgModeExact), crate::imgcmp::DiffMode::Exact),
+                    (
+                        t(I18nKey::ImgModeTolerance),
+                        crate::imgcmp::DiffMode::Tolerance,
+                    ),
+                    (
+                        t(I18nKey::ImgModeMismatch),
+                        crate::imgcmp::DiffMode::MismatchRange,
+                    ),
+                    (t(I18nKey::ImgModeMixed), crate::imgcmp::DiffMode::Mixed),
+                ];
+                for (label, mode) in modes {
+                    if ui.button(label).clicked() {
+                        ui.close();
+                        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                            t.diff_mode = mode;
+                            t.recompute_current();
+                        }
+                    }
+                }
+            });
             if ui.button(t(I18nKey::ImgResetOffset)).clicked() {
                 ui.close();
                 if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
