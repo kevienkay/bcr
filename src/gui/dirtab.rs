@@ -88,6 +88,10 @@ pub struct DirTab {
     pub sync_msg: Option<String>,
     /// 上次自动刷新时间（秒，egui time）
     pub(crate) last_auto_refresh: f64,
+    /// P56-3：比较开始时间（记录最近一次完整对比的耗时，状态栏显示）
+    pub compare_start: Option<std::time::Instant>,
+    /// P56-3：最近一次对比耗时（秒）
+    pub elapsed_secs: Option<f32>,
     /// 手动对齐弹窗：选中的左侧文件相对路径
     align_left: Option<String>,
     /// 手动对齐弹窗：选中的右侧文件相对路径
@@ -257,6 +261,8 @@ impl DirTab {
             sync_checked: HashSet::new(),
             sync_msg: None,
             last_auto_refresh: 0.0,
+            compare_start: None,
+            elapsed_secs: None,
             align_left: None,
             align_right: None,
             show_align: false,
@@ -312,6 +318,8 @@ impl DirTab {
         let done = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let cancel2 = cancel.clone();
         let pause2 = pause.clone();
+        // P56-3：记录比较开始时间（状态栏显示耗时）
+        self.compare_start = Some(std::time::Instant::now());
         let _handle = std::thread::spawn(move || {
             let result = compare_dirs(
                 std::path::Path::new(&left),
@@ -499,6 +507,10 @@ impl DirTab {
         let Some(bg) = &self.bg else { return };
         match bg.rx.try_recv() {
             Ok(BgResult::Compare(Ok(r))) => {
+                // P56-3：计算比较耗时（状态栏显示）
+                self.elapsed_secs =
+                    self.compare_start.map(|s| s.elapsed().as_secs_f32());
+                self.compare_start = None;
                 for w in &r.warnings {
                     self.error = Some(w.clone());
                 }

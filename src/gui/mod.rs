@@ -2830,6 +2830,10 @@ impl DiffApp {
                                     ))
                                     .color(theme::stat_modify(dark)),
                                 );
+                                // P56-3：比较耗时（BC 状态栏显示比较用时）
+                                if let Some(secs) = t.elapsed_secs {
+                                    ui.label(RichText::new(format!("耗时 {:.2}s", secs)).weak());
+                                }
                                 // 右对齐：选中项数
                                 let sel = t.selected.map(|i| i + 1).unwrap_or(0);
                                 ui.with_layout(
