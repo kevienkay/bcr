@@ -2634,31 +2634,20 @@ impl DiffApp {
                 }
                 ui.separator();
                 // 当前标签导航（Dir 后退/前进/上一层）
-                if let Some(tab) = self.tabs.get_mut(self.active) {
-                    if let Tab::Dir(d) = tab {
-                        ui.label(egui::RichText::new("导航").weak());
-                        ui.horizontal_wrapped(|ui| {
-                            if ui
-                                .button("← 后退")
-                                .on_hover_text("导航到历史前一项")
-                                .clicked()
-                            {
-                                d.back();
-                            }
-                            if ui
-                                .button("→ 前进")
-                                .on_hover_text("导航到历史后一项")
-                                .clicked()
-                            {
-                                d.forward();
-                            }
-                            if ui.button("↑ 上一层").on_hover_text("进入父目录").clicked()
-                            {
-                                d.up_level();
-                            }
-                        });
-                        ui.separator();
-                    }
+                if let Some(Tab::Dir(d)) = self.tabs.get_mut(self.active) {
+                    ui.label(egui::RichText::new("导航").weak());
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button("← 后退").on_hover_text("导航到历史前一项").clicked() {
+                            d.back();
+                        }
+                        if ui.button("→ 前进").on_hover_text("导航到历史后一项").clicked() {
+                            d.forward();
+                        }
+                        if ui.button("↑ 上一层").on_hover_text("进入父目录").clicked() {
+                            d.up_level();
+                        }
+                    });
+                    ui.separator();
                 }
                 // 最近会话列表
                 ui.label(
@@ -2687,10 +2676,7 @@ impl DiffApp {
                                         .unwrap_or_else(|| s.left.clone())
                                 );
                                 if ui
-                                    .add(
-                                        egui::Button::new(egui::RichText::new(label).size(11.0))
-                                            .frame(false),
-                                    )
+                                    .add(egui::Button::new(egui::RichText::new(label).size(11.0)).frame(false))
                                     .clicked()
                                 {
                                     open_req = Some((s.left.clone(), s.right.clone()));
@@ -2705,6 +2691,7 @@ impl DiffApp {
             });
         });
     }
+
 
     fn status_bar(&self, ui: &mut egui::Ui) {
         // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总；B3 补路径/行列数/选中项数）
