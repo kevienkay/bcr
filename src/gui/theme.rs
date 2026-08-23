@@ -421,6 +421,16 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
         Stroke::new(1.0, Color32::from_gray(190))
     };
     style.visuals.widgets.inactive.bg_stroke = border;
+    // P56-5：BC 式细浮动滚动条（悬浮覆盖内容、不挤占空间，观感更简洁专业）
+    style.spacing.scroll = egui::style::ScrollStyle {
+        floating: true,
+        bar_width: 8.0,
+        floating_width: 3.0,
+        bar_inner_margin: 2.0,
+        bar_outer_margin: 0.0,
+        handle_min_length: 20.0,
+        ..Default::default()
+    };
     style.visuals.widgets.hovered.bg_stroke = border;
     // P55 按钮背景（BC 工具栏观感：浅色主题按钮浅灰圆角底，深色主题深灰底）
     if dark {
