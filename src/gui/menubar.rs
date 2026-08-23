@@ -771,7 +771,11 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 }
             }
             // P57-3：复制当前文件到右边并打开下一个差异（BC Search>Copy to Other Side & Open Next Diff）
-            if ui.button(t(I18nKey::CopyToRightAndNextDiff)).on_hover_text("复制当前文件到右侧并跳转到下一个差异文件").clicked() {
+            if ui
+                .button(t(I18nKey::CopyToRightAndNextDiff))
+                .on_hover_text("复制当前文件到右侧并跳转到下一个差异文件")
+                .clicked()
+            {
                 ui.close();
                 if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
                     t.copy_current_to_right_and_next();

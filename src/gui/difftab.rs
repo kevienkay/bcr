@@ -2277,10 +2277,7 @@ impl DiffTab {
                     let cur_pos = self.diff_pos.map(|p| p + 1).unwrap_or(0);
                     ui.label(fmt(
                         I18nKey::DiffCount,
-                        &[
-                            &cur_pos.to_string(),
-                            &self.diff_rows.len().to_string(),
-                        ],
+                        &[&cur_pos.to_string(), &self.diff_rows.len().to_string()],
                     ));
                     if ui
                         .button(format!("⬇ {}", t(I18nKey::NextDiff)))

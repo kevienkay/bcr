@@ -701,11 +701,7 @@ impl MergeTab {
                         let start = *self.view.conflict_rows.get(ci)?;
                         let bi = *self.view.conflict_block_indices.get(ci)?;
                         let blk = self.view.blocks.get(bi)?;
-                        let n = blk
-                            .base
-                            .len()
-                            .max(blk.left.len())
-                            .max(blk.right.len());
+                        let n = blk.base.len().max(blk.left.len()).max(blk.right.len());
                         Some((start, start + n))
                     });
                     let (bp, lp, rp) = (
