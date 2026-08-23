@@ -1398,18 +1398,29 @@ impl DiffApp {
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("快速对比").size(12.0).strong());
-                        let w = (ui.available_width() * 0.33).max(120.0);
+                        // P57-11：每侧输入框后加浏览按钮（BC Home 选路径），否则一列放不下
+                        let w = (ui.available_width() * 0.28).max(110.0);
                         ui.add(
                             egui::TextEdit::singleline(&mut self.quick_left)
                                 .hint_text("左侧文件/目录")
                                 .desired_width(w),
                         );
+                        if ui.button("📂").on_hover_text("选择左侧路径").clicked() {
+                            if let Some(p) = pick_file_or_dir() {
+                                self.quick_left = p;
+                            }
+                        }
                         ui.label("⇄");
                         ui.add(
                             egui::TextEdit::singleline(&mut self.quick_right)
                                 .hint_text("右侧文件/目录")
                                 .desired_width(w),
                         );
+                        if ui.button("📂").on_hover_text("选择右侧路径").clicked() {
+                            if let Some(p) = pick_file_or_dir() {
+                                self.quick_right = p;
+                            }
+                        }
                         if ui.button("▶ 对比").clicked() {
                             let l = self.quick_left.clone();
                             let r = self.quick_right.clone();
@@ -1643,6 +1654,14 @@ fn apply_settings_env(s: &Settings) {
 fn pick_dir() -> Option<String> {
     let p = rfd::FileDialog::new().pick_folder()?;
     Some(p.to_string_lossy().into_owned())
+}
+
+/// P57-11：优先选文件夹，否则选文件（快速对比两侧路径都可选）
+fn pick_file_or_dir() -> Option<String> {
+    if let Some(d) = pick_dir() {
+        return Some(d);
+    }
+    pick_file()
 }
 
 /// P39-2c：从标签提取左右路径（会话保存用）
