@@ -290,6 +290,22 @@ impl MergeTab {
         }
     }
 
+    /// P57-10：解决当前冲突并前进到下一个冲突（BC 行为，不循环回第一个）。
+    /// 用于"取左/取右/取BASE"等主要解决按钮，解决完自动跳到下一处。
+    pub fn resolve_and_advance(&mut self, res: Resolution) {
+        self.resolve_current(res);
+        let n = self.view.conflict_rows.len();
+        if let Some(k) = self.conflict_idx {
+            if k + 1 < n {
+                self.conflict_idx = Some(k + 1);
+                if let Some(&row) = self.view.conflict_rows.get(k + 1) {
+                    self.jump_to_row(row);
+                }
+            }
+            // 已到最后一个冲突：保留当前位置（不循环）
+        }
+    }
+
     /// P45-1：行级采用（BC 采用左边的行/中心行/右边行）——当前行所在冲突块的对应行
     pub fn take_line(&mut self, res: Resolution) {
         // 找 cur_line 所在冲突块（view.rows 索引 → blocks 索引）
@@ -459,13 +475,13 @@ impl MergeTab {
                     }
                     ui.separator();
                     if ui.button(format!("← {}", t(I18nKey::TakeLeft))).clicked() {
-                        self.resolve_current(Resolution::Left);
+                        self.resolve_and_advance(Resolution::Left);
                     }
                     if ui.button(format!("→ {}", t(I18nKey::TakeRight))).clicked() {
-                        self.resolve_current(Resolution::Right);
+                        self.resolve_and_advance(Resolution::Right);
                     }
                     if ui.button(format!("B {}", t(I18nKey::TakeBase))).clicked() {
-                        self.resolve_current(Resolution::Base);
+                        self.resolve_and_advance(Resolution::Base);
                     }
                     // P37-1：顺序合并（BC 采用左边然后右边/采用右边然后左边）
                     if ui
