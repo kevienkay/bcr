@@ -10,6 +10,8 @@ pub struct MergeTab {
     pub left_path: String,
     pub right_path: String,
     pub view: MergeView,
+    /// P56-7：最近一次三路合并计算耗时（秒，状态栏显示）
+    pub elapsed_secs: Option<f32>,
     pub error: Option<String>,
     pub scroll: Vec2,
     /// 当前冲突块下标（conflict_rows 索引）
@@ -30,6 +32,7 @@ impl MergeTab {
             left_path: left.to_string(),
             right_path: right.to_string(),
             view: MergeView::default(),
+            elapsed_secs: None,
             error: None,
             scroll: Vec2::ZERO,
             conflict_idx: None,
@@ -92,9 +95,12 @@ impl MergeTab {
                 return;
             }
         };
+        let _start = std::time::Instant::now();
         self.view = build_merge_view(&b, &l, &r);
         self.conflict_idx = None;
         self.error = None;
+        // P56-7：记录三路合并计算耗时
+        self.elapsed_secs = Some(_start.elapsed().as_secs_f32());
     }
 
     /// 当前冲突块在 blocks 中的索引（通过 conflict_block_indices 精确定位）

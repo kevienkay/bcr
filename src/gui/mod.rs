@@ -2910,6 +2910,10 @@ impl DiffApp {
                                 ))
                                 .color(theme::stat_modify(dark)),
                             );
+                            // P56-7：表格对齐耗时
+                            if let Some(secs) = t.elapsed_secs {
+                                ui.label(RichText::new(format!("耗时 {:.2}s", secs)).weak());
+                            }
                         }
                         Tab::Merge(t) => {
                             let dark = ui.visuals().dark_mode;
@@ -2947,6 +2951,10 @@ impl DiffApp {
                                 )
                             };
                             ui.label(RichText::new(label).color(color));
+                            // P56-7：三路合并计算耗时
+                            if let Some(secs) = t.elapsed_secs {
+                                ui.label(RichText::new(format!("耗时 {:.2}s", secs)).weak());
+                            }
                         }
                         Tab::Image(t) => {
                             let dark = ui.visuals().dark_mode;

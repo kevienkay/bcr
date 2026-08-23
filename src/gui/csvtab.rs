@@ -51,6 +51,8 @@ pub(crate) struct CsvTab {
     table_b: Option<Table>,
     aligned: Vec<crate::csvcmp::AlignedRow>,
     stats: RowStats,
+    /// P56-7：最近一次表格对齐耗时（秒，状态栏显示）
+    pub(crate) elapsed_secs: Option<f32>,
     /// 当前主键列名（空 = 行号对齐）
     key: String,
     /// 分隔符显示值（"," / "\\t"）
@@ -82,6 +84,7 @@ impl CsvTab {
             table_b: None,
             aligned: Vec::new(),
             stats: RowStats::default(),
+            elapsed_secs: None,
             key: String::new(),
             delimiter: ",".to_string(),
             show_same: false,
@@ -184,11 +187,14 @@ impl CsvTab {
         } else {
             Some(self.key.as_str())
         };
+        let _start = std::time::Instant::now();
         let (aligned, stats) = align_tables(&a, &b, key);
         self.table_a = Some(a);
         self.table_b = Some(b);
         self.aligned = aligned;
         self.stats = stats;
+        // P56-7：记录表格对齐耗时
+        self.elapsed_secs = Some(_start.elapsed().as_secs_f32());
     }
 
     /// 可选主键列名列表（去重，保持表头顺序）
