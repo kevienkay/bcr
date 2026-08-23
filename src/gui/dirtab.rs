@@ -814,6 +814,17 @@ impl DirTab {
         self.move_diff_file(1)
     }
 
+    /// P57-3：复制当前选中文件到右侧并打开下一个差异（BC Search>复制文件到右边并打开下一个差异）。
+    /// 先复制当前选中（或暂无选中时第一个差异文件），再跳到下一差异文件。
+    pub fn copy_current_to_right_and_next(&mut self) -> bool {
+        let rel = self.selected_rel();
+        let Some(rel) = rel else {
+            return false;
+        };
+        self.copy_single(&rel, true);
+        self.next_diff_file()
+    }
+
     /// P43-3：上一差异文件（flat 中从当前选中向前找第一个差异文件并选中）
     pub fn prev_diff_file(&mut self) -> bool {
         self.move_diff_file(-1)

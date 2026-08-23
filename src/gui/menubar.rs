@@ -770,6 +770,13 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     t.prev_diff_file();
                 }
             }
+            // P57-3：复制当前文件到右边并打开下一个差异（BC Search>Copy to Other Side & Open Next Diff）
+            if ui.button(t(I18nKey::CopyToRightAndNextDiff)).on_hover_text("复制当前文件到右侧并跳转到下一个差异文件").clicked() {
+                ui.close();
+                if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
+                    t.copy_current_to_right_and_next();
+                }
+            }
         }
         // P44-7：在多个文件中查找（⌘⇧F，BC 文本编辑搜索菜单；已有 P37-1n 弹窗补入口）
         if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_)))

@@ -385,6 +385,8 @@ pub enum Key {
     /// P43-3：上一差异文件
     #[allow(dead_code)] // P43-3 批次使用
     MenuPrevDiffFile,
+    /// P57-3：复制文件到右边并打开下一个差异（BC Search）
+    CopyToRightAndNextDiff,
     /// P43-4：合并文件
     #[allow(dead_code)] // P43-4 批次使用
     MenuMergeFiles,
