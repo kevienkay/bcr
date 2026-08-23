@@ -1351,6 +1351,15 @@ impl DiffApp {
                             .size(13.0)
                             .color(ui.visuals().weak_text_color()),
                     );
+                    // P57-2：版本号 + BC 对齐品牌（BC Home 显示版本信息）
+                    ui.label(
+                        RichText::new(format!(
+                            "v{}",
+                            env!("CARGO_PKG_VERSION"),
+                        ))
+                        .size(11.0)
+                        .color(theme::card_icon_colors()[3].gamma_multiply(0.9)),
+                    );
                     ui.add_space(4.0);
                     // BC 提示语：将文件夹或文件拖放到会话图标上
                     ui.label(
