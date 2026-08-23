@@ -51,6 +51,8 @@ pub struct TextEditTab {
     pub(crate) path: String,
     /// 编辑缓冲区（测试直接读写）
     pub(crate) content: String,
+    /// P56-1：打开/保存时的基线内容（用于判断是否有未保存修改）
+    base: String,
     error: Option<String>,
     /// 撤销栈（整文件快照）
     undo_stack: Vec<String>,
@@ -100,6 +102,7 @@ impl TextEditTab {
         let mut t = TextEditTab {
             path: String::new(),
             content: String::new(),
+            base: String::new(),
             error: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
@@ -127,14 +130,16 @@ impl TextEditTab {
     }
 
     pub fn title(&self) -> String {
+        // P56-1：有未保存修改 → 标题前缀 `*`（BC 未保存标记）
+        let star = if self.content != self.base { "* " } else { "" };
         if self.path.is_empty() {
-            t(I18nKey::TextEditTitle).to_string()
+            format!("{}{}", star, t(I18nKey::TextEditTitle))
         } else {
             let name = std::path::Path::new(&self.path)
                 .file_name()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_else(|| self.path.clone());
-            format!("✏️ {}", name)
+            format!("{}✏️ {}", star, name)
         }
     }
 
@@ -148,6 +153,7 @@ impl TextEditTab {
                 }
                 self.path = path.to_string();
                 self.content = tf.text.clone();
+                self.base = self.content.clone(); // 打开时基线
                 self.encoding = tf.encoding;
                 self.had_bom = tf.had_bom;
                 self.error = None;
@@ -175,6 +181,7 @@ impl TextEditTab {
             Some(text) => {
                 self.undo_stack.push(self.content.clone());
                 self.content = text;
+                self.base = self.content.clone(); // 剪贴板视为新基线
                 self.path.clear(); // 未命名：保存时走另存
                 self.error = None;
                 self.redo_stack.clear();
@@ -207,6 +214,7 @@ impl TextEditTab {
         );
         match std::fs::write(&self.path, bytes) {
             Ok(()) => {
+                self.base = self.content.clone(); // 保存后基线更新
                 self.error = None;
                 true
             }
@@ -809,10 +817,22 @@ mod tests {
         let d = tempdir().unwrap();
         let p = write(d.path(), "a.txt", "hello\nworld\n");
         let t = TextEditTab::new(&p);
-        assert!(t.error.is_none());
-        assert_eq!(t.content, "hello\nworld\n");
+        assert!(t.error.is_none());        assert_eq!(t.content, "hello\nworld\n");
         assert_eq!(t.encoding, crate::encoding::EncodingKind::Utf8);
         assert_eq!(t.line_count(), 2);
+    }
+
+    #[test]
+    fn dirty_star_shows_when_unsaved() {
+        // P56-1：未保存修改 → 标题前缀 `*`；保存后清除
+        let d = tempdir().unwrap();
+        let p = write(d.path(), "a.txt", "hello\n");
+        let mut t = TextEditTab::new(&p);
+        assert!(!t.title().starts_with('*'), "打开未修改不应显示 *");
+        t.content.push_str("world\n");
+        assert!(t.title().starts_with('*'), "修改后应显示 *");
+        t.save();
+        assert!(!t.title().starts_with('*'), "保存后应清除 *");
     }
 
     #[test]

@@ -158,6 +158,8 @@ pub struct DiffTab {
     pub editing: Option<EditState>,
     /// P32-A2：行内直接编辑状态（双击行进入）
     pub inline_edit: Option<InlineEditState>,
+    /// P56-1：有未保存/未重载的内容修改（BC 标题栏 `*` 星号标记）
+    pub dirty: bool,
     /// P32-A6：撤销栈（编辑/替换前的文件内容）
     pub undo_stack: Vec<EditSnapshot>,
     /// P32-A6：重做栈
@@ -257,6 +259,7 @@ impl DiffTab {
             goto_focus: false,
             editing: None,
             inline_edit: None,
+            dirty: false,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             hex: None,
@@ -283,9 +286,12 @@ impl DiffTab {
     }
 
     pub fn title(&self) -> String {
+        // P56-1：有未保存修改 → 标题前缀 `*`（BC 未保存标记）
+        let star = if self.dirty { "* " } else { "" };
         if let Some(h) = &self.hex {
             return format!(
-                "{}: {} ↔ {}",
+                "{}{}: {} ↔ {}",
+                star,
                 t(I18nKey::HexTitle),
                 basename(&h.left),
                 basename(&h.right)
@@ -293,7 +299,8 @@ impl DiffTab {
         }
         match (&self.left, &self.right) {
             (Some(l), Some(r)) => format!(
-                "{}: {} ↔ {}",
+                "{}{}: {} ↔ {}",
+                star,
                 t(I18nKey::DiffTitle),
                 basename(&l.path),
                 basename(&r.path)
@@ -305,6 +312,8 @@ impl DiffTab {
     }
 
     pub fn load_pair(&mut self, l: &str, r: &str, opts: ViewOptions) {
+        // P56-1：新内容加载 → 清除未保存标记
+        self.dirty = false;
         // 拖入单文件/空路径守卫：只有一侧时转单侧加载（BC 语义：先导入的显示在左边）
         if l.is_empty() && r.is_empty() {
             self.opts = opts;
@@ -390,6 +399,7 @@ impl DiffTab {
     }
 
     pub fn load_left(&mut self, path: &str, opts: ViewOptions) {
+        self.dirty = false;
         self.opts = opts;
         match crate::encoding::read_text(path) {
             Ok(tf) => {
@@ -414,6 +424,7 @@ impl DiffTab {
     }
 
     pub fn load_right(&mut self, path: &str, opts: ViewOptions) {
+        self.dirty = false;
         self.opts = opts;
         match crate::encoding::read_text(path) {
             Ok(tf) => {
@@ -597,6 +608,7 @@ impl DiffTab {
             }
         }
         if changed {
+            self.dirty = true;
             self.finish_replace();
         }
         changed
@@ -623,6 +635,7 @@ impl DiffTab {
             }
         }
         if changed {
+            self.dirty = true;
             self.finish_replace();
         }
         changed
@@ -1260,6 +1273,7 @@ impl DiffTab {
             EditSide::Right => self.load_right(&dst_path, self.opts.clone()),
             EditSide::Left => self.load_left(&dst_path, self.opts.clone()),
         }
+        self.dirty = true; // BC：复制到另一侧后标题显示 `*`（load_* 会清除，此处重新置位）
         self.error = Some(fmt(I18nKey::Saved, &["已复制到另一侧"]));
         true
     }
@@ -1540,6 +1554,7 @@ impl DiffTab {
             EditSide::Right => self.load_right(&dst_path, self.opts.clone()),
             EditSide::Left => self.load_left(&dst_path, self.opts.clone()),
         }
+        self.dirty = true; // BC：复制行后标题显示 `*`
         true
     }
 
@@ -4085,4 +4100,28 @@ fn write_clipboard_temp(text: &str) -> Option<String> {
     let path = dir.join(name);
     std::fs::write(&path, text).ok()?;
     Some(path.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod dirty_title_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn diff_title_shows_star_when_dirty() {
+        // P56-1：dirty=true → 标题前缀 `*`，load 后清除
+        let d = tempdir().unwrap();
+        let l = d.path().join("l.txt");
+        let r = d.path().join("r.txt");
+        fs::write(&l, "a\n").unwrap();
+        fs::write(&r, "a\n").unwrap();
+        let mut t = DiffTab::new();
+        t.load_pair(l.to_str().unwrap(), r.to_str().unwrap(), ViewOptions::default());
+        assert!(!t.title().starts_with('*'), "加载后不应显示 *");
+        t.dirty = true;
+        assert!(t.title().starts_with('*'), "dirty 后应显示 *");
+        t.load_pair(l.to_str().unwrap(), r.to_str().unwrap(), ViewOptions::default());
+        assert!(!t.title().starts_with('*'), "重新加载后应清除 *");
+    }
 }
