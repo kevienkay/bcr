@@ -680,6 +680,18 @@ impl MergeTab {
                 let syn_r = crate::highlight::syntax_for(&self.right_path);
                 sa.show_rows(ui, ROW_H, rows.len(), |ui, range| {
                     ui.set_min_width(total_w);
+                    // P57-9：当前冲突块行范围（左侧边条，BC 当前区段视觉）
+                    let cur_span = self.conflict_idx.and_then(|ci| {
+                        let start = *self.view.conflict_rows.get(ci)?;
+                        let bi = *self.view.conflict_block_indices.get(ci)?;
+                        let blk = self.view.blocks.get(bi)?;
+                        let n = blk
+                            .base
+                            .len()
+                            .max(blk.left.len())
+                            .max(blk.right.len());
+                        Some((start, start + n))
+                    });
                     let (bp, lp, rp) = (
                         self.base_path.clone(),
                         self.left_path.clone(),
@@ -693,6 +705,19 @@ impl MergeTab {
                             ui, row, gutter, col_w, bg_b, bg_l, bg_r, hl_l, hl_r, fg, syn_b, syn_l,
                             syn_r,
                         );
+                        // P57-9：当前冲突块左侧 3px 蓝色侧边条
+                        if let Some((s, e)) = cur_span {
+                            if i >= s && i < e {
+                                ui.painter().rect_filled(
+                                    Rect::from_min_size(
+                                        Pos2::new(resp.rect.left(), resp.rect.top()),
+                                        vec2(3.0, ROW_H),
+                                    ),
+                                    0.0,
+                                    super::theme::current_bar(ui.visuals().dark_mode),
+                                );
+                            }
+                        }
                         // P45-1：点击行记录 cur_line（行级采用定位）
                         if resp.clicked() {
                             click_line = Some(i);
