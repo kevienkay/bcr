@@ -3836,6 +3836,18 @@ fn paint_diff_row_v(
             super::theme::current_bar(ui.visuals().dark_mode),
         );
     }
+    // P57-1：当前差异块——整块左侧加宽侧边条（上下布局整行高）
+    if in_cur_block {
+        let c = super::theme::current_bar(ui.visuals().dark_mode);
+        ui.painter().rect_filled(
+            Rect::from_min_size(
+                Pos2::new(x + super::theme::CURRENT_BAR, y),
+                vec2(3.0, row_h),
+            ),
+            0.0,
+            c.gamma_multiply(0.45),
+        );
+    }
     // ---- 上半：左 gutter + 左内容 ----
     let l_bg = if ignored { Some(dim) } else { bg_l };
     {
