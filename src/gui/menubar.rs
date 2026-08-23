@@ -1066,6 +1066,19 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
         }
         // P44-6：行号 / 语法加亮开关（BC 视图菜单；DiffTab 分支）
+        // P57-6：CsvTab 分支——隐藏相同列/调整列宽为适合大小（BC 表格比较视图菜单）
+        if matches!(app.tabs.get(app.active), Some(Tab::Csv(_))) {
+            if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+                let mut h = tab.hide_same_cols;
+                if ui.checkbox(&mut h, t(I18nKey::HideSameCols)).changed() {
+                    tab.hide_same_cols = h;
+                }
+                let mut f = tab.auto_fit;
+                if ui.checkbox(&mut f, t(I18nKey::FitColumns)).changed() {
+                    tab.auto_fit = f;
+                }
+            }
+        }
         if matches!(app.tabs.get(app.active), Some(Tab::Diff(_))) {
             let show_ln = app
                 .tabs
