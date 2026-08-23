@@ -1475,11 +1475,22 @@ impl DiffTab {
 
     /// P37-1m：复制单行到目标侧（BC Copy Line to Right/Left，行级替换该行）。
     /// `target` 是被覆盖的一侧：Right = 左侧→右侧，Left = 右侧→左侧。
+    /// P56-4：复制当前差异行到目标侧（BC Edit>Copy Line to Right/Left）。
+    /// 当前行 = 当前差异位置（diff_pos → diff_rows 定位）。
+    pub fn copy_line_current(&mut self, target: EditSide) -> bool {
+        let Some(pos) = self.diff_pos else {
+            return false;
+        };
+        let Some(&row) = self.diff_rows.get(pos) else {
+            return false;
+        };
+        self.copy_line_at(row, target)
+    }
+
     pub fn copy_line_at(&mut self, row: usize, target: EditSide) -> bool {
         let Some(r) = self.rows.get(row) else {
             return false;
-        };
-        let src_is_left = target == EditSide::Right;
+        };        let src_is_left = target == EditSide::Right;
         // 源侧该行文本
         let src_text = if src_is_left {
             r.left.as_ref().map(|c| c.text.clone())

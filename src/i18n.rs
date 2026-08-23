@@ -319,6 +319,10 @@ pub enum Key {
     CopyToRight,
     /// 复制到左侧（P35-A1：把当前差异块右侧内容复制到左侧）
     CopyToLeft,
+    /// 复制行到右侧（P56-4：BC Edit>Copy Line to Right，复制当前行到右侧）
+    CopyLineRight,
+    /// 复制行到左侧（P56-4：BC Edit>Copy Line to Left，复制当前行到左侧）
+    CopyLineLeft,
     /// 交换左右两侧（P35-A2：BC Swap Sides）
     SwapSides,
     /// P37-1f：立即同步（BC Sync Now）

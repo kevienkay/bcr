@@ -434,6 +434,32 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 }
             }
             ui.separator();
+            // P56-4：复制到另一侧（BC Edit> Copy to Right/Left + Copy Line to Right/Left）
+            if ui.button(t(I18nKey::CopyToRight)).clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.copy_block_to(super::difftab::EditSide::Right);
+                }
+            }
+            if ui.button(t(I18nKey::CopyToLeft)).clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.copy_block_to(super::difftab::EditSide::Left);
+                }
+            }
+            if ui.button(t(I18nKey::CopyLineRight)).on_hover_text("复制当前差异行到右侧").clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.copy_line_current(super::difftab::EditSide::Right);
+                }
+            }
+            if ui.button(t(I18nKey::CopyLineLeft)).on_hover_text("复制当前差异行到左侧").clicked() {
+                ui.close();
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.copy_line_current(super::difftab::EditSide::Left);
+                }
+            }
+            ui.separator();
             // P44-2：对齐方式/缩进（BC 编辑菜单 对齐方式.../增加缩进/减少缩进）
             if menu_item(ui, t(I18nKey::MenuAlign), sc("⌘A", "Ctrl+A")).clicked() {
                 ui.close();
