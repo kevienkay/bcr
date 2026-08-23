@@ -508,8 +508,7 @@ impl DirTab {
         match bg.rx.try_recv() {
             Ok(BgResult::Compare(Ok(r))) => {
                 // P56-3：计算比较耗时（状态栏显示）
-                self.elapsed_secs =
-                    self.compare_start.map(|s| s.elapsed().as_secs_f32());
+                self.elapsed_secs = self.compare_start.map(|s| s.elapsed().as_secs_f32());
                 self.compare_start = None;
                 for w in &r.warnings {
                     self.error = Some(w.clone());
