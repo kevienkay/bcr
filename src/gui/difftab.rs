@@ -126,6 +126,8 @@ pub struct DiffTab {
     pub right: Option<LoadedFile>,
     pub rows: Vec<SideRow>,
     pub stats: Stats,
+    /// P56-6：最近一次 diff 计算耗时（秒，状态栏显示）
+    pub elapsed_secs: Option<f32>,
     pub opts: ViewOptions,
     pub error: Option<String>,
     pub show_stats: bool,
@@ -240,6 +242,7 @@ impl DiffTab {
             right: None,
             rows: Vec::new(),
             stats: Stats::default(),
+            elapsed_secs: None,
             opts: ViewOptions::default(),
             error: None,
             show_stats: true,
@@ -449,6 +452,7 @@ impl DiffTab {
     }
 
     pub fn recompute(&mut self) {
+        let start = std::time::Instant::now();
         let (l, r) = match (&self.left, &self.right) {
             (Some(l), Some(r)) => (l.content.as_str(), r.content.as_str()),
             // P50：单侧导入时仍构建 rows（BC 语义：先导入的显示在左边，右侧留空）
@@ -513,6 +517,8 @@ impl DiffTab {
             equal: stats.equal,
         };
         self.update_search();
+        // P56-6：记录 diff 计算耗时
+        self.elapsed_secs = Some(start.elapsed().as_secs_f32());
     }
 
     /// P38-1b：应用手动对齐对（left_no, right_no 1-based）。

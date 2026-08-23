@@ -2762,6 +2762,10 @@ impl DiffApp {
                                 RichText::new(format!("{} {}", sr, s.replace))
                                     .color(theme::stat_modify(ui.visuals().dark_mode)),
                             );
+                            // P56-6：diff 计算耗时（BC 状态栏显示比较用时）
+                            if let Some(secs) = t.elapsed_secs {
+                                ui.label(RichText::new(format!("耗时 {:.2}s", secs)).weak());
+                            }
                             // P47-3：右侧编码/大小弱色（右对齐）
                             if let Some(l) = &t.left {
                                 ui.with_layout(
