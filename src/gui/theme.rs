@@ -406,6 +406,7 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
         style.visuals.window_fill = Color32::from_gray(252);
         style.visuals.extreme_bg_color = Color32::from_gray(240);
         style.visuals.faint_bg_color = Color32::from_gray(244);
+        style.visuals.window_stroke = Stroke::new(1.0, Color32::from_gray(200));
     }
     // 选中态
     style.visuals.selection.bg_fill = if dark {
