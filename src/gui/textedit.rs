@@ -817,7 +817,8 @@ mod tests {
         let d = tempdir().unwrap();
         let p = write(d.path(), "a.txt", "hello\nworld\n");
         let t = TextEditTab::new(&p);
-        assert!(t.error.is_none());        assert_eq!(t.content, "hello\nworld\n");
+        assert!(t.error.is_none());
+        assert_eq!(t.content, "hello\nworld\n");
         assert_eq!(t.encoding, crate::encoding::EncodingKind::Utf8);
         assert_eq!(t.line_count(), 2);
     }

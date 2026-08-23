@@ -4117,11 +4117,19 @@ mod dirty_title_tests {
         fs::write(&l, "a\n").unwrap();
         fs::write(&r, "a\n").unwrap();
         let mut t = DiffTab::new();
-        t.load_pair(l.to_str().unwrap(), r.to_str().unwrap(), ViewOptions::default());
+        t.load_pair(
+            l.to_str().unwrap(),
+            r.to_str().unwrap(),
+            ViewOptions::default(),
+        );
         assert!(!t.title().starts_with('*'), "加载后不应显示 *");
         t.dirty = true;
         assert!(t.title().starts_with('*'), "dirty 后应显示 *");
-        t.load_pair(l.to_str().unwrap(), r.to_str().unwrap(), ViewOptions::default());
+        t.load_pair(
+            l.to_str().unwrap(),
+            r.to_str().unwrap(),
+            ViewOptions::default(),
+        );
         assert!(!t.title().starts_with('*'), "重新加载后应清除 *");
     }
 }
