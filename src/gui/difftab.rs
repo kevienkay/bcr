@@ -3098,6 +3098,13 @@ impl DiffTab {
                 ui.set_min_width(total_w);
                 // 当前差异行（diff_pos → diff_rows 中的行索引，P31 竖条标记）
                 let cur_diff_orig = self.diff_pos.and_then(|k| self.diff_rows.get(k)).copied();
+                // P57-1：当前差异块的行范围（整块高亮，BC 当前区段视觉）
+                let cur_block = cur_diff_orig.and_then(|cur| {
+                    self.diff_blocks
+                        .iter()
+                        .find(|&&(s, e)| s <= cur && cur <= e)
+                        .copied()
+                });
                 for i in range {
                     let (vi, placeholder) = view[i];
                     let oi = orig_of(vi);
@@ -3182,6 +3189,7 @@ impl DiffTab {
                         syn_l,
                         syn_r,
                         cur_diff_orig == Some(oi),
+                        cur_block.is_some_and(|(s, e)| s <= oi && oi <= e),
                         inline.as_mut().filter(|ie| ie.row == oi),
                         block_start,
                         ignored,
@@ -3574,6 +3582,8 @@ fn paint_diff_row(
     syn_l: Option<&'static syntect::parsing::SyntaxReference>,
     syn_r: Option<&'static syntect::parsing::SyntaxReference>,
     is_current: bool,
+    // P57-1：该行属于当前差异块（整块高亮，BC 当前区段视觉）
+    in_cur_block: bool,
     mut inline: Option<&mut InlineEditState>,
     block_start: Option<usize>,
     ignored: bool,
@@ -3587,8 +3597,24 @@ fn paint_diff_row(
     // P39-2d：上-下/网页布局 → 垂直堆叠（左内容上半、右内容下半，行高 2*ROW_H）
     if layout != DiffLayout::SideBySide {
         return paint_diff_row_v(
-            ui, row, gutter_l, gutter_r, content_w, bg_l, bg_r, hl_l, hl_r, fg, syn_l, syn_r,
-            is_current, inline, ignored, h_scroll, show_ws,
+            ui,
+            row,
+            gutter_l,
+            gutter_r,
+            content_w,
+            bg_l,
+            bg_r,
+            hl_l,
+            hl_r,
+            fg,
+            syn_l,
+            syn_r,
+            is_current,
+            in_cur_block,
+            inline,
+            ignored,
+            h_scroll,
+            show_ws,
         );
     }
     let mid_gap = super::theme::MID_GAP;
@@ -3627,6 +3653,19 @@ fn paint_diff_row(
             Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H)),
             0.0,
             super::theme::current_bar(ui.visuals().dark_mode),
+        );
+    }
+    // P57-1：当前差异块（BC 当前区段）——整块左侧加宽竖条，突出当前导航区段
+    // 当前行 3px，整块再加一条 6px 半透明侧边，形成"当前区段"观感
+    if in_cur_block {
+        let c = super::theme::current_bar(ui.visuals().dark_mode);
+        ui.painter().rect_filled(
+            Rect::from_min_size(
+                Pos2::new(x + super::theme::CURRENT_BAR, y),
+                vec2(3.0, ROW_H),
+            ),
+            0.0,
+            c.gamma_multiply(0.45),
         );
     }
 
@@ -3772,6 +3811,8 @@ fn paint_diff_row_v(
     syn_l: Option<&'static syntect::parsing::SyntaxReference>,
     syn_r: Option<&'static syntect::parsing::SyntaxReference>,
     is_current: bool,
+    // P57-1：该行属于当前差异块（对齐 SideBySide 签名）
+    in_cur_block: bool,
     mut inline: Option<&mut InlineEditState>,
     ignored: bool,
     h_scroll: f32,
