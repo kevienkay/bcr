@@ -111,45 +111,6 @@ fn snap_app_difftab_light() {
     save(&mut h, "app_difftab_light");
 }
 
-// ---- P58：顶部全局工具栏（新增原生工具栏，三平台适配）----
-
-#[test]
-#[ignore]
-fn snap_app_toolbar() {
-    let (_d, l, r) = write_pair("snap-toolbar", SAMPLE_L, SAMPLE_R);
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(1360.0, 860.0))
-        .build_eframe(|cc| {
-            install_cjk_fonts(&cc.egui_ctx);
-            theme::apply(&cc.egui_ctx);
-            let mut app = DiffApp::new(Settings::default());
-            let mut t = crate::gui::difftab::DiffTab::new();
-            t.load_pair(&l, &r, ViewOptions::default());
-            app.add_tab(Tab::Diff(t));
-            app
-        });
-    save(&mut h, "app_toolbar");
-}
-
-#[test]
-#[ignore]
-fn snap_app_toolbar_light() {
-    let (_d, l, r) = write_pair("snap-toolbar-l", SAMPLE_L, SAMPLE_R);
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(1360.0, 860.0))
-        .with_theme(egui::Theme::Light)
-        .build_eframe(|cc| {
-            install_cjk_fonts(&cc.egui_ctx);
-            theme::apply(&cc.egui_ctx);
-            let mut app = DiffApp::new(Settings::default());
-            let mut t = crate::gui::difftab::DiffTab::new();
-            t.load_pair(&l, &r, ViewOptions::default());
-            app.add_tab(Tab::Diff(t));
-            app
-        });
-    save(&mut h, "app_toolbar_light");
-}
-
 #[test]
 #[ignore]
 fn snap_app_dirtab() {

@@ -42,22 +42,6 @@ impl MediaTab {
         self.left.is_empty() && self.right.is_empty()
     }
 
-    /// P58：打开左侧媒体文件（文件对话框），保留右侧（供全局工具栏分发）。
-    pub fn open_left(&mut self) {
-        if let Some(p) = super::pick_file() {
-            let (l, r) = (p, self.right.clone());
-            self.load_pair(&l, &r);
-        }
-    }
-
-    /// P58：打开右侧媒体文件（文件对话框），保留左侧。
-    pub fn open_right(&mut self) {
-        if let Some(p) = super::pick_file() {
-            let (l, r) = (self.left.clone(), p);
-            self.load_pair(&l, &r);
-        }
-    }
-
     /// 加载两侧媒体并对比元数据
     pub fn load_pair(&mut self, l: &str, r: &str) {
         self.left = l.to_string();
@@ -99,15 +83,28 @@ impl MediaTab {
         egui::CentralPanel::default().show(ui, |ui| {
             if self.is_empty() {
                 // P52-2：统一空状态（媒体用粉色系）
-                // P58：打开左/右媒体文件已上移至全局工具栏（dispatch 到 open_left/right），
-                // 空状态不再重复展示
                 super::common::empty_state(
                     ui,
                     "🎵",
                     super::theme::card_icon_colors()[6],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |_ui| {},
+                    |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                                if let Some(p) = super::pick_file() {
+                                    let (l, r) = (p, self.right.clone());
+                                    self.load_pair(&l, &r);
+                                }
+                            }
+                            if ui.button(t(I18nKey::OpenRight)).clicked() {
+                                if let Some(p) = super::pick_file() {
+                                    let (l, r) = (self.left.clone(), p);
+                                    self.load_pair(&l, &r);
+                                }
+                            }
+                        });
+                    },
                 );
                 return;
             }

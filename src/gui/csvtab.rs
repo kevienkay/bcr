@@ -830,14 +830,22 @@ impl CsvTab {
             // P34：空会话（两侧均未选择文件）→ 显示打开入口 + 拖拽提示
             egui::CentralPanel::default().show(ui, |ui| {
                 // P52-2：统一空状态（表格用绿色系）
-                // P58：打开左/右按钮已上移至全局工具栏，空状态不再重复展示
                 super::common::empty_state(
                     ui,
                     "📊",
                     super::theme::card_icon_colors()[4],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |_ui| {},
+                    |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
+                                self.open_left();
+                            }
+                            if ui.button(t(I18nKey::OpenRight)).clicked() {
+                                self.open_right();
+                            }
+                        });
+                    },
                 );
             });
             return;

@@ -649,8 +649,7 @@ impl MergeTab {
                     t(I18nKey::MergeEmpty),
                     t(I18nKey::DragHint),
                     |ui| {
-                        // P58：打开左/右文件已上移至全局工具栏（dispatch 到 open_left/right），
-                        // 空状态仅保留 BASE（全局工具栏无 BASE 入口）。
+                        // P34：分别打开 BASE/LEFT/RIGHT（BC 式：不强求一次选满三个）
                         ui.horizontal(|ui| {
                             if ui
                                 .button(format!("📂 {}", t(I18nKey::OpenBase)))
@@ -658,6 +657,20 @@ impl MergeTab {
                                 .clicked()
                             {
                                 self.open_base();
+                            }
+                            if ui
+                                .button(format!("📂 {}", t(I18nKey::OpenLeft)))
+                                .on_hover_text(t(I18nKey::OpenLeftFile))
+                                .clicked()
+                            {
+                                self.open_left();
+                            }
+                            if ui
+                                .button(format!("📂 {}", t(I18nKey::OpenRight)))
+                                .on_hover_text(t(I18nKey::OpenRightFile))
+                                .clicked()
+                            {
+                                self.open_right();
                             }
                         });
                     },
