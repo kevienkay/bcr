@@ -618,23 +618,14 @@ impl ImageTab {
         if self.pair.is_none() && self.left.is_empty() {
             egui::CentralPanel::default().show(ui, |ui| {
                 // P52-2：统一空状态（图片用紫色系）
+                // P58：打开左/右图片按钮已上移至全局工具栏，空状态不再重复展示
                 super::common::empty_state(
                     ui,
                     "🖼",
                     super::theme::card_icon_colors()[3],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |ui| {
-                        // P34：分别打开左右图片（BC 式）
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                                self.open_left();
-                            }
-                            if ui.button(t(I18nKey::OpenRight)).clicked() {
-                                self.open_right();
-                            }
-                        });
-                    },
+                    |_ui| {},
                 );
             });
             return;

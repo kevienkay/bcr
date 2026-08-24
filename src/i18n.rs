@@ -507,8 +507,10 @@ pub enum Key {
     /// 选择左右两个目录开始对比（或拖入目录）
     DirEmpty,
     /// 打开左侧目录…
+    #[allow(dead_code)] // P58: 目录打开入口上移至全局工具栏后暂未引用
     OpenLeftDir,
     /// 打开右侧目录…
+    #[allow(dead_code)] // P58: 目录打开入口上移至全局工具栏后暂未引用
     OpenRightDir,
 
     // ---- MergeTab ----

@@ -2169,22 +2169,7 @@ impl DiffTab {
         if super::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("difftab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    // ---- 打开（BC: Open 按钮组）----
-                    if ui
-                        .button(format!("◀ {}", t(I18nKey::OpenLeft)))
-                        .on_hover_text(t(I18nKey::OpenLeftFile))
-                        .clicked()
-                    {
-                        self.open_left_dialog();
-                    }
-                    if ui
-                        .button(format!("▶ {}", t(I18nKey::OpenRight)))
-                        .on_hover_text(t(I18nKey::OpenRightFile))
-                        .clicked()
-                    {
-                        self.open_right_dialog();
-                    }
-                    ui.separator();
+                    // P58：打开左侧/右侧按钮上移至全局工具栏（唯一入口），本行不再重复
                     // ---- 显示过滤（BC: All▾ Diffs Context 组）----
                     // P35-A3：视图过滤下拉（Show All/Diff/Same/Context）
                     {
@@ -2723,23 +2708,14 @@ impl DiffTab {
 
             if self.rows.is_empty() {
                 // P52-2：统一空状态（大图标底片 + 标题 + 操作）
+                // P58：打开左侧/右侧按钮已上移至全局工具栏，空状态不再重复展示
                 super::common::empty_state(
                     ui,
                     "⇄",
                     super::theme::card_icon_colors()[0],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |ui| {
-                        // P34：分别打开左右两侧（BC 式：不强求一次选满两个）
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                                self.open_left_dialog();
-                            }
-                            if ui.button(t(I18nKey::OpenRight)).clicked() {
-                                self.open_right_dialog();
-                            }
-                        });
-                    },
+                    |_ui| {},
                 );
                 return;
             }

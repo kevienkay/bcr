@@ -2815,14 +2815,10 @@ impl DiffApp {
                         self.open_empty_diff();
                     }
                     if bt(ui, crate::i18n::t(crate::i18n::Key::MenuOpenLeft)).clicked() {
-                        if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
-                            t.open_left_dialog();
-                        }
+                        self.open_active_left();
                     }
                     if bt(ui, crate::i18n::t(crate::i18n::Key::MenuOpenRight)).clicked() {
-                        if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
-                            t.open_right_dialog();
-                        }
+                        self.open_active_right();
                     }
                     if bt(ui, crate::i18n::t(crate::i18n::Key::Refresh)).clicked() {
                         self.reload_current();
@@ -2848,6 +2844,33 @@ impl DiffApp {
                     }
                 });
             });
+    }
+
+    /// P58：全局工具栏「打开左侧」——按活动标签类型分发到对应的打开方法
+    /// （文本对比/文件夹对比/CSV/图片/媒体/三路合并等，避免各标签重复按钮）。
+    fn open_active_left(&mut self) {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::Diff(t)) => t.open_left_dialog(),
+            Some(Tab::Dir(t)) => t.open_left_dir(),
+            Some(Tab::Csv(t)) => t.open_left(),
+            Some(Tab::Image(t)) => t.open_left(),
+            Some(Tab::Merge(t)) => t.open_left(),
+            Some(Tab::Media(t)) => t.open_left(),
+            _ => {}
+        }
+    }
+
+    /// P58：全局工具栏「打开右侧」——按活动标签类型分发到对应的打开方法。
+    fn open_active_right(&mut self) {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::Diff(t)) => t.open_right_dialog(),
+            Some(Tab::Dir(t)) => t.open_right_dir(),
+            Some(Tab::Csv(t)) => t.open_right(),
+            Some(Tab::Image(t)) => t.open_right(),
+            Some(Tab::Merge(t)) => t.open_right(),
+            Some(Tab::Media(t)) => t.open_right(),
+            _ => {}
+        }
     }
 
     fn status_bar(&self, ui: &mut egui::Ui) {
