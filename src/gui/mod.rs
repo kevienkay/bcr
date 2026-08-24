@@ -14,6 +14,7 @@ mod imagetab;
 mod mediatab;
 mod menubar;
 mod mergetab;
+mod native_menu;
 mod patchtab;
 mod textedit;
 mod theme;
@@ -292,6 +293,10 @@ struct DiffApp {
     log: Vec<String>,
     /// P43-5：信息弹窗开关
     show_info: bool,
+    /// P58：请求关闭窗口（muda 原生菜单 Quit）
+    quit_requested: bool,
+    /// P58：主题已通过原生菜单切换，下一帧应用
+    theme_changed: bool,
 }
 
 impl DiffApp {
@@ -301,6 +306,8 @@ impl DiffApp {
             active: 0,
             settings,
             show_git_help: false,
+            quit_requested: false,
+            theme_changed: false,
             show_sessions: false,
             show_sidebar: true,
             quick_left: String::new(),
@@ -1704,6 +1711,18 @@ fn diff_report_preview(t: &crate::gui::difftab::DiffTab) -> String {
 
 impl eframe::App for DiffApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // P58：轮询 muda 原生菜单事件并分派到对应动作
+        for cmd in crate::gui::native_menu::drain() {
+            self.run_menu_cmd(cmd);
+        }
+        if self.theme_changed {
+            self.theme_changed = false;
+            ui.ctx().set_theme(self.settings.theme_pref());
+        }
+        if self.quit_requested {
+            self.quit_requested = false;
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
         // 记录窗口大小用于退出时持久化
         if let Some(rect) = ui.ctx().input(|i| i.viewport().inner_rect) {
             self.settings.window_size = Some([rect.width(), rect.height()]);
@@ -2781,6 +2800,87 @@ impl DiffApp {
         });
     }
 
+    /// P58：解释并执行 muda 原生菜单命令（drain 自 native_menu 事件队列）。
+    fn run_menu_cmd(&mut self, cmd: crate::gui::native_menu::MenuCmd) {
+        use crate::gui::difftab::EditSide;
+        use crate::gui::native_menu::MenuCmd as Cmd;
+        match cmd {
+            Cmd::NewText => self.open_empty_diff(),
+            Cmd::NewDir => self.open_empty_dir(),
+            Cmd::NewImage => self.open_empty_image(),
+            Cmd::NewCsv => self.open_empty_csv(),
+            Cmd::NewMerge => self.open_empty_merge(),
+            Cmd::NewMedia => self.open_empty_media(),
+            Cmd::OpenLeft => self.open_active_left(),
+            Cmd::OpenRight => self.open_active_right(),
+            Cmd::Refresh => self.reload_current(),
+            Cmd::Undo => self.with_active_diff(|t| t.undo()),
+            Cmd::Redo => self.with_active_diff(|t| t.redo()),
+            Cmd::CopyRight => self.with_active_diff(|t| t.copy_block_to(EditSide::Right)),
+            Cmd::CopyLeft => self.with_active_diff(|t| t.copy_block_to(EditSide::Left)),
+            Cmd::NextDiff => self.with_active_diff(|t| t.next_diff()),
+            Cmd::PrevDiff => self.with_active_diff(|t| t.prev_diff()),
+            Cmd::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
+            Cmd::CycleTheme => self.cycle_theme(),
+            Cmd::Settings => self.show_settings = true,
+            Cmd::Shortcuts => self.show_shortcuts = true,
+            Cmd::About => self.show_about = true,
+            Cmd::Quit => {
+                self.settings.save();
+                self.quit_requested = true;
+            }
+        }
+    }
+
+    /// 对当前活动标签为 DiffTab 时执行操作（原生菜单转发撤销/复制/跳转）。
+    fn with_active_diff<R>(&mut self, f: impl FnOnce(&mut DiffTab) -> R) {
+        if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
+            f(t);
+        }
+    }
+
+    /// 原生菜单「打开左侧」——按活动标签类型分发到对应打开方法。
+    fn open_active_left(&mut self) {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::Diff(t)) => t.open_left_dialog(),
+            Some(Tab::Dir(t)) => t.open_left_dir(),
+            Some(Tab::Csv(t)) => t.open_left(),
+            Some(Tab::Image(t)) => t.open_left(),
+            Some(Tab::Merge(t)) => t.open_left(),
+            Some(Tab::Media(t)) => t.open_left(),
+            _ => {}
+        }
+    }
+
+    /// 原生菜单「打开右侧」——按活动标签类型分发到对应打开方法。
+    fn open_active_right(&mut self) {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::Diff(t)) => t.open_right_dialog(),
+            Some(Tab::Dir(t)) => t.open_right_dir(),
+            Some(Tab::Csv(t)) => t.open_right(),
+            Some(Tab::Image(t)) => t.open_right(),
+            Some(Tab::Merge(t)) => t.open_right(),
+            Some(Tab::Media(t)) => t.open_right(),
+            _ => {}
+        }
+    }
+
+    /// P58：主题循环（系统→浅色→深色），供原生菜单"切换主题"使用。
+    fn cycle_theme(&mut self) {
+        let next = match self.settings.theme_pref() {
+            ThemePreference::System => ThemePreference::Light,
+            ThemePreference::Light => ThemePreference::Dark,
+            ThemePreference::Dark => ThemePreference::System,
+        };
+        self.settings.theme = match next {
+            ThemePreference::Dark => "dark".to_string(),
+            ThemePreference::Light => "light".to_string(),
+            _ => "system".to_string(),
+        };
+        self.settings.save();
+        self.theme_changed = true;
+    }
+
     fn status_bar(&self, ui: &mut egui::Ui) {
         // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总；B3 补路径/行列数/选中项数）
         egui::Panel::bottom("status_bar").show(ui, |ui| {
@@ -3431,6 +3531,8 @@ pub fn run(args: &GuiArgs) -> i32 {
         options,
         Box::new(move |cc| {
             install_cjk_fonts(&cc.egui_ctx);
+            // P58：muda 原生顶部菜单栏（macOS/Windows；Linux no-op）
+            crate::gui::native_menu::install(cc);
             theme::apply(&cc.egui_ctx);
             for theme in [egui::Theme::Dark, egui::Theme::Light] {
                 cc.egui_ctx.style_mut_of(theme, |style| {

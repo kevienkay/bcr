@@ -1,0 +1,228 @@
+//! P58：跨平台「原生顶部菜单栏」（基于 muda）。
+//!
+//! - **macOS**：`Menu::init_for_nsapp()` 将菜单设为 NSApp 主菜单（顶部系统菜单栏）。
+//! - **Windows**：`Menu::init_for_hwnd(hwnd)`，HWND 取自 eframe `CreationContext::winit_window()`。
+//! - **Linux**：muda Linux 后端为 GTK，需 GTK 窗口；eframe/winit 窗口非 GTK，故 Linux 无原生菜单栏，
+//!   保留窗口内菜单栏（见 mod.rs 的 `menu` 面板）。此模块在 Linux 为 no-op。
+//!
+//! 菜单项点击经 muda 的 `MenuEvent::receiver()`（内建通道）回传；egui 每帧轮询 `drain()`
+//! 取回命令，由 `DiffApp::run_menu_cmd` 分派到对应动作（与窗口内菜单栏同源逻辑，避免重复实现）。
+
+/// 原生菜单项代表的动作（由 egui 每帧轮询事件还原，再分派到 DiffApp 方法）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuCmd {
+    NewText,
+    NewDir,
+    NewImage,
+    NewCsv,
+    NewMerge,
+    NewMedia,
+    OpenLeft,
+    OpenRight,
+    Refresh,
+    Undo,
+    Redo,
+    CopyRight,
+    CopyLeft,
+    NextDiff,
+    PrevDiff,
+    ToggleSidebar,
+    CycleTheme,
+    Settings,
+    Shortcuts,
+    About,
+    Quit,
+}
+
+/// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
+pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
+    Some(match id {
+        "new_text" => MenuCmd::NewText,
+        "new_dir" => MenuCmd::NewDir,
+        "new_image" => MenuCmd::NewImage,
+        "new_csv" => MenuCmd::NewCsv,
+        "new_merge" => MenuCmd::NewMerge,
+        "new_media" => MenuCmd::NewMedia,
+        "open_left" => MenuCmd::OpenLeft,
+        "open_right" => MenuCmd::OpenRight,
+        "refresh" => MenuCmd::Refresh,
+        "undo" => MenuCmd::Undo,
+        "redo" => MenuCmd::Redo,
+        "copy_right" => MenuCmd::CopyRight,
+        "copy_left" => MenuCmd::CopyLeft,
+        "next_diff" => MenuCmd::NextDiff,
+        "prev_diff" => MenuCmd::PrevDiff,
+        "toggle_sidebar" => MenuCmd::ToggleSidebar,
+        "cycle_theme" => MenuCmd::CycleTheme,
+        "settings" => MenuCmd::Settings,
+        "shortcuts" => MenuCmd::Shortcuts,
+        "about" => MenuCmd::About,
+        "quit" => MenuCmd::Quit,
+        _ => return None,
+    })
+}
+
+// ---- macOS / Windows：muda 实现 ----
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod plat {
+    use super::*;
+    use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+
+    fn submenu(id: &str, key: crate::i18n::Key) -> Submenu {
+        Submenu::with_id(id, crate::i18n::t(key), true)
+    }
+
+    fn item(id: &str, key: crate::i18n::Key) -> MenuItem {
+        MenuItem::with_id(id, crate::i18n::t(key), true, None)
+    }
+
+    /// 无对应 i18n 键时用固定标签（原生菜单构建一次，语言切换不刷新系统菜单）。
+    fn fixed(id: &str, label: &str) -> MenuItem {
+        MenuItem::with_id(id, label, true, None)
+    }
+
+    /// 构建 bcr 菜单（顶级菜单 → 子菜单 → 菜单项；项 id 即命令字符串）。
+    #[allow(unused_must_use)] // muda append 返回 Result，构建期无需逐个处理
+    fn build_menu() -> Menu {
+        let menu = Menu::new();
+        // ---- 会话 ----
+        {
+            let m = submenu("session", crate::i18n::Key::MenuSession);
+            m.append(&item("new_text", crate::i18n::Key::MenuNewText));
+            m.append(&item("new_image", crate::i18n::Key::MenuNewImage));
+            m.append(&item("new_csv", crate::i18n::Key::MenuNewCsv));
+            m.append(&item("new_media", crate::i18n::Key::SessionMedia));
+            menu.append(&m);
+        }
+        // ---- 文件 ----
+        {
+            let m = submenu("file", crate::i18n::Key::MenuFile);
+            m.append(&item("open_left", crate::i18n::Key::MenuOpenLeft));
+            m.append(&item("open_right", crate::i18n::Key::MenuOpenRight));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("refresh", crate::i18n::Key::Refresh));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&fixed("quit", "退出 bcr"));
+            menu.append(&m);
+        }
+        // ---- 编辑 ----
+        {
+            let m = submenu("edit", crate::i18n::Key::MenuEdit);
+            m.append(&item("undo", crate::i18n::Key::MenuUndo));
+            m.append(&item("redo", crate::i18n::Key::MenuRedo));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("copy_right", crate::i18n::Key::CopyToRight));
+            m.append(&item("copy_left", crate::i18n::Key::CopyToLeft));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("next_diff", crate::i18n::Key::NextDiff));
+            m.append(&item("prev_diff", crate::i18n::Key::PrevDiff));
+            menu.append(&m);
+        }
+        // ---- 视图 ----
+        {
+            let m = submenu("view", crate::i18n::Key::MenuView);
+            m.append(&fixed("toggle_sidebar", "切换侧栏"));
+            m.append(&item("cycle_theme", crate::i18n::Key::Theme));
+            menu.append(&m);
+        }
+        // ---- 帮助 ----
+        {
+            let m = submenu("help", crate::i18n::Key::MenuHelp);
+            m.append(&item("shortcuts", crate::i18n::Key::MenuShortcuts));
+            m.append(&item("settings", crate::i18n::Key::MenuSettings));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("about", crate::i18n::Key::MenuAbout));
+            menu.append(&m);
+        }
+        menu
+    }
+
+    /// 在 eframe 主线程安装原生菜单。macOS 直接设为 NSApp 主菜单；Windows 需窗口句柄。
+    pub fn install(cc: &eframe::CreationContext) {
+        let _ = cc; // macOS 不需要窗口句柄（init_for_nsapp）；Windows 用 cc 取 HWND
+        let menu = build_menu();
+        #[cfg(target_os = "macos")]
+        {
+            menu.init_for_nsapp();
+        }
+        #[cfg(target_os = "windows")]
+        {
+            use raw_window_handle::RawWindowHandle;
+            if let Some(w) = cc.winit_window() {
+                let hwnd = match w.window_handle().map(|h| h.as_raw()) {
+                    Ok(RawWindowHandle::Win32(h)) => h.hwnd as isize,
+                    _ => return,
+                };
+                let _ = unsafe { menu.init_for_hwnd(hwnd) };
+            }
+        }
+    }
+
+    /// 每帧取走全部菜单点击事件并还原为命令。
+    pub fn drain() -> Vec<MenuCmd> {
+        let mut out = Vec::new();
+        while let Ok(ev) = MenuEvent::receiver().try_recv() {
+            if let Some(cmd) = super::cmd_from_id(ev.id().as_ref()) {
+                out.push(cmd);
+            }
+        }
+        out
+    }
+}
+
+// ---- Linux：no-op（保留窗口内菜单栏）----
+#[cfg(target_os = "linux")]
+mod plat {
+    use super::*;
+    pub fn install(_cc: &eframe::CreationContext) {}
+    pub fn drain() -> Vec<MenuCmd> {
+        Vec::new()
+    }
+}
+
+pub use crate::gui::native_menu::plat::{drain, install};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cmd_from_id_maps_all_known_ids() {
+        for (id, expect) in [
+            ("new_text", MenuCmd::NewText),
+            ("new_dir", MenuCmd::NewDir),
+            ("new_image", MenuCmd::NewImage),
+            ("new_csv", MenuCmd::NewCsv),
+            ("new_merge", MenuCmd::NewMerge),
+            ("new_media", MenuCmd::NewMedia),
+            ("open_left", MenuCmd::OpenLeft),
+            ("open_right", MenuCmd::OpenRight),
+            ("refresh", MenuCmd::Refresh),
+            ("undo", MenuCmd::Undo),
+            ("redo", MenuCmd::Redo),
+            ("copy_right", MenuCmd::CopyRight),
+            ("copy_left", MenuCmd::CopyLeft),
+            ("next_diff", MenuCmd::NextDiff),
+            ("prev_diff", MenuCmd::PrevDiff),
+            ("toggle_sidebar", MenuCmd::ToggleSidebar),
+            ("cycle_theme", MenuCmd::CycleTheme),
+            ("settings", MenuCmd::Settings),
+            ("shortcuts", MenuCmd::Shortcuts),
+            ("about", MenuCmd::About),
+            ("quit", MenuCmd::Quit),
+        ] {
+            assert_eq!(
+                cmd_from_id(id),
+                Some(expect),
+                "id `{id}` 应映射为 {:?}",
+                expect
+            );
+        }
+    }
+
+    #[test]
+    fn cmd_from_id_unknown_returns_none() {
+        assert_eq!(cmd_from_id("nonexistent"), None);
+        assert_eq!(cmd_from_id(""), None);
+    }
+}
