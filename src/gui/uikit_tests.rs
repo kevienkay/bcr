@@ -3572,3 +3572,52 @@ fn global_toolbar_new_diff_opens_tab() {
     let theme_label = crate::i18n::t(crate::i18n::Key::Theme);
     let _ = h.get_by_label(theme_label);
 }
+
+// ---- P58：差异行中间空隙的内联覆盖箭头（◀▶，点击拷贝差异块到另一侧）----
+
+/// 在渲染输出中查找指定文字的 egui 文本形状，返回其屏幕中心位置。
+fn find_text_center(h: &Harness<'_>, needle: &str) -> Option<eframe::egui::Pos2> {
+    use eframe::egui::epaint::Shape;
+    for cs in &h.output().shapes {
+        if let Shape::Text(ts) = &cs.shape {
+            if ts.galley.text() == needle {
+                let sz = ts.galley.size();
+                return Some(ts.pos + eframe::egui::vec2(sz.x * 0.5, sz.y * 0.5));
+            }
+        }
+    }
+    None
+}
+
+#[test]
+fn difftab_inline_arrow_copies_block_to_other_side() {
+    // 三处差异（Delete / Replace / 等长替换），保证差异行箭头可见
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "h\nDEL\nm\nREP1\nm2\n");
+    let r = write(d.path(), "r.txt", "h\nm\nINS\nREP2\nm2\n");
+    let tab = RefCell::new(DiffTab::new());
+    tab.borrow_mut().load_pair(&l, &r, ViewOptions::default());
+    let mut h = Harness::builder()
+        .with_size(eframe::egui::vec2(1200.0, 800.0))
+        .build_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    h.run(); // 多帧稳定，确保箭头已进入 shapes
+
+    // 差异行中间空隙应渲染「▶」（左→右覆盖箭头）
+    let center = find_text_center(&h, "▶").expect("差异行中间空隙应渲染 ▶ 箭头");
+    // 注入一次点击（down+up at 箭头中心）
+    h.hover_at(center);
+    h.drag_at(center);
+    h.drop_at(center);
+    h.run();
+    // copy_block_at 会重载目标侧并置位 dirty（标题出现 * 未保存标记）
+    assert!(tab.borrow().dirty, "点击 ▶ 箭头后应触发拷贝（dirty 置位）");
+
+    // 同样验证 ◀（右→左覆盖箭头）也存在且可点击不 panic
+    let center_l = find_text_center(&h, "◀").expect("差异行中间空隙应渲染 ◀ 箭头");
+    h.hover_at(center_l);
+    h.drag_at(center_l);
+    h.drop_at(center_l);
+    h.run();
+    assert!(tab.borrow().dirty, "点击 ◀ 箭头后应触发拷贝（dirty 置位）");
+}

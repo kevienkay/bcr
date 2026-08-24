@@ -22,8 +22,8 @@ pub const ITEM_GAP: f32 = 6.0;
 /// 当前行左侧竖条宽度（BC 风格当前差异标记，批次 3 DiffTab 使用）
 #[allow(dead_code)]
 pub const CURRENT_BAR: f32 = 3.0;
-/// P32-A1：左右面板之间空隙宽度（画差异连接线）
-pub const MID_GAP: f32 = 14.0;
+/// P32-A1：左右面板之间空隙宽度（画差异连接线 + P58 内联覆盖箭头 ◀▶）
+pub const MID_GAP: f32 = 26.0;
 
 /// 差异色（BC 语义：仅左/删除=红，仅右/插入=绿，修改=黄）
 /// P39-2b：对齐 BC 5.2.5 柔和色调（深色主题：淡红/淡绿/淡黄）

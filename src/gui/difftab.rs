@@ -3199,6 +3199,8 @@ impl DiffTab {
                     match hit {
                         Some(RowHit::Edit(side)) => dbl = Some((oi, side)),
                         Some(RowHit::FoldToggle(bi)) => fold_toggle = Some(bi),
+                        // P58：点击中间 ◀/▶ 箭头 → 拷贝该行所在差异块到目标侧
+                        Some(RowHit::Copy(side)) => copy_req = Some((oi, side)),
                         None => {}
                     }
                     // P38-1d：已编辑行小圆点标记（右上角）
@@ -3564,6 +3566,8 @@ pub enum RowHit {
     Edit(EditSide),
     /// 点击折叠箭头（切换差异块折叠）
     FoldToggle(usize),
+    /// P58：点击中间空隙的覆盖箭头（拷贝差异块到另一侧）
+    Copy(EditSide),
 }
 
 #[allow(clippy::too_many_arguments)] // egui 行绘制参数较多，保持扁平可读
@@ -3712,21 +3716,69 @@ fn paint_diff_row(
     let mid_rect = Rect::from_min_size(Pos2::new(mid_x, y), vec2(mid_gap, ROW_H));
     let mid_color = diff_mid_line_color(ui.visuals().dark_mode, row.tag);
     if let Some(c) = mid_color {
-        // 空隙底色（比 gutter 略深一档，突出连接线）
+        // 空隙底色（比 gutter 略深一档，突出连接线/箭头）
         paint_bg(
             ui,
             mid_rect,
             Some(super::theme::mid_bg(ui.visuals().dark_mode)),
         );
-        // 水平连接线（行垂直居中，左右各留 2px）
-        let cy = y + ROW_H / 2.0;
-        ui.painter().line_segment(
-            [
-                Pos2::new(mid_x + 2.0, cy),
-                Pos2::new(mid_x + mid_gap - 2.0, cy),
-            ],
-            egui::Stroke::new(1.5, c),
+        // P58：内联覆盖箭头（◀ = 右侧覆盖左侧；▶ = 左侧覆盖右侧，BC 拷贝到另一侧）。
+        // 用 ui.interact 生成独立可点区域（hover 高亮 + 点击），每个差异行显示一对。
+        let half = mid_gap * 0.5;
+        let left_rect = Rect::from_min_size(
+            Pos2::new(mid_x + 1.0, y),
+            vec2((half - 3.0).max(6.0), ROW_H),
         );
+        let right_rect = Rect::from_min_size(
+            Pos2::new(mid_x + half + 2.0, y),
+            vec2((half - 3.0).max(6.0), ROW_H),
+        );
+        // 稳定 id（用行号区分虚拟化行，避免渲染复用导致 id 冲突）
+        let row_tag_id = (row.left_no, row.right_no);
+        let left_resp = ui.interact(
+            left_rect,
+            ui.id().with(("infl_arrow_l", row_tag_id)),
+            egui::Sense::click(),
+        );
+        let right_resp = ui.interact(
+            right_rect,
+            ui.id().with(("infl_arrow_r", row_tag_id)),
+            egui::Sense::click(),
+        );
+        let icon = ui.visuals().strong_text_color();
+        let icon_weak = ui.visuals().weak_text_color();
+        let font = egui::FontId::proportional(11.0);
+        // hover/active 底色（差异色淡化）
+        let hover_l = left_resp.hovered() || left_resp.is_pointer_button_down_on();
+        let hover_r = right_resp.hovered() || right_resp.is_pointer_button_down_on();
+        let hover_bg = c.gamma_multiply(0.35);
+        if hover_l {
+            paint_bg(ui, left_rect, Some(hover_bg));
+        }
+        if hover_r {
+            paint_bg(ui, right_rect, Some(hover_bg));
+        }
+        ui.painter().text(
+            left_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "◀",
+            font.clone(),
+            if hover_l { icon } else { icon_weak },
+        );
+        ui.painter().text(
+            right_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "▶",
+            font,
+            if hover_r { icon } else { icon_weak },
+        );
+        // 点击 ◀ → 右侧覆盖左侧；点击 ▶ → 左侧覆盖右侧
+        if left_resp.clicked() {
+            return (Some(RowHit::Copy(EditSide::Left)), resp);
+        }
+        if right_resp.clicked() {
+            return (Some(RowHit::Copy(EditSide::Right)), resp);
+        }
     } else {
         // 无差异行：弱色垂直分隔线（延续面板分隔感）
         let sep = super::theme::mid_sep(ui.visuals().dark_mode);
