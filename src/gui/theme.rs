@@ -365,6 +365,66 @@ pub fn card_icon_colors() -> [Color32; 7] {
     ]
 }
 
+/// P58：桌面平台枚举（Windows / macOS / Linux）。
+/// 用于顶部全局工具栏等需要按平台就地适配观感的部分（与 `install_cjk_fonts`
+/// 用 `cfg!(target_os)` 探测字体同一模式）。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PlatformKind {
+    MacOs,
+    Windows,
+    Linux,
+}
+
+/// 当前运行平台（`cfg!(target_os)` 三选一；非 macOS/Windows 一律视为 Linux 族）。
+pub fn current_platform() -> PlatformKind {
+    if cfg!(target_os = "macos") {
+        PlatformKind::MacOs
+    } else if cfg!(target_os = "windows") {
+        PlatformKind::Windows
+    } else {
+        PlatformKind::Linux
+    }
+}
+
+/// P58：顶部全局工具栏的平台化样式（配色/分隔/行高/按钮尺寸）。
+pub struct ToolbarStyle {
+    /// 工具栏背景
+    pub bg: Color32,
+    /// 工具栏下缘分隔线
+    pub bottom_stroke: egui::Stroke,
+    /// 工具栏行高（保证三平台字体差异下高度一致、不溢出）
+    pub row_height: f32,
+    /// 图标按钮边长（紧凑原生观感）
+    pub button_size: f32,
+}
+
+/// P58：按平台返回工具栏样式。macOS 用更接近系统工具栏的浅灰/深灰、
+/// 下缘细分隔；Windows/Linux 用平坦面板底色 + 1px 下缘分割。
+pub fn toolbar_style(dark: bool, p: PlatformKind) -> ToolbarStyle {
+    match p {
+        PlatformKind::MacOs => ToolbarStyle {
+            bg: if dark {
+                Color32::from_rgb(30, 30, 32)
+            } else {
+                Color32::from_rgb(235, 235, 237)
+            },
+            bottom_stroke: egui::Stroke::new(1.0, Color32::from_gray(if dark { 48 } else { 172 })),
+            row_height: 34.0,
+            button_size: 22.0,
+        },
+        PlatformKind::Windows | PlatformKind::Linux => ToolbarStyle {
+            bg: if dark {
+                Color32::from_rgb(32, 32, 34)
+            } else {
+                Color32::from_rgb(245, 245, 245)
+            },
+            bottom_stroke: egui::Stroke::new(1.0, Color32::from_gray(if dark { 52 } else { 200 })),
+            row_height: 32.0,
+            button_size: 21.0,
+        },
+    }
+}
+
 /// 对某主题应用统一样式（间距/圆角/选中态/面板层次）
 fn apply_style(style: &mut egui::Style, dark: bool) {
     use egui::epaint::CornerRadius;
@@ -455,5 +515,56 @@ pub fn apply(ctx: &egui::Context) {
         ctx.style_mut_of(theme, |style| {
             apply_style(style, theme == egui::Theme::Dark);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn current_platform_maps_to_three_kinds() {
+        // current_platform() 依当前编译目标返回三种平台之一；恰好落在枚举内。
+        let p = current_platform();
+        let _ = match p {
+            PlatformKind::MacOs | PlatformKind::Windows | PlatformKind::Linux => true,
+        };
+        // 枚举共有三平台且互斥（Copy/PartialEq 保证可比）
+        assert_ne!(PlatformKind::MacOs, PlatformKind::Windows);
+        assert_ne!(PlatformKind::Windows, PlatformKind::Linux);
+        assert_ne!(PlatformKind::Linux, PlatformKind::MacOs);
+    }
+
+    #[test]
+    fn toolbar_style_diffs_by_platform_and_theme() {
+        for p in [
+            PlatformKind::MacOs,
+            PlatformKind::Windows,
+            PlatformKind::Linux,
+        ] {
+            for dark in [false, true] {
+                let s = toolbar_style(dark, p);
+                // 三平台三主题都应有非零行高与按钮尺寸、稳定底色
+                assert!(s.row_height > 0.0);
+                assert!(s.button_size > 0.0);
+                assert!(s.bottom_stroke.width > 0.0);
+                assert_ne!(s.bg, Color32::TRANSPARENT);
+            }
+        }
+        // macOS 与 Windows 行高/配色应不同（平台差异化生效）
+        let mac_light = toolbar_style(false, PlatformKind::MacOs);
+        let win_light = toolbar_style(false, PlatformKind::Windows);
+        assert_ne!(mac_light.row_height, win_light.row_height);
+        assert_ne!(mac_light.bg, win_light.bg);
+        // 深/浅主题底色应不同（深浅差异化生效）
+        assert_ne!(
+            toolbar_style(true, PlatformKind::Linux).bg,
+            toolbar_style(false, PlatformKind::Linux).bg
+        );
+        // 同平台同主题应稳定（纯函数）
+        assert_eq!(
+            toolbar_style(true, PlatformKind::MacOs).bg,
+            toolbar_style(true, PlatformKind::MacOs).bg
+        );
     }
 }

@@ -3544,3 +3544,31 @@ fn dropped_single_file_into_empty_diff_tab_keeps_left_only() {
         }
     }
 }
+
+// ---- P58：顶部全局工具栏（新增原生工具栏，三平台适配；正常显示时新增标签）----
+
+#[test]
+fn global_toolbar_new_diff_opens_tab() {
+    // 确保工具栏开关为开（默认 true，显式置位避免并行测试干扰）
+    super::common::SHOW_TOOLBAR.store(true, std::sync::atomic::Ordering::Relaxed);
+    let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
+    assert!(app.borrow().tabs.is_empty(), "前置：无标签页");
+    let mut h = Harness::new_ui(|ui| app.borrow_mut().global_toolbar(ui));
+    h.run();
+    // 点击「新建文本对比」→ open_empty_diff 应新增一个 Diff 标签
+    let new_label = crate::i18n::t(crate::i18n::Key::MenuNewText);
+    h.get_by_label(new_label).click();
+    h.run();
+    assert_eq!(
+        app.borrow().tabs.len(),
+        1,
+        "点击新建文本对比应新增一个 Diff 标签"
+    );
+    assert!(
+        matches!(app.borrow().tabs[0], super::Tab::Diff(_)),
+        "应为 Diff 标签"
+    );
+    // 「主题」按钮存在（不点击——点击会写真实 ~/.bcr-gui.toml，测试不落盘）
+    let theme_label = crate::i18n::t(crate::i18n::Key::Theme);
+    let _ = h.get_by_label(theme_label);
+}

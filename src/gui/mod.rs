@@ -1719,6 +1719,9 @@ impl eframe::App for DiffApp {
             menubar::menu_bar(self, ui);
         });
 
+        // P58：窗口顶部全局工具栏（菜单栏之下、标签栏之上；对标 BC 单工具栏，随标签上下文感知）
+        self.global_toolbar(ui);
+
         // 标签栏（P33：菜单栏之下独立一行，BC 观感）
         egui::Panel::top("tabbar").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -2779,6 +2782,72 @@ impl DiffApp {
                 }
             });
         });
+    }
+
+    /// P58：窗口顶部全局工具栏。渲染为一条横向 strip，含三组：
+    /// - 会话/文件组（恒显）：新建文本对比 / 打开左 / 打开右 / 刷新
+    /// - 全局/右侧组：主题循环、设置
+    ///
+    /// 背景/下缘分隔/行高/按钮高按平台就地适配（Windows/macOS/Linux，见 `theme::toolbar_style`）。
+    fn global_toolbar(&mut self, ui: &mut egui::Ui) {
+        // 与 View>工具栏 开关联动（SHOW_TOOLBAR 同时控制全局工具栏与每标签详细工具栏）
+        if !crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        let dark = ui.visuals().dark_mode;
+        let style = theme::toolbar_style(dark, theme::current_platform());
+        let btn_h = style.button_size;
+        let bt = |ui: &mut egui::Ui, s: &str| {
+            ui.add(egui::Button::new(s).min_size(egui::vec2(0.0, btn_h)))
+        };
+        let vm = ((style.row_height * 0.5 - 11.0).max(3.0)) as i8;
+        egui::Panel::top("global_toolbar")
+            .frame(
+                egui::Frame::new()
+                    .fill(style.bg)
+                    .stroke(style.bottom_stroke)
+                    .inner_margin(egui::Margin::symmetric(8, vm)),
+            )
+            .show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    // ---- 会话/文件组（恒显）----
+                    if bt(ui, crate::i18n::t(crate::i18n::Key::MenuNewText)).clicked() {
+                        self.open_empty_diff();
+                    }
+                    if bt(ui, crate::i18n::t(crate::i18n::Key::MenuOpenLeft)).clicked() {
+                        if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
+                            t.open_left_dialog();
+                        }
+                    }
+                    if bt(ui, crate::i18n::t(crate::i18n::Key::MenuOpenRight)).clicked() {
+                        if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
+                            t.open_right_dialog();
+                        }
+                    }
+                    if bt(ui, crate::i18n::t(crate::i18n::Key::Refresh)).clicked() {
+                        self.reload_current();
+                    }
+                    ui.separator();
+                    // ---- 全局/右侧组：主题循环（系统→浅色→深色）----
+                    if bt(ui, crate::i18n::t(crate::i18n::Key::Theme)).clicked() {
+                        let next = match self.settings.theme_pref() {
+                            ThemePreference::System => ThemePreference::Light,
+                            ThemePreference::Light => ThemePreference::Dark,
+                            ThemePreference::Dark => ThemePreference::System,
+                        };
+                        self.settings.theme = match next {
+                            ThemePreference::Dark => "dark".to_string(),
+                            ThemePreference::Light => "light".to_string(),
+                            _ => "system".to_string(),
+                        };
+                        self.settings.save();
+                        ui.ctx().set_theme(next);
+                    }
+                    if bt(ui, crate::i18n::t(crate::i18n::Key::MenuSettings)).clicked() {
+                        self.show_settings = true;
+                    }
+                });
+            });
     }
 
     fn status_bar(&self, ui: &mut egui::Ui) {
