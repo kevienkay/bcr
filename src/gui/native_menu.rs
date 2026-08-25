@@ -518,6 +518,10 @@ mod plat {
                 let _ = unsafe { menu.init_for_hwnd(hwnd) };
             }
         }
+        // P58-fix: 原生菜单项(NSMenuItem/HMENU)持有到 Rust MenuChild 的原始指针。
+        // 若此处丢弃 menu，其 MenuChild 被释放，点击菜单项会 use-after-free 导致进程退出。
+        // 菜单仅创建一次且需存活到应用结束，故用 forget 泄漏整个菜单树。
+        std::mem::forget(menu);
     }
 
     /// 每帧取走全部菜单点击事件并还原为命令。
