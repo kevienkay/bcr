@@ -3400,6 +3400,7 @@ fn dirtab_view_filter_hotkeys_1_2_3() {
 // ---- P49-3：菜单栏真点验证（kittest 驱动完整 menu_bar，点击菜单项触发行为） ----
 
 #[test]
+#[cfg(target_os = "linux")] // 窗口内菜单栏仅 Linux 渲染；macOS/Windows 用 muda 原生菜单
 fn menubar_session_new_text_creates_diff_tab() {
     let app = RefCell::new(super::DiffApp::new(super::Settings::default()));
     assert!(app.borrow().tabs.is_empty(), "前置：无标签页");

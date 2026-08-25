@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+// P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
+
 //! CSV 表格对比标签页（P29）：并排渲染左右表格，行对齐 + 单元格级差异高亮。
 //!
 //! 对标 Beyond Compare 表格视图：

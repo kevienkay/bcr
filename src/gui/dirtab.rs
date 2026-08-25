@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+// P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
+
 //! 目录对比标签页：树形差异视图（可折叠）+ 键盘导航 + 双击打开并排 Diff。
 
 use super::common::*;

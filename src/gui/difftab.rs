@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+// P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
+
 //! 并排 Diff 标签页：虚拟化渲染、行内高亮、搜索、差异/行号跳转。
 
 use super::common::*;

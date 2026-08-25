@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+// P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
+
 //! 图片对比标签页：并排渲染左右图 + 差异叠加图，缩放/fit-to-window，GIF/WebP 多帧导航 + 缩略图条。
 //!
 //! 打开流程：`open_diff_files` / 目录双击 / 拖放时检测两侧文件魔数，

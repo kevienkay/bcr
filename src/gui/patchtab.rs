@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+// P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
+
 //! P37-1h：补丁视图（对标 BC Text Patch，`.patch`/`.diff` 自动进入）。
 //!
 //! 解析补丁文件 → 左侧（旧）vs 右侧（新）双栏对比，

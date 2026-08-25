@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+// P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
+
 //! P37-1g：文本编辑视图（对标 BC Text Edit，`bcomp -edit 文件`）。
 //!
 //! 单文件编辑器：打开/保存（编码回写 + A2 模式 .bak 备份）、撤销/重做、
