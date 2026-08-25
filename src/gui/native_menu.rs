@@ -76,6 +76,27 @@ pub enum MenuCmd {
     GotoBookmark,
     ToggleBookmark,
     ClearBookmarks,
+    RotateCw,
+    RotateCcw,
+    FlipHorizontal,
+    FlipVertical,
+    ImageResetDiff,
+    ImageCompareMeta,
+    CsvSort,
+    CsvInsertRow,
+    CsvDeleteRow,
+    DiffCopyLine,
+    DiffIndent,
+    DiffRecompute,
+    MergeTakeLine,
+    MergeResolve,
+    DirUpLevel,
+    DirBack,
+    DirForward,
+    TextConvertTrim,
+    TextConvertTabs,
+    TextOpenClipboard,
+    TextFindInFiles,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -143,6 +164,27 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "goto_bookmark" => MenuCmd::GotoBookmark,
         "toggle_bookmark" => MenuCmd::ToggleBookmark,
         "clear_bookmarks" => MenuCmd::ClearBookmarks,
+        "rotate_cw" => MenuCmd::RotateCw,
+        "rotate_ccw" => MenuCmd::RotateCcw,
+        "flip_h" => MenuCmd::FlipHorizontal,
+        "flip_v" => MenuCmd::FlipVertical,
+        "image_reset_diff" => MenuCmd::ImageResetDiff,
+        "image_compare_meta" => MenuCmd::ImageCompareMeta,
+        "csv_sort" => MenuCmd::CsvSort,
+        "csv_insert_row" => MenuCmd::CsvInsertRow,
+        "csv_delete_row" => MenuCmd::CsvDeleteRow,
+        "diff_copy_line" => MenuCmd::DiffCopyLine,
+        "diff_indent" => MenuCmd::DiffIndent,
+        "diff_recompute" => MenuCmd::DiffRecompute,
+        "merge_take_line" => MenuCmd::MergeTakeLine,
+        "merge_resolve" => MenuCmd::MergeResolve,
+        "dir_up" => MenuCmd::DirUpLevel,
+        "dir_back" => MenuCmd::DirBack,
+        "dir_forward" => MenuCmd::DirForward,
+        "text_trim" => MenuCmd::TextConvertTrim,
+        "text_tabs" => MenuCmd::TextConvertTabs,
+        "text_clipboard" => MenuCmd::TextOpenClipboard,
+        "text_find_files" => MenuCmd::TextFindInFiles,
         _ => return None,
     })
 }
@@ -264,6 +306,14 @@ mod plat {
             m.append(&fixed("toggle_bookmark", "切换书签"));
             m.append(&fixed("goto_bookmark", "跳转书签 0"));
             m.append(&fixed("clear_bookmarks", "清除书签"));
+            m.append(&PredefinedMenuItem::separator());
+            // 图片
+            m.append(&fixed("rotate_cw", "图片顺时针旋转"));
+            m.append(&fixed("rotate_ccw", "图片逆时针旋转"));
+            m.append(&fixed("flip_h", "图片水平翻转"));
+            m.append(&fixed("flip_v", "图片垂直翻转"));
+            m.append(&fixed("image_reset_diff", "重置图片差异偏移"));
+            m.append(&fixed("image_compare_meta", "图片元数据对比"));
             menu.append(&m);
         }
         // ---- 工具 ----
@@ -279,6 +329,27 @@ mod plat {
             ));
             m.append(&PredefinedMenuItem::separator());
             m.append(&item("reset_defaults", crate::i18n::Key::MenuResetDefaults));
+            m.append(&PredefinedMenuItem::separator());
+            // 目录导航
+            m.append(&fixed("dir_up", "上一级"));
+            m.append(&fixed("dir_back", "后退"));
+            m.append(&fixed("dir_forward", "前进"));
+            m.append(&PredefinedMenuItem::separator());
+            // 差异/合并
+            m.append(&fixed("diff_copy_line", "复制当前行"));
+            m.append(&fixed("diff_indent", "调整缩进"));
+            m.append(&fixed("diff_recompute", "重新计算"));
+            m.append(&fixed("merge_take_line", "取当前行"));
+            m.append(&fixed("merge_resolve", "解决当前冲突"));
+            m.append(&PredefinedMenuItem::separator());
+            // 表格/文本
+            m.append(&fixed("csv_sort", "表格排序…"));
+            m.append(&fixed("csv_insert_row", "插入行"));
+            m.append(&fixed("csv_delete_row", "删除行"));
+            m.append(&fixed("text_trim", "文本去行尾空白"));
+            m.append(&fixed("text_tabs", "文本 Tab→空格"));
+            m.append(&fixed("text_clipboard", "打开剪贴板文本"));
+            m.append(&fixed("text_find_files", "在文件中查找"));
             menu.append(&m);
         }
         // ---- 窗口 ----

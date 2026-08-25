@@ -2902,6 +2902,39 @@ impl DiffApp {
             Cmd::GotoBookmark => self.with_active_diff(|t| t.goto_bookmark(0)),
             Cmd::ToggleBookmark => self.with_active_diff(|t| t.toggle_bookmark(0)),
             Cmd::ClearBookmarks => self.with_active_diff(|t| t.clear_bookmarks()),
+            Cmd::RotateCw => self.with_active_image(|t| t.rotate_cw()),
+            Cmd::RotateCcw => self.with_active_image(|t| t.rotate_ccw()),
+            Cmd::FlipHorizontal => self.with_active_image(|t| t.flip_horizontal()),
+            Cmd::FlipVertical => self.with_active_image(|t| t.flip_vertical()),
+            Cmd::ImageResetDiff => self.with_active_image(|t| t.reset_diff_offset()),
+            Cmd::ImageCompareMeta => self.with_active_image(|t| t.compare_meta()),
+            Cmd::CsvSort => self.with_active_csv(|t| t.open_sort_dialog()),
+            Cmd::CsvInsertRow => self.with_active_csv(|t| {
+                t.insert_row();
+            }),
+            Cmd::CsvDeleteRow => self.with_active_csv(|t| {
+                t.delete_row();
+            }),
+            Cmd::DiffCopyLine => self.with_active_diff(|t| {
+                t.copy_line_current(EditSide::Right);
+            }),
+            Cmd::DiffIndent => self.with_active_diff(|t| {
+                t.indent_current(0);
+            }),
+            Cmd::DiffRecompute => self.with_active_diff(|t| t.recompute()),
+            Cmd::MergeTakeLine => self.with_active_merge(|t| {
+                t.take_line(crate::mergeview::Resolution::Left);
+            }),
+            Cmd::MergeResolve => self.with_active_merge(|t| {
+                t.resolve_current(crate::mergeview::Resolution::Left);
+            }),
+            Cmd::DirUpLevel => self.with_active_dir(|t| t.up_level()),
+            Cmd::DirBack => self.with_active_dir(|t| t.back()),
+            Cmd::DirForward => self.with_active_dir(|t| t.forward()),
+            Cmd::TextConvertTrim => self.with_active_textedit(|t| t.convert_trim()),
+            Cmd::TextConvertTabs => self.with_active_textedit(|t| t.convert_tabs()),
+            Cmd::TextOpenClipboard => self.with_active_textedit(|t| t.open_clipboard()),
+            Cmd::TextFindInFiles => self.with_active_textedit(|t| t.open_find_in_files()),
         }
     }
 
@@ -2926,6 +2959,18 @@ impl DiffApp {
 
     fn with_active_textedit<R>(&mut self, f: impl FnOnce(&mut TextEditTab) -> R) {
         if let Some(Tab::TextEdit(t)) = self.tabs.get_mut(self.active) {
+            f(t);
+        }
+    }
+
+    fn with_active_csv<R>(&mut self, f: impl FnOnce(&mut CsvTab) -> R) {
+        if let Some(Tab::Csv(t)) = self.tabs.get_mut(self.active) {
+            f(t);
+        }
+    }
+
+    fn with_active_image<R>(&mut self, f: impl FnOnce(&mut ImageTab) -> R) {
+        if let Some(Tab::Image(t)) = self.tabs.get_mut(self.active) {
             f(t);
         }
     }
