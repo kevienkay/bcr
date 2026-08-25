@@ -32,6 +32,10 @@ pub enum MenuCmd {
     Shortcuts,
     About,
     Quit,
+    NextTab,
+    PrevTab,
+    Minimize,
+    CloseAllTabs,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -58,6 +62,10 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "shortcuts" => MenuCmd::Shortcuts,
         "about" => MenuCmd::About,
         "quit" => MenuCmd::Quit,
+        "next_tab" => MenuCmd::NextTab,
+        "prev_tab" => MenuCmd::PrevTab,
+        "minimize" => MenuCmd::Minimize,
+        "close_all" => MenuCmd::CloseAllTabs,
         _ => return None,
     })
 }
@@ -118,11 +126,28 @@ mod plat {
             m.append(&item("prev_diff", crate::i18n::Key::PrevDiff));
             menu.append(&m);
         }
+        // ---- 搜索 ----
+        {
+            let m = submenu("search", crate::i18n::Key::MenuSearch);
+            m.append(&item("next_diff", crate::i18n::Key::MenuFindNext));
+            m.append(&item("prev_diff", crate::i18n::Key::MenuFindPrev));
+            menu.append(&m);
+        }
         // ---- 视图 ----
         {
             let m = submenu("view", crate::i18n::Key::MenuView);
             m.append(&fixed("toggle_sidebar", "切换侧栏"));
             m.append(&item("cycle_theme", crate::i18n::Key::Theme));
+            menu.append(&m);
+        }
+        // ---- 窗口 ----
+        {
+            let m = submenu("window", crate::i18n::Key::MenuWindow);
+            m.append(&item("next_tab", crate::i18n::Key::MenuNextTab));
+            m.append(&item("prev_tab", crate::i18n::Key::MenuPrevTab));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("minimize", crate::i18n::Key::MenuMinimize));
+            m.append(&item("close_all", crate::i18n::Key::MenuCloseAllWindows));
             menu.append(&m);
         }
         // ---- 帮助 ----

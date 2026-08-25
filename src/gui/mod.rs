@@ -1713,7 +1713,7 @@ impl eframe::App for DiffApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // P58：轮询 muda 原生菜单事件并分派到对应动作
         for cmd in crate::gui::native_menu::drain() {
-            self.run_menu_cmd(cmd);
+            self.run_menu_cmd(ui, cmd);
         }
         if self.theme_changed {
             self.theme_changed = false;
@@ -1734,6 +1734,8 @@ impl eframe::App for DiffApp {
         self.handle_global_shortcuts(ui);
 
         // 顶部菜单栏（P33：BC 式标准菜单，替代扁平按钮排）
+        // P58：macOS/Windows 也保留窗口内菜单（muda 原生菜单栏在其上补充系统级入口；
+        // 完全隐藏会移除仅菜单可达的功能：差异布局/Hex/对齐/设置导出导入等，故二者并存）。
         egui::Panel::top("menu").show(ui, |ui| {
             menubar::menu_bar(self, ui);
         });
@@ -2801,7 +2803,7 @@ impl DiffApp {
     }
 
     /// P58：解释并执行 muda 原生菜单命令（drain 自 native_menu 事件队列）。
-    fn run_menu_cmd(&mut self, cmd: crate::gui::native_menu::MenuCmd) {
+    fn run_menu_cmd(&mut self, ui: &mut egui::Ui, cmd: crate::gui::native_menu::MenuCmd) {
         use crate::gui::difftab::EditSide;
         use crate::gui::native_menu::MenuCmd as Cmd;
         match cmd {
@@ -2829,6 +2831,12 @@ impl DiffApp {
                 self.settings.save();
                 self.quit_requested = true;
             }
+            Cmd::NextTab => self.next_tab(),
+            Cmd::PrevTab => self.prev_tab(),
+            Cmd::Minimize => ui
+                .ctx()
+                .send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+            Cmd::CloseAllTabs => self.close_all_tabs(),
         }
     }
 
