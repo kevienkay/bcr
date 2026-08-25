@@ -9,6 +9,10 @@
 //! 取回命令，由 `DiffApp::run_menu_cmd` 分派到对应动作（与窗口内菜单栏同源逻辑，避免重复实现）。
 
 /// 原生菜单项代表的动作（由 egui 每帧轮询事件还原，再分派到 DiffApp 方法）。
+///
+/// Linux 无原生菜单（no-op），枚举与解析函数仅被 macOS/Windows 的 `drain()` 使用，
+/// 故在 Linux 目标上放行 dead_code（测试仍覆盖映射逻辑）。
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuCmd {
     NewText,
@@ -48,6 +52,7 @@ pub enum MenuCmd {
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
     Some(match id {
         "new_text" => MenuCmd::NewText,
@@ -215,7 +220,7 @@ mod plat {
         }
         #[cfg(target_os = "windows")]
         {
-            use raw_window_handle::RawWindowHandle;
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
             if let Some(w) = cc.winit_window() {
                 let hwnd = match w.window_handle().map(|h| h.as_raw()) {
                     Ok(RawWindowHandle::Win32(h)) => h.hwnd as isize,

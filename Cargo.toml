@@ -45,6 +45,8 @@ cab = "0.6.0"
 muda = "0.17"
 [target.'cfg(target_os = "windows")'.dependencies]
 muda = "0.17"
+# P58：Windows 原生菜单需从 winit 窗口提取 HWND
+raw-window-handle = "0.6"
 
 [dev-dependencies]
 tempfile = "3"
