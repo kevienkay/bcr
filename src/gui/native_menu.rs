@@ -97,6 +97,15 @@ pub enum MenuCmd {
     TextConvertTabs,
     TextOpenClipboard,
     TextFindInFiles,
+    SaveWorkspace,
+    LoadWorkspace,
+    ByteOrderLE,
+    ByteOrderBE,
+    ReopenCsv,
+    ReopenHex,
+    ReopenImage,
+    ReopenMerge,
+    ReopenText,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -185,6 +194,15 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "text_tabs" => MenuCmd::TextConvertTabs,
         "text_clipboard" => MenuCmd::TextOpenClipboard,
         "text_find_files" => MenuCmd::TextFindInFiles,
+        "save_workspace" => MenuCmd::SaveWorkspace,
+        "load_workspace" => MenuCmd::LoadWorkspace,
+        "byte_le" => MenuCmd::ByteOrderLE,
+        "byte_be" => MenuCmd::ByteOrderBE,
+        "reopen_csv" => MenuCmd::ReopenCsv,
+        "reopen_hex" => MenuCmd::ReopenHex,
+        "reopen_image" => MenuCmd::ReopenImage,
+        "reopen_merge" => MenuCmd::ReopenMerge,
+        "reopen_text" => MenuCmd::ReopenText,
         _ => return None,
     })
 }
@@ -222,6 +240,15 @@ mod plat {
             m.append(&PredefinedMenuItem::separator());
             m.append(&fixed("new_tab_like", "新建类似标签"));
             m.append(&PredefinedMenuItem::separator());
+            m.append(&fixed("save_workspace", "保存工作空间…"));
+            m.append(&fixed("load_workspace", "加载工作空间…"));
+            m.append(&PredefinedMenuItem::separator());
+            // 重新打开为
+            m.append(&fixed("reopen_csv", "重新打开为 CSV"));
+            m.append(&fixed("reopen_hex", "重新打开为 Hex"));
+            m.append(&fixed("reopen_image", "重新打开为图片"));
+            m.append(&fixed("reopen_merge", "重新打开为三路合并"));
+            m.append(&fixed("reopen_text", "重新打开为文本"));
             menu.append(&m);
         }
         // ---- 文件 ----
@@ -314,6 +341,10 @@ mod plat {
             m.append(&fixed("flip_v", "图片垂直翻转"));
             m.append(&fixed("image_reset_diff", "重置图片差异偏移"));
             m.append(&fixed("image_compare_meta", "图片元数据对比"));
+            m.append(&PredefinedMenuItem::separator());
+            // 十六进制字节序
+            m.append(&fixed("byte_le", "字节序：小端"));
+            m.append(&fixed("byte_be", "字节序：大端"));
             menu.append(&m);
         }
         // ---- 工具 ----

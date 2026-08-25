@@ -342,7 +342,6 @@ impl DiffApp {
     }
 
     /// P46-5：保存工作空间（BC 会话>保存工作空间为...）——标签布局 TOML 持久化
-    #[allow(dead_code)] // P58: 工作空间存取仅窗口内菜单可达, 待迁入原生
     fn save_workspace(&mut self, path: &std::path::Path) -> Result<(), String> {
         #[derive(serde::Serialize)]
         struct WsTab {
@@ -383,7 +382,6 @@ impl DiffApp {
     }
 
     /// P46-5：加载工作空间（BC 会话>加载工作空间）——按类型重建标签
-    #[allow(dead_code)] // P58: 工作空间存取仅窗口内菜单可达, 待迁入原生
     fn load_workspace(&mut self, path: &std::path::Path) -> Result<(), String> {
         #[derive(serde::Deserialize)]
         struct WsTab {
@@ -1026,8 +1024,6 @@ impl DiffApp {
         t.load_left(path, ViewOptions::default());
         self.add_tab(Tab::Diff(t));
     }
-
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn open_diff_files(&mut self) {
         // 支持多选：选 1 个 → 立即显示左侧（先导入的显示在左边）；
         // 选 2 个 → 双文件逻辑；≥3 个 → 三路合并（与拖拽一致）
@@ -1065,8 +1061,6 @@ impl DiffApp {
             }
         }
     }
-
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn open_dir_compare(&mut self) {
         let Some(l) = pick_dir() else { return };
         let Some(r) = pick_dir() else { return };
@@ -1088,8 +1082,6 @@ impl DiffApp {
         let Some(r) = pick_file() else { return };
         self.add_tab(Tab::Csv(CsvTab::new(&l, &r)));
     }
-
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn open_merge(&mut self) {
         let Some(b) = pick_file() else { return };
         let Some(l) = pick_file() else { return };
@@ -1147,7 +1139,6 @@ impl DiffApp {
     }
 
     /// P39-2a：新建标签页（⌘T）——复制当前会话类型的新空标签
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn new_tab_like_current(&mut self) {
         match self.tabs.get(self.active) {
             Some(Tab::Diff(_)) => self.open_empty_diff(),
@@ -1174,7 +1165,6 @@ impl DiffApp {
     }
 
     /// P39-2a：清除会话（⌥⌘C）——把当前标签重置为同类型空会话
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn clear_active_tab(&mut self) {
         if self.tabs.is_empty() {
             return;
@@ -1196,7 +1186,6 @@ impl DiffApp {
     }
 
     /// P39-2e：比较文件使用（视图切换）——用指定视图重新打开当前文件对
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn reopen_as_text(&mut self, l: &str, r: &str) {
         let mut t = DiffTab::new();
         t.opts = ViewOptions {
@@ -1212,7 +1201,6 @@ impl DiffApp {
     }
 
     /// P39-2e：16进制视图（强制 hex 渲染）
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn reopen_as_hex(&mut self, l: &str, r: &str) {
         self.reopen_as_text(l, r);
         if let Tab::Diff(t) = &mut self.tabs[self.active] {
@@ -1221,25 +1209,21 @@ impl DiffApp {
     }
 
     /// P39-2e：图片视图
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn reopen_as_image(&mut self, l: &str, r: &str) {
         self.add_tab(Tab::Image(ImageTab::new(l, r)));
     }
 
     /// P39-2e：表格视图
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn reopen_as_csv(&mut self, l: &str, r: &str) {
         self.add_tab(Tab::Csv(CsvTab::new(l, r)));
     }
 
     /// P43-4：合并文件（BC 文本比较 Session>合并文件）——当前左右文件进入三路合并，BASE 留空待填
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn reopen_as_merge(&mut self, l: &str, r: &str) {
         self.add_tab(Tab::Merge(MergeTab::new("", l, r)));
     }
 
     /// P43-4：和输出比较（BC 文件夹合并/同步 Session>和输出比较）——输出目录 vs 左侧目录对比
-    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入原生菜单
     fn compare_with_output(&mut self) {
         let Some(Tab::FolderMerge(t)) = self.tabs.get(self.active) else {
             return;
@@ -2935,6 +2919,64 @@ impl DiffApp {
             Cmd::TextConvertTabs => self.with_active_textedit(|t| t.convert_tabs()),
             Cmd::TextOpenClipboard => self.with_active_textedit(|t| t.open_clipboard()),
             Cmd::TextFindInFiles => self.with_active_textedit(|t| t.open_find_in_files()),
+            Cmd::SaveWorkspace => {
+                if let Some(p) = rfd::FileDialog::new()
+                    .set_file_name("bcr-workspace.toml")
+                    .save_file()
+                {
+                    if let Err(e) = self.save_workspace(&p) {
+                        self.report_error = Some(format!("保存工作空间失败: {}", e));
+                    }
+                }
+            }
+            Cmd::LoadWorkspace => {
+                if let Some(p) = rfd::FileDialog::new().pick_file() {
+                    if let Err(e) = self.load_workspace(&p) {
+                        self.report_error = Some(format!("加载工作空间失败: {}", e));
+                    }
+                }
+            }
+            Cmd::ByteOrderLE => self.with_active_diff(|t| {
+                if let Some(h) = &mut t.hex {
+                    h.value_mode = crate::hexview::HexValueMode::LittleEndian;
+                }
+            }),
+            Cmd::ByteOrderBE => self.with_active_diff(|t| {
+                if let Some(h) = &mut t.hex {
+                    h.value_mode = crate::hexview::HexValueMode::BigEndian;
+                }
+            }),
+            Cmd::ReopenCsv => {
+                let (l, r) = self.active_diff_paths();
+                self.reopen_as_csv(&l, &r);
+            }
+            Cmd::ReopenHex => {
+                let (l, r) = self.active_diff_paths();
+                self.reopen_as_hex(&l, &r);
+            }
+            Cmd::ReopenImage => {
+                let (l, r) = self.active_diff_paths();
+                self.reopen_as_image(&l, &r);
+            }
+            Cmd::ReopenMerge => {
+                let (l, r) = self.active_diff_paths();
+                self.reopen_as_merge(&l, &r);
+            }
+            Cmd::ReopenText => {
+                let (l, r) = self.active_diff_paths();
+                self.reopen_as_text(&l, &r);
+            }
+        }
+    }
+
+    /// 当前活动 DiffTab 的左右文件路径（用于"重新打开为"）。
+    fn active_diff_paths(&self) -> (String, String) {
+        match self.tabs.get(self.active) {
+            Some(Tab::Diff(t)) => (
+                t.left.as_ref().map(|f| f.path.clone()).unwrap_or_default(),
+                t.right.as_ref().map(|f| f.path.clone()).unwrap_or_default(),
+            ),
+            _ => (String::new(), String::new()),
         }
     }
 

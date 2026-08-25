@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+// P58: 剩余少量标签专项/内部状态项待逐项迁入
+
 // P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
 
 //! P37-1g：文本编辑视图（对标 BC Text Edit，`bcomp -edit 文件`）。
