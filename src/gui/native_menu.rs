@@ -512,7 +512,7 @@ mod plat {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
             if let Some(w) = cc.winit_window() {
                 let hwnd = match w.window_handle().map(|h| h.as_raw()) {
-                    Ok(RawWindowHandle::Win32(h)) => h.hwnd as isize,
+                    Ok(RawWindowHandle::Win32(h)) => h.hwnd.get(),
                     _ => return,
                 };
                 let _ = unsafe { menu.init_for_hwnd(hwnd) };
