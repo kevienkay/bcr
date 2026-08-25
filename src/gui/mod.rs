@@ -2886,6 +2886,22 @@ impl DiffApp {
             Cmd::CollapseAll => self.with_active_dir(|t| t.collapse_all()),
             Cmd::ExpandAll => self.with_active_dir(|t| t.expand_all()),
             Cmd::RebuildTree => self.with_active_dir(|t| t.rebuild_tree()),
+            Cmd::NextConflict => self.with_active_merge(|t| t.next_conflict()),
+            Cmd::PrevConflict => self.with_active_merge(|t| t.prev_conflict()),
+            Cmd::NextDiffSection => self.with_active_diff(|t| t.next_diff_section()),
+            Cmd::PrevDiffSection => self.with_active_diff(|t| t.prev_diff_section()),
+            Cmd::NextEdit => self.with_active_diff(|t| t.next_edit()),
+            Cmd::PrevEdit => self.with_active_diff(|t| t.prev_edit()),
+            Cmd::FocusSearch => self.with_active_diff(|t| t.focus_search()),
+            Cmd::FocusReplace => self.with_active_diff(|t| t.focus_replace()),
+            Cmd::SaveAs => self.with_active_textedit(|t| t.save_as()),
+            Cmd::NextTakenLeft => self.with_active_merge(|t| t.next_taken_left()),
+            Cmd::NextTakenRight => self.with_active_merge(|t| t.next_taken_right()),
+            Cmd::LoadClipboardLeft => self.with_active_diff(|t| t.load_clipboard_left()),
+            Cmd::LoadClipboardRight => self.with_active_diff(|t| t.load_clipboard_right()),
+            Cmd::GotoBookmark => self.with_active_diff(|t| t.goto_bookmark(0)),
+            Cmd::ToggleBookmark => self.with_active_diff(|t| t.toggle_bookmark(0)),
+            Cmd::ClearBookmarks => self.with_active_diff(|t| t.clear_bookmarks()),
         }
     }
 
@@ -2898,6 +2914,18 @@ impl DiffApp {
 
     fn with_active_dir<R>(&mut self, f: impl FnOnce(&mut DirTab) -> R) {
         if let Some(Tab::Dir(t)) = self.tabs.get_mut(self.active) {
+            f(t);
+        }
+    }
+
+    fn with_active_merge<R>(&mut self, f: impl FnOnce(&mut MergeTab) -> R) {
+        if let Some(Tab::Merge(t)) = self.tabs.get_mut(self.active) {
+            f(t);
+        }
+    }
+
+    fn with_active_textedit<R>(&mut self, f: impl FnOnce(&mut TextEditTab) -> R) {
+        if let Some(Tab::TextEdit(t)) = self.tabs.get_mut(self.active) {
             f(t);
         }
     }

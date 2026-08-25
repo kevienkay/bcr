@@ -60,6 +60,22 @@ pub enum MenuCmd {
     CollapseAll,
     ExpandAll,
     RebuildTree,
+    NextConflict,
+    PrevConflict,
+    NextDiffSection,
+    PrevDiffSection,
+    NextEdit,
+    PrevEdit,
+    FocusSearch,
+    FocusReplace,
+    SaveAs,
+    NextTakenLeft,
+    NextTakenRight,
+    LoadClipboardLeft,
+    LoadClipboardRight,
+    GotoBookmark,
+    ToggleBookmark,
+    ClearBookmarks,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -111,6 +127,22 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "collapse_all" => MenuCmd::CollapseAll,
         "expand_all" => MenuCmd::ExpandAll,
         "rebuild_tree" => MenuCmd::RebuildTree,
+        "next_conflict" => MenuCmd::NextConflict,
+        "prev_conflict" => MenuCmd::PrevConflict,
+        "next_diff_section" => MenuCmd::NextDiffSection,
+        "prev_diff_section" => MenuCmd::PrevDiffSection,
+        "next_edit" => MenuCmd::NextEdit,
+        "prev_edit" => MenuCmd::PrevEdit,
+        "focus_search" => MenuCmd::FocusSearch,
+        "focus_replace" => MenuCmd::FocusReplace,
+        "save_as" => MenuCmd::SaveAs,
+        "next_taken_left" => MenuCmd::NextTakenLeft,
+        "next_taken_right" => MenuCmd::NextTakenRight,
+        "clip_left" => MenuCmd::LoadClipboardLeft,
+        "clip_right" => MenuCmd::LoadClipboardRight,
+        "goto_bookmark" => MenuCmd::GotoBookmark,
+        "toggle_bookmark" => MenuCmd::ToggleBookmark,
+        "clear_bookmarks" => MenuCmd::ClearBookmarks,
         _ => return None,
     })
 }
@@ -163,6 +195,11 @@ mod plat {
             m.append(&PredefinedMenuItem::separator());
             m.append(&item("refresh", crate::i18n::Key::Refresh));
             m.append(&PredefinedMenuItem::separator());
+            m.append(&fixed("save_as", "另存为…"));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&fixed("clip_left", "剪贴板 → 左侧"));
+            m.append(&fixed("clip_right", "剪贴板 → 右侧"));
+            m.append(&PredefinedMenuItem::separator());
             m.append(&fixed("quit", "退出 bcr"));
             menu.append(&m);
         }
@@ -177,6 +214,15 @@ mod plat {
             m.append(&PredefinedMenuItem::separator());
             m.append(&item("next_diff", crate::i18n::Key::NextDiff));
             m.append(&item("prev_diff", crate::i18n::Key::PrevDiff));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&fixed("next_diff_section", "下一差异区段"));
+            m.append(&fixed("prev_diff_section", "上一差异区段"));
+            m.append(&fixed("next_edit", "下一编辑点"));
+            m.append(&fixed("prev_edit", "上一编辑点"));
+            m.append(&fixed("next_conflict", "下一冲突"));
+            m.append(&fixed("prev_conflict", "上一冲突"));
+            m.append(&fixed("next_taken_left", "下一已取左"));
+            m.append(&fixed("next_taken_right", "下一已取右"));
             menu.append(&m);
         }
         // ---- 搜索 ----
@@ -184,6 +230,9 @@ mod plat {
             let m = submenu("search", crate::i18n::Key::MenuSearch);
             m.append(&item("next_diff", crate::i18n::Key::MenuFindNext));
             m.append(&item("prev_diff", crate::i18n::Key::MenuFindPrev));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&fixed("focus_search", "聚焦搜索"));
+            m.append(&fixed("focus_replace", "聚焦替换"));
             m.append(&PredefinedMenuItem::separator());
             m.append(&item("next_diff_file", crate::i18n::Key::MenuNextDiffFile));
             m.append(&item("prev_diff_file", crate::i18n::Key::MenuPrevDiffFile));
@@ -210,6 +259,11 @@ mod plat {
             m.append(&fixed("collapse_all", "全部折叠"));
             m.append(&fixed("expand_all", "全部展开"));
             m.append(&fixed("rebuild_tree", "重建目录树"));
+            m.append(&PredefinedMenuItem::separator());
+            // 书签
+            m.append(&fixed("toggle_bookmark", "切换书签"));
+            m.append(&fixed("goto_bookmark", "跳转书签 0"));
+            m.append(&fixed("clear_bookmarks", "清除书签"));
             menu.append(&m);
         }
         // ---- 工具 ----
