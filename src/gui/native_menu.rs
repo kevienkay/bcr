@@ -121,6 +121,21 @@ pub enum MenuCmd {
     TextConvertLf,
     CopyToRightAndNext,
     PatchSelectAll,
+    DirSelectAll,
+    DirSelectNone,
+    DirInvert,
+    DirSelectOrphans,
+    DirSelectNewer,
+    FilterOrphans,
+    FilterNonOrphans,
+    FilterDiffNoOrphans,
+    FilterLeftNewerOrOrphan,
+    FilterRightNewerOrOrphan,
+    ConvertTrim,
+    ConvertTabsMode,
+    ConvertCrlfMode,
+    ConvertLfMode,
+    LockToggle,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -233,6 +248,21 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "text_lf" => MenuCmd::TextConvertLf,
         "copy_right_next" => MenuCmd::CopyToRightAndNext,
         "patch_select_all" => MenuCmd::PatchSelectAll,
+        "dir_select_all" => MenuCmd::DirSelectAll,
+        "dir_select_none" => MenuCmd::DirSelectNone,
+        "dir_invert" => MenuCmd::DirInvert,
+        "dir_select_orphans" => MenuCmd::DirSelectOrphans,
+        "dir_select_newer" => MenuCmd::DirSelectNewer,
+        "filter_orphans" => MenuCmd::FilterOrphans,
+        "filter_non_orphans" => MenuCmd::FilterNonOrphans,
+        "filter_diff_no_orphans" => MenuCmd::FilterDiffNoOrphans,
+        "filter_left_newer" => MenuCmd::FilterLeftNewerOrOrphan,
+        "filter_right_newer" => MenuCmd::FilterRightNewerOrOrphan,
+        "convert_trim_mode" => MenuCmd::ConvertTrim,
+        "convert_tabs_mode" => MenuCmd::ConvertTabsMode,
+        "convert_crlf_mode" => MenuCmd::ConvertCrlfMode,
+        "convert_lf_mode" => MenuCmd::ConvertLfMode,
+        "lock_toggle" => MenuCmd::LockToggle,
         _ => return None,
     })
 }
@@ -325,6 +355,11 @@ mod plat {
             m.append(&fixed("prev_take_left", "上一已取左"));
             m.append(&fixed("prev_take_right", "上一已取右"));
             m.append(&fixed("patch_select_all", "补丁全选"));
+            m.append(&fixed("dir_select_all", "目录全选"));
+            m.append(&fixed("dir_select_none", "目录取消选择"));
+            m.append(&fixed("dir_invert", "目录反向选择"));
+            m.append(&fixed("dir_select_orphans", "目录选独有项"));
+            m.append(&fixed("dir_select_newer", "目录选较新项"));
             menu.append(&m);
         }
         // ---- 搜索 ----
@@ -362,6 +397,13 @@ mod plat {
             m.append(&fixed("collapse_all", "全部折叠"));
             m.append(&fixed("expand_all", "全部展开"));
             m.append(&fixed("rebuild_tree", "重建目录树"));
+            m.append(&PredefinedMenuItem::separator());
+            // 过滤（DirTab）
+            m.append(&fixed("filter_orphans", "仅显示独有"));
+            m.append(&fixed("filter_non_orphans", "仅显示不独有"));
+            m.append(&fixed("filter_diff_no_orphans", "差异无独有"));
+            m.append(&fixed("filter_left_newer", "仅左更新"));
+            m.append(&fixed("filter_right_newer", "仅右更新"));
             m.append(&PredefinedMenuItem::separator());
             // 书签
             m.append(&fixed("toggle_bookmark", "切换书签"));
@@ -405,6 +447,7 @@ mod plat {
             m.append(&fixed("diff_copy_line", "复制当前行"));
             m.append(&fixed("diff_indent", "调整缩进"));
             m.append(&fixed("diff_recompute", "重新计算"));
+            m.append(&fixed("lock_toggle", "锁定当前行"));
             m.append(&fixed("merge_take_line", "取当前行"));
             m.append(&fixed("merge_resolve", "解决当前冲突"));
             m.append(&PredefinedMenuItem::separator());
@@ -421,6 +464,10 @@ mod plat {
             m.append(&PredefinedMenuItem::separator());
             // 差异/表格编辑
             m.append(&fixed("convert_file", "转换文件…"));
+            m.append(&fixed("convert_trim_mode", "转换：去行尾空白"));
+            m.append(&fixed("convert_tabs_mode", "转换：Tab→空格"));
+            m.append(&fixed("convert_crlf_mode", "转换：行尾→CRLF"));
+            m.append(&fixed("convert_lf_mode", "转换：行尾→LF"));
             m.append(&fixed("select_all_diff", "全选"));
             m.append(&fixed("selection_clip", "选区到剪贴板"));
             m.append(&fixed("start_edit", "开始编辑"));

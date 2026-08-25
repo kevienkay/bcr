@@ -15,7 +15,6 @@ use eframe::egui::{self, Key, Pos2, Rect, Vec2};
 
 /// P42-1：转换文件模式（BC Convert File）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // P58: 文本转换模式含仅菜单变体, 待迁入
 pub enum ConvertMode {
     /// Trim 行尾空白（逐行保留各自行尾风格 CRLF/LF）
     Trim,

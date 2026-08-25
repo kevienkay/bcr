@@ -206,7 +206,6 @@ pub struct DiffTab {
     /// P39-2d：书签（编号 0-9 → 渲染行索引）
     pub bookmarks: std::collections::HashMap<u8, usize>,
     /// P44-4：会话锁定（BC Session>已锁定，锁定时禁止编辑操作）
-    #[allow(dead_code)] // P58: 锁行状态仅窗口内菜单设置, 待迁入
     pub locked: bool,
     /// P44-6：行号显示开关（BC View>行号）
     pub show_line_numbers: bool,

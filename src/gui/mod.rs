@@ -2995,6 +2995,41 @@ impl DiffApp {
             Cmd::PatchSelectAll => self.with_active_patch(|t| {
                 t.select_selection();
             }),
+            Cmd::DirSelectAll => self.with_active_dir(|t| t.select_all()),
+            Cmd::DirSelectNone => self.with_active_dir(|t| t.select_none()),
+            Cmd::DirInvert => self.with_active_dir(|t| t.invert_selection()),
+            Cmd::DirSelectOrphans => self.with_active_dir(|t| t.select_orphans()),
+            Cmd::DirSelectNewer => self.with_active_dir(|t| t.select_newer()),
+            Cmd::FilterOrphans => self.with_active_dir(|t| {
+                t.view_filter = crate::gui::dirtab::ViewFilter::Orphans;
+            }),
+            Cmd::FilterNonOrphans => self.with_active_dir(|t| {
+                t.view_filter = crate::gui::dirtab::ViewFilter::NonOrphans;
+            }),
+            Cmd::FilterDiffNoOrphans => self.with_active_dir(|t| {
+                t.view_filter = crate::gui::dirtab::ViewFilter::DiffNoOrphans;
+            }),
+            Cmd::FilterLeftNewerOrOrphan => self.with_active_dir(|t| {
+                t.view_filter = crate::gui::dirtab::ViewFilter::LeftNewerOrOrphan;
+            }),
+            Cmd::FilterRightNewerOrOrphan => self.with_active_dir(|t| {
+                t.view_filter = crate::gui::dirtab::ViewFilter::RightNewerOrOrphan;
+            }),
+            Cmd::ConvertTrim => self.with_active_diff(|t| {
+                t.convert_file(crate::gui::textedit::ConvertMode::Trim);
+            }),
+            Cmd::ConvertTabsMode => self.with_active_diff(|t| {
+                t.convert_file(crate::gui::textedit::ConvertMode::TabsToSpaces);
+            }),
+            Cmd::ConvertCrlfMode => self.with_active_diff(|t| {
+                t.convert_file(crate::gui::textedit::ConvertMode::ToCrlf);
+            }),
+            Cmd::ConvertLfMode => self.with_active_diff(|t| {
+                t.convert_file(crate::gui::textedit::ConvertMode::ToLf);
+            }),
+            Cmd::LockToggle => self.with_active_diff(|t| {
+                t.locked = !t.locked;
+            }),
         }
     }
 
