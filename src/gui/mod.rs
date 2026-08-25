@@ -1733,9 +1733,8 @@ impl eframe::App for DiffApp {
         // B1 + P39-2a：全局快捷键（关闭标签 / 设置 / 新建标签 / 新建窗口 / 会话）
         self.handle_global_shortcuts(ui);
 
-        // 顶部菜单栏（P33：BC 式标准菜单，替代扁平按钮排）
-        // P58：macOS/Windows 也保留窗口内菜单（muda 原生菜单栏在其上补充系统级入口；
-        // 完全隐藏会移除仅菜单可达的功能：差异布局/Hex/对齐/设置导出导入等，故二者并存）。
+        // 顶部菜单栏（P33：BC 式标准菜单）。仅 Linux 显示窗口内菜单栏；
+        // macOS/Windows 改用 muda 原生顶部菜单栏（P58，功能已迁入，不丢失）。
         egui::Panel::top("menu").show(ui, |ui| {
             menubar::menu_bar(self, ui);
         });
@@ -2805,6 +2804,7 @@ impl DiffApp {
     /// P58：解释并执行 muda 原生菜单命令（drain 自 native_menu 事件队列）。
     fn run_menu_cmd(&mut self, ui: &mut egui::Ui, cmd: crate::gui::native_menu::MenuCmd) {
         use crate::gui::difftab::EditSide;
+        use crate::gui::difftab::{DiffDetailMode as DM, DiffLayout as DL};
         use crate::gui::native_menu::MenuCmd as Cmd;
         match cmd {
             Cmd::NewText => self.open_empty_diff(),
@@ -2837,6 +2837,30 @@ impl DiffApp {
                 .ctx()
                 .send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
             Cmd::CloseAllTabs => self.close_all_tabs(),
+            Cmd::LayoutSideBySide => self.with_active_diff(|t| t.set_layout(DL::SideBySide)),
+            Cmd::LayoutTopBottom => self.with_active_diff(|t| t.set_layout(DL::TopBottom)),
+            Cmd::LayoutWeb => self.with_active_diff(|t| t.set_layout(DL::Web)),
+            Cmd::DetailText => self.with_active_diff(|t| t.set_detail_mode(DM::Text)),
+            Cmd::DetailHex => self.with_active_diff(|t| t.set_detail_mode(DM::Hex)),
+            Cmd::DetailAlign => self.with_active_diff(|t| t.set_detail_mode(DM::Align)),
+            Cmd::ExportSettings => {
+                if let Some(p) = rfd::FileDialog::new()
+                    .set_file_name("bcr-settings.toml")
+                    .save_file()
+                {
+                    if let Err(e) = self.settings.export_to(&p) {
+                        self.report_error = Some(format!("导出设置失败: {}", e));
+                    }
+                }
+            }
+            Cmd::ImportSettings => {
+                if let Some(p) = rfd::FileDialog::new().pick_file() {
+                    if let Err(e) = self.settings.import_from(&p) {
+                        self.report_error = Some(format!("导入设置失败: {}", e));
+                    }
+                }
+            }
+            Cmd::ResetDefaults => self.settings.reset_defaults(),
         }
     }
 

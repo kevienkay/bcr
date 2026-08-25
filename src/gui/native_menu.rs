@@ -36,6 +36,15 @@ pub enum MenuCmd {
     PrevTab,
     Minimize,
     CloseAllTabs,
+    LayoutSideBySide,
+    LayoutTopBottom,
+    LayoutWeb,
+    DetailText,
+    DetailHex,
+    DetailAlign,
+    ExportSettings,
+    ImportSettings,
+    ResetDefaults,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -66,6 +75,15 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "prev_tab" => MenuCmd::PrevTab,
         "minimize" => MenuCmd::Minimize,
         "close_all" => MenuCmd::CloseAllTabs,
+        "layout_side" => MenuCmd::LayoutSideBySide,
+        "layout_top" => MenuCmd::LayoutTopBottom,
+        "layout_web" => MenuCmd::LayoutWeb,
+        "detail_text" => MenuCmd::DetailText,
+        "detail_hex" => MenuCmd::DetailHex,
+        "detail_align" => MenuCmd::DetailAlign,
+        "export_settings" => MenuCmd::ExportSettings,
+        "import_settings" => MenuCmd::ImportSettings,
+        "reset_defaults" => MenuCmd::ResetDefaults,
         _ => return None,
     })
 }
@@ -138,6 +156,31 @@ mod plat {
             let m = submenu("view", crate::i18n::Key::MenuView);
             m.append(&fixed("toggle_sidebar", "切换侧栏"));
             m.append(&item("cycle_theme", crate::i18n::Key::Theme));
+            m.append(&PredefinedMenuItem::separator());
+            // 布局（DiffTab）
+            m.append(&item("layout_side", crate::i18n::Key::LayoutSideBySide));
+            m.append(&item("layout_top", crate::i18n::Key::LayoutTopBottom));
+            m.append(&item("layout_web", crate::i18n::Key::LayoutWeb));
+            m.append(&PredefinedMenuItem::separator());
+            // 细节（DiffTab）
+            m.append(&item("detail_text", crate::i18n::Key::DetailText));
+            m.append(&item("detail_hex", crate::i18n::Key::DetailHex));
+            m.append(&item("detail_align", crate::i18n::Key::DetailAlign));
+            menu.append(&m);
+        }
+        // ---- 工具 ----
+        {
+            let m = submenu("tools", crate::i18n::Key::MenuTools);
+            m.append(&item(
+                "export_settings",
+                crate::i18n::Key::MenuExportSettings,
+            ));
+            m.append(&item(
+                "import_settings",
+                crate::i18n::Key::MenuImportSettings,
+            ));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("reset_defaults", crate::i18n::Key::MenuResetDefaults));
             menu.append(&m);
         }
         // ---- 窗口 ----
