@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 // P58: 剩余少量标签专项/内部状态项待逐项迁入
 
 // P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
@@ -16,6 +15,7 @@ use eframe::egui::{self, Key, Pos2, Rect, Vec2};
 
 /// P42-1：转换文件模式（BC Convert File）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // P58: 文本转换模式含仅菜单变体, 待迁入
 pub enum ConvertMode {
     /// Trim 行尾空白（逐行保留各自行尾风格 CRLF/LF）
     Trim,

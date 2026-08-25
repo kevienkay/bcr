@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 // P58: 剩余少量标签专项/内部状态项待迁入(插入列/编辑单元格/转换/替换/起始编辑/剪贴板/书签选择/孤立项过滤等)
 
 // P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
@@ -207,6 +206,7 @@ pub struct DiffTab {
     /// P39-2d：书签（编号 0-9 → 渲染行索引）
     pub bookmarks: std::collections::HashMap<u8, usize>,
     /// P44-4：会话锁定（BC Session>已锁定，锁定时禁止编辑操作）
+    #[allow(dead_code)] // P58: 锁行状态仅窗口内菜单设置, 待迁入
     pub locked: bool,
     /// P44-6：行号显示开关（BC View>行号）
     pub show_line_numbers: bool,

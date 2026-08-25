@@ -106,6 +106,21 @@ pub enum MenuCmd {
     ReopenImage,
     ReopenMerge,
     ReopenText,
+    ConvertFile,
+    DiffSelectAll,
+    SelectionToClipboard,
+    StartEdit,
+    NextReplace,
+    PrevReplace,
+    PrevTakenLeft,
+    PrevTakenRight,
+    InsertCsvCol,
+    EditCsvCell,
+    HexLayoutTop,
+    TextConvertCrlf,
+    TextConvertLf,
+    CopyToRightAndNext,
+    PatchSelectAll,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -203,6 +218,21 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "reopen_image" => MenuCmd::ReopenImage,
         "reopen_merge" => MenuCmd::ReopenMerge,
         "reopen_text" => MenuCmd::ReopenText,
+        "convert_file" => MenuCmd::ConvertFile,
+        "select_all_diff" => MenuCmd::DiffSelectAll,
+        "selection_clip" => MenuCmd::SelectionToClipboard,
+        "start_edit" => MenuCmd::StartEdit,
+        "next_replace" => MenuCmd::NextReplace,
+        "prev_replace" => MenuCmd::PrevReplace,
+        "prev_take_left" => MenuCmd::PrevTakenLeft,
+        "prev_take_right" => MenuCmd::PrevTakenRight,
+        "insert_csv_col" => MenuCmd::InsertCsvCol,
+        "edit_csv_cell" => MenuCmd::EditCsvCell,
+        "hex_layout_top" => MenuCmd::HexLayoutTop,
+        "text_crlf" => MenuCmd::TextConvertCrlf,
+        "text_lf" => MenuCmd::TextConvertLf,
+        "copy_right_next" => MenuCmd::CopyToRightAndNext,
+        "patch_select_all" => MenuCmd::PatchSelectAll,
         _ => return None,
     })
 }
@@ -292,6 +322,9 @@ mod plat {
             m.append(&fixed("prev_conflict", "上一冲突"));
             m.append(&fixed("next_taken_left", "下一已取左"));
             m.append(&fixed("next_taken_right", "下一已取右"));
+            m.append(&fixed("prev_take_left", "上一已取左"));
+            m.append(&fixed("prev_take_right", "上一已取右"));
+            m.append(&fixed("patch_select_all", "补丁全选"));
             menu.append(&m);
         }
         // ---- 搜索 ----
@@ -306,6 +339,7 @@ mod plat {
             m.append(&item("next_diff_file", crate::i18n::Key::MenuNextDiffFile));
             m.append(&item("prev_diff_file", crate::i18n::Key::MenuPrevDiffFile));
             m.append(&item("compare_parent", crate::i18n::Key::MenuCompareParent));
+            m.append(&fixed("copy_right_next", "复制到右边并下一差异"));
             menu.append(&m);
         }
         // ---- 视图 ----
@@ -345,6 +379,7 @@ mod plat {
             // 十六进制字节序
             m.append(&fixed("byte_le", "字节序：小端"));
             m.append(&fixed("byte_be", "字节序：大端"));
+            m.append(&fixed("hex_layout_top", "十六进制布局：上-下"));
             menu.append(&m);
         }
         // ---- 工具 ----
@@ -379,8 +414,20 @@ mod plat {
             m.append(&fixed("csv_delete_row", "删除行"));
             m.append(&fixed("text_trim", "文本去行尾空白"));
             m.append(&fixed("text_tabs", "文本 Tab→空格"));
+            m.append(&fixed("text_crlf", "文本行尾→CRLF"));
+            m.append(&fixed("text_lf", "文本行尾→LF"));
             m.append(&fixed("text_clipboard", "打开剪贴板文本"));
             m.append(&fixed("text_find_files", "在文件中查找"));
+            m.append(&PredefinedMenuItem::separator());
+            // 差异/表格编辑
+            m.append(&fixed("convert_file", "转换文件…"));
+            m.append(&fixed("select_all_diff", "全选"));
+            m.append(&fixed("selection_clip", "选区到剪贴板"));
+            m.append(&fixed("start_edit", "开始编辑"));
+            m.append(&fixed("next_replace", "下一替换"));
+            m.append(&fixed("prev_replace", "上一替换"));
+            m.append(&fixed("insert_csv_col", "表格插入列"));
+            m.append(&fixed("edit_csv_cell", "表格编辑单元格…"));
             menu.append(&m);
         }
         // ---- 窗口 ----

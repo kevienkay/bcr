@@ -111,7 +111,7 @@ impl Lang {
 
 /// 翻译键（覆盖 CLI 输出与 GUI 文案）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // P58: 少量键仅窗口内菜单使用(部分已迁入原生)
+#[allow(dead_code)] // P58: 少量键在迁移后未再使用(键名保留待后续)
 pub enum Key {
     // ---- CLI 通用 ----
     /// 无法读取 {}: {}

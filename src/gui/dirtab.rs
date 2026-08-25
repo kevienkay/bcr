@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 // P58: 剩余少量标签专项/内部状态项待迁入(插入列/编辑单元格/转换/替换/起始编辑/剪贴板/书签选择/孤立项过滤等)
 
 // P58: 窗口内菜单仅Linux渲染, 其驱动的进阶方法在macOS/Windows未调用; 待逐项迁入原生菜单
@@ -15,6 +14,7 @@ use std::collections::HashSet;
 
 /// 目录视图状态过滤（B1 显示过滤，对齐 BC 显示过滤器）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // P58: 过滤枚举含仅菜单项, 待迁入
 pub enum ViewFilter {
     /// 全部（含相同，受 show_same 控制）
     All,
@@ -1175,6 +1175,7 @@ impl DirTab {
     }
 
     /// P41-3：全选（当前 flat 全部文件加入多选集合）
+    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入
     pub fn select_all(&mut self) {
         for (idx, r) in self.flat.iter().enumerate() {
             if !r.is_dir {
@@ -1184,11 +1185,13 @@ impl DirTab {
     }
 
     /// P41-3：取消选择（清空多选集合）
+    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入
     pub fn select_none(&mut self) {
         self.selected_set.clear();
     }
 
     /// P41-3：反向选择（多选集合在可见文件间翻转）
+    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入
     pub fn invert_selection(&mut self) {
         for (idx, r) in self.flat.iter().enumerate() {
             if r.is_dir {
@@ -1201,6 +1204,7 @@ impl DirTab {
     }
 
     /// P41-3：选择独有项（LeftOnly/RightOnly 文件）
+    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入
     pub fn select_orphans(&mut self) {
         self.selected_set.clear();
         let Some(r) = &self.result else { return };
@@ -1215,6 +1219,7 @@ impl DirTab {
     }
 
     /// P41-3：选择较新项（LeftNewer/RightNewer 文件，即 Differ 且一侧 mtime 更新）
+    #[allow(dead_code)] // P58: 仅窗口内菜单可达, 待迁入
     pub fn select_newer(&mut self) {
         self.selected_set.clear();
         let Some(r) = &self.result else { return };

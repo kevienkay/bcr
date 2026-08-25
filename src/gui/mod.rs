@@ -2966,6 +2966,35 @@ impl DiffApp {
                 let (l, r) = self.active_diff_paths();
                 self.reopen_as_text(&l, &r);
             }
+            Cmd::ConvertFile => self.with_active_diff(|t| {
+                t.convert_file(crate::gui::textedit::ConvertMode::Trim);
+            }),
+            Cmd::DiffSelectAll => self.with_active_diff(|t| {
+                t.select_selection();
+            }),
+            Cmd::SelectionToClipboard => self.with_active_diff(|t| {
+                t.selection_to_clipboard();
+            }),
+            Cmd::StartEdit => self.with_active_diff(|t| t.start_edit(EditSide::Left)),
+            Cmd::NextReplace => self.with_active_diff(|t| t.next_replace()),
+            Cmd::PrevReplace => self.with_active_diff(|t| t.prev_replace()),
+            Cmd::PrevTakenLeft => self.with_active_merge(|t| t.prev_taken_left()),
+            Cmd::PrevTakenRight => self.with_active_merge(|t| t.prev_taken_right()),
+            Cmd::InsertCsvCol => self.with_active_csv(|t| {
+                t.insert_col_after();
+            }),
+            Cmd::EditCsvCell => self.with_active_csv(|t| t.open_cell_edit()),
+            Cmd::HexLayoutTop => self.with_active_diff(|t| {
+                t.hex_layout = crate::gui::difftab::HexViewLayout::TopBottom;
+            }),
+            Cmd::TextConvertCrlf => self.with_active_textedit(|t| t.convert_line_ending(true)),
+            Cmd::TextConvertLf => self.with_active_textedit(|t| t.convert_line_ending(false)),
+            Cmd::CopyToRightAndNext => self.with_active_dir(|t| {
+                t.copy_current_to_right_and_next();
+            }),
+            Cmd::PatchSelectAll => self.with_active_patch(|t| {
+                t.select_selection();
+            }),
         }
     }
 
@@ -3013,6 +3042,12 @@ impl DiffApp {
 
     fn with_active_image<R>(&mut self, f: impl FnOnce(&mut ImageTab) -> R) {
         if let Some(Tab::Image(t)) = self.tabs.get_mut(self.active) {
+            f(t);
+        }
+    }
+
+    fn with_active_patch<R>(&mut self, f: impl FnOnce(&mut PatchTab) -> R) {
+        if let Some(Tab::Patch(t)) = self.tabs.get_mut(self.active) {
             f(t);
         }
     }
