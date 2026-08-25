@@ -1733,8 +1733,8 @@ impl eframe::App for DiffApp {
         // B1 + P39-2a：全局快捷键（关闭标签 / 设置 / 新建标签 / 新建窗口 / 会话）
         self.handle_global_shortcuts(ui);
 
-        // 顶部菜单栏（P33：BC 式标准菜单）。仅 Linux 显示窗口内菜单栏；
-        // macOS/Windows 改用 muda 原生顶部菜单栏（P58，功能已迁入，不丢失）。
+        // 顶部菜单栏（P33：BC 式标准菜单）。macOS/Windows 同时存在 muda 原生顶部菜单；
+        // 窗口内菜单保留以保证全量功能（原生+窗口内并存）。
         egui::Panel::top("menu").show(ui, |ui| {
             menubar::menu_bar(self, ui);
         });
