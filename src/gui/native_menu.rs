@@ -49,6 +49,17 @@ pub enum MenuCmd {
     ExportSettings,
     ImportSettings,
     ResetDefaults,
+    OpenFiles,
+    OpenDirCompare,
+    OpenMerge,
+    CompareWithOutput,
+    NewTabLike,
+    NextDiffFile,
+    PrevDiffFile,
+    CompareParent,
+    CollapseAll,
+    ExpandAll,
+    RebuildTree,
 }
 
 /// 由菜单项 id（字符串）还原命令；未知返回 None（将来新增向后兼容）。
@@ -89,6 +100,17 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "export_settings" => MenuCmd::ExportSettings,
         "import_settings" => MenuCmd::ImportSettings,
         "reset_defaults" => MenuCmd::ResetDefaults,
+        "open_files" => MenuCmd::OpenFiles,
+        "open_dir_compare" => MenuCmd::OpenDirCompare,
+        "open_merge" => MenuCmd::OpenMerge,
+        "compare_with_output" => MenuCmd::CompareWithOutput,
+        "new_tab_like" => MenuCmd::NewTabLike,
+        "next_diff_file" => MenuCmd::NextDiffFile,
+        "prev_diff_file" => MenuCmd::PrevDiffFile,
+        "compare_parent" => MenuCmd::CompareParent,
+        "collapse_all" => MenuCmd::CollapseAll,
+        "expand_all" => MenuCmd::ExpandAll,
+        "rebuild_tree" => MenuCmd::RebuildTree,
         _ => return None,
     })
 }
@@ -123,11 +145,19 @@ mod plat {
             m.append(&item("new_image", crate::i18n::Key::MenuNewImage));
             m.append(&item("new_csv", crate::i18n::Key::MenuNewCsv));
             m.append(&item("new_media", crate::i18n::Key::SessionMedia));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&fixed("new_tab_like", "新建类似标签"));
+            m.append(&PredefinedMenuItem::separator());
             menu.append(&m);
         }
         // ---- 文件 ----
         {
             let m = submenu("file", crate::i18n::Key::MenuFile);
+            m.append(&fixed("open_files", "打开文件…"));
+            m.append(&fixed("open_dir_compare", "文件夹对比…"));
+            m.append(&fixed("open_merge", "三路合并…"));
+            m.append(&fixed("compare_with_output", "与输出比较"));
+            m.append(&PredefinedMenuItem::separator());
             m.append(&item("open_left", crate::i18n::Key::MenuOpenLeft));
             m.append(&item("open_right", crate::i18n::Key::MenuOpenRight));
             m.append(&PredefinedMenuItem::separator());
@@ -154,6 +184,10 @@ mod plat {
             let m = submenu("search", crate::i18n::Key::MenuSearch);
             m.append(&item("next_diff", crate::i18n::Key::MenuFindNext));
             m.append(&item("prev_diff", crate::i18n::Key::MenuFindPrev));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("next_diff_file", crate::i18n::Key::MenuNextDiffFile));
+            m.append(&item("prev_diff_file", crate::i18n::Key::MenuPrevDiffFile));
+            m.append(&item("compare_parent", crate::i18n::Key::MenuCompareParent));
             menu.append(&m);
         }
         // ---- 视图 ----
@@ -171,6 +205,11 @@ mod plat {
             m.append(&item("detail_text", crate::i18n::Key::DetailText));
             m.append(&item("detail_hex", crate::i18n::Key::DetailHex));
             m.append(&item("detail_align", crate::i18n::Key::DetailAlign));
+            m.append(&PredefinedMenuItem::separator());
+            // 目录折叠/展开/重建
+            m.append(&fixed("collapse_all", "全部折叠"));
+            m.append(&fixed("expand_all", "全部展开"));
+            m.append(&fixed("rebuild_tree", "重建目录树"));
             menu.append(&m);
         }
         // ---- 工具 ----

@@ -2875,12 +2875,29 @@ impl DiffApp {
                 }
             }
             Cmd::ResetDefaults => self.settings.reset_defaults(),
+            Cmd::OpenFiles => self.open_diff_files(),
+            Cmd::OpenDirCompare => self.open_dir_compare(),
+            Cmd::OpenMerge => self.open_merge(),
+            Cmd::CompareWithOutput => self.compare_with_output(),
+            Cmd::NewTabLike => self.new_tab_like_current(),
+            Cmd::NextDiffFile => self.with_active_dir(|t| t.next_diff_file()),
+            Cmd::PrevDiffFile => self.with_active_dir(|t| t.prev_diff_file()),
+            Cmd::CompareParent => self.with_active_dir(|t| t.compare_parent()),
+            Cmd::CollapseAll => self.with_active_dir(|t| t.collapse_all()),
+            Cmd::ExpandAll => self.with_active_dir(|t| t.expand_all()),
+            Cmd::RebuildTree => self.with_active_dir(|t| t.rebuild_tree()),
         }
     }
 
     /// 对当前活动标签为 DiffTab 时执行操作（原生菜单转发撤销/复制/跳转）。
     fn with_active_diff<R>(&mut self, f: impl FnOnce(&mut DiffTab) -> R) {
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
+            f(t);
+        }
+    }
+
+    fn with_active_dir<R>(&mut self, f: impl FnOnce(&mut DirTab) -> R) {
+        if let Some(Tab::Dir(t)) = self.tabs.get_mut(self.active) {
             f(t);
         }
     }
