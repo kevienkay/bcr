@@ -524,6 +524,17 @@ mod plat {
         std::mem::forget(menu);
     }
 
+    /// 语言切换后重建原生菜单（用当前 `t()` 文案）。macOS 重设为 NSApp 主菜单；
+    /// Windows 需窗口句柄故暂不做（保留初装菜单）；Linux 用窗口内菜单（自动更新）。
+    pub fn reinstall() {
+        #[cfg(target_os = "macos")]
+        {
+            let menu = build_menu();
+            menu.init_for_nsapp();
+            std::mem::forget(menu);
+        }
+    }
+
     /// 每帧取走全部菜单点击事件并还原为命令。
     pub fn drain() -> Vec<MenuCmd> {
         let mut out = Vec::new();
@@ -541,12 +552,13 @@ mod plat {
 mod plat {
     use super::*;
     pub fn install(_cc: &eframe::CreationContext) {}
+    pub fn reinstall() {}
     pub fn drain() -> Vec<MenuCmd> {
         Vec::new()
     }
 }
 
-pub use crate::gui::native_menu::plat::{drain, install};
+pub use crate::gui::native_menu::plat::{drain, install, reinstall};
 
 #[cfg(test)]
 mod tests {

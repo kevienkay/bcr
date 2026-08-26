@@ -191,6 +191,7 @@ fn main() {
         .as_deref()
         .and_then(i18n::Lang::parse)
         .or_else(i18n::Lang::from_env)
+        .or_else(i18n::Lang::from_system)
         .unwrap_or(i18n::Lang::Zh);
     i18n::set_lang(lang);
     // 编码覆盖：--encoding 优先写入 BCR_ENCODING，供 encoding 模块统一读取

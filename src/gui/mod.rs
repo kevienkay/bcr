@@ -242,6 +242,7 @@ impl Settings {
     fn lang(&self) -> crate::i18n::Lang {
         crate::i18n::Lang::parse(&self.lang)
             .or_else(crate::i18n::Lang::from_env)
+            .or_else(crate::i18n::Lang::from_system)
             .unwrap_or(crate::i18n::Lang::Zh)
     }
 }
@@ -256,9 +257,6 @@ struct DiffApp {
     show_sessions: bool,
     /// P56-2：左侧会话导航侧栏开关（BC 常驻侧栏）
     show_sidebar: bool,
-    /// P57-4：欢迎页快速对比输入（BC Home 输入两个路径对比）
-    quick_left: String,
-    quick_right: String,
     /// P58：历史导入路径（欢迎页快速对比 ▾ 历史下拉；最近在前，最多 20 条）
     import_history: Vec<String>,
     /// 规则(Profile)管理窗口开关
@@ -317,8 +315,6 @@ impl DiffApp {
             theme_changed: false,
             show_sessions: false,
             show_sidebar: true,
-            quick_left: String::new(),
-            quick_right: String::new(),
             import_history,
             show_profiles: false,
             show_cloud: false,
@@ -1102,30 +1098,6 @@ impl DiffApp {
         self.new_diff_tab();
     }
 
-    /// P57-4：BC Home 快速对比（两侧路径 → 按类型打开对比标签）
-    fn open_quick_compare(&mut self, l: &str, r: &str) {
-        let l = l.trim().to_string();
-        let r = r.trim().to_string();
-        if l.is_empty() || r.is_empty() {
-            return;
-        }
-        self.add_import_history(&l);
-        self.add_import_history(&r);
-        let lp = std::path::Path::new(&l);
-        let rp = std::path::Path::new(&r);
-        if lp.is_dir() && rp.is_dir() {
-            self.add_tab(Tab::Dir(DirTab::new(&l, &r)));
-        } else if crate::imgcmp::is_image_file(&l) && crate::imgcmp::is_image_file(&r) {
-            self.add_tab(Tab::Image(ImageTab::new(&l, &r)));
-        } else if crate::csvcmp::is_csv_file(&l) && crate::csvcmp::is_csv_file(&r) {
-            self.add_tab(Tab::Csv(CsvTab::new(&l, &r)));
-        } else {
-            let mut t = DiffTab::new();
-            t.load_pair(&l, &r, ViewOptions::default());
-            self.add_tab(Tab::Diff(t));
-        }
-    }
-
     /// P58：加入历史导入路径（去重、最近在前、上限 20，并持久化到设置）。
     fn add_import_history(&mut self, path: &str) {
         let p = path.trim().to_string();
@@ -1418,43 +1390,6 @@ impl DiffApp {
                             .size(12.0)
                             .color(ui.visuals().weak_text_color()),
                     );
-                    // P57-4：BC Home 快速对比输入（两侧路径，点击对比按类型打开标签）
-                    ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("快速对比").size(12.0).strong());
-                        // P57-11：每侧输入框后加浏览按钮，否则一列放不下
-                        let w = (ui.available_width() * 0.28).max(110.0);
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.quick_left)
-                                .hint_text("左侧文件/目录")
-                                .desired_width(w),
-                        );
-                        if ui.button("📂").on_hover_text("选择左侧路径").clicked() {
-                            if let Some(p) = pick_file_or_dir() {
-                                self.quick_left = p;
-                            }
-                        }
-                        ui.label("⇄");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.quick_right)
-                                .hint_text("右侧文件/目录")
-                                .desired_width(w),
-                        );
-                        if ui.button("📂").on_hover_text("选择右侧路径").clicked() {
-                            if let Some(p) = pick_file_or_dir() {
-                                self.quick_right = p;
-                            }
-                        }
-                        if ui.button("▶ 对比").clicked() {
-                            let l = self.quick_left.clone();
-                            let r = self.quick_right.clone();
-                            if !l.trim().is_empty() && !r.trim().is_empty() {
-                                self.quick_left.clear();
-                                self.quick_right.clear();
-                                self.open_quick_compare(&l, &r);
-                            }
-                        }
-                    });
                     ui.add_space(12.0);
                     // 会话类型卡片（7 类，BC 主页语义）
                     let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 7] = [
@@ -2052,6 +1987,8 @@ impl eframe::App for DiffApp {
                         self.settings.lang = new_lang.code().to_string();
                         self.settings.save();
                         crate::i18n::set_lang(new_lang);
+                        // P58：语言切换后重建原生顶部菜单（用新语言文案）
+                        crate::gui::native_menu::reinstall();
                     }
                 });
                 ui.separator();

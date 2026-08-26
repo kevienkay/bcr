@@ -107,6 +107,39 @@ impl Lang {
         }
         None
     }
+
+    /// 从系统区域设置（LANG/LC_ALL/LANGUAGE）推断语言，用于"跟随当前系统语言"的默认值。
+    /// 例如 `zh_CN.UTF-8` → Zh、`ja_JP` → Ja、`en_US.UTF-8` → En、`de_DE` → De。
+    pub fn from_system() -> Option<Lang> {
+        for var in ["LC_ALL", "LANG", "LANGUAGE"] {
+            if let Ok(v) = std::env::var(var) {
+                if let Some(l) = Lang::from_locale(&v) {
+                    return Some(l);
+                }
+            }
+        }
+        None
+    }
+
+    /// 从单个区域串（如 `ja_JP.UTF-8` / `zh_CN` / 直接 `ja`）解析语言。
+    fn from_locale(s: &str) -> Option<Lang> {
+        let s = s.split(['.', '@']).next().unwrap_or(s);
+        let lower = s.to_lowercase();
+        let prefix = lower.split('_').next().unwrap_or(&lower);
+        match prefix {
+            "zh" | "cn" => Some(Lang::Zh),
+            "en" => Some(Lang::En),
+            "de" => Some(Lang::De),
+            "ja" | "jp" => Some(Lang::Ja),
+            "ko" | "kr" => Some(Lang::Ko),
+            "es" => Some(Lang::Es),
+            "pt" => Some(Lang::Pt),
+            "ar" => Some(Lang::Ar),
+            "ru" => Some(Lang::Ru),
+            "fr" => Some(Lang::Fr),
+            _ => None,
+        }
+    }
 }
 
 /// 翻译键（覆盖 CLI 输出与 GUI 文案）

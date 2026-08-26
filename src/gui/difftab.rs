@@ -2749,43 +2749,42 @@ impl DiffTab {
                                         .size(11.0)
                                         .weak(),
                                 );
-                                let iw = (ui.available_width() - 84.0).max(80.0);
-                                let path = if is_left {
-                                    &mut self.open_l
-                                } else {
-                                    &mut self.open_r
-                                };
+                                // 输入框宽度 = 列宽 - (标签 + ▾历史 + 📁浏览 + ✕清空 + 间距) 预算，
+                                // 避免超宽与另一半重叠
+                                let iw = (ui.available_width() - 96.0).max(40.0);
                                 ui.add(
-                                    egui::TextEdit::singleline(path)
-                                        .hint_text("文件或目录")
-                                        .desired_width(iw),
+                                    egui::TextEdit::singleline(if is_left {
+                                        &mut self.open_l
+                                    } else {
+                                        &mut self.open_r
+                                    })
+                                    .hint_text("文件或目录")
+                                    .desired_width(iw),
                                 );
                                 // ▾ 历史下拉（点击展开，显示最近导入路径）
                                 let hist = self.recent_paths.clone();
-                                ui.menu_button(
-                                    format!("▾ {}", if is_left { "左" } else { "右" }),
-                                    |ui| {
-                                        if hist.is_empty() {
-                                            ui.weak("暂无历史路径");
+                                ui.menu_button("▾", |ui| {
+                                    if hist.is_empty() {
+                                        ui.weak("暂无历史路径");
+                                    }
+                                    let mut pick: Option<String> = None;
+                                    for p in &hist {
+                                        if ui.button(p.as_str()).clicked() {
+                                            pick = Some(p.clone());
                                         }
-                                        let mut pick: Option<String> = None;
-                                        for p in &hist {
-                                            if ui.button(p.as_str()).clicked() {
-                                                pick = Some(p.clone());
-                                            }
+                                    }
+                                    if let Some(p) = pick {
+                                        if is_left {
+                                            self.open_l = p;
+                                        } else {
+                                            self.open_r = p;
                                         }
-                                        if let Some(p) = pick {
-                                            if is_left {
-                                                self.open_l = p;
-                                            } else {
-                                                self.open_r = p;
-                                            }
-                                        }
-                                    },
-                                );
+                                    }
+                                });
                                 // 📁 浏览
                                 if ui.button("📁").on_hover_text("浏览路径").clicked() {
                                     if let Some(p) = super::pick_file_or_dir() {
+                                        self.pending_history.push(p.clone());
                                         if is_left {
                                             self.open_l = p;
                                         } else {
@@ -2802,23 +2801,6 @@ impl DiffTab {
                                     }
                                 }
                             });
-                        }
-                    });
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        let bw = (ui.available_width() * 0.3).max(120.0);
-                        if ui
-                            .add(egui::Button::new("▶ 对比").min_size(egui::vec2(bw, 26.0)))
-                            .on_hover_text("按两侧路径类型打开对比")
-                            .clicked()
-                        {
-                            let l = self.open_l.trim().to_string();
-                            let r = self.open_r.trim().to_string();
-                            if !l.is_empty() && !r.is_empty() {
-                                self.pending_history.push(l.clone());
-                                self.pending_history.push(r.clone());
-                                self.load_pair(&l, &r, self.opts.clone());
-                            }
                         }
                     });
                 });
