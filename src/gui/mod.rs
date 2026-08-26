@@ -177,6 +177,9 @@ struct Settings {
     max_size: Option<u64>,
     #[serde(default)]
     window_size: Option<[f32; 2]>,
+    /// P58：历史导入路径（最近 N 条，最前为最新；欢迎页快速对比 ▾ 历史下拉）
+    #[serde(default)]
+    recent_paths: Vec<String>,
 }
 
 fn default_true() -> bool {
@@ -256,6 +259,8 @@ struct DiffApp {
     /// P57-4：欢迎页快速对比输入（BC Home 输入两个路径对比）
     quick_left: String,
     quick_right: String,
+    /// P58：历史导入路径（欢迎页快速对比 ▾ 历史下拉；最近在前，最多 20 条）
+    import_history: Vec<String>,
     /// 规则(Profile)管理窗口开关
     show_profiles: bool,
     /// 云盘/远程浏览窗口开关
@@ -302,6 +307,7 @@ struct DiffApp {
 
 impl DiffApp {
     fn new(settings: Settings) -> Self {
+        let import_history = settings.recent_paths.clone();
         DiffApp {
             tabs: Vec::new(),
             active: 0,
@@ -313,6 +319,7 @@ impl DiffApp {
             show_sidebar: true,
             quick_left: String::new(),
             quick_right: String::new(),
+            import_history,
             show_profiles: false,
             show_cloud: false,
             cloud_left: String::new(),
@@ -1102,6 +1109,8 @@ impl DiffApp {
         if l.is_empty() || r.is_empty() {
             return;
         }
+        self.add_import_history(&l);
+        self.add_import_history(&r);
         let lp = std::path::Path::new(&l);
         let rp = std::path::Path::new(&r);
         if lp.is_dir() && rp.is_dir() {
@@ -1115,6 +1124,19 @@ impl DiffApp {
             t.load_pair(&l, &r, ViewOptions::default());
             self.add_tab(Tab::Diff(t));
         }
+    }
+
+    /// P58：加入历史导入路径（去重、最近在前、上限 20，并持久化到设置）。
+    fn add_import_history(&mut self, path: &str) {
+        let p = path.trim().to_string();
+        if p.is_empty() {
+            return;
+        }
+        self.import_history.retain(|x| x != &p);
+        self.import_history.insert(0, p);
+        self.import_history.truncate(20);
+        self.settings.recent_paths = self.import_history.clone();
+        self.settings.save();
     }
     /// 空文件夹对比会话
     fn open_empty_dir(&mut self) {
@@ -1396,34 +1418,78 @@ impl DiffApp {
                             .size(12.0)
                             .color(ui.visuals().weak_text_color()),
                     );
-                    // P57-4：BC Home 快速对比输入（两侧路径，点击对比按类型打开标签）
+                    // P57-4/P58：BC Home 快速对比 — 两半分栏，每半路径输入 + 三个图标按钮(▾历史/📁浏览/✕清空)
                     ui.add_space(10.0);
+                    ui.label(RichText::new("快速对比").size(12.0).strong());
+                    ui.add_space(4.0);
+                    ui.columns(2, |cols| {
+                        for (ci, col) in cols.iter_mut().enumerate() {
+                            let is_left = ci == 0;
+                            let label = if is_left { "左侧" } else { "右侧" };
+                            col.horizontal(|ui| {
+                                ui.label(RichText::new(label).size(11.0).weak());
+                                let iw = (ui.available_width() - 82.0).max(80.0);
+                                let path = if is_left {
+                                    &mut self.quick_left
+                                } else {
+                                    &mut self.quick_right
+                                };
+                                ui.add(
+                                    egui::TextEdit::singleline(path)
+                                        .hint_text("文件或目录")
+                                        .desired_width(iw),
+                                );
+                                // ▾ 历史下拉（点击展开，显示历史导入路径）
+                                let hist = self.import_history.clone();
+                                ui.menu_button(format!("▾ {}", label), |ui| {
+                                    if hist.is_empty() {
+                                        ui.weak("暂无历史路径");
+                                    }
+                                    let mut pick: Option<String> = None;
+                                    for p in &hist {
+                                        if ui.button(p.as_str()).clicked() {
+                                            pick = Some(p.clone());
+                                        }
+                                    }
+                                    if let Some(p) = pick {
+                                        if is_left {
+                                            self.quick_left = p;
+                                        } else {
+                                            self.quick_right = p;
+                                        }
+                                    }
+                                });
+                                // 📁 浏览
+                                if ui.button("📁").on_hover_text("浏览路径").clicked() {
+                                    if let Some(p) = pick_file_or_dir() {
+                                        self.add_import_history(&p);
+                                        if is_left {
+                                            self.quick_left = p;
+                                        } else {
+                                            self.quick_right = p;
+                                        }
+                                    }
+                                }
+                                // ✕ 清空
+                                if ui.button("✕").on_hover_text("清空").clicked() {
+                                    if is_left {
+                                        self.quick_left.clear();
+                                    } else {
+                                        self.quick_right.clear();
+                                    }
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(6.0);
+                    // 对比按钮（置于两半下方）
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("快速对比").size(12.0).strong());
-                        // P57-11：每侧输入框后加浏览按钮（BC Home 选路径），否则一列放不下
-                        let w = (ui.available_width() * 0.28).max(110.0);
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.quick_left)
-                                .hint_text("左侧文件/目录")
-                                .desired_width(w),
-                        );
-                        if ui.button("📂").on_hover_text("选择左侧路径").clicked() {
-                            if let Some(p) = pick_file_or_dir() {
-                                self.quick_left = p;
-                            }
-                        }
-                        ui.label("⇄");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.quick_right)
-                                .hint_text("右侧文件/目录")
-                                .desired_width(w),
-                        );
-                        if ui.button("📂").on_hover_text("选择右侧路径").clicked() {
-                            if let Some(p) = pick_file_or_dir() {
-                                self.quick_right = p;
-                            }
-                        }
-                        if ui.button("▶ 对比").clicked() {
+                        let bw = (ui.available_width() * 0.3).max(120.0);
+                        if ui
+                            .add(egui::Button::new("▶ 对比").min_size(egui::vec2(bw, 26.0)))
+                            .on_hover_text("按两侧路径类型打开对比标签")
+                            .clicked()
+                        {
                             let l = self.quick_left.clone();
                             let r = self.quick_right.clone();
                             if !l.trim().is_empty() && !r.trim().is_empty() {
