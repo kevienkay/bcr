@@ -412,13 +412,8 @@ impl MergeTab {
                     {
                         self.reload();
                     }
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::Save),
-                        t(I18nKey::SaveMerged),
-                        "",
-                    )
-                    .clicked()
+                    if widgets::tool_button(ui, Some(icons::Icon::Save), t(I18nKey::SaveMerged), "")
+                        .clicked()
                     {
                         self.save();
                     }

@@ -1961,10 +1961,7 @@ impl eframe::App for DiffApp {
                         (crate::i18n::Key::ThemeDark, ThemePreference::Dark),
                         (crate::i18n::Key::ThemeLight, ThemePreference::Light),
                     ] {
-                        if ui
-                            .selectable_label(pref == p, crate::i18n::t(key))
-                            .clicked()
-                        {
+                        if widgets::chip(ui, pref == p, crate::i18n::t(key)).clicked() {
                             pref = p;
                             self.settings.theme = match p {
                                 ThemePreference::Dark => "dark".to_string(),
@@ -1982,10 +1979,7 @@ impl eframe::App for DiffApp {
                     let mut new_lang = crate::i18n::current();
                     let mut lang_changed = false;
                     for l in crate::i18n::Lang::ALL {
-                        if ui
-                            .selectable_label(new_lang == l, l.native_name())
-                            .clicked()
-                        {
+                        if widgets::chip(ui, new_lang == l, l.native_name()).clicked() {
                             new_lang = l;
                             lang_changed = true;
                         }
@@ -2084,10 +2078,7 @@ impl eframe::App for DiffApp {
                 ui.horizontal(|ui| {
                     ui.label("格式:");
                     for (fmt, label) in [("txt", "文本 TXT"), ("html", "HTML")] {
-                        if ui
-                            .selectable_label(self.report_format == fmt, label)
-                            .clicked()
-                        {
+                        if widgets::chip(ui, self.report_format == fmt, label).clicked() {
                             self.report_format = fmt.to_string();
                         }
                     }
