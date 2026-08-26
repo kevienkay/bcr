@@ -1418,78 +1418,34 @@ impl DiffApp {
                             .size(12.0)
                             .color(ui.visuals().weak_text_color()),
                     );
-                    // P57-4/P58：BC Home 快速对比 — 两半分栏，每半路径输入 + 三个图标按钮(▾历史/📁浏览/✕清空)
+                    // P57-4：BC Home 快速对比输入（两侧路径，点击对比按类型打开标签）
                     ui.add_space(10.0);
-                    ui.label(RichText::new("快速对比").size(12.0).strong());
-                    ui.add_space(4.0);
-                    ui.columns(2, |cols| {
-                        for (ci, col) in cols.iter_mut().enumerate() {
-                            let is_left = ci == 0;
-                            let label = if is_left { "左侧" } else { "右侧" };
-                            col.horizontal(|ui| {
-                                ui.label(RichText::new(label).size(11.0).weak());
-                                let iw = (ui.available_width() - 82.0).max(80.0);
-                                let path = if is_left {
-                                    &mut self.quick_left
-                                } else {
-                                    &mut self.quick_right
-                                };
-                                ui.add(
-                                    egui::TextEdit::singleline(path)
-                                        .hint_text("文件或目录")
-                                        .desired_width(iw),
-                                );
-                                // ▾ 历史下拉（点击展开，显示历史导入路径）
-                                let hist = self.import_history.clone();
-                                ui.menu_button(format!("▾ {}", label), |ui| {
-                                    if hist.is_empty() {
-                                        ui.weak("暂无历史路径");
-                                    }
-                                    let mut pick: Option<String> = None;
-                                    for p in &hist {
-                                        if ui.button(p.as_str()).clicked() {
-                                            pick = Some(p.clone());
-                                        }
-                                    }
-                                    if let Some(p) = pick {
-                                        if is_left {
-                                            self.quick_left = p;
-                                        } else {
-                                            self.quick_right = p;
-                                        }
-                                    }
-                                });
-                                // 📁 浏览
-                                if ui.button("📁").on_hover_text("浏览路径").clicked() {
-                                    if let Some(p) = pick_file_or_dir() {
-                                        self.add_import_history(&p);
-                                        if is_left {
-                                            self.quick_left = p;
-                                        } else {
-                                            self.quick_right = p;
-                                        }
-                                    }
-                                }
-                                // ✕ 清空
-                                if ui.button("✕").on_hover_text("清空").clicked() {
-                                    if is_left {
-                                        self.quick_left.clear();
-                                    } else {
-                                        self.quick_right.clear();
-                                    }
-                                }
-                            });
-                        }
-                    });
-                    ui.add_space(6.0);
-                    // 对比按钮（置于两半下方）
                     ui.horizontal(|ui| {
-                        let bw = (ui.available_width() * 0.3).max(120.0);
-                        if ui
-                            .add(egui::Button::new("▶ 对比").min_size(egui::vec2(bw, 26.0)))
-                            .on_hover_text("按两侧路径类型打开对比标签")
-                            .clicked()
-                        {
+                        ui.label(RichText::new("快速对比").size(12.0).strong());
+                        // P57-11：每侧输入框后加浏览按钮，否则一列放不下
+                        let w = (ui.available_width() * 0.28).max(110.0);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.quick_left)
+                                .hint_text("左侧文件/目录")
+                                .desired_width(w),
+                        );
+                        if ui.button("📂").on_hover_text("选择左侧路径").clicked() {
+                            if let Some(p) = pick_file_or_dir() {
+                                self.quick_left = p;
+                            }
+                        }
+                        ui.label("⇄");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.quick_right)
+                                .hint_text("右侧文件/目录")
+                                .desired_width(w),
+                        );
+                        if ui.button("📂").on_hover_text("选择右侧路径").clicked() {
+                            if let Some(p) = pick_file_or_dir() {
+                                self.quick_right = p;
+                            }
+                        }
+                        if ui.button("▶ 对比").clicked() {
                             let l = self.quick_left.clone();
                             let r = self.quick_right.clone();
                             if !l.trim().is_empty() && !r.trim().is_empty() {
@@ -1778,6 +1734,13 @@ impl eframe::App for DiffApp {
         // P58：轮询 muda 原生菜单事件并分派到对应动作
         for cmd in crate::gui::native_menu::drain() {
             self.run_menu_cmd(ui, cmd);
+        }
+        // P58：空文件对比页(打开对比页面) 的两半分栏 —— 同步最近路径历史 + 汲取其待记历史
+        if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
+            t.recent_paths = self.import_history.clone();
+            for p in std::mem::take(&mut t.pending_history) {
+                self.add_import_history(&p);
+            }
         }
         if self.theme_changed {
             self.theme_changed = false;

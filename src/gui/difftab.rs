@@ -157,6 +157,11 @@ pub struct DiffTab {
     /// P38-1d：当前编辑导航位置（edited_rows 索引）
     pub edit_pos: Option<usize>,
     pub search: SearchState,
+    /// P58：空文件对比页（尚未导入文件）左/右路径输入 + 最近导入路径 + 待记历史
+    pub open_l: String,
+    pub open_r: String,
+    pub recent_paths: Vec<String>,
+    pub pending_history: Vec<String>,
     /// 待跳转行号（1-based）
     pub goto_line: Option<usize>,
     pub goto_focus: bool,
@@ -250,6 +255,10 @@ impl DiffTab {
             opts: ViewOptions::default(),
             error: None,
             show_stats: true,
+            open_l: String::new(),
+            open_r: String::new(),
+            recent_paths: Vec::new(),
+            pending_history: Vec::new(),
             scroll: Vec2::ZERO,
             diff_rows: Vec::new(),
             diff_pos: None,
@@ -2726,16 +2735,93 @@ impl DiffTab {
             }
 
             if self.rows.is_empty() {
-                // P52-2：统一空状态（大图标底片 + 标题）。
-                // P58：打开左/右侧入口已由顶部详细工具栏与原生菜单提供，空状态不再重复展示按钮。
-                super::common::empty_state(
-                    ui,
-                    "⇄",
-                    super::theme::card_icon_colors()[0],
-                    t(I18nKey::DiffEmptyHint),
-                    t(I18nKey::DragHint),
-                    |_ui| {},
-                );
+                // P58：打开文件对比页（尚未导入文件）——两半分栏，每半顶部 路径输入 + ▾历史/📁浏览/✕清空。
+                ui.vertical(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new("快速对比").size(13.0).strong());
+                    ui.add_space(6.0);
+                    ui.columns(2, |cols| {
+                        for (ci, col) in cols.iter_mut().enumerate() {
+                            let is_left = ci == 0;
+                            col.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(if is_left { "左侧" } else { "右侧" })
+                                        .size(11.0)
+                                        .weak(),
+                                );
+                                let iw = (ui.available_width() - 84.0).max(80.0);
+                                let path = if is_left {
+                                    &mut self.open_l
+                                } else {
+                                    &mut self.open_r
+                                };
+                                ui.add(
+                                    egui::TextEdit::singleline(path)
+                                        .hint_text("文件或目录")
+                                        .desired_width(iw),
+                                );
+                                // ▾ 历史下拉（点击展开，显示最近导入路径）
+                                let hist = self.recent_paths.clone();
+                                ui.menu_button(
+                                    format!("▾ {}", if is_left { "左" } else { "右" }),
+                                    |ui| {
+                                        if hist.is_empty() {
+                                            ui.weak("暂无历史路径");
+                                        }
+                                        let mut pick: Option<String> = None;
+                                        for p in &hist {
+                                            if ui.button(p.as_str()).clicked() {
+                                                pick = Some(p.clone());
+                                            }
+                                        }
+                                        if let Some(p) = pick {
+                                            if is_left {
+                                                self.open_l = p;
+                                            } else {
+                                                self.open_r = p;
+                                            }
+                                        }
+                                    },
+                                );
+                                // 📁 浏览
+                                if ui.button("📁").on_hover_text("浏览路径").clicked() {
+                                    if let Some(p) = super::pick_file_or_dir() {
+                                        if is_left {
+                                            self.open_l = p;
+                                        } else {
+                                            self.open_r = p;
+                                        }
+                                    }
+                                }
+                                // ✕ 清空
+                                if ui.button("✕").on_hover_text("清空").clicked() {
+                                    if is_left {
+                                        self.open_l.clear();
+                                    } else {
+                                        self.open_r.clear();
+                                    }
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        let bw = (ui.available_width() * 0.3).max(120.0);
+                        if ui
+                            .add(egui::Button::new("▶ 对比").min_size(egui::vec2(bw, 26.0)))
+                            .on_hover_text("按两侧路径类型打开对比")
+                            .clicked()
+                        {
+                            let l = self.open_l.trim().to_string();
+                            let r = self.open_r.trim().to_string();
+                            if !l.is_empty() && !r.is_empty() {
+                                self.pending_history.push(l.clone());
+                                self.pending_history.push(r.clone());
+                                self.load_pair(&l, &r, self.opts.clone());
+                            }
+                        }
+                    });
+                });
                 return;
             }
 

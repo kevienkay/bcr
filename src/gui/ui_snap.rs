@@ -76,6 +76,21 @@ fn snap_welcome_light() {
 
 #[test]
 #[ignore]
+fn snap_empty_diff_open() {
+    let mut app = DiffApp::new(Settings::default());
+    app.add_tab(Tab::Diff(crate::gui::difftab::DiffTab::new()));
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1360.0, 860.0))
+        .build_eframe(|cc| {
+            install_cjk_fonts(&cc.egui_ctx);
+            theme::apply(&cc.egui_ctx);
+            app
+        });
+    save(&mut h, "empty_diff_open");
+}
+
+#[test]
+#[ignore]
 fn snap_app_difftab() {
     let (_d, l, r) = write_pair("snap-diff", SAMPLE_L, SAMPLE_R);
     let mut h = Harness::builder()
