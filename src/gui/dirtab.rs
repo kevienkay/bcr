@@ -1402,7 +1402,7 @@ impl DirTab {
                         {
                             bg.toggle_pause();
                         }
-                        if ui.button("✕ 取消").clicked() {
+                        if widgets::icon_button(ui, icons::Icon::Clear, "取消", 14.0).clicked() {
                             bg.request_cancel();
                         }
                         ui.separator();

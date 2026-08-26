@@ -2648,10 +2648,13 @@ impl DiffApp {
             ui.set_max_width(240.0);
             ui.vertical(|ui| {
                 // 主页按钮（回到欢迎页/清除会话）
-                if ui
-                    .button("🏠 主页")
-                    .on_hover_text("回到欢迎页（关闭当前标签）")
-                    .clicked()
+                if widgets::tool_button(
+                    ui,
+                    Some(icons::Icon::Home),
+                    "主页",
+                    "回到欢迎页（关闭当前标签）",
+                )
+                .clicked()
                 {
                     self.tabs.clear();
                     self.active = 0;
@@ -2661,21 +2664,29 @@ impl DiffApp {
                 if let Some(Tab::Dir(d)) = self.tabs.get_mut(self.active) {
                     ui.label(egui::RichText::new("导航").weak());
                     ui.horizontal_wrapped(|ui| {
-                        if ui
-                            .button("← 后退")
-                            .on_hover_text("导航到历史前一项")
-                            .clicked()
+                        if widgets::tool_button(
+                            ui,
+                            Some(icons::Icon::OpenLeft),
+                            "后退",
+                            "导航到历史前一项",
+                        )
+                        .clicked()
                         {
                             d.back();
                         }
-                        if ui
-                            .button("→ 前进")
-                            .on_hover_text("导航到历史后一项")
-                            .clicked()
+                        if widgets::tool_button(
+                            ui,
+                            Some(icons::Icon::OpenRight),
+                            "前进",
+                            "导航到历史后一项",
+                        )
+                        .clicked()
                         {
                             d.forward();
                         }
-                        if ui.button("↑ 上一层").on_hover_text("进入父目录").clicked() {
+                        if widgets::tool_button(ui, Some(icons::Icon::Prev), "上一层", "进入父目录")
+                            .clicked()
+                        {
                             d.up_level();
                         }
                     });
