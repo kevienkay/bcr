@@ -3717,58 +3717,60 @@ fn paint_diff_row(
             mid_rect,
             Some(super::theme::mid_bg(ui.visuals().dark_mode)),
         );
-        // P58：内联覆盖箭头（▶ = 左侧覆盖右侧；◀ = 右侧覆盖左侧，BC 拷贝到另一侧）。
-        // 注意：把"左侧覆盖右侧"(▶) 放在**左半**、靠左内容一侧；"右侧覆盖左侧"(◀) 在右半。
-        let half = mid_gap * 0.5;
-        let left_rect = Rect::from_min_size(
-            Pos2::new(mid_x + 1.0, y),
-            vec2((half - 3.0).max(6.0), ROW_H),
+        // P58：内联覆盖箭头。▶(左侧覆盖右侧) 放在**左半部分的最左边**（行号区左端，
+        // 因行号右对齐、左端空白不压行号）；◀(右侧覆盖左侧) 留在中间空隙右半。
+        let row_tag_id = (row.left_no, row.right_no);
+        let icon = ui.visuals().strong_text_color();
+        let icon_weak = ui.visuals().weak_text_color();
+        let font = egui::FontId::proportional(11.0);
+        let hover_bg = c.gamma_multiply(0.35);
+        // ---- ▶(左→右) 放到最左 ----
+        let edge_rect = Rect::from_min_size(
+            Pos2::new(x + super::theme::CURRENT_BAR + 3.0, y),
+            vec2(14.0, ROW_H),
         );
+        let edge_resp = ui.interact(
+            edge_rect,
+            ui.id().with(("infl_edge_r", row_tag_id)),
+            egui::Sense::click(),
+        );
+        if edge_resp.hovered() || edge_resp.is_pointer_button_down_on() {
+            paint_bg(ui, edge_rect, Some(hover_bg));
+        }
+        ui.painter().text(
+            edge_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "▶",
+            font.clone(),
+            if edge_resp.hovered() { icon } else { icon_weak },
+        );
+        // ---- ◀(右→左) 留在中间空隙右半 ----
+        let half = mid_gap * 0.5;
         let right_rect = Rect::from_min_size(
             Pos2::new(mid_x + half + 2.0, y),
             vec2((half - 3.0).max(6.0), ROW_H),
-        );
-        // 稳定 id（用行号区分虚拟化行，避免渲染复用导致 id 冲突）
-        let row_tag_id = (row.left_no, row.right_no);
-        let left_resp = ui.interact(
-            left_rect,
-            ui.id().with(("infl_arrow_l", row_tag_id)),
-            egui::Sense::click(),
         );
         let right_resp = ui.interact(
             right_rect,
             ui.id().with(("infl_arrow_r", row_tag_id)),
             egui::Sense::click(),
         );
-        let icon = ui.visuals().strong_text_color();
-        let icon_weak = ui.visuals().weak_text_color();
-        let font = egui::FontId::proportional(11.0);
-        // hover/active 底色（差异色淡化）
-        let hover_l = left_resp.hovered() || left_resp.is_pointer_button_down_on();
-        let hover_r = right_resp.hovered() || right_resp.is_pointer_button_down_on();
-        let hover_bg = c.gamma_multiply(0.35);
-        if hover_l {
-            paint_bg(ui, left_rect, Some(hover_bg));
-        }
-        if hover_r {
+        if right_resp.hovered() || right_resp.is_pointer_button_down_on() {
             paint_bg(ui, right_rect, Some(hover_bg));
         }
-        ui.painter().text(
-            left_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            "▶",
-            font.clone(),
-            if hover_l { icon } else { icon_weak },
-        );
         ui.painter().text(
             right_rect.center(),
             egui::Align2::CENTER_CENTER,
             "◀",
             font,
-            if hover_r { icon } else { icon_weak },
+            if right_resp.hovered() {
+                icon
+            } else {
+                icon_weak
+            },
         );
-        // 点击 ▶(左半) → 左侧覆盖右侧；点击 ◀(右半) → 右侧覆盖左侧
-        if left_resp.clicked() {
+        // 点击 ▶(最左) → 左侧覆盖右侧；点击 ◀(空隙右半) → 右侧覆盖左侧
+        if edge_resp.clicked() {
             return (Some(RowHit::Copy(EditSide::Right)), resp);
         }
         if right_resp.clicked() {
