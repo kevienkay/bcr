@@ -1292,9 +1292,13 @@ impl DiffApp {
                                                 .show(ui, |ui| {
                                                     ui.horizontal(|ui| {
                                                         ui.label(
-                                                            RichText::new("📁")
-                                                                .size(14.0)
-                                                                .color(icon_c),
+                                                            RichText::new(
+                                                                icons::Icon::Dir
+                                                                    .glyph()
+                                                                    .to_string(),
+                                                            )
+                                                            .font(icons::font(13.0))
+                                                            .color(icon_c),
                                                         );
                                                         ui.add_space(2.0);
                                                         let resp = ui
@@ -1321,17 +1325,20 @@ impl DiffApp {
                                                         let del = ui
                                                             .add(
                                                                 egui::Button::new(
-                                                                    RichText::new("✕")
-                                                                        .size(11.0)
-                                                                        .color(if resp.hovered() {
-                                                                            theme::stat_delete(
-                                                                                ui.visuals()
-                                                                                    .dark_mode,
-                                                                            )
-                                                                        } else {
-                                                                            ui.visuals()
-                                                                                .weak_text_color()
-                                                                        }),
+                                                                    RichText::new(
+                                                                        icons::Icon::Clear
+                                                                            .glyph()
+                                                                            .to_string(),
+                                                                    )
+                                                                    .font(icons::font(12.0))
+                                                                    .color(if resp.hovered() {
+                                                                        theme::stat_delete(
+                                                                            ui.visuals().dark_mode,
+                                                                        )
+                                                                    } else {
+                                                                        ui.visuals()
+                                                                            .weak_text_color()
+                                                                    }),
                                                                 )
                                                                 .small()
                                                                 .frame(false),
@@ -1394,48 +1401,48 @@ impl DiffApp {
                             .color(ui.visuals().weak_text_color()),
                     );
                     ui.add_space(12.0);
-                    // 会话类型卡片（7 类，BC 主页语义）
-                    let cards: [(&str, crate::i18n::Key, crate::i18n::Key, u32); 7] = [
+                    // 会话类型卡片（7 类，BC 主页语义）——图标用 Phosphor 字形（与标签栏一致）
+                    let cards: [(char, crate::i18n::Key, crate::i18n::Key, u32); 7] = [
                         (
-                            "📄",
+                            '\u{E23A}', // file-text（文本对比）
                             crate::i18n::Key::SessionText,
                             crate::i18n::Key::SessionTextDesc,
                             0,
                         ),
                         (
-                            "📁",
+                            '\u{E24A}', // folder（文件夹对比）
                             crate::i18n::Key::SessionDir,
                             crate::i18n::Key::SessionDirDesc,
                             1,
                         ),
                         (
-                            "🔀",
+                            '\u{E278}', // git-branch（三路合并）
                             crate::i18n::Key::SessionMerge,
                             crate::i18n::Key::SessionMergeDesc,
                             2,
                         ),
                         (
-                            "🖼",
+                            '\u{E2CA}', // image（图片对比）
                             crate::i18n::Key::SessionImage,
                             crate::i18n::Key::SessionImageDesc,
                             3,
                         ),
                         (
-                            "📊",
+                            '\u{E476}', // table（CSV 表格）
                             crate::i18n::Key::SessionCsv,
                             crate::i18n::Key::SessionCsvDesc,
                             4,
                         ),
-                        // P33：补齐 BC 会话类型入口
+                        // P33：补齐 BC 会话类型入口（hex）
                         (
-                            "🔢",
+                            '\u{E2A2}', // hash（Hex 对比）
                             crate::i18n::Key::MenuNewHex,
                             crate::i18n::Key::MenuNewHex,
                             5,
                         ),
                         // P43-6：媒体比较（音视频元数据）
                         (
-                            "🎵",
+                            '\u{E340}', // music-notes（媒体比较）
                             crate::i18n::Key::SessionMedia,
                             crate::i18n::Key::SessionMediaDesc,
                             6,
@@ -1476,8 +1483,8 @@ impl DiffApp {
                                                 ui.painter().text(
                                                     chip_rect.center(),
                                                     egui::Align2::CENTER_CENTER,
-                                                    *icon,
-                                                    egui::FontId::proportional(19.0),
+                                                    icon.to_string(),
+                                                    icons::font(19.0),
                                                     chip_c,
                                                 );
                                                 ui.add_space(4.0);
