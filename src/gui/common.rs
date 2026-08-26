@@ -53,17 +53,17 @@ pub fn bg_select() -> Color32 {
     super::theme::bg_select()
 }
 /// 行内高亮（变更段背景）
-pub fn hl_delete() -> Color32 {
-    super::theme::hl_delete()
+pub fn hl_delete(dark: bool) -> Color32 {
+    super::theme::hl_delete(dark)
 }
-pub fn hl_insert() -> Color32 {
-    super::theme::hl_insert()
+pub fn hl_insert(dark: bool) -> Color32 {
+    super::theme::hl_insert(dark)
 }
-pub fn hl_replace_l() -> Color32 {
-    super::theme::hl_modify_l()
+pub fn hl_replace_l(dark: bool) -> Color32 {
+    super::theme::hl_modify_l(dark)
 }
-pub fn hl_replace_r() -> Color32 {
-    super::theme::hl_modify_r()
+pub fn hl_replace_r(dark: bool) -> Color32 {
+    super::theme::hl_modify_r(dark)
 }
 /// 行号颜色
 pub const GUTTER: Color32 = super::theme::GUTTER;

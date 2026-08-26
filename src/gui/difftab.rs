@@ -3292,10 +3292,11 @@ impl DiffTab {
                     } else {
                         (bg_l, bg_r)
                     };
+                    let dk = ui.visuals().dark_mode;
                     let (hl_l, hl_r) = match row.tag {
-                        RowTag::Replace => (Some(hl_replace_l()), Some(hl_replace_r())),
-                        RowTag::Delete => (Some(hl_delete()), None),
-                        RowTag::Insert => (None, Some(hl_insert())),
+                        RowTag::Replace => (Some(hl_replace_l(dk)), Some(hl_replace_r(dk))),
+                        RowTag::Delete => (Some(hl_delete(dk)), None),
+                        RowTag::Insert => (None, Some(hl_insert(dk))),
                         RowTag::Equal => (None, None),
                     };
                     // P32-B5：忽略行弱化显示（半透明灰）

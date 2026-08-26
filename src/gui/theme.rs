@@ -84,18 +84,34 @@ pub fn bg_current() -> Color32 {
 pub fn bg_select() -> Color32 {
     Color32::from_rgba_unmultiplied(120, 170, 250, 70)
 }
-/// 行内变更段高亮
-pub fn hl_delete() -> Color32 {
-    Color32::from_rgba_unmultiplied(226, 110, 110, 150)
+/// 行内变更段高亮（浅色主题用更柔和的粉/绿 pastel 呼应 BC，深色保持原值）
+pub fn hl_delete(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(226, 110, 110, 150)
+    } else {
+        Color32::from_rgba_unmultiplied(244, 158, 158, 118)
+    }
 }
-pub fn hl_insert() -> Color32 {
-    Color32::from_rgba_unmultiplied(110, 196, 128, 150)
+pub fn hl_insert(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(110, 196, 128, 150)
+    } else {
+        Color32::from_rgba_unmultiplied(158, 210, 168, 118)
+    }
 }
-pub fn hl_modify_l() -> Color32 {
-    Color32::from_rgba_unmultiplied(226, 120, 120, 160)
+pub fn hl_modify_l(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(226, 120, 120, 160)
+    } else {
+        Color32::from_rgba_unmultiplied(244, 168, 160, 122)
+    }
 }
-pub fn hl_modify_r() -> Color32 {
-    Color32::from_rgba_unmultiplied(120, 210, 138, 160)
+pub fn hl_modify_r(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(120, 210, 138, 160)
+    } else {
+        Color32::from_rgba_unmultiplied(164, 216, 178, 122)
+    }
 }
 
 /// 行号颜色（P39-2b：适中灰，深浅主题都清晰）
@@ -134,7 +150,7 @@ pub fn head_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(38)
     } else {
-        Color32::from_gray(230)
+        Color32::from_rgb(232, 233, 238)
     }
 }
 /// 文件信息头前景（蓝色系，BC 观感）
@@ -158,7 +174,7 @@ pub fn column_head_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(42)
     } else {
-        Color32::from_rgb(251, 252, 252)
+        Color32::from_rgb(249, 250, 252)
     }
 }
 /// 统计色：相同（绿）——全局状态栏与 DiffTab 底部统计栏统一
@@ -194,7 +210,7 @@ pub fn gutter_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(38)
     } else {
-        Color32::from_gray(238)
+        Color32::from_rgb(240, 241, 245)
     }
 }
 /// 左右面板空隙（连接线区）底色，比 gutter 略深一档
@@ -202,7 +218,7 @@ pub fn mid_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(24)
     } else {
-        Color32::from_gray(244)
+        Color32::from_rgb(244, 245, 248)
     }
 }
 /// 无差异行空隙垂直分隔线
@@ -210,7 +226,7 @@ pub fn mid_sep(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(48)
     } else {
-        Color32::from_gray(210)
+        Color32::from_rgb(214, 216, 222)
     }
 }
 /// 字符列标尺底色
@@ -218,7 +234,7 @@ pub fn ruler_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(32)
     } else {
-        Color32::from_gray(244)
+        Color32::from_rgb(246, 247, 250)
     }
 }
 /// 忽略行弱化底色
@@ -226,7 +242,7 @@ pub fn ignored_dim(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(42)
     } else {
-        Color32::from_gray(226)
+        Color32::from_rgb(228, 229, 234)
     }
 }
 /// 折叠行提示条底色
@@ -234,7 +250,7 @@ pub fn fold_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(26)
     } else {
-        Color32::from_gray(240)
+        Color32::from_rgb(242, 243, 247)
     }
 }
 /// 主页卡片底色
@@ -242,7 +258,7 @@ pub fn card_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(36)
     } else {
-        Color32::from_gray(250)
+        Color32::from_rgb(250, 250, 252)
     }
 }
 /// 标签栏选中标签底色
@@ -402,11 +418,12 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
         style.visuals.extreme_bg_color = Color32::from_gray(18);
         style.visuals.faint_bg_color = Color32::from_gray(34);
     } else {
-        style.visuals.panel_fill = Color32::from_gray(248);
-        style.visuals.window_fill = Color32::from_gray(252);
-        style.visuals.extreme_bg_color = Color32::from_gray(240);
-        style.visuals.faint_bg_color = Color32::from_gray(244);
-        style.visuals.window_stroke = Stroke::new(1.0, Color32::from_gray(200));
+        // Pxx-浅色：BC 纸面观感——轻微冷白 + 面板间细描边，层次靠同色系微差
+        style.visuals.panel_fill = Color32::from_rgb(248, 249, 252);
+        style.visuals.window_fill = Color32::from_rgb(252, 252, 254);
+        style.visuals.extreme_bg_color = Color32::from_rgb(240, 242, 246);
+        style.visuals.faint_bg_color = Color32::from_rgb(245, 246, 249);
+        style.visuals.window_stroke = Stroke::new(1.0, Color32::from_rgb(206, 208, 216));
     }
     // 选中态
     style.visuals.selection.bg_fill = if dark {
@@ -441,11 +458,12 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
         style.visuals.widgets.active.weak_bg_fill = Color32::from_gray(50);
         style.visuals.widgets.open.weak_bg_fill = Color32::from_gray(46);
     } else {
-        style.visuals.widgets.noninteractive.weak_bg_fill = Color32::from_gray(246);
-        style.visuals.widgets.inactive.weak_bg_fill = Color32::from_gray(229);
-        style.visuals.widgets.hovered.weak_bg_fill = Color32::from_gray(212);
-        style.visuals.widgets.active.weak_bg_fill = Color32::from_gray(206);
-        style.visuals.widgets.open.weak_bg_fill = Color32::from_gray(220);
+        // Pxx-浅色：按钮底色略偏冷白到浅灰蓝，hover/active 清晰可辨
+        style.visuals.widgets.noninteractive.weak_bg_fill = Color32::from_rgb(247, 248, 251);
+        style.visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(233, 234, 239);
+        style.visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(219, 221, 228);
+        style.visuals.widgets.active.weak_bg_fill = Color32::from_rgb(211, 213, 222);
+        style.visuals.widgets.open.weak_bg_fill = Color32::from_rgb(225, 227, 234);
     }
 }
 

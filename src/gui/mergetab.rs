@@ -711,7 +711,7 @@ impl MergeTab {
                     for i in range {
                         let row = &rows[i];
                         let (bg_b, bg_l, bg_r) = merge_row_bg(row);
-                        let (hl_l, hl_r) = merge_row_hl(row);
+                        let (hl_l, hl_r) = merge_row_hl(row, ui.visuals().dark_mode);
                         let resp = paint_merge_row(
                             ui, row, gutter, col_w, bg_b, bg_l, bg_r, hl_l, hl_r, fg, syn_b, syn_l,
                             syn_r,
@@ -807,9 +807,12 @@ fn merge_row_bg(
     }
 }
 
-fn merge_row_hl(row: &crate::mergeview::MergeRow) -> (Option<Color32>, Option<Color32>) {
+fn merge_row_hl(
+    row: &crate::mergeview::MergeRow,
+    dark: bool,
+) -> (Option<Color32>, Option<Color32>) {
     if row.in_conflict {
-        (Some(hl_replace_l()), Some(hl_replace_r()))
+        (Some(hl_replace_l(dark)), Some(hl_replace_r(dark)))
     } else {
         (None, None)
     }

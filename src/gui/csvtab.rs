@@ -1069,7 +1069,11 @@ impl CsvTab {
                                 let hl = if ar.status == RowStatus::Modified
                                     && ar.changed_cols.contains(&col_idx)
                                 {
-                                    Some(if side { hl_replace_l() } else { hl_replace_r() })
+                                    Some(if side {
+                                        hl_replace_l(ui.visuals().dark_mode)
+                                    } else {
+                                        hl_replace_r(ui.visuals().dark_mode)
+                                    })
                                 } else {
                                     None
                                 };
