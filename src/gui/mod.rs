@@ -1615,14 +1615,6 @@ fn pick_dir() -> Option<String> {
     Some(p.to_string_lossy().into_owned())
 }
 
-/// P57-11：优先选文件夹，否则选文件（快速对比两侧路径都可选）
-fn pick_file_or_dir() -> Option<String> {
-    if let Some(d) = pick_dir() {
-        return Some(d);
-    }
-    pick_file()
-}
-
 /// P39-2c：从标签提取左右路径（会话保存用）
 fn session_paths(t: &Tab) -> Option<(String, String)> {
     match t {

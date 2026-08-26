@@ -107,6 +107,25 @@ fn snap_app_difftab() {
     save(&mut h, "app_difftab");
 }
 
+/// 仅导入左侧文件 → 应即时显示左侧内容（P58 选中即加载）
+#[test]
+#[ignore]
+fn snap_diff_single_left() {
+    let (_d, l, _r) = write_pair("snap-single", SAMPLE_L, SAMPLE_R);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1360.0, 860.0))
+        .build_eframe(|cc| {
+            install_cjk_fonts(&cc.egui_ctx);
+            theme::apply(&cc.egui_ctx);
+            let mut app = DiffApp::new(Settings::default());
+            let mut t = crate::gui::difftab::DiffTab::new();
+            t.load_left(&l, ViewOptions::default());
+            app.add_tab(Tab::Diff(t));
+            app
+        });
+    save(&mut h, "diff_single_left");
+}
+
 #[test]
 #[ignore]
 fn snap_app_difftab_light() {

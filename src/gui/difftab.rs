@@ -464,6 +464,40 @@ impl DiffTab {
         }
     }
 
+    /// P58：把浏览/历史选中的路径填入该侧，并立即加载（另一侧已有时转为两侧对比加载）。
+    pub fn open_into(&mut self, is_left: bool, p: String) {
+        self.pending_history.push(p.clone());
+        let opts = self.opts.clone();
+        if is_left {
+            self.open_l = p.clone();
+            let r = self.open_r.clone();
+            if r.is_empty() {
+                self.load_left(&p, opts);
+            } else {
+                self.load_pair(&p, &r, opts);
+            }
+        } else {
+            self.open_r = p.clone();
+            let l = self.open_l.clone();
+            if l.is_empty() {
+                self.load_right(&p, opts);
+            } else {
+                self.load_pair(&l, &p, opts);
+            }
+        }
+    }
+
+    /// P58：从输入框路径加载（回车触发）。`load_pair` 自身对单侧为空做降级。
+    pub fn load_open_pair(&mut self, l: String, r: String) {
+        if l.is_empty() && r.is_empty() {
+            return;
+        }
+        let opts = self.opts.clone();
+        self.open_l = l.clone();
+        self.open_r = r.clone();
+        self.load_pair(&l, &r, opts);
+    }
+
     pub fn recompute(&mut self) {
         let start = std::time::Instant::now();
         let (l, r) = match (&self.left, &self.right) {
@@ -2734,8 +2768,9 @@ impl DiffTab {
                 return;
             }
 
+            // P58：打开文件对比页（尚未导入文件）——两半分栏，每半顶部 路径输入 + ▾历史/📁浏览/✕清空。
+            // 选中/输入任一路径后立即加载进入对比视图（另一侧可用顶部 打开左侧/右侧 补全）。
             if self.rows.is_empty() {
-                // P58：打开文件对比页（尚未导入文件）——两半分栏，每半顶部 路径输入 + ▾历史/📁浏览/✕清空。
                 ui.vertical(|ui| {
                     ui.add_space(8.0);
                     ui.label(egui::RichText::new("快速对比").size(13.0).strong());
@@ -2744,15 +2779,10 @@ impl DiffTab {
                         for (ci, col) in cols.iter_mut().enumerate() {
                             let is_left = ci == 0;
                             col.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(if is_left { "左侧" } else { "右侧" })
-                                        .size(11.0)
-                                        .weak(),
-                                );
-                                // 输入框宽度 = 列宽 - (标签 + ▾历史 + 📁浏览 + ✕清空 + 间距) 预算，
+                                // 输入框宽度 = 列宽 - (▾历史 + 📁浏览 + ✕清空 + 间距) 预算，
                                 // 避免超宽与另一半重叠
-                                let iw = (ui.available_width() - 96.0).max(40.0);
-                                ui.add(
+                                let iw = (ui.available_width() - 72.0).max(40.0);
+                                let resp = ui.add(
                                     egui::TextEdit::singleline(if is_left {
                                         &mut self.open_l
                                     } else {
@@ -2774,31 +2804,31 @@ impl DiffTab {
                                         }
                                     }
                                     if let Some(p) = pick {
-                                        if is_left {
-                                            self.open_l = p;
-                                        } else {
-                                            self.open_r = p;
-                                        }
+                                        self.open_into(is_left, p);
                                     }
                                 });
-                                // 📁 浏览
+                                // 📁 浏览（使用单个文件选择对话框，避免先弹文件夹再弹文件两次对话框）
                                 if ui.button("📁").on_hover_text("浏览路径").clicked() {
-                                    if let Some(p) = super::pick_file_or_dir() {
-                                        self.pending_history.push(p.clone());
-                                        if is_left {
-                                            self.open_l = p;
-                                        } else {
-                                            self.open_r = p;
-                                        }
+                                    if let Some(p) = super::pick_file() {
+                                        self.open_into(is_left, p);
                                     }
                                 }
-                                // ✕ 清空
+                                // ✕ 清空（同时卸载该侧文件，回到分栏）
                                 if ui.button("✕").on_hover_text("清空").clicked() {
                                     if is_left {
                                         self.open_l.clear();
+                                        self.left = None;
                                     } else {
                                         self.open_r.clear();
+                                        self.right = None;
                                     }
+                                    self.recompute();
+                                }
+                                // 输入路径后回车 → 加载该侧/两侧
+                                if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                                    let l = self.open_l.trim().to_string();
+                                    let r = self.open_r.trim().to_string();
+                                    self.load_open_pair(l, r);
                                 }
                             });
                         }
