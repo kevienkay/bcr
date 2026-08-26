@@ -3717,8 +3717,8 @@ fn paint_diff_row(
             mid_rect,
             Some(super::theme::mid_bg(ui.visuals().dark_mode)),
         );
-        // P58：内联覆盖箭头（◀ = 右侧覆盖左侧；▶ = 左侧覆盖右侧，BC 拷贝到另一侧）。
-        // 用 ui.interact 生成独立可点区域（hover 高亮 + 点击），每个差异行显示一对。
+        // P58：内联覆盖箭头（▶ = 左侧覆盖右侧；◀ = 右侧覆盖左侧，BC 拷贝到另一侧）。
+        // 注意：把"左侧覆盖右侧"(▶) 放在**左半**、靠左内容一侧；"右侧覆盖左侧"(◀) 在右半。
         let half = mid_gap * 0.5;
         let left_rect = Rect::from_min_size(
             Pos2::new(mid_x + 1.0, y),
@@ -3756,23 +3756,23 @@ fn paint_diff_row(
         ui.painter().text(
             left_rect.center(),
             egui::Align2::CENTER_CENTER,
-            "◀",
+            "▶",
             font.clone(),
             if hover_l { icon } else { icon_weak },
         );
         ui.painter().text(
             right_rect.center(),
             egui::Align2::CENTER_CENTER,
-            "▶",
+            "◀",
             font,
             if hover_r { icon } else { icon_weak },
         );
-        // 点击 ◀ → 右侧覆盖左侧；点击 ▶ → 左侧覆盖右侧
+        // 点击 ▶(左半) → 左侧覆盖右侧；点击 ◀(右半) → 右侧覆盖左侧
         if left_resp.clicked() {
-            return (Some(RowHit::Copy(EditSide::Left)), resp);
+            return (Some(RowHit::Copy(EditSide::Right)), resp);
         }
         if right_resp.clicked() {
-            return (Some(RowHit::Copy(EditSide::Right)), resp);
+            return (Some(RowHit::Copy(EditSide::Left)), resp);
         }
     } else {
         // 无差异行：弱色垂直分隔线（延续面板分隔感）
