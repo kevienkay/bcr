@@ -11,6 +11,7 @@
 //! - 表头点击排序（纯显示排序，不改对齐数据）
 
 use super::common::*;
+use super::{icons, widgets};
 use crate::csvcmp::{align_tables, serialize_csv, RowStats, RowStatus, Table};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use eframe::egui::{self, Pos2, Rect, Vec2};
@@ -792,10 +793,13 @@ impl CsvTab {
                             }
                         });
                     // 重新加载
-                    if ui
-                        .button(format!("⟳ {}", t(I18nKey::Reload)))
-                        .on_hover_text(t(I18nKey::ReloadHint))
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Refresh),
+                        t(I18nKey::Reload),
+                        t(I18nKey::ReloadHint),
+                    )
+                    .clicked()
                     {
                         self.reload();
                     }
