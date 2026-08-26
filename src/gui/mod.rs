@@ -1713,39 +1713,15 @@ impl eframe::App for DiffApp {
                 let mut drag_req: Option<(usize, usize)> = None;
                 for i in 0..self.tabs.len() {
                     let selected = i == self.active;
-                    // P48-2：标签用 Frame 包裹——选中标签高亮底色+圆角（BC 观感），普通标签弱色
-                    let tab_bg = if selected {
-                        theme::tab_selected_bg(ui.visuals().dark_mode)
-                    } else {
-                        egui::Color32::TRANSPARENT
-                    };
-                    let text = if selected {
-                        RichText::new(self.tabs[i].title()).strong()
-                    } else {
-                        RichText::new(self.tabs[i].title())
-                    };
-                    // P53-1：标签前加类型图标（单色 emoji 按类型着色，与主页卡片呼应）
-                    let icon = self.tabs[i].icon();
-                    let icon_c = self.tabs[i].icon_color();
-                    let resp = egui::Frame::new()
-                        .fill(tab_bg)
-                        .corner_radius(6.0)
-                        .inner_margin(egui::Margin::symmetric(8, 4))
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                // P58-图标：Phosphor 矢量字形 + 类型色
-                                ui.label(
-                                    RichText::new(icon.glyph().to_string())
-                                        .font(icons::font(13.0))
-                                        .color(icon_c),
-                                );
-                                // 选中态视觉由 selectable_label 提供，点击交给外层 Frame interact
-                                let _ = ui.selectable_label(selected, text);
-                            });
-                        })
-                        .response
-                        .interact(egui::Sense::click())
-                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    // P48-2：标签 chip（BC 观感）——选中高亮+圆角，未选中弱色，彩色类型图标 + 关闭
+                    let (resp, close_clicked) = widgets::tab_chip(
+                        ui,
+                        self.tabs[i].icon(),
+                        self.tabs[i].icon_color(),
+                        &self.tabs[i].title(),
+                        selected,
+                        crate::i18n::t(crate::i18n::Key::CloseTab),
+                    );
                     // B6：拖拽检测（拖拽标签标题区域）
                     if resp.drag_started() {
                         self.drag_tab = Some(i);
@@ -1761,24 +1737,7 @@ impl eframe::App for DiffApp {
                     if resp.clicked() {
                         activate = Some(i);
                     }
-                    // 关闭按钮（hover 变色；当前标签 hover 时红色提示）
-                    let close_color = if resp.hovered() {
-                        theme::diff_delete(ui.visuals().dark_mode)
-                    } else if selected {
-                        ui.visuals().strong_text_color()
-                    } else {
-                        ui.visuals().weak_text_color()
-                    };
-                    let close_resp = ui
-                        .add(
-                            egui::Button::new(RichText::new("✕").color(close_color))
-                                .small()
-                                .corner_radius(eframe::egui::CornerRadius::same(
-                                    theme::CORNER as u8,
-                                )),
-                        )
-                        .on_hover_text(crate::i18n::t(crate::i18n::Key::CloseTab));
-                    if close_resp.clicked() {
+                    if close_clicked {
                         close = Some(i);
                     }
                 }
@@ -1792,10 +1751,13 @@ impl eframe::App for DiffApp {
                 if let Some(i) = close {
                     self.close_tab(i);
                 }
-                if ui
-                    .button("+")
-                    .on_hover_text(crate::i18n::t(crate::i18n::Key::NewDiffTab))
-                    .clicked()
+                if widgets::icon_button(
+                    ui,
+                    icons::Icon::Plus,
+                    crate::i18n::t(crate::i18n::Key::NewDiffTab),
+                    14.0,
+                )
+                .clicked()
                 {
                     self.new_diff_tab();
                 }

@@ -153,6 +153,66 @@ pub fn icon_label(ui: &mut Ui, icon: icons::Icon, size: f32, color: Color32) {
     );
 }
 
+/// 标签 chip（BC 式）：彩色类型图标 + 文本 + 关闭按钮。
+/// 返回 (主响应, 关闭点击)。选中标签高亮底色+圆角；未选中弱色。
+#[allow(dead_code)]
+pub fn tab_chip(
+    ui: &mut Ui,
+    icon: icons::Icon,
+    icon_color: Color32,
+    text: &str,
+    selected: bool,
+    close_tooltip: &str,
+) -> (egui::Response, bool) {
+    let dark = ui.visuals().dark_mode;
+    let tab_bg = if selected {
+        theme::tab_selected_bg(dark)
+    } else {
+        Color32::TRANSPARENT
+    };
+    let text = if selected {
+        RichText::new(text).strong()
+    } else {
+        RichText::new(text)
+    };
+    let resp = egui::Frame::new()
+        .fill(tab_bg)
+        .corner_radius(6.0)
+        .inner_margin(Margin::symmetric(8, 4))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(icon.glyph().to_string())
+                        .font(icons::font(13.0))
+                        .color(icon_color),
+                );
+                let _ = ui.selectable_label(selected, text);
+            });
+        })
+        .response
+        .interact(egui::Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    let close_color = if resp.hovered() {
+        theme::stat_delete(dark)
+    } else if selected {
+        ui.visuals().strong_text_color()
+    } else {
+        ui.visuals().weak_text_color()
+    };
+    let close_resp = ui
+        .add(
+            egui::Button::new(
+                RichText::new(icons::Icon::Close.glyph().to_string())
+                    .font(icons::font(11.0))
+                    .color(close_color),
+            )
+            .small()
+            .corner_radius(theme::CORNER as u8),
+        )
+        .on_hover_text(close_tooltip);
+    (resp, close_resp.clicked())
+}
+
 /// 会话/欢迎卡片：彩色图标底片 + 标题 (+ 副标题)。返回可交互响应。
 #[allow(dead_code)]
 pub fn card(
