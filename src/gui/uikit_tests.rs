@@ -165,13 +165,13 @@ fn dirtab_filter_dropdown_changes_view() {
     let mut applied = false;
     for attempt in 0..3 {
         if attempt == 0 {
-            // 首次打开下拉
+            // 首次打开下拉（accesskit 语义点击：不依赖指针坐标，避免 ubuntu CI popup 层坐标偏差）
             h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
-                .click();
+                .click_accesskit();
         } else {
             // 重新打开下拉再点（上一轮点击可能落在已关闭的菜单上）
             h.get_by_role(eframe::egui::accesskit::Role::ComboBox)
-                .click();
+                .click_accesskit();
             h.run_steps(4);
         }
         h.run_steps(4);
@@ -181,7 +181,9 @@ fn dirtab_filter_dropdown_changes_view() {
             // 与下方等待循环一致：真实 sleep，避免 ubuntu CI 并发下菜单展开时序不稳
             std::thread::sleep(std::time::Duration::from_millis(10));
             if let Some(node) = h.query_by_label("仅左侧") {
-                node.click();
+                // 坐标 click() 在 ubuntu CI 偶发落空（popup 层渲染坐标与 accesskit rect 偏差）
+                // → 改用 accesskit 语义点击：直接对节点触发 Action::Click，不依赖指针坐标
+                node.click_accesskit();
                 reclicked = true;
                 break;
             }
