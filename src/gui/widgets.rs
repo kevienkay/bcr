@@ -76,14 +76,20 @@ pub fn tool_button_enabled(
     tooltip: &str,
 ) -> egui::Response {
     let (corner, fill, stroke, txt) = btn_style(ui);
-    ui.add_enabled(
-        enabled,
-        egui::Button::new(icon_text_job(icon, text, 14.0, txt))
-            .corner_radius(corner)
-            .fill(fill)
-            .stroke(stroke),
-    )
-    .on_hover_text(tooltip)
+    let resp = ui
+        .add_enabled(
+            enabled,
+            egui::Button::new(icon_text_job(icon, text, 14.0, txt))
+                .corner_radius(corner)
+                .fill(fill)
+                .stroke(stroke),
+        )
+        .on_hover_text(tooltip);
+    // 无障碍/测试标签用纯文本（不含图标字形），避免与含同词的后台状态 label 冲突
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, text.to_owned())
+    });
+    resp
 }
 
 /// 纯图标按钮（替代 ▾/📁/✕/🔍）。用 tooltip 兼作无障碍标签，便于测试按功能名查询。

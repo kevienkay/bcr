@@ -60,6 +60,13 @@ pub enum Icon {
     Refresh,
     Save,
     Swap,
+    // 图像变换
+    RotateCw,
+    RotateCcw,
+    FlipH,
+    FlipV,
+    ResetTransform,
+    Locate,
     // 路径控件
     Folder,
     History,
@@ -94,38 +101,44 @@ impl Icon {
     pub fn glyph(self) -> char {
         use Icon::*;
         match self {
-            OpenLeft => '\u{E058}',  // arrow-left
-            OpenRight => '\u{E06C}', // arrow-right
-            Compare => '\u{E862}',   // brackets-angle
-            Prev => '\u{E13C}',      // caret-up
-            Next => '\u{E136}',      // caret-down
-            Search => '\u{E30C}',    // magnifying-glass
-            Refresh => '\u{E094}',   // arrows-clockwise
-            Save => '\u{E248}',      // floppy-disk
-            Swap => '\u{E83C}',      // swap
-            Folder => '\u{E24A}',    // folder
-            History => '\u{E19A}',   // clock
-            Clear => '\u{E4F6}',     // x
-            Close => '\u{E4F6}',     // x
-            Home => '\u{E2C2}',      // house
-            Settings => '\u{E272}',  // gear-six
-            Plug => '\u{E946}',      // plug
-            Plus => '\u{E3D4}',      // plus
-            Eye => '\u{E220}',       // eye
-            EyeSlash => '\u{E224}',  // eye-slash
-            Equal => '\u{E182}',     // check
-            Differ => '\u{E2F4}',    // list-dashes
-            Copy => '\u{E1CA}',      // copy
-            Align => '\u{E506}',     // align-bottom
-            Diff => '\u{E23A}',      // file-text
-            Text => '\u{E48A}',      // text-t
-            Dir => '\u{E24A}',       // folder
-            Merge => '\u{E278}',     // git-branch
-            Image => '\u{E2CA}',     // image
-            Csv => '\u{E476}',       // table
-            Hex => '\u{E2A2}',       // hash
-            Patch => '\u{EAE8}',     // terminal-window
-            Media => '\u{E340}',     // music-notes
+            OpenLeft => '\u{E058}',       // arrow-left
+            OpenRight => '\u{E06C}',      // arrow-right
+            Compare => '\u{E862}',        // brackets-angle
+            Prev => '\u{E13C}',           // caret-up
+            Next => '\u{E136}',           // caret-down
+            Search => '\u{E30C}',         // magnifying-glass
+            Refresh => '\u{E094}',        // arrows-clockwise
+            Save => '\u{E248}',           // floppy-disk
+            Swap => '\u{E83C}',           // swap
+            RotateCw => '\u{E094}',       // arrows-clockwise
+            RotateCcw => '\u{E096}',      // arrows-counter-clockwise
+            FlipH => '\u{ED6A}',          // flip-horizontal
+            FlipV => '\u{ED6C}',          // flip-vertical
+            ResetTransform => '\u{E024}', // arrow-bend-up-left
+            Locate => '\u{E1D6}',         // crosshair
+            Folder => '\u{E24A}',         // folder
+            History => '\u{E19A}',        // clock
+            Clear => '\u{E4F6}',          // x
+            Close => '\u{E4F6}',          // x
+            Home => '\u{E2C2}',           // house
+            Settings => '\u{E272}',       // gear-six
+            Plug => '\u{E946}',           // plug
+            Plus => '\u{E3D4}',           // plus
+            Eye => '\u{E220}',            // eye
+            EyeSlash => '\u{E224}',       // eye-slash
+            Equal => '\u{E182}',          // check
+            Differ => '\u{E2F4}',         // list-dashes
+            Copy => '\u{E1CA}',           // copy
+            Align => '\u{E506}',          // align-bottom
+            Diff => '\u{E23A}',           // file-text
+            Text => '\u{E48A}',           // text-t
+            Dir => '\u{E24A}',            // folder
+            Merge => '\u{E278}',          // git-branch
+            Image => '\u{E2CA}',          // image
+            Csv => '\u{E476}',            // table
+            Hex => '\u{E2A2}',            // hash
+            Patch => '\u{EAE8}',          // terminal-window
+            Media => '\u{E340}',          // music-notes
         }
     }
 }

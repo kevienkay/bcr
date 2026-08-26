@@ -5,6 +5,7 @@
 //! 三路合并标签页：BASE/LEFT/RIGHT 三栏渲染、冲突导航与解决、保存。
 
 use super::common::*;
+use super::{icons, widgets};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::mergeview::{build_merge_view, render_merged, MergeView, Resolution};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
@@ -406,12 +407,18 @@ impl MergeTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("mergetab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
+                    if widgets::tool_button(ui, Some(icons::Icon::Refresh), t(I18nKey::Reload), "")
+                        .clicked()
+                    {
                         self.reload();
                     }
-                    if ui
-                        .button(format!("💾 {}", t(I18nKey::SaveMerged)))
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Save),
+                        t(I18nKey::SaveMerged),
+                        "",
+                    )
+                    .clicked()
                     {
                         self.save();
                     }
@@ -423,17 +430,23 @@ impl MergeTab {
                         I18nKey::ConflictsCount,
                         &[&self.view.conflicts.to_string()],
                     ));
-                    if ui
-                        .button(format!("⬇ {}", t(I18nKey::NextConflict)))
-                        .on_hover_text("下一冲突 (F7)")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Next),
+                        t(I18nKey::NextConflict),
+                        "下一冲突 (F7)",
+                    )
+                    .clicked()
                     {
                         self.next_conflict();
                     }
-                    if ui
-                        .button(format!("⬆ {}", t(I18nKey::PrevConflict)))
-                        .on_hover_text("上一冲突 (Shift+F7)")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Prev),
+                        t(I18nKey::PrevConflict),
+                        "上一冲突 (Shift+F7)",
+                    )
+                    .clicked()
                     {
                         self.prev_conflict();
                     }

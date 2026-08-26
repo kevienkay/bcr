@@ -5,6 +5,7 @@
 //! 打开流程：`open_diff_files` / 目录双击 / 拖放时检测两侧文件魔数，
 //! 若均为图片则创建 `ImageTab` 而非 `DiffTab`。
 
+use super::{icons, widgets};
 use crate::i18n::{t, Key as I18nKey};
 use crate::imgcmp::ImgPair;
 use eframe::egui::{self, RichText};
@@ -401,10 +402,13 @@ impl ImageTab {
                         .map(|p| p.stats.has_differences())
                         .unwrap_or(false);
                     if has_diff
-                        && ui
-                            .button("🎯 定位差异")
-                            .on_hover_text("缩放并滚动到差异区域")
-                            .clicked()
+                        && widgets::tool_button(
+                            ui,
+                            Some(icons::Icon::Locate),
+                            "定位差异",
+                            "缩放并滚动到差异区域",
+                        )
+                        .clicked()
                     {
                         self.locate_diff_req = true;
                     }
@@ -431,30 +435,43 @@ impl ImageTab {
                     }
                     ui.separator();
                     // P37-1e：变换（BC 旋转/翻转/重置差异偏移）
-                    if ui
-                        .button("↻")
-                        .on_hover_text(t(I18nKey::ImgRotateCw))
-                        .clicked()
+                    if widgets::icon_button(
+                        ui,
+                        icons::Icon::RotateCw,
+                        t(I18nKey::ImgRotateCw),
+                        14.0,
+                    )
+                    .clicked()
                     {
                         self.rotate_cw();
                     }
-                    if ui
-                        .button("↺")
-                        .on_hover_text(t(I18nKey::ImgRotateCcw))
-                        .clicked()
+                    if widgets::icon_button(
+                        ui,
+                        icons::Icon::RotateCcw,
+                        t(I18nKey::ImgRotateCcw),
+                        14.0,
+                    )
+                    .clicked()
                     {
                         self.rotate_ccw();
                     }
-                    if ui.button("⇋").on_hover_text(t(I18nKey::ImgFlipH)).clicked() {
+                    if widgets::icon_button(ui, icons::Icon::FlipH, t(I18nKey::ImgFlipH), 14.0)
+                        .clicked()
+                    {
                         self.flip_horizontal();
                     }
-                    if ui.button("⇵").on_hover_text(t(I18nKey::ImgFlipV)).clicked() {
+                    if widgets::icon_button(ui, icons::Icon::FlipV, t(I18nKey::ImgFlipV), 14.0)
+                        .clicked()
+                    {
                         self.flip_vertical();
                     }
-                    if ui
-                        .button("↩")
-                        .on_hover_text(t(I18nKey::ImgResetTransform))
-                        .clicked()
+                    if widgets::icon_button(
+                        ui,
+                        icons::Icon::ResetTransform,
+                        t(I18nKey::ImgResetTransform),
+                        14.0,
+                    )
+                    .clicked()
                     {
                         self.reset_transform();
                     }

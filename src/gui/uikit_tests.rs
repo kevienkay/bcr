@@ -122,8 +122,8 @@ fn dirtab_refresh_builds_tree_via_ui() {
     // → 统一用 run_steps 推帧；断言后台任务启动（bg.is_some()）而非等待线程结果
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run_steps(4);
-    // 点「刷新」按钮（P31 图标前缀 ⟳，精确匹配避免命中后台任务指示 label）
-    h.get_by_label("⟳ 刷新").click();
+    // 点「刷新」按钮（纯文本无障碍标签，与后台指示「⏳ 刷新 …」精确区分）
+    h.get_by_label("刷新").click();
     h.run_steps(4);
     // 时序兼容：小目录线程可能已跑完（bg 已置 None、result 已就绪），
     // 也可能仍在跑（bg 为 Some）——两者都算按钮生效
@@ -878,15 +878,15 @@ fn imagetab_rotate_cw_button_applies_transform() {
     h.run();
     assert_eq!(tab.borrow().rotation, 0, "默认不旋转");
     // 点击顺时针旋转按钮（↻）
-    h.get_by_label("↻").click();
+    h.get_by_label("顺时针旋转").click();
     h.run();
     assert_eq!(tab.borrow().rotation, 90, "点击↻后旋转 90°");
     // 再次点击 → 180°
-    h.get_by_label("↻").click();
+    h.get_by_label("顺时针旋转").click();
     h.run();
     assert_eq!(tab.borrow().rotation, 180, "再次点击后旋转 180°");
     // 重置（↩）→ 0°
-    h.get_by_label("↩").click();
+    h.get_by_label("重置变换").click();
     h.run();
     assert_eq!(tab.borrow().rotation, 0, "重置后旋转归零");
 }
@@ -900,13 +900,13 @@ fn imagetab_flip_buttons_toggle_flags() {
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run();
     assert!(!tab.borrow().flip_h && !tab.borrow().flip_v, "默认无翻转");
-    h.get_by_label("⇋").click(); // 水平翻转
+    h.get_by_label("水平翻转").click(); // 水平翻转
     h.run();
     assert!(tab.borrow().flip_h, "点击⇋后水平翻转");
-    h.get_by_label("⇵").click(); // 垂直翻转
+    h.get_by_label("垂直翻转").click(); // 垂直翻转
     h.run();
     assert!(tab.borrow().flip_v, "点击⇵后垂直翻转");
-    h.get_by_label("↩").click(); // 重置
+    h.get_by_label("重置变换").click(); // 重置
     h.run();
     assert!(
         !tab.borrow().flip_h && !tab.borrow().flip_v,

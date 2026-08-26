@@ -10,6 +10,7 @@
 //! P42-1：ConvertMode + convert_content 抽为公共逻辑，供 TextEditTab 与 DiffTab 复用。
 
 use super::common::*;
+use super::{icons, widgets};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use eframe::egui::{self, Key, Pos2, Rect, Vec2};
 
@@ -505,7 +506,9 @@ impl TextEditTab {
                         self.redo();
                     }
                     ui.separator();
-                    if ui.button("🔍 查找/替换").clicked() {
+                    if widgets::tool_button(ui, Some(icons::Icon::Search), "查找/替换", "")
+                        .clicked()
+                    {
                         self.show_search = !self.show_search;
                     }
                     ui.separator();

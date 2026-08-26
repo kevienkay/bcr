@@ -4,6 +4,7 @@
 //! 能识别容器头或扩展名匹配）→ 创建 `MediaTab` 而非 `DiffTab`。
 //! 展示字段：格式/大小/时长/采样率/声道/位深/码率；差异字段红色标记，缺失字段灰色。
 
+use super::{icons, widgets};
 use crate::i18n::{t, Key as I18nKey};
 use crate::mediacmp::{compare_media, MediaFieldDiff};
 use eframe::egui::{self, RichText};
@@ -84,11 +85,20 @@ impl MediaTab {
         // 工具栏：重新加载 / 交换两侧
         egui::Panel::top("mediatab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if ui.button(format!("⟳ {}", t(I18nKey::Reload))).clicked() {
+                if widgets::tool_button(ui, Some(icons::Icon::Refresh), t(I18nKey::Reload), "")
+                    .clicked()
+                {
                     let (l, r) = (self.left.clone(), self.right.clone());
                     self.load_pair(&l, &r);
                 }
-                if ui.button(format!("⇄ {}", t(I18nKey::SwapSides))).clicked() {
+                if widgets::tool_button(
+                    ui,
+                    Some(icons::Icon::Swap),
+                    t(I18nKey::SwapSides),
+                    "交换左右两侧",
+                )
+                .clicked()
+                {
                     std::mem::swap(&mut self.left, &mut self.right);
                     let (l, r) = (self.left.clone(), self.right.clone());
                     self.load_pair(&l, &r);

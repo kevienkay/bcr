@@ -5,6 +5,7 @@
 //! 目录对比标签页：树形差异视图（可折叠）+ 键盘导航 + 双击打开并排 Diff。
 
 use super::common::*;
+use super::{icons, widgets};
 use crate::compare::{compare_dirs, CompareResult, FileStatus};
 use crate::fsscan::Filter;
 use crate::i18n::{fmt, t, Key as I18nKey};
@@ -1406,18 +1407,24 @@ impl DirTab {
                         }
                         ui.separator();
                     }
-                    if ui
-                        .button(format!("⟳ {}", t(I18nKey::Refresh)))
-                        .on_hover_text("刷新 (F5)")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Refresh),
+                        t(I18nKey::Refresh),
+                        "刷新 (F5)",
+                    )
+                    .clicked()
                     {
                         self.refresh();
                     }
                     // P36-D1：交换左右两侧（BC 会话菜单「交换两边」）
-                    if ui
-                        .button(format!("⇄ {}", t(I18nKey::SwapSides)))
-                        .on_hover_text("交换左右两侧目录")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Swap),
+                        t(I18nKey::SwapSides),
+                        "交换左右两侧目录",
+                    )
+                    .clicked()
                     {
                         self.swap_sides();
                     }
