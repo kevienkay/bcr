@@ -2726,24 +2726,15 @@ impl DiffTab {
             }
 
             if self.rows.is_empty() {
-                // P52-2：统一空状态（大图标底片 + 标题 + 操作）
+                // P52-2：统一空状态（大图标底片 + 标题）。
+                // P58：打开左/右侧入口已由顶部详细工具栏与原生菜单提供，空状态不再重复展示按钮。
                 super::common::empty_state(
                     ui,
                     "⇄",
                     super::theme::card_icon_colors()[0],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |ui| {
-                        // P34：分别打开左右两侧（BC 式：不强求一次选满两个）
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                                self.open_left_dialog();
-                            }
-                            if ui.button(t(I18nKey::OpenRight)).clicked() {
-                                self.open_right_dialog();
-                            }
-                        });
-                    },
+                    |_ui| {},
                 );
                 return;
             }

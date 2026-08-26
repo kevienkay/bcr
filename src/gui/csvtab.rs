@@ -840,16 +840,7 @@ impl CsvTab {
                     super::theme::card_icon_colors()[4],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |ui| {
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                                self.open_left();
-                            }
-                            if ui.button(t(I18nKey::OpenRight)).clicked() {
-                                self.open_right();
-                            }
-                        });
-                    },
+                    |_ui| {},
                 );
             });
             return;

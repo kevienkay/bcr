@@ -626,17 +626,7 @@ impl ImageTab {
                     super::theme::card_icon_colors()[3],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |ui| {
-                        // P34：分别打开左右图片（BC 式）
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                                self.open_left();
-                            }
-                            if ui.button(t(I18nKey::OpenRight)).clicked() {
-                                self.open_right();
-                            }
-                        });
-                    },
+                    |_ui| {},
                 );
             });
             return;

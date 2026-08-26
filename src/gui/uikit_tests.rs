@@ -1385,12 +1385,13 @@ fn empty_diff_tab_shows_open_buttons() {
 }
 
 #[test]
-fn empty_csv_tab_shows_open_buttons() {
+fn empty_csv_tab_hides_duplicate_open_buttons() {
     let tab = RefCell::new(CsvTab::new("", ""));
     let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
     h.run();
-    assert!(h.query_all_by_label_contains("打开左侧").next().is_some());
-    assert!(h.query_all_by_label_contains("打开右侧").next().is_some());
+    // P58：打开左/右入口已由原生菜单提供，空状态不再重复展示按钮
+    assert!(h.query_all_by_label_contains("打开左侧").next().is_none());
+    assert!(h.query_all_by_label_contains("打开右侧").next().is_none());
 }
 
 // ---- P37-1g：文本编辑视图（BC Text Edit） ----------------

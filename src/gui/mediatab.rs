@@ -105,22 +105,7 @@ impl MediaTab {
                     super::theme::card_icon_colors()[6],
                     t(I18nKey::DiffEmptyHint),
                     t(I18nKey::DragHint),
-                    |ui| {
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenLeft)).clicked() {
-                                if let Some(p) = super::pick_file() {
-                                    let (l, r) = (p, self.right.clone());
-                                    self.load_pair(&l, &r);
-                                }
-                            }
-                            if ui.button(t(I18nKey::OpenRight)).clicked() {
-                                if let Some(p) = super::pick_file() {
-                                    let (l, r) = (self.left.clone(), p);
-                                    self.load_pair(&l, &r);
-                                }
-                            }
-                        });
-                    },
+                    |_ui| {},
                 );
                 return;
             }

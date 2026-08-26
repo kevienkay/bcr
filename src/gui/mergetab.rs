@@ -645,7 +645,9 @@ impl MergeTab {
 
         egui::CentralPanel::default().show(ui, |ui| {
             if self.view.rows.is_empty() && self.view.conflicts == 0 {
-                // P52-2：统一空状态（三路合并用橙色系）
+                // P52-2：统一空状态（三路合并用橙色系）。
+                // P58：打开左/右文件入口已由原生菜单提供（dispatch 到 open_left/right），
+                // 空状态仅保留 BASE（原生菜单无 BASE 入口）。
                 super::common::empty_state(
                     ui,
                     "🔀",
@@ -653,7 +655,6 @@ impl MergeTab {
                     t(I18nKey::MergeEmpty),
                     t(I18nKey::DragHint),
                     |ui| {
-                        // P34：分别打开 BASE/LEFT/RIGHT（BC 式：不强求一次选满三个）
                         ui.horizontal(|ui| {
                             if ui
                                 .button(format!("📂 {}", t(I18nKey::OpenBase)))
@@ -661,20 +662,6 @@ impl MergeTab {
                                 .clicked()
                             {
                                 self.open_base();
-                            }
-                            if ui
-                                .button(format!("📂 {}", t(I18nKey::OpenLeft)))
-                                .on_hover_text(t(I18nKey::OpenLeftFile))
-                                .clicked()
-                            {
-                                self.open_left();
-                            }
-                            if ui
-                                .button(format!("📂 {}", t(I18nKey::OpenRight)))
-                                .on_hover_text(t(I18nKey::OpenRightFile))
-                                .clicked()
-                            {
-                                self.open_right();
                             }
                         });
                     },

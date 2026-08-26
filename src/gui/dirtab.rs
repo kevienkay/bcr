@@ -2032,23 +2032,15 @@ impl DirTab {
             }
             // P34：空会话（两侧均未选择目录）→ 显示打开入口 + 拖拽提示
             if self.left.is_empty() && self.right.is_empty() {
-                // P52-2：统一空状态（文件夹用青色系）
+                // P52-2：统一空状态（文件夹用青色系）。
+                // P58：打开左/右目录入口已由原生菜单提供，空状态不再重复展示按钮。
                 super::common::empty_state(
                     ui,
                     "📁",
                     super::theme::card_icon_colors()[1],
                     t(I18nKey::DirEmpty),
                     t(I18nKey::DragHint),
-                    |ui| {
-                        ui.horizontal(|ui| {
-                            if ui.button(t(I18nKey::OpenLeftDir)).clicked() {
-                                self.open_left_dir();
-                            }
-                            if ui.button(t(I18nKey::OpenRightDir)).clicked() {
-                                self.open_right_dir();
-                            }
-                        });
-                    },
+                    |_ui| {},
                 );
                 return;
             }
