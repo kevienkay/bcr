@@ -8,6 +8,7 @@
 //! 支持应用补丁（把右侧内容写回 b 侧路径，A2 模式 .bak 备份）。
 
 use super::common::*;
+use super::{icons, widgets};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::patchview::{parse_patch, ParsedPatch};
 use crate::sideview::{build_rows, RowTag, SideRow, ViewOptions};
@@ -342,17 +343,23 @@ impl PatchTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("patch_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .button(format!("📂 {}", t(I18nKey::OpenFile)))
-                        .on_hover_text("打开补丁文件")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Folder),
+                        t(I18nKey::OpenFile),
+                        "打开补丁文件",
+                    )
+                    .clicked()
                     {
                         self.open_dialog();
                     }
-                    if ui
-                        .button(format!("⚡ {}", t(I18nKey::ApplyPatch)))
-                        .on_hover_text("把右侧（新）内容写回目标文件")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Plug),
+                        t(I18nKey::ApplyPatch),
+                        "把右侧（新）内容写回目标文件",
+                    )
+                    .clicked()
                     {
                         self.apply_req = true;
                     }

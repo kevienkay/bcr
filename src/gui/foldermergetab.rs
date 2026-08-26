@@ -3,6 +3,7 @@
 //! BASE/LEFT/RIGHT 三目录 + 输出目录：生成合并计划（build_merge3_plan），
 //! 列表展示 copy/merge/conflict/delete/same 状态，执行后写入输出目录。
 
+use super::{icons, widgets};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::merge3::{build_merge3_plan, execute_plan, Merge3PlanItem, Merge3Stats};
 use eframe::egui::{self};
@@ -250,17 +251,23 @@ impl FolderMergeTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("foldermerge_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if ui
-                        .button(format!("🗂 {}", t(I18nKey::GeneratePlan)))
-                        .on_hover_text("重新扫描三目录并生成合并计划")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Compare),
+                        t(I18nKey::GeneratePlan),
+                        "重新扫描三目录并生成合并计划",
+                    )
+                    .clicked()
                     {
                         self.gen_req = true;
                     }
-                    if ui
-                        .button(format!("⚡ {}", t(I18nKey::ExecuteMerge)))
-                        .on_hover_text("把合并结果写入输出目录")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Plug),
+                        t(I18nKey::ExecuteMerge),
+                        "把合并结果写入输出目录",
+                    )
+                    .clicked()
                     {
                         self.exec_req = true;
                     }

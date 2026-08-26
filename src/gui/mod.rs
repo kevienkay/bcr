@@ -2101,7 +2101,9 @@ impl eframe::App for DiffApp {
                                 ui.monospace(p);
                             });
                         ui.separator();
-                        if ui.button("💾 保存报告…").clicked() {
+                        if widgets::tool_button(ui, Some(icons::Icon::Save), "保存报告…", "")
+                            .clicked()
+                        {
                             save_req = true;
                         }
                     }
