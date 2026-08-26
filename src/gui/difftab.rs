@@ -2825,28 +2825,37 @@ impl DiffTab {
                                 );
                                 // ▾ 历史下拉（点击展开，显示最近导入路径）
                                 let hist = self.recent_paths.clone();
-                                ui.menu_button("▾", |ui| {
-                                    if hist.is_empty() {
-                                        ui.weak("暂无历史路径");
-                                    }
-                                    let mut pick: Option<String> = None;
-                                    for p in &hist {
-                                        if ui.button(p.as_str()).clicked() {
-                                            pick = Some(p.clone());
+                                ui.menu_button(
+                                    egui::RichText::new(icons::Icon::History.glyph().to_string())
+                                        .font(icons::font(14.0))
+                                        .color(ui.visuals().text_color()),
+                                    |ui| {
+                                        if hist.is_empty() {
+                                            ui.weak("暂无历史路径");
                                         }
-                                    }
-                                    if let Some(p) = pick {
-                                        self.open_into(is_left, p);
-                                    }
-                                });
+                                        let mut pick: Option<String> = None;
+                                        for p in &hist {
+                                            if ui.button(p.as_str()).clicked() {
+                                                pick = Some(p.clone());
+                                            }
+                                        }
+                                        if let Some(p) = pick {
+                                            self.open_into(is_left, p);
+                                        }
+                                    },
+                                );
                                 // 📁 浏览（使用单个文件选择对话框，避免先弹文件夹再弹文件两次对话框）
-                                if ui.button("📁").on_hover_text("浏览路径").clicked() {
+                                if widgets::icon_button(ui, icons::Icon::Folder, "浏览路径", 14.0)
+                                    .clicked()
+                                {
                                     if let Some(p) = super::pick_file() {
                                         self.open_into(is_left, p);
                                     }
                                 }
                                 // ✕ 清空（同时卸载该侧文件，回到分栏）
-                                if ui.button("✕").on_hover_text("清空").clicked() {
+                                if widgets::icon_button(ui, icons::Icon::Clear, "清空", 14.0)
+                                    .clicked()
+                                {
                                     if is_left {
                                         self.open_l.clear();
                                         self.left = None;
