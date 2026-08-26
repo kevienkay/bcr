@@ -178,6 +178,8 @@ fn dirtab_filter_dropdown_changes_view() {
         let mut reclicked = false;
         for _ in 0..30 {
             h.run_steps(2);
+            // 与下方等待循环一致：真实 sleep，避免 ubuntu CI 并发下菜单展开时序不稳
+            std::thread::sleep(std::time::Duration::from_millis(10));
             if let Some(node) = h.query_by_label("仅左侧") {
                 node.click();
                 reclicked = true;

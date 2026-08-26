@@ -3,6 +3,10 @@
 # 用法: bash tests/acceptance.sh
 set -u
 
+# 验收断言基于中文文案；固定语言避免受 runner 系统 locale（如 macOS LANG=en_US.UTF-8）影响
+# （--lang / 行内 BCR_LANG 优先级更高，仍可覆盖）
+export BCR_LANG=zh
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/target/release/bcr"
 if [ ! -x "$BIN" ] && [ -x "$ROOT/target/release/bcr.exe" ]; then
