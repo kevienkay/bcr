@@ -10,6 +10,7 @@ mod csvtab;
 mod difftab;
 mod dirtab;
 mod foldermergetab;
+mod icons;
 mod imagetab;
 mod mediatab;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -23,6 +24,7 @@ mod theme;
 mod ui_snap;
 #[cfg(test)]
 mod uikit_tests;
+mod widgets;
 
 use crate::sideview::ViewOptions;
 use common::*;
@@ -114,24 +116,25 @@ impl Tab {
         }
     }
 
-    /// P53-1：标签类型图标（与主页卡片/空状态同风格，单色 emoji 按类型着色）
-    fn icon(&self) -> &'static str {
+    /// P53-1：标签类型图标（Phosphor 矢量字形，按类型着色，与主页卡片/空状态同风格）
+    fn icon(&self) -> icons::Icon {
+        use icons::Icon;
         match self {
             Tab::Diff(t) => {
                 if t.hex.is_some() {
-                    "🔢"
+                    Icon::Hex
                 } else {
-                    "📄"
+                    Icon::Diff
                 }
             }
-            Tab::Dir(_) => "📁",
-            Tab::Merge(_) => "🔀",
-            Tab::Image(_) => "🖼",
-            Tab::Csv(_) => "📊",
-            Tab::TextEdit(_) => "✏️",
-            Tab::Patch(_) => "🩹",
-            Tab::FolderMerge(_) => "🗂",
-            Tab::Media(_) => "🎵",
+            Tab::Dir(_) => Icon::Dir,
+            Tab::Merge(_) => Icon::Merge,
+            Tab::Image(_) => Icon::Image,
+            Tab::Csv(_) => Icon::Csv,
+            Tab::TextEdit(_) => Icon::Text,
+            Tab::Patch(_) => Icon::Patch,
+            Tab::FolderMerge(_) => Icon::Merge,
+            Tab::Media(_) => Icon::Media,
         }
     }
 
@@ -1723,7 +1726,12 @@ impl eframe::App for DiffApp {
                         .inner_margin(egui::Margin::symmetric(8, 4))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new(icon).size(14.0).color(icon_c));
+                                // P58-图标：Phosphor 矢量字形 + 类型色
+                                ui.label(
+                                    RichText::new(icon.glyph().to_string())
+                                        .font(icons::font(13.0))
+                                        .color(icon_c),
+                                );
                                 // 选中态视觉由 selectable_label 提供，点击交给外层 Frame interact
                                 let _ = ui.selectable_label(selected, text);
                             });
@@ -3605,7 +3613,6 @@ fn install_cjk_fonts(ctx: &egui::Context) {
         ]
     };
     let mut fonts = egui::FontDefinitions::default();
-    let mut loaded_any = false;
     // 1. 等宽字体：Monospace 族首位
     for (i, p) in mono_candidates.iter().enumerate() {
         if std::path::Path::new(p).exists() {
@@ -3619,7 +3626,6 @@ fn install_cjk_fonts(ctx: &egui::Context) {
                     .entry(egui::FontFamily::Monospace)
                     .or_default()
                     .insert(0, name.clone());
-                loaded_any = true;
             }
         }
     }
@@ -3634,13 +3640,12 @@ fn install_cjk_fonts(ctx: &egui::Context) {
                 for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
                     fonts.families.entry(family).or_default().push(name.clone());
                 }
-                loaded_any = true;
             }
         }
     }
-    if loaded_any {
-        ctx.set_fonts(fonts);
-    }
+    // 4. 矢量图标字体（vendored 静态，独立家族；始终可用）
+    icons::add_to_fonts(&mut fonts);
+    ctx.set_fonts(fonts);
 }
 
 /// 运行 GUI 事件循环，返回进程退出码
