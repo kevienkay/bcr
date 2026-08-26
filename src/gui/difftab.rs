@@ -5,6 +5,7 @@
 //! 并排 Diff 标签页：虚拟化渲染、行内高亮、搜索、差异/行号跳转。
 
 use super::common::*;
+use super::{icons, widgets};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::sideview::{build_rows, RowTag, SideRow, Stats, ViewOptions};
 use eframe::egui::{self, Color32, Key, Pos2, Rect, Vec2};
@@ -2217,17 +2218,23 @@ impl DiffTab {
             egui::Panel::top("difftab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     // ---- 打开（BC: Open 按钮组）----
-                    if ui
-                        .button(format!("◀ {}", t(I18nKey::OpenLeft)))
-                        .on_hover_text(t(I18nKey::OpenLeftFile))
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::OpenLeft),
+                        t(I18nKey::OpenLeft),
+                        t(I18nKey::OpenLeftFile),
+                    )
+                    .clicked()
                     {
                         self.open_left_dialog();
                     }
-                    if ui
-                        .button(format!("▶ {}", t(I18nKey::OpenRight)))
-                        .on_hover_text(t(I18nKey::OpenRightFile))
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::OpenRight),
+                        t(I18nKey::OpenRight),
+                        t(I18nKey::OpenRightFile),
+                    )
+                    .clicked()
                     {
                         self.open_right_dialog();
                     }
@@ -2265,17 +2272,25 @@ impl DiffTab {
                     // P32-A6：撤销/重做按钮
                     let can_undo = !self.undo_stack.is_empty();
                     let can_redo = !self.redo_stack.is_empty();
-                    if ui
-                        .add_enabled(can_undo, egui::Button::new("↩ 撤销"))
-                        .on_hover_text("Ctrl+Z")
-                        .clicked()
+                    if widgets::tool_button_enabled(
+                        ui,
+                        can_undo,
+                        Some(icons::Icon::Prev),
+                        "撤销",
+                        "Ctrl+Z",
+                    )
+                    .clicked()
                     {
                         self.undo();
                     }
-                    if ui
-                        .add_enabled(can_redo, egui::Button::new("↪ 重做"))
-                        .on_hover_text("Ctrl+Y")
-                        .clicked()
+                    if widgets::tool_button_enabled(
+                        ui,
+                        can_redo,
+                        Some(icons::Icon::Next),
+                        "重做",
+                        "Ctrl+Y",
+                    )
+                    .clicked()
                     {
                         self.redo();
                     }
@@ -2283,38 +2298,46 @@ impl DiffTab {
                     // ---- 操作（BC: Copy/Swap/Reload 组）----
                     // P35-A1：复制差异块到另一侧（BC Copy to Other Side）
                     let has_diff = self.diff_pos.is_some();
-                    if ui
-                        .add_enabled(
-                            has_diff,
-                            egui::Button::new(format!("→ {}", t(I18nKey::CopyToRight))),
-                        )
-                        .on_hover_text("复制当前差异块左侧内容到右侧")
-                        .clicked()
+                    if widgets::tool_button_enabled(
+                        ui,
+                        has_diff,
+                        Some(icons::Icon::OpenRight),
+                        t(I18nKey::CopyToRight),
+                        "复制当前差异块左侧内容到右侧",
+                    )
+                    .clicked()
                     {
                         self.copy_block_to(EditSide::Right);
                     }
-                    if ui
-                        .add_enabled(
-                            has_diff,
-                            egui::Button::new(format!("← {}", t(I18nKey::CopyToLeft))),
-                        )
-                        .on_hover_text("复制当前差异块右侧内容到左侧")
-                        .clicked()
+                    if widgets::tool_button_enabled(
+                        ui,
+                        has_diff,
+                        Some(icons::Icon::OpenLeft),
+                        t(I18nKey::CopyToLeft),
+                        "复制当前差异块右侧内容到左侧",
+                    )
+                    .clicked()
                     {
                         self.copy_block_to(EditSide::Left);
                     }
-                    if ui
-                        .button(format!("⟳ {}", t(I18nKey::Reload)))
-                        .on_hover_text(t(I18nKey::ReloadHint))
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Refresh),
+                        t(I18nKey::Reload),
+                        t(I18nKey::ReloadHint),
+                    )
+                    .clicked()
                     {
                         self.reload();
                     }
                     // P35-A2：交换左右两侧（BC Swap Sides）
-                    if ui
-                        .button(format!("⇄ {}", t(I18nKey::SwapSides)))
-                        .on_hover_text("交换左右两侧文件")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Swap),
+                        t(I18nKey::SwapSides),
+                        "交换左右两侧文件",
+                    )
+                    .clicked()
                     {
                         self.swap_sides();
                     }
@@ -2326,17 +2349,23 @@ impl DiffTab {
                         I18nKey::DiffCount,
                         &[&cur_pos.to_string(), &self.diff_rows.len().to_string()],
                     ));
-                    if ui
-                        .button(format!("⬇ {}", t(I18nKey::NextDiff)))
-                        .on_hover_text("下一差异 (F6)")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Next),
+                        t(I18nKey::NextDiff),
+                        "下一差异 (F6)",
+                    )
+                    .clicked()
                     {
                         self.next_diff();
                     }
-                    if ui
-                        .button(format!("⬆ {}", t(I18nKey::PrevDiff)))
-                        .on_hover_text("上一差异 (F7)")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Prev),
+                        t(I18nKey::PrevDiff),
+                        "上一差异 (F7)",
+                    )
+                    .clicked()
                     {
                         self.prev_diff();
                     }
@@ -2353,7 +2382,8 @@ impl DiffTab {
                     }
                     self.goto_line = goto_text.parse().ok();
                     if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                        || ui.button(format!("🎯 {}", t(I18nKey::Goto))).clicked()
+                        || widgets::tool_button(ui, Some(icons::Icon::Search), t(I18nKey::Goto), "")
+                            .clicked()
                     {
                         if let Some(line) = self.goto_line {
                             if line >= 1 {
@@ -2376,16 +2406,12 @@ impl DiffTab {
                     if resp.changed() {
                         self.update_search();
                     }
-                    if ui
-                        .button("⬆")
-                        .on_hover_text(t(I18nKey::PrevMatch))
+                    if widgets::icon_button(ui, icons::Icon::Prev, t(I18nKey::PrevMatch), 14.0)
                         .clicked()
                     {
                         self.prev_match();
                     }
-                    if ui
-                        .button("⬇")
-                        .on_hover_text(t(I18nKey::NextMatch))
+                    if widgets::icon_button(ui, icons::Icon::Next, t(I18nKey::NextMatch), 14.0)
                         .clicked()
                     {
                         self.next_match();
@@ -2404,17 +2430,23 @@ impl DiffTab {
                         rep_resp.request_focus();
                         self.search.replace_focus = false;
                     }
-                    if ui
-                        .button("🔁 替换")
-                        .on_hover_text("替换当前匹配（写回文件并自动备份）")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Copy),
+                        "替换",
+                        "替换当前匹配（写回文件并自动备份）",
+                    )
+                    .clicked()
                     {
                         self.replace_current();
                     }
-                    if ui
-                        .button("🔁 全部替换")
-                        .on_hover_text("替换所有匹配（写回文件并自动备份）")
-                        .clicked()
+                    if widgets::tool_button(
+                        ui,
+                        Some(icons::Icon::Copy),
+                        "全部替换",
+                        "替换所有匹配（写回文件并自动备份）",
+                    )
+                    .clicked()
                     {
                         self.replace_all();
                     }

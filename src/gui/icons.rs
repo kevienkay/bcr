@@ -1,8 +1,8 @@
 //! 矢量图标（Phosphor Icons，vendored 字体，零版本耦合）。
 //!
 //! egui 内置控件没有现成的彩色图标字体；此前用文字 emoji（📁✕▶▾...）当图标，
-//! 观感简陋且基线错乱。这里把 Phosphor Regular 字体内嵌进二进制，并注册为独立的
-//! `FontFamily::Name("phosphor")`，图标与 CJK 回退彻底分离（颜色/大小/基线可控）。
+//! 观感简陋且基线错乱。这里把 Phosphor Regular 字体内嵌进二进制，并注册为默认
+//! `Proportional` 家族的兜底字体；图标字体只含 PUA 码点，普通文本不会命中。
 //!
 //! 字体与字形常量取自 egui-phosphor 生态（MIT，作者 Romet Tagobert），
 //! 字形码点位于 Unicode Private Use Area。
@@ -16,11 +16,15 @@ static PHOSPHOR_TTF: &[u8] = include_bytes!(concat!(
     "/assets/icons/Phosphor-Regular.ttf"
 ));
 
-/// 图标字体族名
+/// 图标字体注册名
 pub const FAMILY: &str = "phosphor";
 
 /// 把图标字体注册进 FontDefinitions（与 CJK/等宽合并后一次 set_fonts）。
 /// 仅在启动时调用一次。
+///
+/// 用默认 `Proportional` 家族兜底（而非独立命名家族）：即使某个测试 Harness
+/// 未调用字体安装，也不会因 `FontFamily::Name` 未绑定而 panic——未注册时
+/// 图标仅退化为无字形块，绝不崩溃。
 pub fn add_to_fonts(fonts: &mut egui::FontDefinitions) {
     fonts.font_data.insert(
         FAMILY.to_string(),
@@ -28,14 +32,15 @@ pub fn add_to_fonts(fonts: &mut egui::FontDefinitions) {
     );
     fonts
         .families
-        .entry(FontFamily::Name(FAMILY.into()))
+        .entry(FontFamily::Proportional)
         .or_default()
-        .insert(0, FAMILY.to_string());
+        .push(FAMILY.to_string());
 }
 
 /// 图标字体的 FontId（调用方用 `RichText::new(glyph).font(icons::font(size))`）。
+/// 使用默认比例家族，避免依赖"phosphor"命名家族已注册。
 pub fn font(size: f32) -> FontId {
-    FontId::new(size, FontFamily::Name(FAMILY.into()))
+    FontId::proportional(size)
 }
 
 /// 语义化图标（方便在 widget/工具栏里一一对应，避免散落码点）。

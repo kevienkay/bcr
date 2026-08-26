@@ -63,8 +63,21 @@ pub fn tool_button(
     text: &str,
     tooltip: &str,
 ) -> egui::Response {
+    tool_button_enabled(ui, true, icon, text, tooltip)
+}
+
+/// 工具栏按钮（enabled 变体）：不可用时灰显。
+#[allow(dead_code)]
+pub fn tool_button_enabled(
+    ui: &mut Ui,
+    enabled: bool,
+    icon: Option<icons::Icon>,
+    text: &str,
+    tooltip: &str,
+) -> egui::Response {
     let (corner, fill, stroke, txt) = btn_style(ui);
-    ui.add(
+    ui.add_enabled(
+        enabled,
         egui::Button::new(icon_text_job(icon, text, 14.0, txt))
             .corner_radius(corner)
             .fill(fill)
@@ -73,21 +86,26 @@ pub fn tool_button(
     .on_hover_text(tooltip)
 }
 
-/// 纯图标按钮（替代 ▾/📁/✕/🔍）。
+/// 纯图标按钮（替代 ▾/📁/✕/🔍）。用 tooltip 兼作无障碍标签，便于测试按功能名查询。
 #[allow(dead_code)]
 pub fn icon_button(ui: &mut Ui, icon: icons::Icon, tooltip: &str, size: f32) -> egui::Response {
     let (corner, fill, stroke, txt) = btn_style(ui);
-    ui.add(
-        egui::Button::new(
-            RichText::new(icon.glyph().to_string())
-                .font(icons::font(size))
-                .color(txt),
+    let resp = ui
+        .add(
+            egui::Button::new(
+                RichText::new(icon.glyph().to_string())
+                    .font(icons::font(size))
+                    .color(txt),
+            )
+            .corner_radius(corner)
+            .fill(fill)
+            .stroke(stroke),
         )
-        .corner_radius(corner)
-        .fill(fill)
-        .stroke(stroke),
-    )
-    .on_hover_text(tooltip)
+        .on_hover_text(tooltip);
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tooltip.to_owned())
+    });
+    resp
 }
 
 /// 工具栏分组弱分隔线。

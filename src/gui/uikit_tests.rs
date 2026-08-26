@@ -73,7 +73,7 @@ fn difftab_search_finds_matches_via_ui() {
         "搜索 beta 应产生匹配"
     );
     // 点击 ⬇（下一匹配）→ 设置 current → UI 显示 1/1
-    h.get_by_label("⬇").click();
+    h.get_by_label("下一个匹配").click();
     h.run();
     assert!(h.query_by_label("1/1").is_some(), "UI 应显示 1/1 匹配计数");
 }
@@ -499,14 +499,14 @@ fn difftab_undo_redo_restores_content_via_ui() {
         "前置：文件已修改"
     );
     // 工具栏点「↩ 撤销」→ 恢复 before
-    h.get_by_label("↩ 撤销").click();
+    h.get_by_label_contains("撤销").click();
     h.run();
     assert!(
         std::fs::read_to_string(&l).unwrap().contains("alpha\n"),
         "撤销后文件应恢复原内容"
     );
     // 工具栏点「↪ 重做」→ 恢复 after
-    h.get_by_label("↪ 重做").click();
+    h.get_by_label_contains("重做").click();
     h.run();
     assert!(
         std::fs::read_to_string(&l).unwrap().contains("edited-line"),
