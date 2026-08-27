@@ -158,11 +158,13 @@ pub struct DiffTab {
     /// P38-1d：当前编辑导航位置（edited_rows 索引）
     pub edit_pos: Option<usize>,
     pub search: SearchState,
-    /// P58：空文件对比页（尚未导入文件）左/右路径输入 + 最近导入路径 + 待记历史
+    /// P58：空文件对比页（尚未导入文件）左/右路径输入 + 分侧最近导入路径 + 待记历史
     pub open_l: String,
     pub open_r: String,
-    pub recent_paths: Vec<String>,
-    pub pending_history: Vec<String>,
+    pub recent_paths_l: Vec<String>,
+    pub recent_paths_r: Vec<String>,
+    /// 待记历史（(is_left, path)），由 DiffApp 每帧汲取到分侧历史
+    pub pending_history: Vec<(bool, String)>,
     /// 待跳转行号（1-based）
     pub goto_line: Option<usize>,
     pub goto_focus: bool,
@@ -258,7 +260,8 @@ impl DiffTab {
             show_stats: true,
             open_l: String::new(),
             open_r: String::new(),
-            recent_paths: Vec::new(),
+            recent_paths_l: Vec::new(),
+            recent_paths_r: Vec::new(),
             pending_history: Vec::new(),
             scroll: Vec2::ZERO,
             diff_rows: Vec::new(),
@@ -350,6 +353,8 @@ impl DiffTab {
             return;
         }
         self.opts = opts;
+        self.open_l = l.to_string();
+        self.open_r = r.to_string();
         // 任一文件为二进制 → 切换 hex 对比视图
         if is_binary_file(l) || is_binary_file(r) {
             let rows = match (std::fs::read(l), std::fs::read(r)) {
@@ -418,6 +423,7 @@ impl DiffTab {
     pub fn load_left(&mut self, path: &str, opts: ViewOptions) {
         self.dirty = false;
         self.opts = opts;
+        self.open_l = path.to_string();
         match crate::encoding::read_text(path) {
             Ok(tf) => {
                 if tf.is_binary {
@@ -443,6 +449,7 @@ impl DiffTab {
     pub fn load_right(&mut self, path: &str, opts: ViewOptions) {
         self.dirty = false;
         self.opts = opts;
+        self.open_r = path.to_string();
         match crate::encoding::read_text(path) {
             Ok(tf) => {
                 if tf.is_binary {
@@ -467,7 +474,7 @@ impl DiffTab {
 
     /// P58：把浏览/历史选中的路径填入该侧，并立即加载（另一侧已有时转为两侧对比加载）。
     pub fn open_into(&mut self, is_left: bool, p: String) {
-        self.pending_history.push(p.clone());
+        self.pending_history.push((is_left, p.clone()));
         let opts = self.opts.clone();
         if is_left {
             self.open_l = p.clone();
@@ -2800,9 +2807,9 @@ impl DiffTab {
                 return;
             }
 
-            // P58：打开文件对比页（尚未导入文件）——两半分栏，每半顶部 路径输入 + ▾历史/📁浏览/✕清空。
-            // 选中/输入任一路径后立即加载进入对比视图（另一侧可用顶部 打开左侧/右侧 补全）。
-            if self.rows.is_empty() {
+            // P58：打开文件对比页（双方尚未都导入）——两半分栏，每半顶部 路径输入 + ▾历史/📁浏览/✕清空。
+            // 任一侧导入后保留分栏并把路径显示在该侧输入框；两侧都导入后才进入对比视图。
+            if self.left.is_none() || self.right.is_none() {
                 ui.vertical(|ui| {
                     ui.add_space(8.0);
                     ui.label(egui::RichText::new("快速对比").size(13.0).strong());
@@ -2811,9 +2818,9 @@ impl DiffTab {
                         for (ci, col) in cols.iter_mut().enumerate() {
                             let is_left = ci == 0;
                             col.horizontal(|ui| {
-                                // 输入框宽度 = 列宽 - (▾历史 + 📁浏览 + ✕清空 + 间距) 预算，
-                                // 避免超宽与另一半重叠
-                                let iw = (ui.available_width() - 72.0).max(40.0);
+                                // 输入框宽度 = 列宽 - (▾历史 + 📁浏览 + ✕清空 + 间距) 实际占用预算，
+                                // 避免超宽溢入另一半（重叠）
+                                let iw = (ui.available_width() - 116.0).max(40.0);
                                 let resp = ui.add(
                                     egui::TextEdit::singleline(if is_left {
                                         &mut self.open_l
@@ -2823,8 +2830,12 @@ impl DiffTab {
                                     .hint_text("文件或目录")
                                     .desired_width(iw),
                                 );
-                                // ▾ 历史下拉（点击展开，显示最近导入路径）
-                                let hist = self.recent_paths.clone();
+                                // ▾ 历史下拉（分侧：左侧只看左历史，右侧只看右历史）
+                                let hist = if is_left {
+                                    self.recent_paths_l.clone()
+                                } else {
+                                    self.recent_paths_r.clone()
+                                };
                                 ui.menu_button(
                                     egui::RichText::new(icons::Icon::History.glyph().to_string())
                                         .font(icons::font(14.0))

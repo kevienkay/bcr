@@ -183,6 +183,11 @@ struct Settings {
     /// P58：历史导入路径（最近 N 条，最前为最新；欢迎页快速对比 ▾ 历史下拉）
     #[serde(default)]
     recent_paths: Vec<String>,
+    /// P58-2：分侧导入历史（左侧/右侧各自独立，▾ 下拉按侧显示）
+    #[serde(default)]
+    recent_paths_l: Vec<String>,
+    #[serde(default)]
+    recent_paths_r: Vec<String>,
 }
 
 fn default_true() -> bool {
@@ -261,7 +266,8 @@ struct DiffApp {
     /// P56-2：左侧会话导航侧栏开关（BC 常驻侧栏）
     show_sidebar: bool,
     /// P58：历史导入路径（欢迎页快速对比 ▾ 历史下拉；最近在前，最多 20 条）
-    import_history: Vec<String>,
+    import_history_l: Vec<String>,
+    import_history_r: Vec<String>,
     /// 规则(Profile)管理窗口开关
     show_profiles: bool,
     /// 云盘/远程浏览窗口开关
@@ -308,7 +314,11 @@ struct DiffApp {
 
 impl DiffApp {
     fn new(settings: Settings) -> Self {
-        let import_history = settings.recent_paths.clone();
+        // P58-2：分侧历史。旧版单一 recent_paths 迁移到左侧历史（保留既有记录）。
+        let mut import_history_l = settings.recent_paths_l.clone();
+        if import_history_l.is_empty() && !settings.recent_paths.is_empty() {
+            import_history_l = settings.recent_paths.clone();
+        }
         DiffApp {
             tabs: Vec::new(),
             active: 0,
@@ -318,7 +328,8 @@ impl DiffApp {
             theme_changed: false,
             show_sessions: false,
             show_sidebar: true,
-            import_history,
+            import_history_l,
+            import_history_r: Vec::new(),
             show_profiles: false,
             show_cloud: false,
             cloud_left: String::new(),
@@ -1101,16 +1112,27 @@ impl DiffApp {
         self.new_diff_tab();
     }
 
-    /// P58：加入历史导入路径（去重、最近在前、上限 20，并持久化到设置）。
-    fn add_import_history(&mut self, path: &str) {
+    /// P58：加入分侧历史导入路径（去重、最近在前、上限 20，并持久化到设置）。
+    fn add_import_history(&mut self, is_left: bool, path: &str) {
         let p = path.trim().to_string();
         if p.is_empty() {
             return;
         }
-        self.import_history.retain(|x| x != &p);
-        self.import_history.insert(0, p);
-        self.import_history.truncate(20);
-        self.settings.recent_paths = self.import_history.clone();
+        let (list, storage) = if is_left {
+            (
+                &mut self.import_history_l,
+                &mut self.settings.recent_paths_l,
+            )
+        } else {
+            (
+                &mut self.import_history_r,
+                &mut self.settings.recent_paths_r,
+            )
+        };
+        list.retain(|x| x != &p);
+        list.insert(0, p);
+        list.truncate(20);
+        *storage = list.clone();
         self.settings.save();
     }
     /// 空文件夹对比会话
@@ -1674,9 +1696,10 @@ impl eframe::App for DiffApp {
         }
         // P58：空文件对比页(打开对比页面) 的两半分栏 —— 同步最近路径历史 + 汲取其待记历史
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
-            t.recent_paths = self.import_history.clone();
-            for p in std::mem::take(&mut t.pending_history) {
-                self.add_import_history(&p);
+            t.recent_paths_l = self.import_history_l.clone();
+            t.recent_paths_r = self.import_history_r.clone();
+            for (is_left, p) in std::mem::take(&mut t.pending_history) {
+                self.add_import_history(is_left, &p);
             }
         }
         if self.theme_changed {

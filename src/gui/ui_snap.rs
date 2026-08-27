@@ -107,7 +107,7 @@ fn snap_app_difftab() {
     save(&mut h, "app_difftab");
 }
 
-/// 仅导入左侧文件 → 应即时显示左侧内容（P58 选中即加载）
+/// 仅导入左侧文件 → 分栏快速对比页保留并显示该侧路径（P58：两侧都导入才进入对比视图）
 #[test]
 #[ignore]
 fn snap_diff_single_left() {
