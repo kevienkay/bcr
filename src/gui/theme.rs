@@ -427,11 +427,23 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
     }
     // 选中态
     style.visuals.selection.bg_fill = if dark {
-        Color32::from_rgb(46, 92, 160)
+        Color32::from_rgb(52, 102, 180)
     } else {
-        Color32::from_rgb(190, 214, 244)
+        Color32::from_rgb(186, 212, 246)
     };
     style.visuals.selection.stroke = Stroke::new(1.0, Color32::from_gray(120));
+    // BC 蓝色强调（Slider 填充轨、ComboBox、超链接等默认控件统一走这个主色）
+    style.visuals.hyperlink_color = if dark {
+        Color32::from_rgb(86, 148, 240)
+    } else {
+        Color32::from_rgb(40, 90, 200)
+    };
+    // 输入框底色（TextEdit 默认靠此与面板区分，形成"内嵌输入区"观感）
+    style.visuals.text_edit_bg_color = Some(if dark {
+        Color32::from_gray(15)
+    } else {
+        Color32::from_rgb(255, 255, 255)
+    });
     // 按钮边框
     let border = if dark {
         Stroke::new(1.0, Color32::from_gray(64))

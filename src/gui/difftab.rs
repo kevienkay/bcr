@@ -2256,21 +2256,18 @@ impl DiffTab {
                             (DiffViewFilter::Context, t(I18nKey::ShowContext)),
                         ];
                         let cur = self.view_filter;
-                        egui::ComboBox::from_id_salt("diff_view_filter")
-                            .selected_text(
-                                filters
-                                    .iter()
-                                    .find(|(v, _)| *v == cur)
-                                    .map(|(_, l)| *l)
-                                    .unwrap_or(""),
-                            )
-                            .show_ui(ui, |ui| {
-                                for (v, l) in &filters {
-                                    if ui.selectable_label(cur == *v, *l).clicked() {
-                                        self.view_filter = *v;
-                                    }
+                        let sel_text = filters
+                            .iter()
+                            .find(|(v, _)| *v == cur)
+                            .map(|(_, l)| *l)
+                            .unwrap_or("");
+                        widgets::combo(ui, sel_text, "", |ui| {
+                            for (v, l) in &filters {
+                                if ui.selectable_label(cur == *v, *l).clicked() {
+                                    self.view_filter = *v;
                                 }
-                            });
+                            }
+                        });
                     }
                     // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
                     ui.separator();

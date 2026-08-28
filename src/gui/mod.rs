@@ -1993,24 +1993,23 @@ impl eframe::App for DiffApp {
                         "shift_jis",
                     ];
                     let mut sel = self.settings.encoding.clone();
-                    egui::ComboBox::from_id_salt("settings_encoding")
-                        .selected_text(if sel.is_empty() {
-                            "auto".to_string()
-                        } else {
-                            sel.clone()
-                        })
-                        .show_ui(ui, |ui| {
-                            for e in encodings {
-                                let label = if e.is_empty() {
-                                    "auto".to_string()
-                                } else {
-                                    e.to_string()
-                                };
-                                if ui.selectable_label(sel == e, label).clicked() {
-                                    sel = e.to_string();
-                                }
+                    let sel_text = if sel.is_empty() {
+                        "auto".to_string()
+                    } else {
+                        sel.clone()
+                    };
+                    widgets::combo(ui, &sel_text, "", |ui| {
+                        for e in encodings {
+                            let label = if e.is_empty() {
+                                "auto".to_string()
+                            } else {
+                                e.to_string()
+                            };
+                            if ui.selectable_label(sel == e, label).clicked() {
+                                sel = e.to_string();
                             }
-                        });
+                        }
+                    });
                     self.settings.encoding = sel;
                 });
                 // 大小上限（MB，0 = 默认）

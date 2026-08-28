@@ -724,21 +724,19 @@ impl CsvTab {
                     } else {
                         key.clone()
                     };
-                    egui::ComboBox::from_id_salt("csv_key")
-                        .selected_text(selected)
-                        .show_ui(ui, |ui| {
-                            if ui
-                                .selectable_label(key.is_empty(), t(I18nKey::CsvRowAlign))
-                                .clicked()
-                            {
-                                key.clear();
+                    widgets::combo(ui, &selected, "", |ui| {
+                        if ui
+                            .selectable_label(key.is_empty(), t(I18nKey::CsvRowAlign))
+                            .clicked()
+                        {
+                            key.clear();
+                        }
+                        for h in &opts {
+                            if ui.selectable_label(self.key == *h, h).clicked() {
+                                key = h.clone();
                             }
-                            for h in &opts {
-                                if ui.selectable_label(self.key == *h, h).clicked() {
-                                    key = h.clone();
-                                }
-                            }
-                        });
+                        }
+                    });
                     if key != self.key {
                         self.key = key;
                         self.reload();
@@ -747,15 +745,13 @@ impl CsvTab {
                     ui.separator();
                     ui.label(t(I18nKey::CsvDelimiter));
                     let mut delim = self.delimiter.clone();
-                    egui::ComboBox::from_id_salt("csv_delim")
-                        .selected_text(delim.clone())
-                        .show_ui(ui, |ui| {
-                            for d in [",", "\\t"] {
-                                if ui.selectable_label(delim == d, d).clicked() {
-                                    delim = d.to_string();
-                                }
+                    widgets::combo(ui, &delim.clone(), "", |ui| {
+                        for d in [",", "\\t"] {
+                            if ui.selectable_label(delim == d, d).clicked() {
+                                delim = d.to_string();
                             }
-                        });
+                        }
+                    });
                     if delim != self.delimiter {
                         self.delimiter = delim;
                         self.reload();
@@ -777,21 +773,18 @@ impl CsvTab {
                         (CsvFilter::Same, t(I18nKey::CsvFilterSame)),
                     ];
                     let cur = self.filter;
-                    egui::ComboBox::from_id_salt("csv_filter")
-                        .selected_text(
-                            filter_labels
-                                .iter()
-                                .find(|(v, _)| *v == cur)
-                                .map(|(_, l)| *l)
-                                .unwrap_or(""),
-                        )
-                        .show_ui(ui, |ui| {
-                            for (v, l) in &filter_labels {
-                                if ui.selectable_label(cur == *v, *l).clicked() {
-                                    self.filter = *v;
-                                }
+                    let sel_text = filter_labels
+                        .iter()
+                        .find(|(v, _)| *v == cur)
+                        .map(|(_, l)| *l)
+                        .unwrap_or("");
+                    widgets::combo(ui, sel_text, "", |ui| {
+                        for (v, l) in &filter_labels {
+                            if ui.selectable_label(cur == *v, *l).clicked() {
+                                self.filter = *v;
                             }
-                        });
+                        }
+                    });
                     // 重新加载
                     if widgets::tool_button(
                         ui,
@@ -1173,26 +1166,24 @@ impl CsvTab {
                 .show(ui.ctx(), |ui| {
                     ui.label(format!("当前排序列：{}", col_name));
                     if !headers.is_empty() {
-                        egui::ComboBox::from_id_salt("csv_sort_col")
-                            .selected_text(col_name.clone())
-                            .show_ui(ui, |ui| {
-                                for (side, label) in [(true, "左"), (false, "右")] {
-                                    let n = if side {
-                                        self.table_a.as_ref().map(|t| t.headers.len()).unwrap_or(0)
-                                    } else {
-                                        self.table_b.as_ref().map(|t| t.headers.len()).unwrap_or(0)
-                                    };
-                                    for c in 0..n {
-                                        let name = format!("{} · 列{}", label, c);
-                                        if ui
-                                            .selectable_label(col_name == name, name.clone())
-                                            .clicked()
-                                        {
-                                            col_name = name;
-                                        }
+                        widgets::combo(ui, &col_name.clone(), "", |ui| {
+                            for (side, label) in [(true, "左"), (false, "右")] {
+                                let n = if side {
+                                    self.table_a.as_ref().map(|t| t.headers.len()).unwrap_or(0)
+                                } else {
+                                    self.table_b.as_ref().map(|t| t.headers.len()).unwrap_or(0)
+                                };
+                                for c in 0..n {
+                                    let name = format!("{} · 列{}", label, c);
+                                    if ui
+                                        .selectable_label(col_name == name, name.clone())
+                                        .clicked()
+                                    {
+                                        col_name = name;
                                     }
                                 }
-                            });
+                            }
+                        });
                     }
                     ui.horizontal(|ui| {
                         ui.radio_value(&mut asc, true, t(I18nKey::SortAscending));

@@ -6,7 +6,7 @@
 
 use eframe::egui::{self};
 
-use super::{DiffApp, Tab};
+use super::{widgets, DiffApp, Tab};
 use crate::i18n::{t, Key as I18nKey};
 
 /// 顶部菜单栏（BC 式 7 个主菜单）
@@ -877,13 +877,15 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     ui.separator();
                     ui.checkbox(&mut h.show_addr, t(I18nKey::HexShowAddr));
                     let cur_addr_hex = h.addr_hex;
-                    egui::ComboBox::from_id_salt("view_hex_addr_fmt")
-                        .selected_text(if cur_addr_hex {
+                    widgets::combo(
+                        ui,
+                        if cur_addr_hex {
                             t(I18nKey::HexAddrHex)
                         } else {
                             t(I18nKey::HexAddrDec)
-                        })
-                        .show_ui(ui, |ui| {
+                        },
+                        "",
+                        |ui| {
                             if ui
                                 .selectable_label(cur_addr_hex, t(I18nKey::HexAddrHex))
                                 .clicked()
@@ -896,7 +898,8 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                             {
                                 h.addr_hex = false;
                             }
-                        });
+                        },
+                    );
                     use crate::hexview::HexValueMode;
                     let cur = h.value_mode;
                     let label = match cur {
@@ -904,19 +907,17 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                         HexValueMode::LittleEndian => t(I18nKey::HexValLittle),
                         HexValueMode::BigEndian => t(I18nKey::HexValBig),
                     };
-                    egui::ComboBox::from_id_salt("view_hex_val_fmt")
-                        .selected_text(label)
-                        .show_ui(ui, |ui| {
-                            for (mode, k) in [
-                                (HexValueMode::Raw, I18nKey::HexValRaw),
-                                (HexValueMode::LittleEndian, I18nKey::HexValLittle),
-                                (HexValueMode::BigEndian, I18nKey::HexValBig),
-                            ] {
-                                if ui.selectable_label(cur == mode, t(k)).clicked() {
-                                    h.value_mode = mode;
-                                }
+                    widgets::combo(ui, label, "", |ui| {
+                        for (mode, k) in [
+                            (HexValueMode::Raw, I18nKey::HexValRaw),
+                            (HexValueMode::LittleEndian, I18nKey::HexValLittle),
+                            (HexValueMode::BigEndian, I18nKey::HexValBig),
+                        ] {
+                            if ui.selectable_label(cur == mode, t(k)).clicked() {
+                                h.value_mode = mode;
                             }
-                        });
+                        }
+                    });
                     // P46-3：hex 视图过滤（BC 16进制 显示全部/差异/相同，1/2/3）
                     let cur_f = tab.hex_filter;
                     ui.label(t(I18nKey::MenuFilter));

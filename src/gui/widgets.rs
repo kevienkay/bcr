@@ -120,6 +120,40 @@ pub fn separator(ui: &mut Ui) {
     ui.separator();
 }
 
+/// BC 风格下拉组合框：主题化按钮（选中文本 + Phosphor caret-down）+ 弹出菜单。
+/// `add_contents` 在弹出菜单里渲染可选项（一般用 `selectable_label`）。
+#[allow(dead_code)]
+pub fn combo(
+    ui: &mut Ui,
+    selected_text: &str,
+    tooltip: &str,
+    add_contents: impl FnOnce(&mut Ui),
+) -> egui::Response {
+    let txt = ui.visuals().text_color();
+    let mut job = egui::text::LayoutJob::default();
+    job.append(selected_text, 0.0, text_format(14.0, txt));
+    job.append("  ", 0.0, text_format(14.0, txt));
+    job.append(
+        &icons::Icon::Next.glyph().to_string(),
+        0.0,
+        glyph_format(12.0, txt),
+    );
+    let resp = ui
+        .menu_button(
+            egui::WidgetText::LayoutJob(std::sync::Arc::new(job)),
+            |ui| {
+                add_contents(ui);
+            },
+        )
+        .response
+        .on_hover_text(tooltip);
+    // 让 accesskit/测试把它当作 ComboBox
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, selected_text.to_owned())
+    });
+    resp
+}
+
 /// 单选 chip（分段按钮）：选中高亮圆角，未选中弱色。用于设置页语言/格式、视图过滤。
 #[allow(dead_code)]
 pub fn chip(ui: &mut Ui, selected: bool, text: &str) -> egui::Response {
