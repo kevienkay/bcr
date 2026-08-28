@@ -2814,70 +2814,102 @@ impl DiffTab {
                     ui.columns(2, |cols| {
                         for (ci, col) in cols.iter_mut().enumerate() {
                             let is_left = ci == 0;
-                            col.horizontal(|ui| {
-                                // 输入框宽度 = 列宽 - (▾历史 + 📁浏览 + ✕清空 + 间距) 实际占用预算，
-                                // 避免超宽溢入另一半（重叠）
-                                let iw = (ui.available_width() - 116.0).max(40.0);
-                                let resp = ui.add(
-                                    egui::TextEdit::singleline(if is_left {
-                                        &mut self.open_l
+                            col.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    // 输入框宽度 = 列宽 - (▾历史 + 📁浏览 + ✕清空 + 间距) 实际占用预算，
+                                    // 避免超宽溢入另一半（重叠）
+                                    let iw = (ui.available_width() - 116.0).max(40.0);
+                                    let resp = ui.add(
+                                        egui::TextEdit::singleline(if is_left {
+                                            &mut self.open_l
+                                        } else {
+                                            &mut self.open_r
+                                        })
+                                        .hint_text("文件或目录")
+                                        .desired_width(iw),
+                                    );
+                                    // ▾ 历史下拉（分侧：左侧只看左历史，右侧只看右历史）
+                                    let hist = if is_left {
+                                        self.recent_paths_l.clone()
                                     } else {
-                                        &mut self.open_r
-                                    })
-                                    .hint_text("文件或目录")
-                                    .desired_width(iw),
-                                );
-                                // ▾ 历史下拉（分侧：左侧只看左历史，右侧只看右历史）
-                                let hist = if is_left {
-                                    self.recent_paths_l.clone()
-                                } else {
-                                    self.recent_paths_r.clone()
-                                };
-                                ui.menu_button(
-                                    egui::RichText::new(icons::Icon::History.glyph().to_string())
+                                        self.recent_paths_r.clone()
+                                    };
+                                    ui.menu_button(
+                                        egui::RichText::new(
+                                            icons::Icon::History.glyph().to_string(),
+                                        )
                                         .font(icons::font(14.0))
                                         .color(ui.visuals().text_color()),
-                                    |ui| {
-                                        if hist.is_empty() {
-                                            ui.weak("暂无历史路径");
-                                        }
-                                        let mut pick: Option<String> = None;
-                                        for p in &hist {
-                                            if ui.button(p.as_str()).clicked() {
-                                                pick = Some(p.clone());
+                                        |ui| {
+                                            if hist.is_empty() {
+                                                ui.weak("暂无历史路径");
                                             }
-                                        }
-                                        if let Some(p) = pick {
+                                            let mut pick: Option<String> = None;
+                                            for p in &hist {
+                                                if ui.button(p.as_str()).clicked() {
+                                                    pick = Some(p.clone());
+                                                }
+                                            }
+                                            if let Some(p) = pick {
+                                                self.open_into(is_left, p);
+                                            }
+                                        },
+                                    );
+                                    // 📁 浏览（使用单个文件选择对话框，避免先弹文件夹再弹文件两次对话框）
+                                    if widgets::icon_button(
+                                        ui,
+                                        icons::Icon::Folder,
+                                        "浏览路径",
+                                        14.0,
+                                    )
+                                    .clicked()
+                                    {
+                                        if let Some(p) = super::pick_file() {
                                             self.open_into(is_left, p);
                                         }
-                                    },
-                                );
-                                // 📁 浏览（使用单个文件选择对话框，避免先弹文件夹再弹文件两次对话框）
-                                if widgets::icon_button(ui, icons::Icon::Folder, "浏览路径", 14.0)
-                                    .clicked()
-                                {
-                                    if let Some(p) = super::pick_file() {
-                                        self.open_into(is_left, p);
                                     }
-                                }
-                                // ✕ 清空（同时卸载该侧文件，回到分栏）
-                                if widgets::icon_button(ui, icons::Icon::Clear, "清空", 14.0)
-                                    .clicked()
-                                {
-                                    if is_left {
-                                        self.open_l.clear();
-                                        self.left = None;
-                                    } else {
-                                        self.open_r.clear();
-                                        self.right = None;
+                                    // ✕ 清空（同时卸载该侧文件，回到分栏）
+                                    if widgets::icon_button(ui, icons::Icon::Clear, "清空", 14.0)
+                                        .clicked()
+                                    {
+                                        if is_left {
+                                            self.open_l.clear();
+                                            self.left = None;
+                                        } else {
+                                            self.open_r.clear();
+                                            self.right = None;
+                                        }
+                                        self.recompute();
                                     }
-                                    self.recompute();
-                                }
-                                // 输入路径后回车 → 加载该侧/两侧
-                                if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                                    let l = self.open_l.trim().to_string();
-                                    let r = self.open_r.trim().to_string();
-                                    self.load_open_pair(l, r);
+                                    // 输入路径后回车 → 加载该侧/两侧
+                                    if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter))
+                                    {
+                                        let l = self.open_l.trim().to_string();
+                                        let r = self.open_r.trim().to_string();
+                                        self.load_open_pair(l, r);
+                                    }
+                                });
+                                // 内容预览：该侧已导入则直接显示其内容（输入框保留显示路径）
+                                let content = if is_left {
+                                    self.left.as_ref().map(|f| f.content.as_str())
+                                } else {
+                                    self.right.as_ref().map(|f| f.content.as_str())
+                                };
+                                if let Some(text) = content {
+                                    ui.add_space(6.0);
+                                    ui.separator();
+                                    egui::ScrollArea::both().auto_shrink([false, false]).show(
+                                        ui,
+                                        |ui| {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(text)
+                                                        .font(egui::FontId::monospace(14.0)),
+                                                )
+                                                .wrap_mode(egui::TextWrapMode::Extend),
+                                            );
+                                        },
+                                    );
                                 }
                             });
                         }
@@ -3872,10 +3904,10 @@ fn paint_diff_row(
         let icon_weak = ui.visuals().weak_text_color();
         let font = egui::FontId::proportional(11.0);
         let hover_bg = c.gamma_multiply(0.35);
-        // ---- ▶(左→右) 放到最左 ----
+        // ---- ▶(左→右) 放到中间空隙左半（BC：两拷贝箭头都在中缝）----
         let edge_rect = Rect::from_min_size(
-            Pos2::new(x + super::theme::CURRENT_BAR + 3.0, y),
-            vec2(14.0, ROW_H),
+            Pos2::new(mid_x + 2.0, y),
+            vec2((mid_gap * 0.5 - 3.0).max(6.0), ROW_H),
         );
         let edge_resp = ui.interact(
             edge_rect,
