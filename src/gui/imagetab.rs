@@ -520,10 +520,10 @@ impl ImageTab {
                             }
                         }
                     }
-                    ui.checkbox(&mut self.show_overlay, "差异叠加");
-                    ui.checkbox(&mut self.show_stats, "统计");
+                    widgets::check(ui, &mut self.show_overlay, "差异叠加");
+                    widgets::check(ui, &mut self.show_stats, "统计");
                     // P37-1k：元数据展示（尺寸/格式/文件大小）
-                    ui.checkbox(&mut self.show_meta, t(I18nKey::ImgMetadata));
+                    widgets::check(ui, &mut self.show_meta, t(I18nKey::ImgMetadata));
                     if let Some(p) = &self.pair {
                         let s = p.stats;
                         let st = if s.has_differences() {

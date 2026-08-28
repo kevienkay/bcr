@@ -1869,8 +1869,7 @@ impl DirTab {
                             for (i, op) in plan.iter().enumerate() {
                                 ui.horizontal(|ui| {
                                     let mut checked = self.sync_checked.contains(&i);
-                                    if ui
-                                        .checkbox(&mut checked, "")
+                                    if widgets::check(ui, &mut checked, "")
                                         .on_disabled_hover_text("跳过/冲突项不可执行")
                                         .changed()
                                     {

@@ -5,7 +5,7 @@
 //! 单选 chip、会话卡片、分组分隔线等，全应用一致。
 
 use super::{icons, theme};
-use eframe::egui::{self, Align2, Color32, FontId, Margin, RichText, Stroke, Ui, Vec2};
+use eframe::egui::{self, Align2, Color32, FontId, Margin, Pos2, Rect, RichText, Stroke, Ui, Vec2};
 
 fn glyph_format(size: f32, color: Color32) -> egui::TextFormat {
     egui::TextFormat {
@@ -118,6 +118,72 @@ pub fn icon_button(ui: &mut Ui, icon: icons::Icon, tooltip: &str, size: f32) -> 
 #[allow(dead_code)]
 pub fn separator(ui: &mut Ui) {
     ui.separator();
+}
+
+/// BC 风格复选框：圆角框 + 选中品牌蓝填充 + 白色勾选。返回 Response（`.changed()`/`.clicked()` 可用）。
+#[allow(dead_code)]
+pub fn check(ui: &mut Ui, checked: &mut bool, text: &str) -> egui::Response {
+    use egui::StrokeKind;
+    let dark = ui.visuals().dark_mode;
+    let box_size = 15.0;
+    let text_color = ui.visuals().text_color();
+    let galley =
+        ui.painter()
+            .layout_no_wrap(text.to_string(), FontId::proportional(14.0), text_color);
+    let total_w = box_size + 6.0 + galley.size().x + 4.0;
+    let (rect, mut resp) = ui.allocate_exact_size(egui::vec2(total_w, 20.0), egui::Sense::click());
+    if resp.clicked() {
+        *checked = !*checked;
+        resp.mark_changed();
+    }
+    let box_rect = Rect::from_min_size(
+        Pos2::new(rect.left() + 2.0, rect.center().y - box_size / 2.0),
+        Vec2::splat(box_size),
+    );
+    let accent = if dark {
+        Color32::from_rgb(86, 148, 240)
+    } else {
+        Color32::from_rgb(40, 90, 200)
+    };
+    if *checked {
+        ui.painter().rect_filled(box_rect, 4.0, accent);
+        ui.painter().text(
+            box_rect.center(),
+            Align2::CENTER_CENTER,
+            icons::Icon::Equal.glyph().to_string(),
+            icons::font(10.5),
+            Color32::WHITE,
+        );
+    } else {
+        ui.painter()
+            .rect_filled(box_rect, 4.0, Color32::TRANSPARENT);
+        let border = if dark {
+            Color32::from_gray(90)
+        } else {
+            Color32::from_gray(170)
+        };
+        ui.painter()
+            .rect_stroke(box_rect, 4.0, Stroke::new(1.0, border), StrokeKind::Inside);
+        if resp.hovered() {
+            let hover = if dark {
+                Color32::from_gray(150)
+            } else {
+                Color32::from_gray(110)
+            };
+            ui.painter()
+                .rect_stroke(box_rect, 4.0, Stroke::new(1.5, hover), StrokeKind::Inside);
+        }
+    }
+    let text_pos = Pos2::new(
+        box_rect.right() + 6.0,
+        rect.center().y - galley.size().y / 2.0,
+    );
+    ui.painter().galley(text_pos, galley, text_color);
+    // 无障碍/测试标签：以 Checkbox 角色 + 文案暴露
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Checkbox, true, text.to_owned())
+    });
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// BC 风格下拉组合框：主题化按钮（选中文本 + Phosphor caret-down）+ 弹出菜单。

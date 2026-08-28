@@ -418,8 +418,7 @@ impl MergeTab {
                         self.save();
                     }
                     ui.separator();
-                    ui.checkbox(&mut self.show_preview, t(I18nKey::LivePreview))
-                        .changed();
+                    widgets::check(ui, &mut self.show_preview, t(I18nKey::LivePreview)).changed();
                     ui.separator();
                     ui.label(fmt(
                         I18nKey::ConflictsCount,

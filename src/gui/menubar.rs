@@ -156,7 +156,11 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         // P44-4：已锁定（BC Session>已锁定；DiffTab 分支，锁定会话防编辑）
         if let Some(Tab::Diff(lock_tab)) = app.tabs.get_mut(app.active) {
-            ui.checkbox(&mut lock_tab.locked, crate::i18n::t(I18nKey::MenuLocked));
+            widgets::check(
+                ui,
+                &mut lock_tab.locked,
+                crate::i18n::t(I18nKey::MenuLocked),
+            );
         }
         // P39-2a：清除会话（重置当前标签为空会话）
         if menu_item(ui, t(I18nKey::MenuClearSession), sc("⌥⌘C", "Ctrl+Alt+C")).clicked() {
@@ -815,7 +819,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         });
         if let Some(m) = minor {
             let mut mm = m;
-            if ui.checkbox(&mut mm, t(I18nKey::IgnoreMinor)).changed() {
+            if widgets::check(ui, &mut mm, t(I18nKey::IgnoreMinor)).changed() {
                 if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
                     tab.opts.ignore_whitespace = mm;
                     tab.opts.ignore_trailing = mm;
@@ -831,22 +835,19 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 let mut ic = tab.opts.ignore_case;
                 let mut icr = tab.opts.ignore_crlf;
                 let mut changed = false;
-                if ui.checkbox(&mut iw, t(I18nKey::IgnoreWs)).changed() {
+                if widgets::check(ui, &mut iw, t(I18nKey::IgnoreWs)).changed() {
                     tab.opts.ignore_whitespace = iw;
                     changed = true;
                 }
-                if ui.checkbox(&mut it, t(I18nKey::IgnoreTrailing)).changed() {
+                if widgets::check(ui, &mut it, t(I18nKey::IgnoreTrailing)).changed() {
                     tab.opts.ignore_trailing = it;
                     changed = true;
                 }
-                if ui.checkbox(&mut ic, t(I18nKey::IgnoreCase)).changed() {
+                if widgets::check(ui, &mut ic, t(I18nKey::IgnoreCase)).changed() {
                     tab.opts.ignore_case = ic;
                     changed = true;
                 }
-                if ui
-                    .checkbox(&mut icr, t(I18nKey::SettingsIgnoreCrlf))
-                    .changed()
-                {
+                if widgets::check(ui, &mut icr, t(I18nKey::SettingsIgnoreCrlf)).changed() {
                     tab.opts.ignore_crlf = icr;
                     changed = true;
                 }
@@ -859,15 +860,15 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
                 let mut wrap = tab.wrap;
                 let mut ws = tab.show_whitespace;
-                if ui.checkbox(&mut wrap, t(I18nKey::WordWrap)).changed() {
+                if widgets::check(ui, &mut wrap, t(I18nKey::WordWrap)).changed() {
                     tab.wrap = wrap;
                 }
-                if ui.checkbox(&mut ws, t(I18nKey::VisibleWs)).changed() {
+                if widgets::check(ui, &mut ws, t(I18nKey::VisibleWs)).changed() {
                     tab.show_whitespace = ws;
                 }
                 // P42-3：字符列标尺
                 let mut ruler = tab.show_ruler;
-                if ui.checkbox(&mut ruler, t(I18nKey::ShowRuler)).changed() {
+                if widgets::check(ui, &mut ruler, t(I18nKey::ShowRuler)).changed() {
                     tab.show_ruler = ruler;
                 }
             }
@@ -875,7 +876,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
                 if let Some(h) = tab.hex.as_mut() {
                     ui.separator();
-                    ui.checkbox(&mut h.show_addr, t(I18nKey::HexShowAddr));
+                    widgets::check(ui, &mut h.show_addr, t(I18nKey::HexShowAddr));
                     let cur_addr_hex = h.addr_hex;
                     widgets::combo(
                         ui,
@@ -968,10 +969,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     _ => None,
                 })
                 .unwrap_or(true);
-            if ui
-                .checkbox(&mut show_ln, t(I18nKey::MenuLineNumbers))
-                .changed()
-            {
+            if widgets::check(ui, &mut show_ln, t(I18nKey::MenuLineNumbers)).changed() {
                 if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
                     tab.show_line_numbers = show_ln;
                 }
@@ -984,7 +982,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     _ => None,
                 })
                 .unwrap_or(false);
-            if ui.checkbox(&mut show_wrap, t(I18nKey::WordWrap)).changed() {
+            if widgets::check(ui, &mut show_wrap, t(I18nKey::WordWrap)).changed() {
                 if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
                     tab.show_wrap = show_wrap;
                 }
@@ -997,10 +995,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     _ => None,
                 })
                 .unwrap_or(true);
-            if ui
-                .checkbox(&mut show_fi, t(I18nKey::MenuFileInfo))
-                .changed()
-            {
+            if widgets::check(ui, &mut show_fi, t(I18nKey::MenuFileInfo)).changed() {
                 if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
                     tab.show_file_info = show_fi;
                 }
@@ -1075,11 +1070,11 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if matches!(app.tabs.get(app.active), Some(Tab::Csv(_))) {
             if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
                 let mut h = tab.hide_same_cols;
-                if ui.checkbox(&mut h, t(I18nKey::HideSameCols)).changed() {
+                if widgets::check(ui, &mut h, t(I18nKey::HideSameCols)).changed() {
                     tab.hide_same_cols = h;
                 }
                 let mut f = tab.auto_fit;
-                if ui.checkbox(&mut f, t(I18nKey::FitColumns)).changed() {
+                if widgets::check(ui, &mut f, t(I18nKey::FitColumns)).changed() {
                     tab.auto_fit = f;
                 }
             }
@@ -1093,10 +1088,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     _ => None,
                 })
                 .unwrap_or(true);
-            if ui
-                .checkbox(&mut show_ln.clone(), t(I18nKey::MenuLineNumbers))
-                .changed()
-            {
+            if widgets::check(ui, &mut show_ln.clone(), t(I18nKey::MenuLineNumbers)).changed() {
                 if let Tab::Diff(tab) = &mut app.tabs[app.active] {
                     tab.show_line_numbers = show_ln;
                 }
@@ -1109,9 +1101,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     _ => None,
                 })
                 .unwrap_or(true);
-            if ui
-                .checkbox(&mut show_syn.clone(), t(I18nKey::MenuSyntaxHighlight))
-                .changed()
+            if widgets::check(ui, &mut show_syn.clone(), t(I18nKey::MenuSyntaxHighlight)).changed()
             {
                 if let Tab::Diff(tab) = &mut app.tabs[app.active] {
                     tab.show_syntax = show_syn;
@@ -1129,7 +1119,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             app.show_log = !app.show_log;
         }
         let mut tb = crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed);
-        if ui.checkbox(&mut tb, t(I18nKey::MenuToolbar)).changed() {
+        if widgets::check(ui, &mut tb, t(I18nKey::MenuToolbar)).changed() {
             crate::gui::common::SHOW_TOOLBAR.store(tb, std::sync::atomic::Ordering::Relaxed);
         }
         ui.separator();
@@ -1241,10 +1231,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     _ => None,
                 })
                 .unwrap_or(true);
-            if ui
-                .checkbox(&mut show_dirs, t(I18nKey::DirShowAllDirs))
-                .changed()
-            {
+            if widgets::check(ui, &mut show_dirs, t(I18nKey::DirShowAllDirs)).changed() {
                 if let Tab::Dir(tab) = &mut app.tabs[app.active] {
                     tab.show_all_dirs = show_dirs;
                     tab.rebuild_tree();
@@ -1258,10 +1245,7 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     _ => None,
                 })
                 .unwrap_or(false);
-            if ui
-                .checkbox(&mut only_files, t(I18nKey::DirOnlyFiles))
-                .changed()
-            {
+            if widgets::check(ui, &mut only_files, t(I18nKey::DirOnlyFiles)).changed() {
                 if let Tab::Dir(tab) = &mut app.tabs[app.active] {
                     tab.only_files = only_files;
                     tab.rebuild_tree();

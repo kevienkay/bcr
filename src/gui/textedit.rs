@@ -542,8 +542,8 @@ impl TextEditTab {
                         self.convert_line_ending(false);
                     }
                     ui.separator();
-                    ui.checkbox(&mut self.show_ws, t(I18nKey::VisibleWs));
-                    ui.checkbox(&mut self.show_syntax, t(I18nKey::TextEditSyntax));
+                    widgets::check(ui, &mut self.show_ws, t(I18nKey::VisibleWs));
+                    widgets::check(ui, &mut self.show_syntax, t(I18nKey::TextEditSyntax));
                     ui.separator();
                     // P46-1：文件信息开关（BC View>文件信息）
                     if self.show_file_info && !self.path.is_empty() {

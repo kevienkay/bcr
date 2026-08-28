@@ -1920,19 +1920,23 @@ impl eframe::App for DiffApp {
                 ui.label(
                     RichText::new(crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs)).strong(),
                 );
-                ui.checkbox(
+                widgets::check(
+                    ui,
                     &mut self.settings.ignore_whitespace,
                     crate::i18n::t(crate::i18n::Key::SettingsIgnoreWs),
                 );
-                ui.checkbox(
+                widgets::check(
+                    ui,
                     &mut self.settings.ignore_trailing,
                     crate::i18n::t(crate::i18n::Key::SettingsIgnoreTrail),
                 );
-                ui.checkbox(
+                widgets::check(
+                    ui,
                     &mut self.settings.ignore_case,
                     crate::i18n::t(crate::i18n::Key::SettingsIgnoreCase),
                 );
-                ui.checkbox(
+                widgets::check(
+                    ui,
                     &mut self.settings.ignore_crlf,
                     crate::i18n::t(crate::i18n::Key::SettingsIgnoreCrlf),
                 );
@@ -2396,11 +2400,11 @@ impl eframe::App for DiffApp {
                                                 .desired_width(180.0),
                                         );
                                     });
-                                    ui.checkbox(&mut iw, "忽略空白");
-                                    ui.checkbox(&mut it, "忽略行尾空白");
-                                    ui.checkbox(&mut ic, "忽略大小写");
-                                    ui.checkbox(&mut cc, "内容哈希");
-                                    ui.checkbox(&mut dm, "移动检测");
+                                    widgets::check(ui, &mut iw, "忽略空白");
+                                    widgets::check(ui, &mut it, "忽略行尾空白");
+                                    widgets::check(ui, &mut ic, "忽略大小写");
+                                    widgets::check(ui, &mut cc, "内容哈希");
+                                    widgets::check(ui, &mut dm, "移动检测");
                                     ui.horizontal(|ui| {
                                         ui.label("编码");
                                         ui.add(

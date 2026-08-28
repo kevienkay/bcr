@@ -758,10 +758,7 @@ impl CsvTab {
                     }
                     // 显示相同 + 过滤
                     ui.separator();
-                    if ui
-                        .checkbox(&mut self.show_same, t(I18nKey::ShowSame))
-                        .changed()
-                    {
+                    if widgets::check(ui, &mut self.show_same, t(I18nKey::ShowSame)).changed() {
                         // 仅刷新显示，不需重排
                     }
                     let filter_labels = [
@@ -798,8 +795,8 @@ impl CsvTab {
                     }
                     // P37-1c：隐藏相同列 / 列宽自适应
                     ui.separator();
-                    ui.checkbox(&mut self.hide_same_cols, t(I18nKey::HideSameCols));
-                    ui.checkbox(&mut self.auto_fit, t(I18nKey::FitColumns));
+                    widgets::check(ui, &mut self.hide_same_cols, t(I18nKey::HideSameCols));
+                    widgets::check(ui, &mut self.auto_fit, t(I18nKey::FitColumns));
                     // P37-1c：复制单元格至右侧（需先选中单元格）
                     ui.separator();
                     if ui
