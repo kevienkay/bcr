@@ -477,6 +477,29 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
         style.visuals.widgets.active.weak_bg_fill = Color32::from_rgb(211, 213, 222);
         style.visuals.widgets.open.weak_bg_fill = Color32::from_rgb(225, 227, 234);
     }
+    // 菜单/弹层：统一圆角 + 柔和阴影（下拉/右键菜单、tooltip）
+    style.visuals.menu_corner_radius = CornerRadius::same(5);
+    style.visuals.popup_shadow = egui::epaint::Shadow {
+        offset: [2, 5],
+        blur: 8,
+        spread: 0,
+        color: if dark {
+            Color32::from_black_alpha(110)
+        } else {
+            Color32::from_black_alpha(30)
+        },
+    };
+    // 对话框：柔化阴影（深浅一致）
+    style.visuals.window_shadow = egui::epaint::Shadow {
+        offset: [3, 8],
+        blur: 12,
+        spread: 0,
+        color: if dark {
+            Color32::from_black_alpha(120)
+        } else {
+            Color32::from_black_alpha(28)
+        },
+    };
 }
 
 /// 应用主题样式（启动时调用，对 Dark/Light 两套都设置）

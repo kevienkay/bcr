@@ -19,7 +19,8 @@ pub fn dialog_window<'a>(
         .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
         .frame(
             egui::Frame::window(&style)
-                .inner_margin(egui::Margin::same(14))
+                .corner_radius(8.0)
+                .inner_margin(egui::Margin::same(16))
                 .fill(style.visuals.window_fill()),
         )
 }
