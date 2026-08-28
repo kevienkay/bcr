@@ -209,9 +209,12 @@ pub fn combo(
         )
         .response
         .on_hover_text(tooltip);
-    // 让 accesskit/测试把它当作 ComboBox
+    // 让 accesskit/测试把它当作 ComboBox（label + value 与 egui::ComboBox 一致）
     resp.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, selected_text.to_owned())
+        let mut info = egui::WidgetInfo::new(egui::WidgetType::ComboBox);
+        info.label = Some(selected_text.to_owned());
+        info.current_text_value = Some(selected_text.to_owned());
+        info
     });
     resp
 }

@@ -486,20 +486,18 @@ impl ImageTab {
                             DiffMode::MismatchRange => t(I18nKey::ImgModeMismatch),
                             DiffMode::Mixed => t(I18nKey::ImgModeMixed),
                         };
-                        egui::ComboBox::from_id_salt("img_diff_mode")
-                            .selected_text(label)
-                            .show_ui(ui, |ui| {
-                                for (mode, k) in [
-                                    (DiffMode::Exact, I18nKey::ImgModeExact),
-                                    (DiffMode::Tolerance, I18nKey::ImgModeTolerance),
-                                    (DiffMode::MismatchRange, I18nKey::ImgModeMismatch),
-                                    (DiffMode::Mixed, I18nKey::ImgModeMixed),
-                                ] {
-                                    if ui.selectable_label(cur == mode, t(k)).clicked() {
-                                        self.diff_mode = mode;
-                                    }
+                        widgets::combo(ui, label, "", |ui| {
+                            for (mode, k) in [
+                                (DiffMode::Exact, I18nKey::ImgModeExact),
+                                (DiffMode::Tolerance, I18nKey::ImgModeTolerance),
+                                (DiffMode::MismatchRange, I18nKey::ImgModeMismatch),
+                                (DiffMode::Mixed, I18nKey::ImgModeMixed),
+                            ] {
+                                if ui.selectable_label(cur == mode, t(k)).clicked() {
+                                    self.diff_mode = mode;
                                 }
-                            });
+                            }
+                        });
                         // 容差 / 最小差异块滑块（对应模式生效）
                         if matches!(self.diff_mode, DiffMode::Tolerance | DiffMode::Mixed) {
                             ui.separator();
