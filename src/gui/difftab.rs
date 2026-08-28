@@ -509,7 +509,6 @@ impl DiffTab {
 
     /// P58-2：单侧路径输入行（输入框 + ▾历史 + 📁浏览 + ✕清空）。pane_width 为该侧可用宽。
     /// 用于快速对比分栏与完整对比视图面板顶部（替换原「路径+编码」表头）。
-    #[allow(dead_code)]
     pub fn open_row(&mut self, ui: &mut egui::Ui, is_left: bool, pane_width: f32) {
         ui.horizontal(|ui| {
             let iw = (pane_width - 116.0).max(40.0);
@@ -3034,6 +3033,23 @@ impl DiffTab {
             let _ = max_line_w; // P33：横向滚动条范围在工具栏计算（栏宽固定半屏）
             let fg = text_color(ui);
 
+            // P58-2：面板顶部每侧路径输入行（▾历史/📁浏览/✕清空，与快速对比页一致）——
+            // 渲染在 rows/content 借用之前，可安全写 self.open_l/open_r。
+            {
+                let row_h = 30.0;
+                let head_l_w = gutter_l + half;
+                let head_r_w = gutter_r + half;
+                ui.horizontal(|ui| {
+                    self.open_row(ui, true, head_l_w);
+                    ui.allocate_exact_size(
+                        Vec2::new(super::theme::MID_GAP, row_h),
+                        egui::Sense::hover(),
+                    );
+                    self.open_row(ui, false, head_r_w);
+                });
+                ui.separator();
+            }
+
             // 匹配行集合（搜索高亮）
             let match_set: std::collections::HashSet<usize> =
                 self.search.matches.iter().copied().collect();
@@ -3140,30 +3156,6 @@ impl DiffTab {
             let mut copy_line_req: Option<(usize, EditSide)> = None;
             // P37-1j：右键外部工具对比请求 (左路径, 右路径)
             let mut external_req: Option<(String, String)> = None;
-
-            // P58-2：面板顶部路径输入框（每侧一个，替换原「路径+编码」表头——可编辑路径，无编码/大小详情）
-            {
-                let row_h = 30.0;
-                let head_l_w = gutter_l + half;
-                let head_r_w = gutter_r + half;
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.open_l)
-                            .hint_text(t(I18nKey::OpenLeft))
-                            .desired_width((head_l_w - 10.0).max(40.0)),
-                    );
-                    ui.allocate_exact_size(
-                        Vec2::new(super::theme::MID_GAP, row_h),
-                        egui::Sense::hover(),
-                    );
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.open_r)
-                            .hint_text(t(I18nKey::OpenRight))
-                            .desired_width((head_r_w - 10.0).max(40.0)),
-                    );
-                });
-                ui.separator();
-            }
 
             // P42-3：字符列标尺（BC 标尺，内容区顶部绘制 10/20/... 刻度）
             if self.show_ruler && self.hex.is_none() {
