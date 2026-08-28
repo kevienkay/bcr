@@ -140,11 +140,7 @@ pub fn check(ui: &mut Ui, checked: &mut bool, text: &str) -> egui::Response {
         Pos2::new(rect.left() + 2.0, rect.center().y - box_size / 2.0),
         Vec2::splat(box_size),
     );
-    let accent = if dark {
-        Color32::from_rgb(86, 148, 240)
-    } else {
-        Color32::from_rgb(40, 90, 200)
-    };
+    let accent = theme::accent(dark);
     if *checked {
         ui.painter().rect_filled(box_rect, 4.0, accent);
         ui.painter().text(

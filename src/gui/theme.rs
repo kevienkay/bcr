@@ -114,6 +114,15 @@ pub fn hl_modify_r(dark: bool) -> Color32 {
     }
 }
 
+/// BC 主强调色（复选框填充、滑块轨道、焦点/选中强调）。深浅主题各一套。
+pub fn accent(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(86, 148, 240)
+    } else {
+        Color32::from_rgb(40, 90, 200)
+    }
+}
+
 /// 行号颜色（P39-2b：适中灰，深浅主题都清晰）
 pub const GUTTER: Color32 = Color32::from_gray(128);
 
