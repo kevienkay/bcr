@@ -56,6 +56,7 @@ pub struct LoadedFile {
     /// P33：文件大小（详情行显示）
     pub size: u64,
     /// P33：修改时间可读串（详情行显示）
+    #[allow(dead_code)]
     pub mtime: String,
 }
 
@@ -504,6 +505,72 @@ impl DiffTab {
         self.open_l = l.clone();
         self.open_r = r.clone();
         self.load_pair(&l, &r, opts);
+    }
+
+    /// P58-2：单侧路径输入行（输入框 + ▾历史 + 📁浏览 + ✕清空）。pane_width 为该侧可用宽。
+    /// 用于快速对比分栏与完整对比视图面板顶部（替换原「路径+编码」表头）。
+    #[allow(dead_code)]
+    pub fn open_row(&mut self, ui: &mut egui::Ui, is_left: bool, pane_width: f32) {
+        ui.horizontal(|ui| {
+            let iw = (pane_width - 116.0).max(40.0);
+            let resp = ui.add(
+                egui::TextEdit::singleline(if is_left {
+                    &mut self.open_l
+                } else {
+                    &mut self.open_r
+                })
+                .hint_text("文件或目录")
+                .desired_width(iw),
+            );
+            // ▾ 历史下拉（分侧）
+            let hist = if is_left {
+                self.recent_paths_l.clone()
+            } else {
+                self.recent_paths_r.clone()
+            };
+            ui.menu_button(
+                egui::RichText::new(icons::Icon::History.glyph().to_string())
+                    .font(icons::font(14.0))
+                    .color(ui.visuals().text_color()),
+                |ui| {
+                    if hist.is_empty() {
+                        ui.weak("暂无历史路径");
+                    }
+                    let mut pick: Option<String> = None;
+                    for p in &hist {
+                        if ui.button(p.as_str()).clicked() {
+                            pick = Some(p.clone());
+                        }
+                    }
+                    if let Some(p) = pick {
+                        self.open_into(is_left, p);
+                    }
+                },
+            );
+            // 📁 浏览
+            if widgets::icon_button(ui, icons::Icon::Folder, "浏览路径", 14.0).clicked() {
+                if let Some(p) = super::pick_file() {
+                    self.open_into(is_left, p);
+                }
+            }
+            // ✕ 清空
+            if widgets::icon_button(ui, icons::Icon::Clear, "清空", 14.0).clicked() {
+                if is_left {
+                    self.open_l.clear();
+                    self.left = None;
+                } else {
+                    self.open_r.clear();
+                    self.right = None;
+                }
+                self.recompute();
+            }
+            // 输入路径后回车 → 加载该侧/两侧
+            if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                let l = self.open_l.trim().to_string();
+                let r = self.open_r.trim().to_string();
+                self.load_open_pair(l, r);
+            }
+        });
     }
 
     pub fn recompute(&mut self) {
@@ -2612,7 +2679,7 @@ impl DiffTab {
 
         // P50：点击文件信息头 → 更换该侧文件请求（闭包内赋值，闭包结束后处理，
         // 避免与渲染区 &self.rows 借用冲突）
-        let mut header_click: Option<EditSide> = None;
+        let header_click: Option<EditSide> = None;
 
         egui::CentralPanel::default().show(ui, |ui| {
             // 二进制 hex 对比模式（克隆到局部，渲染基于局部副本，保存时可自由 &mut self）
@@ -3074,107 +3141,26 @@ impl DiffTab {
             // P37-1j：右键外部工具对比请求 (左路径, 右路径)
             let mut external_req: Option<(String, String)> = None;
 
-            // BC 式左右两页：顶部文件名头部（固定视口宽度，不随内容横向滚动移动）
-            // P33：两行结构 — 第一行文件名，第二行详情（时间 | 大小 | 编码），对标 BC 5
+            // P58-2：面板顶部路径输入框（每侧一个，替换原「路径+编码」表头——可编辑路径，无编码/大小详情）
             {
-                let head_h = 42.0;
-                let head_bg = Some(super::theme::head_bg(ui.visuals().dark_mode));
-                let head_fg = super::theme::head_fg(ui.visuals().dark_mode);
-                let detail_fg = ui.visuals().weak_text_color();
-                // 头部两栏各占视口半宽（gutter + half），长行内容超宽时头部不跟随滚动
+                let row_h = 30.0;
                 let head_l_w = gutter_l + half;
                 let head_r_w = gutter_r + half;
-                // 每侧头部信息：全路径（BC 风格，可点击更换）+ 详情行
-                let l_info = self
-                    .left
-                    .as_ref()
-                    .map(|f| (f.path.clone(), file_detail_line(f)));
-                let r_info = self
-                    .right
-                    .as_ref()
-                    .map(|f| (f.path.clone(), file_detail_line(f)));
-                // 全路径截断：超宽时保留头部目录 + … + 文件名（BC 行为）
-                let l_path = l_info
-                    .as_ref()
-                    .map(|(p, _)| p.clone())
-                    .unwrap_or_else(|| t(I18nKey::OpenLeft).to_string());
-                let r_path = r_info
-                    .as_ref()
-                    .map(|(p, _)| p.clone())
-                    .unwrap_or_else(|| t(I18nKey::OpenRight).to_string());
-                let l_name = truncate_path(&l_path, ((head_l_w - 42.0) / 7.0) as usize);
-                let r_name = truncate_path(&r_path, ((head_r_w - 42.0) / 7.0) as usize);
-                let l_detail = l_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
-                let r_detail = r_info.as_ref().map(|(_, d)| d.clone()).unwrap_or_default();
                 ui.horizontal(|ui| {
-                    // 左头部：两行（路径 13px + 详情 11px）
-                    let (l_rect, l_resp) =
-                        ui.allocate_exact_size(Vec2::new(head_l_w, head_h), egui::Sense::click());
-                    paint_bg(ui, l_rect, head_bg);
-                    // 📁 文件夹图标：点击可更换文件路径（BC 风格）
-                    ui.painter().text(
-                        Pos2::new(l_rect.left() + 10.0, l_rect.top() + 11.0),
-                        egui::Align2::LEFT_CENTER,
-                        "📁",
-                        egui::FontId::proportional(13.0),
-                        head_fg,
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.open_l)
+                            .hint_text(t(I18nKey::OpenLeft))
+                            .desired_width((head_l_w - 10.0).max(40.0)),
                     );
-                    ui.painter().text(
-                        Pos2::new(l_rect.left() + 30.0, l_rect.top() + 11.0),
-                        egui::Align2::LEFT_CENTER,
-                        l_name,
-                        egui::FontId::proportional(13.0),
-                        head_fg,
+                    ui.allocate_exact_size(
+                        Vec2::new(super::theme::MID_GAP, row_h),
+                        egui::Sense::hover(),
                     );
-                    ui.painter().text(
-                        Pos2::new(l_rect.left() + 10.0, l_rect.top() + 30.0),
-                        egui::Align2::LEFT_CENTER,
-                        l_detail,
-                        egui::FontId::proportional(11.0),
-                        detail_fg,
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.open_r)
+                            .hint_text(t(I18nKey::OpenRight))
+                            .desired_width((head_r_w - 10.0).max(40.0)),
                     );
-                    if l_resp.clicked() {
-                        header_click = Some(EditSide::Left);
-                    }
-                    // hover 提示：完整路径 + 更换说明（BC 风格）
-                    l_resp
-                        .clone()
-                        .on_hover_text(format!("{}\n点击更换文件", l_path));
-                    // 中间空隙
-                    ui.allocate_exact_size(Vec2::new(mid_gap, head_h), egui::Sense::hover());
-                    // 右头部
-                    let (r_rect, r_resp) =
-                        ui.allocate_exact_size(Vec2::new(head_r_w, head_h), egui::Sense::click());
-                    paint_bg(ui, r_rect, head_bg);
-                    // 📁 文件夹图标：点击可更换文件路径（BC 风格）
-                    ui.painter().text(
-                        Pos2::new(r_rect.left() + 10.0, r_rect.top() + 11.0),
-                        egui::Align2::LEFT_CENTER,
-                        "📁",
-                        egui::FontId::proportional(13.0),
-                        head_fg,
-                    );
-                    ui.painter().text(
-                        Pos2::new(r_rect.left() + 30.0, r_rect.top() + 11.0),
-                        egui::Align2::LEFT_CENTER,
-                        r_name,
-                        egui::FontId::proportional(13.0),
-                        head_fg,
-                    );
-                    ui.painter().text(
-                        Pos2::new(r_rect.left() + 10.0, r_rect.top() + 30.0),
-                        egui::Align2::LEFT_CENTER,
-                        r_detail,
-                        egui::FontId::proportional(11.0),
-                        detail_fg,
-                    );
-                    if r_resp.clicked() {
-                        header_click = Some(EditSide::Right);
-                    }
-                    // hover 提示：完整路径 + 更换说明（BC 风格）
-                    r_resp
-                        .clone()
-                        .on_hover_text(format!("{}\n点击更换文件", r_path));
                 });
                 ui.separator();
             }
@@ -4184,6 +4170,7 @@ fn basename(p: &str) -> String {
 
 /// P50：全路径截断显示（BC 风格）——超宽时保留「目录…文件名」，
 /// 避免长路径溢出头部区域；完整路径在 hover 提示中可见。
+#[allow(dead_code)]
 fn truncate_path(p: &str, max_chars: usize) -> String {
     let count = p.chars().count();
     if count <= max_chars || max_chars < 16 {
@@ -4218,6 +4205,7 @@ fn file_mtime_str(p: &str) -> String {
 }
 
 /// P33：文件详情行（BC 式 "时间 | 大小 bytes | 编码"）
+#[allow(dead_code)]
 fn file_detail_line(f: &LoadedFile) -> String {
     let mut parts: Vec<String> = Vec::new();
     if !f.mtime.is_empty() {

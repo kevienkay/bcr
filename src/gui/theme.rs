@@ -155,6 +155,7 @@ pub fn status_differ() -> Color32 {
     Color32::from_rgb(246, 39, 16)
 }
 /// 文件信息头背景（DiffTab 头部两栏）
+#[allow(dead_code)]
 pub fn head_bg(dark: bool) -> Color32 {
     if dark {
         Color32::from_gray(38)
@@ -163,6 +164,7 @@ pub fn head_bg(dark: bool) -> Color32 {
     }
 }
 /// 文件信息头前景（蓝色系，BC 观感）
+#[allow(dead_code)]
 pub fn head_fg(dark: bool) -> Color32 {
     if dark {
         Color32::from_rgb(150, 190, 240)
