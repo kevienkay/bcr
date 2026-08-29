@@ -101,6 +101,7 @@ $WxsTemplate = @'
   <Product Id="*" Name="bcr" Language="1033" Version="$(var.Version)"
            Manufacturer="bcr" UpgradeCode="{B4C2E7A1-3D6F-4A9B-8C1D-2E5F6A7B8C9D}">
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine"
+             Platform="x64"
              Manufacturer="bcr" Description="Beyond Compare style file comparison tool"
              Keywords="diff,compare,merge,sync" />
 
@@ -153,7 +154,7 @@ Set-Content -Path $Wxs -Value $WxsContent -Encoding UTF8
 
 Push-Location $WixWork
 try {
-  & $candle -dVersion="$Ver" bcr.wxs | Out-Null
+  & $candle -arch x64 -dVersion="$Ver" bcr.wxs | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "candle failed (exit $LASTEXITCODE)" }
   # -sval: skip ICE validation. Hosted CI runners (GitHub Actions service accounts)
   # cannot run ICE validation (needs interactive Windows Installer session), so it
