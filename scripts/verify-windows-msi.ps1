@@ -1,26 +1,28 @@
-# P59: Release verify — Windows MSI 静默安装验证。
-# 在含 .msi 的目录运行：安装到默认位置，确认 bcr.exe 存在。
+# P59: Release verify - silent-install the Windows MSI and check bcr.exe exists.
+# Run inside a directory containing the .msi file.
 #
-# 用法: powershell -File scripts/verify-windows-msi.ps1
+# NOTE: keep this file ASCII-only (Windows PowerShell 5.1 reads BOM-less files as ANSI).
+#
+# Usage: powershell -File scripts/verify-windows-msi.ps1
 $ErrorActionPreference = "Stop"
 
 $msi = Get-ChildItem -Path . -Filter "*.msi" | Select-Object -First 1
 if (-not $msi) {
-  Write-Error "未找到 .msi 文件"
+  Write-Error "No .msi file found"
   exit 1
 }
 
-Write-Host "安装 $($msi.Name) ..."
+Write-Host "Installing $($msi.Name) ..."
 $p = Start-Process msiexec -ArgumentList @("/i", $msi.FullName, "/qn", "/norestart") -Wait -PassThru
 if ($p.ExitCode -ne 0) {
-  Write-Error "msiexec 安装失败 exit=$($p.ExitCode)"
+  Write-Error "msiexec install failed exit=$($p.ExitCode)"
   exit 1
 }
 Start-Sleep -Seconds 3
 
 $installed = "C:\Program Files\bcr\bcr.exe"
 if (-not (Test-Path $installed)) {
-  Write-Error "安装后未找到 $installed"
+  Write-Error "Installed binary not found: $installed"
   exit 1
 }
 Write-Host "OK $installed"
