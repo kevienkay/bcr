@@ -152,7 +152,11 @@ Push-Location $WixWork
 try {
   & $candle -dVersion="$Ver" bcr.wxs | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "candle failed (exit $LASTEXITCODE)" }
-  & $light -ext WixUIExtension -o "bcr.msi" "bcr.wixobj" | Out-Null
+  # -sval: skip ICE validation. Hosted CI runners (GitHub Actions service accounts)
+  # cannot run ICE validation (needs interactive Windows Installer session), so it
+  # fails with exit 204 on CI even for valid packages. FireGiant docs confirm hosted
+  # CI is incompatible with validation; the only option is to suppress it.
+  & $light -sval -ext WixUIExtension -o "bcr.msi" "bcr.wixobj" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "light failed (exit $LASTEXITCODE)" }
   $Msi = Join-Path $OutDir "$Base.msi"
   Copy-Item "bcr.msi" $Msi -Force
