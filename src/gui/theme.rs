@@ -126,6 +126,15 @@ pub fn accent(dark: bool) -> Color32 {
 /// 行号颜色（P39-2b：适中灰，深浅主题都清晰）
 pub const GUTTER: Color32 = Color32::from_gray(128);
 
+/// P56-UI：zebra 条纹底色（目录/表格偶数行，仅黑白微差不喧宾夺主）
+pub fn zebra_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(28)
+    } else {
+        Color32::from_rgb(243, 244, 248)
+    }
+}
+
 /// 状态徽标前景色（目录对比/合并视图，批次 3 使用）
 #[allow(dead_code)]
 pub fn status_fg(ui: &egui::Ui, letter: char) -> Color32 {
@@ -397,12 +406,15 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
     use egui::epaint::CornerRadius;
     use egui::Stroke;
 
-    // 间距
+    // 间距（4/8 密度网格：8 的整数/一半，避免随意值）
     style.spacing.item_spacing = egui::vec2(ITEM_GAP, ITEM_GAP);
-    style.spacing.button_padding = egui::vec2(10.0, 4.0);
-    style.spacing.interact_size.y = 24.0;
+    style.spacing.button_padding = egui::vec2(10.0, 5.0);
+    style.spacing.interact_size.y = 26.0;
     style.spacing.indent = 14.0;
-    // 文本样式
+    // 字号分级（Heading/正文/按钮/等宽/Small）——BC 用字号+粗细做层级而非艳色
+    style
+        .text_styles
+        .insert(egui::TextStyle::Heading, FontId::proportional(17.0));
     style
         .text_styles
         .insert(egui::TextStyle::Monospace, FontId::monospace(FONT_SIZE));
@@ -412,6 +424,9 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
     style
         .text_styles
         .insert(egui::TextStyle::Button, FontId::proportional(FONT_SIZE));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Small, FontId::proportional(11.5));
     // 圆角
     for w in [
         &mut style.visuals.widgets.noninteractive,
@@ -423,15 +438,21 @@ fn apply_style(style: &mut egui::Style, dark: bool) {
         w.corner_radius = CornerRadius::same(CORNER as u8);
     }
     // 面板层次：深色下用更深的背景区分工具栏/内容区
+    // P56-UI 精修：窗口统一圆角（BC/原生桌面窗感），深浅主题圆角一致
+    style.visuals.window_corner_radius = CornerRadius::same(8);
+    style.visuals.window_fill = if dark {
+        Color32::from_gray(30)
+    } else {
+        Color32::from_rgb(252, 252, 254)
+    };
     if dark {
         style.visuals.panel_fill = Color32::from_gray(24);
-        style.visuals.window_fill = Color32::from_gray(30);
         style.visuals.extreme_bg_color = Color32::from_gray(18);
         style.visuals.faint_bg_color = Color32::from_gray(34);
+        style.visuals.window_stroke = Stroke::new(1.0, Color32::from_gray(56));
     } else {
         // Pxx-浅色：BC 纸面观感——轻微冷白 + 面板间细描边，层次靠同色系微差
         style.visuals.panel_fill = Color32::from_rgb(248, 249, 252);
-        style.visuals.window_fill = Color32::from_rgb(252, 252, 254);
         style.visuals.extreme_bg_color = Color32::from_rgb(240, 242, 246);
         style.visuals.faint_bg_color = Color32::from_rgb(245, 246, 249);
         style.visuals.window_stroke = Stroke::new(1.0, Color32::from_rgb(206, 208, 216));

@@ -2146,12 +2146,18 @@ impl DirTab {
                         egui::Sense::click(),
                     );
                     let is_sel = selected == Some(idx) || self.selected_set.contains(&idx);
+                    // P56-UI：zebra 条纹（偶数行轻微底色）+ 选中/hover 层次，BC 表格观感
+                    let zebra = if idx % 2 == 1 && !is_sel && !resp.hovered() {
+                        Some(super::theme::zebra_bg(ui.visuals().dark_mode))
+                    } else {
+                        None
+                    };
                     let bg = if is_sel {
                         Some(bg_match_current())
                     } else if resp.hovered() {
                         Some(bg_match())
                     } else {
-                        None
+                        zebra
                     };
                     paint_bg(ui, rect, bg);
                     let indent = row.depth as f32 * 16.0;

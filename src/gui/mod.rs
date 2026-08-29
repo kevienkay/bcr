@@ -1727,7 +1727,28 @@ impl eframe::App for DiffApp {
         });
 
         // 标签栏（P33：菜单栏之下独立一行，BC 观感）
+        // P56-UI：顶部工具栏区加垂直渐变底（上亮下暗）+ 底部 1px 分隔线，与内容区层次分明
         egui::Panel::top("tabbar").show(ui, |ui| {
+            let full = ui.available_rect_before_wrap();
+            let dark = ui.visuals().dark_mode;
+            let (top_c, bot_c) = if dark {
+                (egui::Color32::from_gray(37), egui::Color32::from_gray(27))
+            } else {
+                (
+                    egui::Color32::from_rgb(252, 252, 254),
+                    egui::Color32::from_rgb(245, 246, 250),
+                )
+            };
+            let mesh = egui::epaint::Mesh::with_texture(egui::TextureId::Managed(0));
+            let mut m = mesh;
+            let mut v = |pos: egui::Pos2, c: egui::Color32| m.colored_vertex(pos, c);
+            v(full.left_top(), top_c);
+            v(full.right_top(), top_c);
+            v(full.right_bottom(), bot_c);
+            v(full.left_bottom(), bot_c);
+            m.add_triangle(0, 1, 2);
+            m.add_triangle(0, 2, 3);
+            ui.painter().add(egui::Shape::mesh(m));
             ui.horizontal_wrapped(|ui| {
                 // 标签栏
                 let mut close: Option<usize> = None;
@@ -3097,6 +3118,14 @@ impl DiffApp {
     fn status_bar(&self, ui: &mut egui::Ui) {
         // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总；B3 补路径/行列数/选中项数）
         egui::Panel::bottom("status_bar").show(ui, |ui| {
+            // P56-UI：顶部 1px 分隔线，与内容区层次分明
+            let top = ui.available_rect_before_wrap().top();
+            let dark = ui.visuals().dark_mode;
+            ui.painter().hline(
+                0.0..=ui.available_width(),
+                top,
+                egui::Stroke::new(1.0, crate::gui::theme::mid_sep(dark)),
+            );
             ui.horizontal(|ui| {
                 ui.add_space(6.0);
                 if let Some(tab) = self.tabs.get(self.active) {
@@ -3623,6 +3652,39 @@ fn install_cjk_fonts(ctx: &egui::Context) {
                 fonts
                     .families
                     .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, name.clone());
+            }
+        }
+    }
+    // 1.5 平台原生比例字体（Latin 首选）：取代 egui 默认 Ubuntu-Light 的薄观感，更接近 BC 的沉稳字形
+    let prop_candidates: &[&str] = if cfg!(target_os = "windows") {
+        &[
+            "C:\\Windows\\Fonts\\segoeui.ttf",
+            "C:\\Windows\\Fonts\\arial.ttf",
+        ]
+    } else if cfg!(target_os = "macos") {
+        &[
+            "/System/Library/Fonts/SFNS.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+        ]
+    } else {
+        &[
+            "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        ]
+    };
+    for (i, p) in prop_candidates.iter().enumerate() {
+        if std::path::Path::new(p).exists() {
+            if let Ok(bytes) = std::fs::read(p) {
+                let name = format!("prop_{i}");
+                fonts
+                    .font_data
+                    .insert(name.clone(), egui::FontData::from_owned(bytes).into());
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
                     .or_default()
                     .insert(0, name.clone());
             }
