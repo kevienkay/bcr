@@ -13,9 +13,17 @@ Rust 实现的 Beyond Compare 替代品，当前完成 **M1：文本 diff** + **
 
 ### Windows
 
+**MSI 安装（正式，推荐）**：
+
+1. 从 [Releases](https://github.com/kevienkay/bcr/releases) 下载 `bcr-<版本>-windows-x86_64.msi`
+2. 双击运行，跟随安装向导（License → 安装目录 → 完成）
+3. 安装后从开始菜单启动「bcr」，或在任意终端执行 `bcr`（已入 PATH 并写入开始菜单快捷方式）
+4. 卸载：设置 → 应用 → bcr → 卸载（或控制面板 → 程序卸载）
+
+**zip 便携版（可选）**：
+
 1. 下载 `bcr-<版本>-windows-x86_64.zip`，解压到任意目录（如 `C:\bcr`）
 2. 双击 `bcr.exe` 启动 GUI，或打开命令行执行 `bcr.exe --help`
-3. （可选）将目录加入 PATH，即可在任意终端使用 `bcr`
 
 ### Linux
 
@@ -26,6 +34,20 @@ sudo dpkg -i bcr-<版本>-linux-x86_64.deb
 bcr --help
 ```
 
+**rpm（Fedora/RHEL）**：
+
+```bash
+sudo rpm -i bcr-<版本>-linux-x86_64.rpm
+bcr --help
+```
+
+**AppImage（跨发行版，免安装）**：
+
+```bash
+chmod +x bcr-<版本>-linux-x86_64.AppImage
+./bcr-<版本>-linux-x86_64.AppImage
+```
+
 **tar.gz（通用）**：
 
 ```bash
@@ -33,6 +55,7 @@ tar xzf bcr-<版本>-linux-x86_64.tar.gz -C ~/.local/bin
 bcr --help
 ```
 
+> deb/rpm 安装后可在应用菜单（GNOME/KDE）直接启动 bcr；
 > 校验完整性：下载后对照 Release 中的 `SHA256SUMS` 执行 `sha256sum -c`。
 
 ### 源码 / Cargo

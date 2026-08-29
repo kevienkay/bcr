@@ -6,6 +6,12 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### 正式安装流程（P59）
+
+- **Windows MSI 完整化**：重写 `scripts/package-windows.ps1`——WiX 构建完整安装向导（License 页 + 目录选择 + 完成页）、开始菜单快捷方式、控制面板卸载入口（ARP 含 Manufacturer/HelpLink/图标）、perMachine 安装 + MajorUpgrade 自动升级；`build.rs` 用 winresource 把 `assets/bcr.ico` 嵌入 bcr.exe 资源节；zip 便携版保留
+- **Linux 新增 rpm + AppImage**：`scripts/package-linux.sh` 新增 Fedora/RHEL 的 rpm（rpmbuild，含 .desktop + 图标）与跨发行版 AppImage（appimagetool，含 AppRun + .desktop + 图标）；deb/tar.gz 保留
+- **release.yml 稳定性**：WiX 改官方 GitHub 直链 wix311-binaries.zip（弃 chocolatey）；Linux job 安装 rpmbuild + 下载 appimagetool；verify 矩阵 Windows 改验 MSI 静默安装、Linux 附加 rpm 内容 + AppImage 运行验证
+
 ### UI 精修美化（P51）
 
 - **颜色系统收敛**：theme.rs 新增 25 个语义函数（`head_bg/gutter_bg/mid_bg/stat_*/folder_color/plan_*/img_*/banner_*` 等），收编 difftab/mod/dirtab/csvtab/mergetab/imagetab/mediatab/patchtab/foldermergetab/textedit/common 全部 ~70 处硬编码 Color32；统计色（difftab 底部 vs 全局状态栏）与错误色（三种 240,110,110/230,100,100/235,90,90）统一；移除 hex 死代码颜色

@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  # 手动触发：不打 tag 也可验证完整打包流水线（Actions 页 → Run workflow）
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,7 +22,7 @@ jobs:
           - os: ubuntu-latest
             script: bash scripts/package-linux.sh
           - os: windows-latest
-            script: powershell -File scripts/package-windows.ps1
+            script: powershell -File scripts/package-windows.ps1 -WixDir "C:\wix311"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -36,16 +38,47 @@ jobs:
           sudo apt-get install -y \
             libxcb1-dev libxkbcommon-dev libgtk-3-dev libgl1-mesa-dev
 
-      # aws-lc-sys（russh 依赖）在 Windows 上构建需要 cmake + nasm
+      # Linux 打包工具：rpmbuild（rpm）+ appimagetool（AppImage）
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y rpm
+          mkdir -p "$HOME/tools"
+          curl -sL -o "$HOME/tools/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$HOME/tools/appimagetool"
+          echo "APPIMAGETOOL=$HOME/tools/appimagetool" >> "$GITHUB_ENV"
+
+      # aws-lc-sys（russh 依赖）在 Windows 上构建需要 cmake + nasm。
+      # 同 ci.yml：cmake 用预装，nasm 官方直链，绕开 chocolatey 超时。
       - name: Install Windows build deps (aws-lc-sys)
         if: runner.os == 'Windows'
-        run: choco install cmake nasm -y --no-progress
+        shell: pwsh
+        run: |
+          if (Test-Path 'C:\Program Files\CMake\bin') {
+            echo 'C:\Program Files\CMake\bin' | Out-File -Append $env:GITHUB_PATH
+          } elseif (Get-Command cmake -ErrorAction SilentlyContinue) {
+            Write-Host 'cmake already on PATH'
+          } else {
+            throw 'cmake not found on windows-latest image'
+          }
+          $ver = '2.16.03'
+          $url = "https://www.nasm.us/pub/nasm/releasebuilds/$ver/win64/nasm-$ver-win64.zip"
+          $zip = Join-Path $env:TEMP 'nasm.zip'
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          Expand-Archive -Path $zip -DestinationPath (Join-Path $env:TEMP 'nasm') -Force
+          echo (Join-Path $env:TEMP "nasm\nasm-$ver") | Out-File -Append $env:GITHUB_PATH
 
-      # WiX 工具链（msi，尽力而为）
-      - name: Install WiX (Windows)
+      # WiX 工具链（MSI）：官方 GitHub 直链 wix311，绕开 choco 不稳定
+      - name: Install WiX (Windows, official direct link)
         if: runner.os == 'Windows'
-        run: choco install wixtoolset -y --no-progress
-        continue-on-error: true
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip'
+          $zip = Join-Path $env:TEMP 'wix311.zip'
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          Expand-Archive -Path $zip -DestinationPath 'C:\wix311' -Force
+          Get-ChildItem 'C:\wix311' | Select-Object -First 5 Name
 
       - name: Build (release)
         run: cargo build --release --locked
@@ -88,6 +121,7 @@ jobs:
           path: artifacts/SHA256SUMS
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
@@ -105,9 +139,9 @@ jobs:
             install: sudo dpkg -i ./*.deb
             bin: /usr/bin/bcr
           - os: windows-latest
-            pkg: "*.zip"
-            install: powershell -Command "Expand-Archive -Force ./*.zip -DestinationPath ./inst"
-            bin: ./inst/bcr.exe
+            pkg: "*.msi"
+            install: powershell -File ../scripts/verify-windows-msi.ps1
+            bin: "/c/Program Files/bcr/bcr.exe"
           - os: macos-latest
             pkg: "*.dmg"
             install: hdiutil attach ./*.dmg -nobrowse -readonly
@@ -122,7 +156,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             xvfb libxkbcommon-x11-0 \
-            libxcb1-dev libxkbcommon-dev libgtk-3-dev libgl1-mesa-dev
+            libxcb1-dev libxkbcommon-dev libgtk-3-dev libgl1-mesa-dev \
+            rpm cpio
 
       - name: Download packages
         uses: actions/download-artifact@v4
@@ -152,3 +187,15 @@ jobs:
           else
             bash ../tests/gui_smoke.sh "$BIN"
           fi
+
+      # Linux 附加验证：rpm 内容 + AppImage 可运行（--appimage-extract 免 FUSE）
+      - name: Verify rpm + AppImage (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cd artifacts
+          echo "--- rpm 内容 ---"
+          rpm2cpio ./*.rpm | cpio -t 2>/dev/null | sort
+          echo "--- AppImage 运行 ---"
+          chmod +x ./*.AppImage
+          ./*.AppImage --appimage-extract-and-run --version

@@ -48,6 +48,10 @@ muda = "0.17"
 # P58：Windows 原生菜单需从 winit 窗口提取 HWND
 raw-window-handle = "0.6"
 
+# 正式分发：build.rs 用 winresource 把 bcr.ico 嵌入 exe 资源节（仅 Windows）
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
 [dev-dependencies]
 tempfile = "3"
 criterion = { version = "0.5", default-features = false }
