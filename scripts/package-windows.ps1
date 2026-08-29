@@ -34,6 +34,9 @@ if (-not (Test-Path $Bin)) {
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+# Resolve to absolute path: later steps run inside Push-Location (temp work dir),
+# so a relative OutDir would resolve against the temp dir and break Copy-Item.
+$OutDir = (Get-Item $OutDir).FullName
 $Base = "bcr-$Ver-windows-x86_64"
 
 # Icon is required for the formal package; fail loudly if missing.
