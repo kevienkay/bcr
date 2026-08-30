@@ -98,6 +98,37 @@ pub fn icon_button(ui: &mut Ui, icon: icons::Icon, tooltip: &str, size: f32) -> 
     icon_button_enabled(ui, true, icon, tooltip, size)
 }
 
+/// BC 工具栏纯图标按钮：只显示图标；无障碍/测试标签用 `name`（保留原按钮文案，
+/// 避免 kittest get_by_label_contains 失效），悬停提示用 `tooltip`。
+#[allow(dead_code)]
+pub fn icon_tool(
+    ui: &mut Ui,
+    icon: icons::Icon,
+    name: &str,
+    tooltip: &str,
+    size: f32,
+) -> egui::Response {
+    let (corner, fill, stroke, txt) = btn_style(ui);
+    let resp = ui
+        .add(
+            egui::Button::new(
+                RichText::new(icon.glyph().to_string())
+                    .font(icons::font(size))
+                    .color(txt),
+            )
+            .corner_radius(corner)
+            .fill(fill)
+            .stroke(stroke),
+        )
+        .on_hover_text(tooltip);
+    resp.widget_info(|| {
+        let mut info = egui::WidgetInfo::new(egui::WidgetType::Button);
+        info.label = Some(name.to_owned());
+        info
+    });
+    resp
+}
+
 /// 纯图标按钮（enabled 变体）：不可用灰显。BC 式工具栏主体，靠 tooltip 表意。
 #[allow(dead_code)]
 pub fn icon_button_enabled(

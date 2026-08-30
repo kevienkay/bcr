@@ -1407,22 +1407,24 @@ impl DirTab {
                         }
                         ui.separator();
                     }
-                    if widgets::tool_button(
+                    if widgets::icon_tool(
                         ui,
-                        Some(icons::Icon::Refresh),
+                        icons::Icon::Refresh,
                         t(I18nKey::Refresh),
                         "刷新 (F5)",
+                        15.0,
                     )
                     .clicked()
                     {
                         self.refresh();
                     }
                     // P36-D1：交换左右两侧（BC 会话菜单「交换两边」）
-                    if widgets::tool_button(
+                    if widgets::icon_tool(
                         ui,
-                        Some(icons::Icon::Swap),
+                        icons::Icon::Swap,
                         t(I18nKey::SwapSides),
                         "交换左右两侧目录",
+                        15.0,
                     )
                     .clicked()
                     {
