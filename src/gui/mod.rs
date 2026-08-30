@@ -1727,12 +1727,23 @@ impl eframe::App for DiffApp {
             self.run_menu_cmd(ui, cmd);
         }
         // P58：空文件对比页(打开对比页面) 的两半分栏 —— 同步最近路径历史 + 汲取其待记历史
+        let mut open_settings = false;
+        let mut pending: Vec<(bool, String)> = Vec::new();
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
             t.recent_paths_l = self.import_history_l.clone();
             t.recent_paths_r = self.import_history_r.clone();
-            for (is_left, p) in std::mem::take(&mut t.pending_history) {
-                self.add_import_history(is_left, &p);
+            pending = std::mem::take(&mut t.pending_history);
+            // BC：工具栏「设置」按钮 → 打开设置对话框
+            if t.settings_req {
+                t.settings_req = false;
+                open_settings = true;
             }
+        }
+        for (is_left, p) in pending {
+            self.add_import_history(is_left, &p);
+        }
+        if open_settings {
+            self.show_settings = true;
         }
         if self.theme_changed {
             self.theme_changed = false;

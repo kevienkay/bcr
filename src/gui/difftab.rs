@@ -162,6 +162,8 @@ pub struct DiffTab {
     /// P58：空文件对比页（尚未导入文件）左/右路径输入 + 分侧最近导入路径 + 待记历史
     pub open_l: String,
     pub open_r: String,
+    /// 请求打开设置对话框（由 DiffApp 处理）
+    pub settings_req: bool,
     pub recent_paths_l: Vec<String>,
     pub recent_paths_r: Vec<String>,
     /// 待记历史（(is_left, path)），由 DiffApp 每帧汲取到分侧历史
@@ -261,6 +263,7 @@ impl DiffTab {
             show_stats: true,
             open_l: String::new(),
             open_r: String::new(),
+            settings_req: false,
             recent_paths_l: Vec::new(),
             recent_paths_r: Vec::new(),
             pending_history: Vec::new(),
@@ -2513,6 +2516,13 @@ impl DiffTab {
                         .clicked()
                     {
                         self.replace_all();
+                    }
+                    // BC：设置（打开设置对话框）
+                    widgets::group_sep(ui);
+                    if widgets::stack_button(ui, icons::Icon::Settings, "设置", "打开设置", 15.0)
+                        .clicked()
+                    {
+                        self.settings_req = true;
                     }
                     // P33：长行横向滚动条（两栏固定各半屏，超长行栏内左右滑动查看）
                     if !self.rows.is_empty() && self.hex.is_none() {
