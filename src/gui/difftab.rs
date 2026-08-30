@@ -2291,13 +2291,25 @@ impl DiffTab {
             egui::Panel::top("difftab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     // ---- 打开（BC: Open 按钮组）----
-                    if widgets::icon_button(ui, icons::Icon::OpenLeft, t(I18nKey::OpenLeft), 15.0)
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::OpenLeft,
+                        t(I18nKey::OpenLeft),
+                        t(I18nKey::OpenLeft),
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.open_left_dialog();
                     }
-                    if widgets::icon_button(ui, icons::Icon::OpenRight, t(I18nKey::OpenRight), 15.0)
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::OpenRight,
+                        t(I18nKey::OpenRight),
+                        t(I18nKey::OpenRight),
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.open_right_dialog();
                     }
@@ -2368,14 +2380,26 @@ impl DiffTab {
                     {
                         self.copy_block_to(EditSide::Left);
                     }
-                    if widgets::icon_button(ui, icons::Icon::Refresh, t(I18nKey::Reload), 15.0)
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Refresh,
+                        t(I18nKey::Reload),
+                        t(I18nKey::Reload),
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.reload();
                     }
                     // P35-A2：交换左右两侧（BC Swap Sides）
-                    if widgets::icon_button(ui, icons::Icon::Swap, t(I18nKey::SwapSides), 15.0)
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Swap,
+                        t(I18nKey::SwapSides),
+                        t(I18nKey::SwapSides),
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.swap_sides();
                     }
@@ -2395,13 +2419,25 @@ impl DiffTab {
                             super::theme::stat_modify(ui.visuals().dark_mode)
                         },
                     );
-                    if widgets::icon_button(ui, icons::Icon::Next, t(I18nKey::NextDiff), 15.0)
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Next,
+                        t(I18nKey::NextDiff),
+                        t(I18nKey::NextDiff),
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.next_diff();
                     }
-                    if widgets::icon_button(ui, icons::Icon::Prev, t(I18nKey::PrevDiff), 15.0)
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Prev,
+                        t(I18nKey::PrevDiff),
+                        t(I18nKey::PrevDiff),
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.prev_diff();
                     }
@@ -2418,8 +2454,14 @@ impl DiffTab {
                     }
                     self.goto_line = goto_text.parse().ok();
                     if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                        || widgets::icon_button(ui, icons::Icon::Search, t(I18nKey::Goto), 15.0)
-                            .clicked()
+                        || widgets::stack_button(
+                            ui,
+                            icons::Icon::Search,
+                            t(I18nKey::Goto),
+                            t(I18nKey::Goto),
+                            15.0,
+                        )
+                        .clicked()
                     {
                         if let Some(line) = self.goto_line {
                             if line >= 1 {
@@ -2470,10 +2512,13 @@ impl DiffTab {
                         rep_resp.request_focus();
                         self.search.replace_focus = false;
                     }
-                    if widgets::icon_button(ui, icons::Icon::Copy, "替换", 15.0).clicked() {
+                    if widgets::stack_button(ui, icons::Icon::Copy, "替换", "替换", 15.0).clicked()
+                    {
                         self.replace_current();
                     }
-                    if widgets::icon_button(ui, icons::Icon::Copy, "全部替换", 15.0).clicked() {
+                    if widgets::stack_button(ui, icons::Icon::Copy, "全部替换", "全部替换", 15.0)
+                        .clicked()
+                    {
                         self.replace_all();
                     }
                     // P33：长行横向滚动条（两栏固定各半屏，超长行栏内左右滑动查看）

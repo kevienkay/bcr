@@ -129,6 +129,38 @@ pub fn icon_tool(
     resp
 }
 
+/// BC 工具栏按钮（图标在上、文字在下）：对标 BC 工具栏观感。
+/// 无障碍/测试标签用 `label`，悬停提示用 `tooltip`。size 为图标字号（文字自动小一档）。
+#[allow(dead_code)]
+pub fn stack_button(
+    ui: &mut Ui,
+    icon: icons::Icon,
+    label: &str,
+    tooltip: &str,
+    size: f32,
+) -> egui::Response {
+    let (corner, fill, stroke, txt) = btn_style(ui);
+    let mut job = egui::text::LayoutJob::default();
+    job.append(&icon.glyph().to_string(), 0.0, glyph_format(size, txt));
+    job.append("\n", 0.0, text_format(size - 4.0, txt));
+    job.append(label, 0.0, text_format(size - 4.0, txt));
+    let resp = ui
+        .add(
+            egui::Button::new(egui::WidgetText::LayoutJob(std::sync::Arc::new(job)))
+                .corner_radius(corner)
+                .fill(fill)
+                .stroke(stroke)
+                .min_size(egui::vec2(46.0, 30.0)),
+        )
+        .on_hover_text(tooltip);
+    resp.widget_info(|| {
+        let mut info = egui::WidgetInfo::new(egui::WidgetType::Button);
+        info.label = Some(label.to_owned());
+        info
+    });
+    resp
+}
+
 /// 纯图标按钮（enabled 变体）：不可用灰显。BC 式工具栏主体，靠 tooltip 表意。
 #[allow(dead_code)]
 pub fn icon_button_enabled(
