@@ -2371,6 +2371,19 @@ impl DiffTab {
                         self.set_detail_mode(next);
                     }
                     widgets::group_sep(ui);
+                    // BC：级别（切换 显示空白符）
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Differ,
+                        "级别",
+                        "显示/隐藏空白符",
+                        15.0,
+                    )
+                    .clicked()
+                    {
+                        self.show_whitespace = !self.show_whitespace;
+                    }
+                    widgets::group_sep(ui);
                     // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
                     widgets::group_sep(ui);
                     // ---- 编辑（BC: Copy/编辑组）----
