@@ -2314,28 +2314,21 @@ impl DiffTab {
                         self.open_right_dialog();
                     }
                     widgets::group_sep(ui);
-                    // ---- 显示过滤（BC: All▾ Diffs Context 组）----
-                    // P35-A3：视图过滤下拉（Show All/Diff/Same/Context）
+                    // ---- 显示过滤（BC: 全部/差别/相同 三态分段组）----
                     {
+                        let cur = self.view_filter;
+                        // BC 风格视图过滤：全部 / 差别 / 相同（+上下文）三态按钮
                         let filters = [
                             (DiffViewFilter::All, t(I18nKey::ShowAll)),
                             (DiffViewFilter::Diff, t(I18nKey::OnlyDiff)),
                             (DiffViewFilter::Same, t(I18nKey::ShowSame)),
                             (DiffViewFilter::Context, t(I18nKey::ShowContext)),
                         ];
-                        let cur = self.view_filter;
-                        let sel_text = filters
-                            .iter()
-                            .find(|(v, _)| *v == cur)
-                            .map(|(_, l)| *l)
-                            .unwrap_or("");
-                        widgets::combo(ui, sel_text, "", |ui| {
-                            for (v, l) in &filters {
-                                if ui.selectable_label(cur == *v, *l).clicked() {
-                                    self.view_filter = *v;
-                                }
+                        for (v, l) in &filters {
+                            if widgets::chip(ui, cur == *v, l).clicked() {
+                                self.view_filter = *v;
                             }
-                        });
+                        }
                     }
                     // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
                     widgets::group_sep(ui);
