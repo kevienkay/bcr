@@ -407,13 +407,19 @@ impl MergeTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("mergetab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if widgets::tool_button(ui, Some(icons::Icon::Refresh), t(I18nKey::Reload), "")
+                    if widgets::stack_button(ui, icons::Icon::Refresh, t(I18nKey::Reload), "", 15.0)
                         .clicked()
                     {
                         self.reload();
                     }
-                    if widgets::tool_button(ui, Some(icons::Icon::Save), t(I18nKey::SaveMerged), "")
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Save,
+                        t(I18nKey::SaveMerged),
+                        "",
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.save();
                     }
@@ -424,21 +430,23 @@ impl MergeTab {
                         I18nKey::ConflictsCount,
                         &[&self.view.conflicts.to_string()],
                     ));
-                    if widgets::tool_button(
+                    if widgets::stack_button(
                         ui,
-                        Some(icons::Icon::Next),
+                        icons::Icon::Next,
                         t(I18nKey::NextConflict),
                         "下一冲突 (F7)",
+                        15.0,
                     )
                     .clicked()
                     {
                         self.next_conflict();
                     }
-                    if widgets::tool_button(
+                    if widgets::stack_button(
                         ui,
-                        Some(icons::Icon::Prev),
+                        icons::Icon::Prev,
                         t(I18nKey::PrevConflict),
                         "上一冲突 (Shift+F7)",
+                        15.0,
                     )
                     .clicked()
                     {
