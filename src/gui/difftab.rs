@@ -2291,27 +2291,17 @@ impl DiffTab {
             egui::Panel::top("difftab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     // ---- 打开（BC: Open 按钮组）----
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::OpenLeft),
-                        t(I18nKey::OpenLeft),
-                        t(I18nKey::OpenLeftFile),
-                    )
-                    .clicked()
+                    if widgets::icon_button(ui, icons::Icon::OpenLeft, t(I18nKey::OpenLeft), 15.0)
+                        .clicked()
                     {
                         self.open_left_dialog();
                     }
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::OpenRight),
-                        t(I18nKey::OpenRight),
-                        t(I18nKey::OpenRightFile),
-                    )
-                    .clicked()
+                    if widgets::icon_button(ui, icons::Icon::OpenRight, t(I18nKey::OpenRight), 15.0)
+                        .clicked()
                     {
                         self.open_right_dialog();
                     }
-                    ui.separator();
+                    widgets::group_sep(ui);
                     // ---- 显示过滤（BC: All▾ Diffs Context 组）----
                     // P35-A3：视图过滤下拉（Show All/Diff/Same/Context）
                     {
@@ -2336,106 +2326,82 @@ impl DiffTab {
                         });
                     }
                     // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
-                    ui.separator();
+                    widgets::group_sep(ui);
                     // ---- 编辑（BC: Copy/编辑组）----
                     // P40-1：编辑左/右收进 Edit 菜单（start_edit）；撤销/重做保留（测试与高频操作依赖）
                     // P32-A6：撤销/重做按钮
                     let can_undo = !self.undo_stack.is_empty();
                     let can_redo = !self.redo_stack.is_empty();
-                    if widgets::tool_button_enabled(
-                        ui,
-                        can_undo,
-                        Some(icons::Icon::Prev),
-                        "撤销",
-                        "Ctrl+Z",
-                    )
-                    .clicked()
+                    if widgets::icon_button_enabled(ui, can_undo, icons::Icon::Prev, "撤销", 15.0)
+                        .clicked()
                     {
                         self.undo();
                     }
-                    if widgets::tool_button_enabled(
-                        ui,
-                        can_redo,
-                        Some(icons::Icon::Next),
-                        "重做",
-                        "Ctrl+Y",
-                    )
-                    .clicked()
+                    if widgets::icon_button_enabled(ui, can_redo, icons::Icon::Next, "重做", 15.0)
+                        .clicked()
                     {
                         self.redo();
                     }
-                    ui.separator();
+                    widgets::group_sep(ui);
                     // ---- 操作（BC: Copy/Swap/Reload 组）----
                     // P35-A1：复制差异块到另一侧（BC Copy to Other Side）
                     let has_diff = self.diff_pos.is_some();
-                    if widgets::tool_button_enabled(
+                    if widgets::icon_button_enabled(
                         ui,
                         has_diff,
-                        Some(icons::Icon::OpenRight),
+                        icons::Icon::OpenRight,
                         t(I18nKey::CopyToRight),
-                        "复制当前差异块左侧内容到右侧",
+                        15.0,
                     )
                     .clicked()
                     {
                         self.copy_block_to(EditSide::Right);
                     }
-                    if widgets::tool_button_enabled(
+                    if widgets::icon_button_enabled(
                         ui,
                         has_diff,
-                        Some(icons::Icon::OpenLeft),
+                        icons::Icon::OpenLeft,
                         t(I18nKey::CopyToLeft),
-                        "复制当前差异块右侧内容到左侧",
+                        15.0,
                     )
                     .clicked()
                     {
                         self.copy_block_to(EditSide::Left);
                     }
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::Refresh),
-                        t(I18nKey::Reload),
-                        t(I18nKey::ReloadHint),
-                    )
-                    .clicked()
+                    if widgets::icon_button(ui, icons::Icon::Refresh, t(I18nKey::Reload), 15.0)
+                        .clicked()
                     {
                         self.reload();
                     }
                     // P35-A2：交换左右两侧（BC Swap Sides）
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::Swap),
-                        t(I18nKey::SwapSides),
-                        "交换左右两侧文件",
-                    )
-                    .clicked()
+                    if widgets::icon_button(ui, icons::Icon::Swap, t(I18nKey::SwapSides), 15.0)
+                        .clicked()
                     {
                         self.swap_sides();
                     }
-                    ui.separator();
+                    widgets::group_sep(ui);
                     // ---- 差异导航（BC: Next Section/Prev Section 组）----
                     // P57-8：差异 x/y 显示当前序号/总差异数（BC 语义），非总行数
                     let cur_pos = self.diff_pos.map(|p| p + 1).unwrap_or(0);
-                    ui.label(fmt(
-                        I18nKey::DiffCount,
-                        &[&cur_pos.to_string(), &self.diff_rows.len().to_string()],
-                    ));
-                    if widgets::tool_button(
+                    widgets::badge(
                         ui,
-                        Some(icons::Icon::Next),
-                        t(I18nKey::NextDiff),
-                        "下一差异 (F6)",
-                    )
-                    .clicked()
+                        &fmt(
+                            I18nKey::DiffCount,
+                            &[&cur_pos.to_string(), &self.diff_rows.len().to_string()],
+                        ),
+                        if self.diff_rows.is_empty() {
+                            ui.visuals().weak_text_color()
+                        } else {
+                            super::theme::stat_modify(ui.visuals().dark_mode)
+                        },
+                    );
+                    if widgets::icon_button(ui, icons::Icon::Next, t(I18nKey::NextDiff), 15.0)
+                        .clicked()
                     {
                         self.next_diff();
                     }
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::Prev),
-                        t(I18nKey::PrevDiff),
-                        "上一差异 (F7)",
-                    )
-                    .clicked()
+                    if widgets::icon_button(ui, icons::Icon::Prev, t(I18nKey::PrevDiff), 15.0)
+                        .clicked()
                     {
                         self.prev_diff();
                     }
@@ -2452,7 +2418,7 @@ impl DiffTab {
                     }
                     self.goto_line = goto_text.parse().ok();
                     if (resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))
-                        || widgets::tool_button(ui, Some(icons::Icon::Search), t(I18nKey::Goto), "")
+                        || widgets::icon_button(ui, icons::Icon::Search, t(I18nKey::Goto), 15.0)
                             .clicked()
                     {
                         if let Some(line) = self.goto_line {
@@ -2461,7 +2427,7 @@ impl DiffTab {
                             }
                         }
                     }
-                    ui.separator();
+                    widgets::group_sep(ui);
                     // ---- 搜索/替换（BC: 搜索组）----
                     let resp = ui.add(
                         egui::TextEdit::singleline(&mut self.search.query)
@@ -2487,7 +2453,11 @@ impl DiffTab {
                         self.next_match();
                     }
                     if let Some(k) = self.search.current {
-                        ui.label(format!("{}/{}", k + 1, self.search.matches.len()));
+                        widgets::badge(
+                            ui,
+                            &format!("{}/{}", k + 1, self.search.matches.len()),
+                            super::theme::accent(ui.visuals().dark_mode),
+                        );
                     }
                     // A4 文本替换
                     let rep_resp = ui.add(
@@ -2500,24 +2470,10 @@ impl DiffTab {
                         rep_resp.request_focus();
                         self.search.replace_focus = false;
                     }
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::Copy),
-                        "替换",
-                        "替换当前匹配（写回文件并自动备份）",
-                    )
-                    .clicked()
-                    {
+                    if widgets::icon_button(ui, icons::Icon::Copy, "替换", 15.0).clicked() {
                         self.replace_current();
                     }
-                    if widgets::tool_button(
-                        ui,
-                        Some(icons::Icon::Copy),
-                        "全部替换",
-                        "替换所有匹配（写回文件并自动备份）",
-                    )
-                    .clicked()
-                    {
+                    if widgets::icon_button(ui, icons::Icon::Copy, "全部替换", 15.0).clicked() {
                         self.replace_all();
                     }
                     // P33：长行横向滚动条（两栏固定各半屏，超长行栏内左右滑动查看）
@@ -3763,6 +3719,15 @@ fn paint_diff_row(
             ui,
             mid_rect,
             Some(super::theme::mid_bg(ui.visuals().dark_mode)),
+        );
+        // P58-2：差异行连接横线——把左右两侧差异行在中缝连起来（BC 观感），
+        // 画在箭头层之下；非差异行仍保留竖直弱分隔线。
+        ui.painter().line_segment(
+            [
+                Pos2::new(mid_rect.left(), mid_rect.center().y),
+                Pos2::new(mid_rect.right(), mid_rect.center().y),
+            ],
+            egui::Stroke::new(1.5, c.gamma_multiply(0.55)),
         );
         // P58：内联覆盖箭头。▶(左侧覆盖右侧) 放在**左半部分的最左边**（行号区左端，
         // 因行号右对齐、左端空白不压行号）；◀(右侧覆盖左侧) 留在中间空隙右半。

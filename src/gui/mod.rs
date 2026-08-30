@@ -1274,13 +1274,45 @@ impl DiffApp {
                             ui.add_space(4.0);
                             let mut sessions = crate::session::load();
                             if sessions.sessions.is_empty() {
-                                ui.label(
-                                    RichText::new(
-                                        "暂无会话\n用 bcr session save <name> <left> <right> 保存",
-                                    )
-                                    .size(12.0)
-                                    .color(ui.visuals().weak_text_color()),
-                                );
+                                // 轻量空状态：小图标底片 + 提示（侧栏窄，不用 64px 大图）
+                                let icon_c = theme::card_icon_colors()[1];
+                                ui.vertical_centered(|ui| {
+                                    let (r, _) = ui.allocate_exact_size(
+                                        egui::vec2(40.0, 40.0),
+                                        egui::Sense::hover(),
+                                    );
+                                    ui.painter().rect_filled(
+                                        r,
+                                        10.0,
+                                        egui::Color32::from_rgba_unmultiplied(
+                                            icon_c.r(),
+                                            icon_c.g(),
+                                            icon_c.b(),
+                                            34,
+                                        ),
+                                    );
+                                    ui.painter().text(
+                                        r.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        icons::Icon::Dir.glyph().to_string(),
+                                        icons::font(20.0),
+                                        icon_c,
+                                    );
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        RichText::new("暂无会话")
+                                            .size(13.0)
+                                            .strong()
+                                            .color(ui.visuals().weak_text_color()),
+                                    );
+                                    ui.label(
+                                        RichText::new(
+                                            "用 bcr session save 保存\n左侧/右侧路径到会话",
+                                        )
+                                        .size(11.0)
+                                        .color(ui.visuals().weak_text_color()),
+                                    );
+                                });
                             } else {
                                 let mut open_req: Option<(String, String)> = None;
                                 let mut delete_req: Option<String> = None;

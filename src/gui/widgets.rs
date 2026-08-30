@@ -95,9 +95,22 @@ pub fn tool_button_enabled(
 /// 纯图标按钮（替代 ▾/📁/✕/🔍）。用 tooltip 兼作无障碍标签，便于测试按功能名查询。
 #[allow(dead_code)]
 pub fn icon_button(ui: &mut Ui, icon: icons::Icon, tooltip: &str, size: f32) -> egui::Response {
+    icon_button_enabled(ui, true, icon, tooltip, size)
+}
+
+/// 纯图标按钮（enabled 变体）：不可用灰显。BC 式工具栏主体，靠 tooltip 表意。
+#[allow(dead_code)]
+pub fn icon_button_enabled(
+    ui: &mut Ui,
+    enabled: bool,
+    icon: icons::Icon,
+    tooltip: &str,
+    size: f32,
+) -> egui::Response {
     let (corner, fill, stroke, txt) = btn_style(ui);
     let resp = ui
-        .add(
+        .add_enabled(
+            enabled,
             egui::Button::new(
                 RichText::new(icon.glyph().to_string())
                     .font(icons::font(size))
@@ -109,7 +122,7 @@ pub fn icon_button(ui: &mut Ui, icon: icons::Icon, tooltip: &str, size: f32) -> 
         )
         .on_hover_text(tooltip);
     resp.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tooltip.to_owned())
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, tooltip.to_owned())
     });
     resp
 }
@@ -118,6 +131,15 @@ pub fn icon_button(ui: &mut Ui, icon: icons::Icon, tooltip: &str, size: f32) -> 
 #[allow(dead_code)]
 pub fn separator(ui: &mut Ui) {
     ui.separator();
+}
+
+/// 工具栏分组分隔：横向留白 + 细分隔线，划出 BC 式分组边界。
+/// 与普通 `separator` 不同，它在两侧加空间，让工具栏「分组」而非「连成一串」。
+#[allow(dead_code)]
+pub fn group_sep(ui: &mut Ui) {
+    ui.add_space(7.0);
+    ui.separator();
+    ui.add_space(7.0);
 }
 
 /// BC 风格复选框：圆角框 + 选中品牌蓝填充 + 白色勾选。返回 Response（`.changed()`/`.clicked()` 可用）。
@@ -252,6 +274,30 @@ pub fn icon_label(ui: &mut Ui, icon: icons::Icon, size: f32, color: Color32) {
     );
 }
 
+/// 计数徽标（BC 式）：半透明彩色圆角 chip + 强调色文字。
+/// 用于工具栏「差异 x/y」「k/N」等计数，替代扁平淡灰 label，
+/// 视觉上对齐 BC 右侧差异计数块。
+#[allow(dead_code)]
+pub fn badge(ui: &mut Ui, text: &str, fg: Color32) {
+    let dark = ui.visuals().dark_mode;
+    let bg = if dark {
+        Color32::from_rgba_unmultiplied(fg.r(), fg.g(), fg.b(), 26)
+    } else {
+        Color32::from_rgba_unmultiplied(fg.r(), fg.g(), fg.b(), 22)
+    };
+    egui::Frame::new()
+        .corner_radius(theme::CORNER as u8)
+        .fill(bg)
+        .inner_margin(Margin::symmetric(7, 2))
+        .show(ui, |ui| {
+            // 关掉换行：工具栏拥挤时徽标不会折成「差异 0 /5」
+            ui.add(
+                egui::Label::new(RichText::new(text).size(12.0).color(fg).strong())
+                    .wrap_mode(egui::TextWrapMode::Extend),
+            );
+        });
+}
+
 /// 标签 chip（BC 式）：彩色类型图标 + 文本 + 关闭按钮。
 /// 返回 (主响应, 关闭点击)。选中标签高亮底色+圆角；未选中弱色。
 #[allow(dead_code)]
@@ -291,6 +337,15 @@ pub fn tab_chip(
         .response
         .interact(egui::Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
+    // P56-B：选中标签顶部 accent 强调线（BC 式选中指示，弥补"仅底色+圆角"的扁平感）
+    if selected {
+        let r = resp.rect;
+        ui.painter().hline(
+            r.x_range(),
+            r.top() + 1.5,
+            egui::Stroke::new(2.0, theme::accent(dark)),
+        );
+    }
     let close_color = if resp.hovered() {
         theme::stat_delete(dark)
     } else if selected {
