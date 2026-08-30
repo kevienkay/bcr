@@ -2353,6 +2353,24 @@ impl DiffTab {
                             }
                         }
                     }
+                    // BC：格式（细节模式 文本/Hex/对齐）
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Text,
+                        "格式",
+                        "细节模式：文本/Hex/对齐",
+                        15.0,
+                    )
+                    .clicked()
+                    {
+                        let next = match self.detail_mode {
+                            DiffDetailMode::Text => DiffDetailMode::Hex,
+                            DiffDetailMode::Hex => DiffDetailMode::Align,
+                            DiffDetailMode::Align => DiffDetailMode::Text,
+                        };
+                        self.set_detail_mode(next);
+                    }
+                    widgets::group_sep(ui);
                     // P40-1：忽略/显示选项收进 View 菜单（原 checkbox 已移除）
                     widgets::group_sep(ui);
                     // ---- 编辑（BC: Copy/编辑组）----
