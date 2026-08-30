@@ -1431,8 +1431,7 @@ impl DirTab {
                         self.swap_sides();
                     }
                     // B2：过滤/显示面板开关（左侧 SidePanel）
-                    if ui
-                        .selectable_label(self.show_filter_panel, "⛭ 过滤")
+                    if widgets::icon_chip(ui, self.show_filter_panel, icons::Icon::Search, "过滤")
                         .on_hover_text("扩展名/大小/时间过滤面板")
                         .clicked()
                     {
@@ -1440,29 +1439,38 @@ impl DirTab {
                     }
                     ui.separator();
                     // P55-2：过滤开关改为 BC 式 toggle 按钮（.selected 显示按下态，比 checkbox 紧凑一行）
-                    if ui
-                        .add(
-                            egui::Button::new(t(I18nKey::ContentHash))
-                                .selected(self.compare_content),
-                        )
-                        .on_hover_text("内容比较：对大小相同的文件做 blake3 哈希")
-                        .clicked()
+                    if widgets::icon_chip(
+                        ui,
+                        self.compare_content,
+                        icons::Icon::Compare,
+                        t(I18nKey::ContentHash),
+                    )
+                    .on_hover_text("内容比较：对大小相同的文件做 blake3 哈希")
+                    .clicked()
                     {
                         self.compare_content = !self.compare_content;
                         self.refresh();
                     }
-                    if ui
-                        .add(egui::Button::new(t(I18nKey::OnlyDiff)).selected(self.only_diff))
-                        .on_hover_text("仅显示差异文件（1）")
-                        .clicked()
+                    if widgets::icon_chip(
+                        ui,
+                        self.only_diff,
+                        icons::Icon::Differ,
+                        t(I18nKey::OnlyDiff),
+                    )
+                    .on_hover_text("仅显示差异文件（1）")
+                    .clicked()
                     {
                         self.only_diff = !self.only_diff;
                         self.rebuild_tree();
                     }
-                    if ui
-                        .add(egui::Button::new(t(I18nKey::ShowSame)).selected(self.show_same))
-                        .on_hover_text("显示相同文件")
-                        .clicked()
+                    if widgets::icon_chip(
+                        ui,
+                        self.show_same,
+                        icons::Icon::Equal,
+                        t(I18nKey::ShowSame),
+                    )
+                    .on_hover_text("显示相同文件")
+                    .clicked()
                         && !self.only_diff
                     {
                         self.show_same = !self.show_same;

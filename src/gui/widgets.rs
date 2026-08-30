@@ -371,11 +371,19 @@ pub fn icon_chip(ui: &mut Ui, selected: bool, icon: icons::Icon, text: &str) -> 
             ..Default::default()
         },
     );
-    ui.add(
+    let resp = ui.add(
         egui::Button::new(egui::WidgetText::LayoutJob(std::sync::Arc::new(job)))
             .corner_radius(theme::CORNER as u8)
             .fill(fill),
-    )
+    );
+    // 无障碍/测试标签用 `text`（不含图标字形），与 stack_button/tool_button 一致，
+    // 否则 kittest get_by_label_contains 无法按功能名查询。
+    resp.widget_info(|| {
+        let mut info = egui::WidgetInfo::new(egui::WidgetType::Button);
+        info.label = Some(text.to_owned());
+        info
+    });
+    resp
 }
 
 /// 纯图标标签（不交互，仅显示）。如标题/状态。
