@@ -783,11 +783,12 @@ impl CsvTab {
                         }
                     });
                     // 重新加载
-                    if widgets::tool_button(
+                    if widgets::stack_button(
                         ui,
-                        Some(icons::Icon::Refresh),
+                        icons::Icon::Refresh,
                         t(I18nKey::Reload),
                         t(I18nKey::ReloadHint),
+                        15.0,
                     )
                     .clicked()
                     {

@@ -402,11 +402,12 @@ impl ImageTab {
                         .map(|p| p.stats.has_differences())
                         .unwrap_or(false);
                     if has_diff
-                        && widgets::tool_button(
+                        && widgets::stack_button(
                             ui,
-                            Some(icons::Icon::Locate),
+                            icons::Icon::Locate,
                             "定位差异",
                             "缩放并滚动到差异区域",
+                            15.0,
                         )
                         .clicked()
                     {
