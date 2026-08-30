@@ -166,6 +166,8 @@ pub struct DiffTab {
     pub settings_req: bool,
     /// 请求回到主页（清空标签，由 DiffApp 处理）
     pub home_req: bool,
+    /// 请求打开会话中心（由 DiffApp 处理）
+    pub sessions_req: bool,
     pub recent_paths_l: Vec<String>,
     pub recent_paths_r: Vec<String>,
     /// 待记历史（(is_left, path)），由 DiffApp 每帧汲取到分侧历史
@@ -267,6 +269,7 @@ impl DiffTab {
             open_r: String::new(),
             settings_req: false,
             home_req: false,
+            sessions_req: false,
             recent_paths_l: Vec::new(),
             recent_paths_r: Vec::new(),
             pending_history: Vec::new(),
@@ -2296,6 +2299,13 @@ impl DiffTab {
         if super::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("difftab_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
+                    if widgets::stack_button(ui, icons::Icon::History, "会话", "会话中心", 15.0)
+                        .clicked()
+                    {
+                        self.sessions_req = true;
+                    }
+                    widgets::group_sep(ui);
+
                     // ---- 打开（BC: Open 按钮组）----
                     // BC：主页（清空标签回欢迎页）
                     if widgets::stack_button(ui, icons::Icon::Home, "主页", "回到主页", 15.0)

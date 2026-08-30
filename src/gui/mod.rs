@@ -1729,6 +1729,7 @@ impl eframe::App for DiffApp {
         // P58：空文件对比页(打开对比页面) 的两半分栏 —— 同步最近路径历史 + 汲取其待记历史
         let mut open_settings = false;
         let mut go_home = false;
+        let mut open_sessions = false;
         let mut pending: Vec<(bool, String)> = Vec::new();
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
             t.recent_paths_l = self.import_history_l.clone();
@@ -1744,6 +1745,10 @@ impl eframe::App for DiffApp {
                 t.home_req = false;
                 go_home = true;
             }
+            if t.sessions_req {
+                t.sessions_req = false;
+                open_sessions = true;
+            }
         }
         for (is_left, p) in pending {
             self.add_import_history(is_left, &p);
@@ -1754,6 +1759,9 @@ impl eframe::App for DiffApp {
         if go_home {
             self.tabs.clear();
             self.active = 0;
+        }
+        if open_sessions {
+            self.show_sessions = true;
         }
         if self.theme_changed {
             self.theme_changed = false;
