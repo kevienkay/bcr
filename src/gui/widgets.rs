@@ -327,6 +327,57 @@ pub fn chip(ui: &mut Ui, selected: bool, text: &str) -> egui::Response {
     )
 }
 
+/// 带图标的分段按钮：前导 Phosphor 图标 + 文本，选中高亮。用于 BC 式视图过滤等。
+#[allow(dead_code)]
+pub fn icon_chip(ui: &mut Ui, selected: bool, icon: icons::Icon, text: &str) -> egui::Response {
+    let dark = ui.visuals().dark_mode;
+    let fill = if selected {
+        theme::tab_selected_bg(dark)
+    } else if dark {
+        Color32::from_gray(38)
+    } else {
+        Color32::from_gray(244)
+    };
+    let txt = if selected {
+        ui.visuals().strong_text_color()
+    } else {
+        ui.visuals().text_color()
+    };
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        &icon.glyph().to_string(),
+        0.0,
+        egui::TextFormat {
+            font_id: icons::font(13.0),
+            color: txt,
+            ..Default::default()
+        },
+    );
+    job.append(
+        " ",
+        0.0,
+        egui::TextFormat {
+            font_id: FontId::proportional(13.0),
+            color: txt,
+            ..Default::default()
+        },
+    );
+    job.append(
+        text,
+        0.0,
+        egui::TextFormat {
+            font_id: FontId::proportional(13.0),
+            color: txt,
+            ..Default::default()
+        },
+    );
+    ui.add(
+        egui::Button::new(egui::WidgetText::LayoutJob(std::sync::Arc::new(job)))
+            .corner_radius(theme::CORNER as u8)
+            .fill(fill),
+    )
+}
+
 /// 纯图标标签（不交互，仅显示）。如标题/状态。
 #[allow(dead_code)]
 pub fn icon_label(ui: &mut Ui, icon: icons::Icon, size: f32, color: Color32) {

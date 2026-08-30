@@ -251,21 +251,23 @@ impl FolderMergeTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("foldermerge_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if widgets::tool_button(
+                    if widgets::stack_button(
                         ui,
-                        Some(icons::Icon::Compare),
+                        icons::Icon::Compare,
                         t(I18nKey::GeneratePlan),
                         "重新扫描三目录并生成合并计划",
+                        15.0,
                     )
                     .clicked()
                     {
                         self.gen_req = true;
                     }
-                    if widgets::tool_button(
+                    if widgets::stack_button(
                         ui,
-                        Some(icons::Icon::Plug),
+                        icons::Icon::Plug,
                         t(I18nKey::ExecuteMerge),
                         "把合并结果写入输出目录",
+                        15.0,
                     )
                     .clicked()
                     {

@@ -2342,13 +2342,25 @@ impl DiffTab {
                         let cur = self.view_filter;
                         // BC 风格视图过滤：全部 / 差别 / 相同（+上下文）三态按钮
                         let filters = [
-                            (DiffViewFilter::All, t(I18nKey::ShowAll)),
-                            (DiffViewFilter::Diff, t(I18nKey::OnlyDiff)),
-                            (DiffViewFilter::Same, t(I18nKey::ShowSame)),
-                            (DiffViewFilter::Context, t(I18nKey::ShowContext)),
+                            (DiffViewFilter::All, icons::Icon::Equal, t(I18nKey::ShowAll)),
+                            (
+                                DiffViewFilter::Diff,
+                                icons::Icon::Differ,
+                                t(I18nKey::OnlyDiff),
+                            ),
+                            (
+                                DiffViewFilter::Same,
+                                icons::Icon::Equal,
+                                t(I18nKey::ShowSame),
+                            ),
+                            (
+                                DiffViewFilter::Context,
+                                icons::Icon::Align,
+                                t(I18nKey::ShowContext),
+                            ),
                         ];
-                        for (v, l) in &filters {
-                            if widgets::chip(ui, cur == *v, l).clicked() {
+                        for (v, ic, l) in &filters {
+                            if widgets::icon_chip(ui, cur == *v, *ic, l).clicked() {
                                 self.view_filter = *v;
                             }
                         }
