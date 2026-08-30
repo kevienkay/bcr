@@ -85,17 +85,18 @@ impl MediaTab {
         // 工具栏：重新加载 / 交换两侧
         egui::Panel::top("mediatab_tools").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                if widgets::tool_button(ui, Some(icons::Icon::Refresh), t(I18nKey::Reload), "")
+                if widgets::stack_button(ui, icons::Icon::Refresh, t(I18nKey::Reload), "", 15.0)
                     .clicked()
                 {
                     let (l, r) = (self.left.clone(), self.right.clone());
                     self.load_pair(&l, &r);
                 }
-                if widgets::tool_button(
+                if widgets::stack_button(
                     ui,
-                    Some(icons::Icon::Swap),
+                    icons::Icon::Swap,
                     t(I18nKey::SwapSides),
                     "交换左右两侧",
+                    15.0,
                 )
                 .clicked()
                 {
