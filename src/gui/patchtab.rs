@@ -343,21 +343,23 @@ impl PatchTab {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
             egui::Panel::top("patch_tools").show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    if widgets::tool_button(
+                    if widgets::stack_button(
                         ui,
-                        Some(icons::Icon::Folder),
+                        icons::Icon::Folder,
                         t(I18nKey::OpenFile),
                         "打开补丁文件",
+                        15.0,
                     )
                     .clicked()
                     {
                         self.open_dialog();
                     }
-                    if widgets::tool_button(
+                    if widgets::stack_button(
                         ui,
-                        Some(icons::Icon::Plug),
+                        icons::Icon::Plug,
                         t(I18nKey::ApplyPatch),
                         "把右侧（新）内容写回目标文件",
+                        15.0,
                     )
                     .clicked()
                     {

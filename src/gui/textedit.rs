@@ -506,7 +506,7 @@ impl TextEditTab {
                         self.redo();
                     }
                     ui.separator();
-                    if widgets::tool_button(ui, Some(icons::Icon::Search), "查找/替换", "")
+                    if widgets::stack_button(ui, icons::Icon::Search, "查找/替换", "", 15.0)
                         .clicked()
                     {
                         self.show_search = !self.show_search;
