@@ -1512,20 +1512,28 @@ impl DirTab {
                         ));
                     }
                     ui.separator();
-                    if ui
-                        .button("⇄ 同步")
-                        .on_hover_text("生成同步计划（update/mirror/two-way）")
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Swap,
+                        "同步",
+                        "生成同步计划（update/mirror/two-way）",
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.show_sync = !self.show_sync;
                         if self.show_sync && self.sync_plan.is_none() {
                             self.gen_sync_plan();
                         }
                     }
-                    if ui
-                        .button("⇱ 手动对齐")
-                        .on_hover_text("左右各选一个文件配对对比")
-                        .clicked()
+                    if widgets::stack_button(
+                        ui,
+                        icons::Icon::Compare,
+                        "手动对齐",
+                        "左右各选一个文件配对对比",
+                        15.0,
+                    )
+                    .clicked()
                     {
                         self.show_align = !self.show_align;
                         if self.show_align {
