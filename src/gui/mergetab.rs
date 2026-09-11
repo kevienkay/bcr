@@ -28,6 +28,8 @@ pub struct MergeTab {
     pub show_preview: bool,
     /// P45-1：当前行（渲染点击记录，行级采用定位用）
     pub cur_line: usize,
+    /// P2：最近一次保存的输出路径（未保存为 None）
+    pub last_save_path: Option<String>,
 }
 
 impl MergeTab {
@@ -46,6 +48,7 @@ impl MergeTab {
             preview_scroll: Vec2::ZERO,
             show_preview: true,
             cur_line: 0,
+            last_save_path: None,
         };
         t.reload();
         t
@@ -352,6 +355,35 @@ impl MergeTab {
             .sum()
     }
 
+    /// P2（BC 5.2.5 状态栏第二行）：冲突数 · 已解决 n/N · 输出路径
+    fn status_row2(&self, ui: &mut egui::Ui, unresolved: usize) {
+        let dark = ui.visuals().dark_mode;
+        let full = ui.max_rect();
+        ui.painter().rect_filled(full, 0.0, super::theme::bg_status(dark));
+        ui.painter().hline(
+            full.x_range(),
+            full.top(),
+            egui::Stroke::new(1.0, super::theme::mid_sep(dark)),
+        );
+        ui.horizontal_centered(|ui| {
+            ui.add_space(8.0);
+            let conflicts = self.view.conflicts;
+            let resolved = resolved_count(conflicts, unresolved);
+            // 冲突数（有冲突黄 / 无冲突绿）
+            ui.label(egui::RichText::new(conflict_label(conflicts)).color(if conflicts > 0 {
+                super::theme::conflict_color(dark)
+            } else {
+                super::theme::resolved_color(dark)
+            }));
+            ui.separator();
+            ui.label(resolved_label(resolved, conflicts));
+            ui.separator();
+            ui.label(
+                egui::RichText::new(output_label(self.last_save_path.as_deref())).weak(),
+            );
+        });
+    }
+
     pub fn save(&mut self) -> bool {
         let Some(path) = rfd::FileDialog::new()
             .set_file_name("merged.txt")
@@ -366,6 +398,8 @@ impl MergeTab {
         }
         match std::fs::write(&path, content) {
             Ok(()) => {
+                // P2：记录输出路径（状态栏第二行显示）
+                self.last_save_path = Some(path.display().to_string());
                 self.error = Some(fmt(
                     I18nKey::MergeSaved,
                     &[&path.display().to_string(), &unresolved.to_string()],
@@ -604,8 +638,14 @@ impl MergeTab {
         }
 
         // 底部实时预览窗格（显示保存将得到的结果，未解决冲突高亮）
+        let (lines, unresolved) = render_merged(&self.view, &self.label_l, &self.label_r);
+        // P2（BC 5.2.5 状态栏第二行）：冲突数 · 已解决 n/N · 输出路径
+        // 声明在预览窗格之前，使其位于预览窗格下方（贴近全局状态栏）
+        egui::Panel::bottom("mergetab_status_row2")
+            .default_size(super::theme::STATUSBAR_ROW_H)
+            .resizable(false)
+            .show(ui, |ui| self.status_row2(ui, unresolved));
         if self.show_preview {
-            let (lines, unresolved) = render_merged(&self.view, &self.label_l, &self.label_r);
             let preview_lines: Vec<(&str, bool)> = lines
                 .iter()
                 .map(|l| {
@@ -885,9 +925,65 @@ fn paint_merge_row(
     resp
 }
 
+// ===== P2（BC 5.2.5）：状态栏第二行（冲突 / 已解决 / 输出路径）=====
+
+/// 冲突数文案
+pub(crate) fn conflict_label(conflicts: usize) -> String {
+    format!("冲突 {conflicts}")
+}
+
+/// 已解决数 = 冲突总数 - 未解决数（下溢保护）
+pub(crate) fn resolved_count(conflicts: usize, unresolved: usize) -> usize {
+    conflicts.saturating_sub(unresolved)
+}
+
+/// 已解决文案（n/N）
+pub(crate) fn resolved_label(resolved: usize, total: usize) -> String {
+    format!("已解决 {resolved}/{total}")
+}
+
+/// 输出路径文案（未保存时提示未保存；只显示文件名）
+pub(crate) fn output_label(path: Option<&str>) -> String {
+    match path {
+        Some(p) if !p.is_empty() => format!("输出: {}", basename(p)),
+        _ => "输出: 未保存".to_string(),
+    }
+}
+
 fn basename(p: &str) -> String {
     std::path::Path::new(p)
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| p.to_string())
+}
+
+/// P2：合并视图新增逻辑的纯函数单测（冲突计数 / 已解决 / 输出路径文案）
+#[cfg(test)]
+mod p2_tests {
+    use super::*;
+
+    #[test]
+    fn conflict_label_formats_count() {
+        assert_eq!(conflict_label(0), "冲突 0");
+        assert_eq!(conflict_label(3), "冲突 3");
+    }
+
+    #[test]
+    fn resolved_count_saturates_and_labels() {
+        assert_eq!(resolved_count(3, 0), 3);
+        assert_eq!(resolved_count(3, 2), 1);
+        assert_eq!(resolved_count(3, 3), 0);
+        // 未解决数异常大于冲突数时不 panic（下溢保护）
+        assert_eq!(resolved_count(1, 5), 0);
+        assert_eq!(resolved_label(2, 3), "已解决 2/3");
+        assert_eq!(resolved_label(0, 0), "已解决 0/0");
+    }
+
+    #[test]
+    fn output_label_uses_basename_or_placeholder() {
+        assert_eq!(output_label(Some("/tmp/out/merged.txt")), "输出: merged.txt");
+        assert_eq!(output_label(Some("merged.txt")), "输出: merged.txt");
+        assert_eq!(output_label(None), "输出: 未保存");
+        assert_eq!(output_label(Some("")), "输出: 未保存");
+    }
 }
