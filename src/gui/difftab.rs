@@ -5,6 +5,7 @@
 //! 并排 Diff 标签页：虚拟化渲染、行内高亮、搜索、差异/行号跳转。
 
 use super::common::*;
+use super::theme::ROW_H_CODE;
 use super::{icons, widgets};
 use crate::i18n::{fmt, t, Key as I18nKey};
 use crate::sideview::{build_rows, RowTag, SideRow, Stats, ViewOptions};
@@ -1224,7 +1225,7 @@ impl DiffTab {
         if no > 9 {
             return;
         }
-        let top = (self.scroll.y / ROW_H).max(0.0) as usize;
+        let top = (self.scroll.y / ROW_H_CODE).max(0.0) as usize;
         if self.bookmarks.get(&no) == Some(&top) {
             self.bookmarks.remove(&no);
         } else {
@@ -1235,7 +1236,7 @@ impl DiffTab {
     /// P39-2d：转到书签（0-9）
     pub fn goto_bookmark(&mut self, no: u8) {
         if let Some(&row) = self.bookmarks.get(&no) {
-            self.scroll.y = row as f32 * ROW_H;
+            self.scroll.y = row as f32 * ROW_H_CODE;
             // 同步 diff_pos：书签行若是差异行则高亮
             if let Some(p) = self.diff_rows.iter().position(|&r| r == row) {
                 self.diff_pos = Some(p);
@@ -1285,8 +1286,8 @@ impl DiffTab {
     /// P39-2d：当前布局的行高（上-下布局每数据行占 2 行）
     pub(crate) fn row_h(&self) -> f32 {
         match self.layout {
-            DiffLayout::TopBottom => ROW_H * 2.0,
-            DiffLayout::SideBySide | DiffLayout::Web => ROW_H,
+            DiffLayout::TopBottom => ROW_H_CODE * 2.0,
+            DiffLayout::SideBySide | DiffLayout::Web => ROW_H_CODE,
         }
     }
 
@@ -2001,9 +2002,9 @@ impl DiffTab {
 
     /// 滚动到指定行索引（虚拟化：设置 scroll.y）
     pub fn jump_to_row(&mut self, row: usize) {
-        let y = row as f32 * ROW_H;
+        let y = row as f32 * ROW_H_CODE;
         // 尽量让目标行出现在视口中部偏上
-        self.scroll.y = (y - 4.0 * ROW_H).max(0.0);
+        self.scroll.y = (y - 4.0 * ROW_H_CODE).max(0.0);
         self.scroll.x = 0.0;
     }
 
@@ -2934,7 +2935,17 @@ impl DiffTab {
             };
             // P33：两栏固定各占半屏（BC 式等分），长行栏内横向滚动查看；随窗口缩放自适应
             // P39-2d：布局切换 —— SideBySide 左右并排各半宽；TopBottom/Web 单栏全宽上下堆叠
-            let avail = ui.available_width();
+            // P2：SideBySide 下右侧预留差异小地图宽（MINIMAP_W），内容不与其重叠
+            let minimap_on = self.show_overview
+                && self.layout == DiffLayout::SideBySide
+                && !self.rows.is_empty();
+            let avail = (ui.available_width()
+                - if minimap_on {
+                    super::theme::MINIMAP_W
+                } else {
+                    0.0
+                })
+            .max(240.0);
             let mid_gap = super::theme::MID_GAP;
             let (content_w, total_w, half) = match self.layout {
                 DiffLayout::SideBySide => {
@@ -3548,8 +3559,64 @@ impl DiffTab {
             }
             self.scroll = out.state.offset;
 
+            // P2：差异小地图（BC 5.2.5：右侧 76px 竖向色块 + 视口框 + 底部「差异图」）
+            if minimap_on {
+                let area = ui.max_rect();
+                let map = Rect::from_min_size(
+                    Pos2::new(area.right() - super::theme::MINIMAP_W, area.top()),
+                    Vec2::new(super::theme::MINIMAP_W, area.height()),
+                );
+                let dk = ui.visuals().dark_mode;
+                ui.painter().rect_filled(map, 0.0, super::theme::mid_bg(dk));
+                ui.painter().line_segment(
+                    [map.left_top(), map.left_bottom()],
+                    egui::Stroke::new(1.0, super::theme::mid_sep(dk)),
+                );
+                // 底部「差异图」标签占位；色块轨道在其上方
+                let label_h = 12.0;
+                let track = Rect::from_min_size(
+                    Pos2::new(map.left(), map.top() + 2.0),
+                    Vec2::new(map.width(), (map.height() - label_h - 4.0).max(1.0)),
+                );
+                let n = display_rows.len();
+                for (i, row) in display_rows.iter().enumerate() {
+                    if let Some(c) = minimap_block_color(dk, row.tag) {
+                        ui.painter()
+                            .rect_filled(minimap_row_rect(track, n, i, 16.0), 2.0, c);
+                    }
+                }
+                // 视口框：1px accent 描边 + 7% accent 填充，随滚动移动
+                if let Some(vp) = minimap_viewport_rect(
+                    track,
+                    n,
+                    self.scroll.y,
+                    out.inner_rect.height(),
+                    self.row_h(),
+                ) {
+                    ui.painter().rect_filled(
+                        vp,
+                        0.0,
+                        super::theme::accent(dk).gamma_multiply(0.07),
+                    );
+                    ui.painter().rect_stroke(
+                        vp,
+                        0.0,
+                        egui::Stroke::new(1.0, super::theme::accent(dk)),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+                ui.painter().text(
+                    Pos2::new(map.center().x, map.bottom() - 6.0),
+                    egui::Align2::CENTER_CENTER,
+                    "差异图",
+                    egui::FontId::proportional(9.5),
+                    ui.visuals().weak_text_color(),
+                );
+            }
+
             // A11 缩略图总览：右侧迷你差异地图（点击跳转到对应行）
-            if self.show_overview && !display_rows.is_empty() {
+            // P2：SideBySide 已改用 76px 差异小地图（show_overview 复用同一开关）
+            if self.show_overview && !minimap_on && !display_rows.is_empty() {
                 let panel_rect = ui.max_rect();
                 let ov_w = 10.0;
                 let ov_rect = Rect::from_min_size(
@@ -3649,6 +3716,87 @@ pub enum RowHit {
     Copy(EditSide),
 }
 
+// ===== P2（BC 5.2.5 设计稿）：行对齐留白斜纹 + 差异小地图 =====
+
+/// 45° 斜纹线段生成（行对齐留白）：在 `rect` 内生成间距 `spacing` 的 45° 斜线，
+/// 线段已按 `rect` 裁剪（x ∈ [l, r] 且 y ∈ [t, b]）。纯函数，供 `paint_hatch` 与单测使用。
+pub(crate) fn hatch_segments(rect: Rect, spacing: f32) -> Vec<[Pos2; 2]> {
+    let mut out = Vec::new();
+    if spacing <= 0.0 || rect.width() <= 0.0 || rect.height() <= 0.0 {
+        return out;
+    }
+    let (l, r, t, b) = (rect.left(), rect.right(), rect.top(), rect.bottom());
+    // 斜线方向 (1, -1)：P(s) = (x0 + s, b - s)，s 受 x∈[l,r] 与 y∈[t,b] 双重约束
+    let mut x0 = l - rect.height();
+    while x0 <= r {
+        let s_start = (l - x0).max(0.0);
+        let s_end = (r - x0).min(b - t);
+        if s_end > s_start {
+            out.push([
+                Pos2::new(x0 + s_start, b - s_start),
+                Pos2::new(x0 + s_end, b - s_end),
+            ]);
+        }
+        x0 += spacing;
+    }
+    out
+}
+
+/// 在对侧缺行（行对齐留白）的区域铺 45° 斜纹，线间距 4px（BC 5.2.5 设计稿）
+pub(crate) fn paint_hatch(ui: &egui::Ui, rect: Rect, dark: bool) {
+    let stroke = egui::Stroke::new(1.0, super::theme::hatch_line(dark));
+    for seg in hatch_segments(rect, 4.0) {
+        ui.painter().line_segment(seg, stroke);
+    }
+}
+
+/// 差异小地图：单行色块颜色（Equal 不画）
+pub(crate) fn minimap_block_color(dark: bool, tag: RowTag) -> Option<Color32> {
+    match tag {
+        RowTag::Equal => None,
+        RowTag::Delete => Some(super::theme::diff_delete(dark)),
+        RowTag::Insert => Some(super::theme::diff_insert(dark)),
+        RowTag::Replace => Some(super::theme::diff_modify(dark)),
+    }
+}
+
+/// 差异小地图：第 `i` 行色块矩形（左右各内缩 `inset`，圆角由调用方指定）
+pub(crate) fn minimap_row_rect(area: Rect, rows: usize, i: usize, inset: f32) -> Rect {
+    if rows == 0 {
+        return area;
+    }
+    let h = area.height() / rows as f32;
+    let y = area.top() + i as f32 * h;
+    let x = area.left() + inset;
+    let w = (area.width() - inset * 2.0).max(0.0);
+    Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, h))
+}
+
+/// 差异小地图：视口框（随滚动移动；按滚动位置与可见高度比例换算）
+pub(crate) fn minimap_viewport_rect(
+    area: Rect,
+    total_rows: usize,
+    scroll_y: f32,
+    view_h: f32,
+    row_h: f32,
+) -> Option<Rect> {
+    let content_h = total_rows as f32 * row_h;
+    if content_h <= 0.0 || view_h <= 0.0 || area.height() <= 0.0 {
+        return None;
+    }
+    let top = scroll_y.max(0.0).min(content_h);
+    let frac_top = (top / content_h).clamp(0.0, 1.0);
+    let frac_h = (view_h / content_h).clamp(0.0, 1.0);
+    let h = (frac_h * area.height()).max(2.0).min(area.height());
+    // 视口框不越出区域：滚动到底时贴着下沿
+    let y_max = (area.bottom() - h).max(area.top());
+    let y = (area.top() + frac_top * area.height()).min(y_max);
+    Some(Rect::from_min_size(
+        Pos2::new(area.left(), y),
+        Vec2::new(area.width(), h),
+    ))
+}
+
 #[allow(clippy::too_many_arguments)] // egui 行绘制参数较多，保持扁平可读
 fn paint_diff_row(
     ui: &mut egui::Ui,
@@ -3676,7 +3824,7 @@ fn paint_diff_row(
     // P39-2d：布局（SideBySide 左右并排；TopBottom/Web 上下堆叠）
     layout: DiffLayout,
 ) -> (Option<RowHit>, egui::Response) {
-    // P39-2d：上-下/网页布局 → 垂直堆叠（左内容上半、右内容下半，行高 2*ROW_H）
+    // P39-2d：上-下/网页布局 → 垂直堆叠（左内容上半、右内容下半，行高 2*ROW_H_CODE）
     if layout != DiffLayout::SideBySide {
         return paint_diff_row_v(
             ui,
@@ -3701,7 +3849,7 @@ fn paint_diff_row(
     }
     let mid_gap = super::theme::MID_GAP;
     let (rect, resp) = ui.allocate_exact_size(
-        Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H),
+        Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H_CODE),
         egui::Sense::click(),
     );
     let x = rect.left();
@@ -3710,7 +3858,7 @@ fn paint_diff_row(
     // P32-A5：块首行左侧画折叠箭头 ▾（点击折叠）
     if let Some(bi) = block_start {
         let arrow_x = x + super::theme::CURRENT_BAR + 3.0;
-        let arrow_rect = Rect::from_min_size(Pos2::new(arrow_x - 2.0, y), vec2(14.0, ROW_H));
+        let arrow_rect = Rect::from_min_size(Pos2::new(arrow_x - 2.0, y), vec2(14.0, ROW_H_CODE));
         let arrow_color = if ignored {
             ui.visuals().weak_text_color()
         } else {
@@ -3732,7 +3880,7 @@ fn paint_diff_row(
     // BC 风格当前差异行：左侧 3px 竖条（P31；P39-2b 改蓝色系对齐 BC）
     if is_current {
         ui.painter().rect_filled(
-            Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H)),
+            Rect::from_min_size(Pos2::new(x, y), vec2(super::theme::CURRENT_BAR, ROW_H_CODE)),
             0.0,
             super::theme::current_bar(ui.visuals().dark_mode),
         );
@@ -3744,7 +3892,7 @@ fn paint_diff_row(
         ui.painter().rect_filled(
             Rect::from_min_size(
                 Pos2::new(x + super::theme::CURRENT_BAR, y),
-                vec2(3.0, ROW_H),
+                vec2(3.0, ROW_H_CODE),
             ),
             0.0,
             c.gamma_multiply(0.45),
@@ -3754,11 +3902,22 @@ fn paint_diff_row(
     // 左 gutter + 内容（P31：gutter 用微灰底色与内容区分，BC 观感）
     // P39-2b：深色下 gutter 底色略亮于内容区，行号更易读
     let gutter_bg = Some(super::theme::gutter_bg(ui.visuals().dark_mode));
-    let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H));
+    let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H_CODE));
     paint_bg(ui, gutter_rect, gutter_bg);
     paint_line_no(ui, gutter_rect, row.left_no);
-    let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
+    let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H_CODE));
     paint_bg(ui, content_rect, bg_l);
+    // P2：对侧缺行 → 该侧 gutter+content 铺 45° 斜纹（文件末尾之后同样铺）
+    if row.left.is_none() {
+        paint_hatch(
+            ui,
+            Rect::from_min_size(
+                Pos2::new(x, y),
+                vec2(gutter_l + content_w, ROW_H_CODE),
+            ),
+            ui.visuals().dark_mode,
+        );
+    }
     // P51-4：行 hover 高亮（半透明弱色叠加，与 DirTab 观感一致）
     if resp.hovered() && !ignored {
         ui.painter()
@@ -3792,7 +3951,7 @@ fn paint_diff_row(
 
     // P32-A1：左右面板空隙画差异连接线（有差异的行画线连接两侧，BC 观感）
     let mid_x = x + gutter_l + content_w;
-    let mid_rect = Rect::from_min_size(Pos2::new(mid_x, y), vec2(mid_gap, ROW_H));
+    let mid_rect = Rect::from_min_size(Pos2::new(mid_x, y), vec2(mid_gap, ROW_H_CODE));
     let mid_color = diff_mid_line_color(ui.visuals().dark_mode, row.tag);
     if let Some(c) = mid_color {
         // 空隙底色（比 gutter 略深一档，突出连接线/箭头）
@@ -3820,7 +3979,7 @@ fn paint_diff_row(
         // ---- ▶(左→右) 放到中间空隙左半（BC：两拷贝箭头都在中缝）----
         let edge_rect = Rect::from_min_size(
             Pos2::new(mid_x + 2.0, y),
-            vec2((mid_gap * 0.5 - 3.0).max(6.0), ROW_H),
+            vec2((mid_gap * 0.5 - 3.0).max(6.0), ROW_H_CODE),
         );
         let edge_resp = ui.interact(
             edge_rect,
@@ -3841,7 +4000,7 @@ fn paint_diff_row(
         let half = mid_gap * 0.5;
         let right_rect = Rect::from_min_size(
             Pos2::new(mid_x + half + 2.0, y),
-            vec2((half - 3.0).max(6.0), ROW_H),
+            vec2((half - 3.0).max(6.0), ROW_H_CODE),
         );
         let right_resp = ui.interact(
             right_rect,
@@ -3875,7 +4034,7 @@ fn paint_diff_row(
         ui.painter().line_segment(
             [
                 Pos2::new(mid_x + mid_gap / 2.0, y),
-                Pos2::new(mid_x + mid_gap / 2.0, y + ROW_H),
+                Pos2::new(mid_x + mid_gap / 2.0, y + ROW_H_CODE),
             ],
             egui::Stroke::new(1.0, sep),
         );
@@ -3883,11 +4042,22 @@ fn paint_diff_row(
 
     // 右 gutter + 内容
     let x_r = mid_x + mid_gap;
-    let gutter_rect = Rect::from_min_size(Pos2::new(x_r, y), vec2(gutter_r, ROW_H));
+    let gutter_rect = Rect::from_min_size(Pos2::new(x_r, y), vec2(gutter_r, ROW_H_CODE));
     paint_bg(ui, gutter_rect, gutter_bg);
     paint_line_no(ui, gutter_rect, row.right_no);
-    let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
+    let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H_CODE));
     paint_bg(ui, content_rect, bg_r);
+    // P2：对侧缺行 → 该侧 gutter+content 铺 45° 斜纹（文件末尾之后同样铺）
+    if row.right.is_none() {
+        paint_hatch(
+            ui,
+            Rect::from_min_size(
+                Pos2::new(x_r, y),
+                vec2(gutter_r + content_w, ROW_H_CODE),
+            ),
+            ui.visuals().dark_mode,
+        );
+    }
     // P51-4：行 hover 高亮（右栏同步）
     if resp.hovered() && !ignored {
         ui.painter()
@@ -3922,9 +4092,9 @@ fn paint_diff_row(
     // P32-A2：双击行内容 → 进入行内编辑（左/右内容区命中）
     if resp.double_clicked() {
         if let Some(pos) = resp.interact_pointer_pos() {
-            let left_zone = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
+            let left_zone = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H_CODE));
             let right_zone =
-                Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H));
+                Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H_CODE));
             if left_zone.contains(pos) {
                 return (Some(RowHit::Edit(EditSide::Left)), resp);
             }
@@ -3936,7 +4106,7 @@ fn paint_diff_row(
     (None, resp)
 }
 
-/// P39-2d：上-下 / 网页布局的行绘制（左内容上半、右内容下半，行高 2*ROW_H）
+/// P39-2d：上-下 / 网页布局的行绘制（左内容上半、右内容下半，行高 2*ROW_H_CODE）
 #[allow(clippy::too_many_arguments)]
 fn paint_diff_row_v(
     ui: &mut egui::Ui,
@@ -3959,7 +4129,7 @@ fn paint_diff_row_v(
     h_scroll: f32,
     show_ws: bool,
 ) -> (Option<RowHit>, egui::Response) {
-    let row_h = ROW_H * 2.0;
+    let row_h = ROW_H_CODE * 2.0;
     let (rect, resp) = ui.allocate_exact_size(
         Vec2::new(gutter_l.max(gutter_r) + content_w, row_h),
         egui::Sense::click(),
@@ -3992,11 +4162,19 @@ fn paint_diff_row_v(
     // ---- 上半：左 gutter + 左内容 ----
     let l_bg = if ignored { Some(dim) } else { bg_l };
     {
-        let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H));
+        let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H_CODE));
         paint_bg(ui, gutter_rect, Some(gutter_bg));
         paint_line_no(ui, gutter_rect, row.left_no);
-        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H));
+        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H_CODE));
         paint_bg(ui, content_rect, l_bg);
+        // P2：对侧缺行 → 斜纹留白（上半=左侧）
+        if row.left.is_none() {
+            paint_hatch(
+                ui,
+                Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l + content_w, ROW_H_CODE)),
+                ui.visuals().dark_mode,
+            );
+        }
         // P51-4：行 hover 高亮（半透明弱色叠加，与 SideBySide 布局一致）
         if resp.hovered() && !ignored {
             ui.painter()
@@ -4030,12 +4208,20 @@ fn paint_diff_row_v(
     // ---- 下半：右 gutter + 右内容 ----
     let r_bg = if ignored { Some(dim) } else { bg_r };
     {
-        let y2 = y + ROW_H;
-        let gutter_rect = Rect::from_min_size(Pos2::new(x, y2), vec2(gutter_r, ROW_H));
+        let y2 = y + ROW_H_CODE;
+        let gutter_rect = Rect::from_min_size(Pos2::new(x, y2), vec2(gutter_r, ROW_H_CODE));
         paint_bg(ui, gutter_rect, Some(gutter_bg));
         paint_line_no(ui, gutter_rect, row.right_no);
-        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_r, y2), vec2(content_w, ROW_H));
+        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_r, y2), vec2(content_w, ROW_H_CODE));
         paint_bg(ui, content_rect, r_bg);
+        // P2：对侧缺行 → 斜纹留白（下半=右侧）
+        if row.right.is_none() {
+            paint_hatch(
+                ui,
+                Rect::from_min_size(Pos2::new(x, y2), vec2(gutter_r + content_w, ROW_H_CODE)),
+                ui.visuals().dark_mode,
+            );
+        }
         // P51-4：行 hover 高亮（右栏同步）
         if resp.hovered() && !ignored {
             ui.painter()
@@ -4069,7 +4255,7 @@ fn paint_diff_row_v(
     // 双击 → 编辑（上半=左，下半=右）
     if resp.double_clicked() {
         if let Some(pos) = resp.interact_pointer_pos() {
-            if pos.y < y + ROW_H {
+            if pos.y < y + ROW_H_CODE {
                 return (Some(RowHit::Edit(EditSide::Left)), resp);
             }
             return (Some(RowHit::Edit(EditSide::Right)), resp);
@@ -4345,5 +4531,113 @@ mod dirty_title_tests {
             ViewOptions::default(),
         );
         assert!(!t.title().starts_with('*'), "重新加载后应清除 *");
+    }
+}
+
+/// P2：文本比较新增逻辑的纯函数单测（小地图色块 / 斜纹留白 / 行高）
+#[cfg(test)]
+mod p2_tests {
+    use super::*;
+
+    #[test]
+    fn minimap_colors_follow_diff_semantics() {
+        // Equal 不画；仅左/删除 = diff_delete；新增 = diff_insert；修改 = diff_modify
+        assert!(minimap_block_color(false, RowTag::Equal).is_none());
+        assert!(minimap_block_color(true, RowTag::Equal).is_none());
+        assert_eq!(
+            minimap_block_color(false, RowTag::Delete),
+            Some(super::super::theme::diff_delete(false))
+        );
+        assert_eq!(
+            minimap_block_color(false, RowTag::Insert),
+            Some(super::super::theme::diff_insert(false))
+        );
+        assert_eq!(
+            minimap_block_color(false, RowTag::Replace),
+            Some(super::super::theme::diff_modify(false))
+        );
+    }
+
+    #[test]
+    fn minimap_row_rect_insets_sixteen_each_side() {
+        // 设计稿：色块左右各内缩 16px（76 - 32 = 44），每行等高
+        let area = Rect::from_min_size(Pos2::ZERO, Vec2::new(76.0, 100.0));
+        let r = minimap_row_rect(area, 4, 1, 16.0);
+        assert!((r.left() - 16.0).abs() < 1e-3, "left inset");
+        assert!((r.width() - 44.0).abs() < 1e-3, "width = 76 - 2*16");
+        assert!((r.top() - 25.0).abs() < 1e-3, "row 1 top");
+        assert!((r.height() - 25.0).abs() < 1e-3, "row height");
+    }
+
+    #[test]
+    fn minimap_row_rect_zero_rows_is_safe() {
+        let area = Rect::from_min_size(Pos2::ZERO, Vec2::new(76.0, 100.0));
+        assert_eq!(minimap_row_rect(area, 0, 0, 16.0), area);
+    }
+
+    #[test]
+    fn minimap_viewport_tracks_scroll() {
+        let area = Rect::from_min_size(Pos2::ZERO, Vec2::new(76.0, 100.0));
+        // 内容 100 行 × 20px = 2000px；视口 500px → 框高 = 25px
+        let top = minimap_viewport_rect(area, 100, 0.0, 500.0, 20.0).unwrap();
+        assert!((top.top() - 0.0).abs() < 1e-3);
+        assert!((top.height() - 25.0).abs() < 1e-3);
+        // 滚动到一半 → 框顶移到一半
+        let mid = minimap_viewport_rect(area, 100, 1000.0, 500.0, 20.0).unwrap();
+        assert!((mid.top() - 50.0).abs() < 1e-3, "viewport follows scroll");
+        // 滚到底 → 不超出区域下沿
+        let end = minimap_viewport_rect(area, 100, 2000.0, 500.0, 20.0).unwrap();
+        assert!(end.bottom() <= area.bottom() + 1e-3);
+    }
+
+    #[test]
+    fn minimap_viewport_none_without_content() {
+        let area = Rect::from_min_size(Pos2::ZERO, Vec2::new(76.0, 100.0));
+        assert!(minimap_viewport_rect(area, 0, 0.0, 500.0, 20.0).is_none());
+        assert!(minimap_viewport_rect(area, 10, 0.0, 0.0, 20.0).is_none());
+    }
+
+    #[test]
+    fn hatch_segments_stay_inside_rect() {
+        let rect = Rect::from_min_size(Pos2::new(5.0, 7.0), Vec2::new(20.0, 10.0));
+        let segs = hatch_segments(rect, 4.0);
+        assert!(!segs.is_empty(), "斜纹应有线段");
+        for [a, b] in &segs {
+            for p in [a, b] {
+                assert!(
+                    p.x >= rect.left() - 1e-3
+                        && p.x <= rect.right() + 1e-3
+                        && p.y >= rect.top() - 1e-3
+                        && p.y <= rect.bottom() + 1e-3,
+                    "斜纹线段必须裁剪到行矩形内: {p:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hatch_density_follows_spacing() {
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(40.0, 20.0));
+        let dense = hatch_segments(rect, 4.0).len();
+        let sparse = hatch_segments(rect, 8.0).len();
+        assert!(dense > sparse, "间距越小线段越密：{dense} vs {sparse}");
+    }
+
+    #[test]
+    fn hatch_segments_degenerate_inputs() {
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(20.0, 10.0));
+        assert!(hatch_segments(rect, 0.0).is_empty());
+        assert!(hatch_segments(rect, -4.0).is_empty());
+        assert!(hatch_segments(Rect::NOTHING, 4.0).is_empty());
+    }
+
+    #[test]
+    fn code_row_height_is_20_and_top_bottom_doubles() {
+        let mut t = DiffTab::new();
+        t.set_layout(DiffLayout::SideBySide);
+        assert!((t.row_h() - super::super::theme::ROW_H_CODE).abs() < 1e-3);
+        assert!((t.row_h() - 20.0).abs() < 1e-3);
+        t.set_layout(DiffLayout::TopBottom);
+        assert!((t.row_h() - 40.0).abs() < 1e-3, "上-下布局保持 ×2");
     }
 }

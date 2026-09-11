@@ -2224,13 +2224,13 @@ fn difftab_detail_mode_hex_and_layout() {
     tab.borrow_mut().set_layout(DiffLayout::TopBottom);
     assert_eq!(
         tab.borrow().row_h(),
-        super::theme::ROW_H * 2.0,
+        super::theme::ROW_H_CODE * 2.0,
         "上-下布局行高应为 2 倍"
     );
     tab.borrow_mut().set_layout(DiffLayout::SideBySide);
     assert_eq!(
         tab.borrow().row_h(),
-        super::theme::ROW_H,
+        super::theme::ROW_H_CODE,
         "并排布局行高应为 1 倍"
     );
 }
