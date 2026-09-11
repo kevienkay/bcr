@@ -248,6 +248,35 @@ pub fn bg_window(dark: bool) -> Color32 {
     }
 }
 
+// ===== BC 5.2.5 设计稿 P2：图片遮罩 / 差异小地图 / 行对齐留白 =====
+
+/// 差异小地图宽（设计稿 76px）
+pub const MINIMAP_W: f32 = 76.0;
+
+/// 行对齐留白 45° 斜纹线色（间距 4px；浅色 rgba(0,0,0,.055)）
+pub fn hatch_line(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 26)
+    } else {
+        Color32::from_rgba_unmultiplied(0, 0, 0, 14)
+    }
+}
+
+/// 图片差异遮罩：仅左图有 #E13C32
+pub fn mask_left() -> Color32 {
+    Color32::from_rgb(225, 60, 50)
+}
+
+/// 图片差异遮罩：仅右图有 #FFC83C
+pub fn mask_right() -> Color32 {
+    Color32::from_rgb(255, 200, 60)
+}
+
+/// 图片比较画布底 #292821
+pub fn img_canvas() -> Color32 {
+    Color32::from_rgb(41, 40, 33)
+}
+
 /// 行号颜色（P39-2b：适中灰，深浅主题都清晰）
 pub const GUTTER: Color32 = Color32::from_gray(128);
 
