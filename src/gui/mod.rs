@@ -3181,13 +3181,13 @@ impl DiffApp {
             Some(Tab::Dir(t)) => {
                 secs = t.elapsed_secs;
                 if let Some(r) = &t.result {
-                    parts = (r.stats.left_only + r.stats.right_only + r.stats.differ) as usize;
+                    parts = r.stats.left_only + r.stats.right_only + r.stats.differ;
                 }
             }
             Some(Tab::Csv(t)) => {
                 secs = t.elapsed_secs;
                 let s = t.stats();
-                parts = (s.left_only + s.right_only + s.modified) as usize;
+                parts = s.left_only + s.right_only + s.modified;
             }
             Some(Tab::Merge(t)) => {
                 secs = t.elapsed_secs;
