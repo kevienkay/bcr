@@ -14,6 +14,17 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **状态栏两行分格（P2）**：`status_bar` 重构为两行 24px、格间 1px `#C7CDD4`、底 `#DFE4EA`；第 1 行通用（`✗ N 个差异部分` ｜ `☐ 忽略的不重要差异` ｜ 忽略摘要 ｜ 右对齐 `加载时间`），第 2 行沿用各视图明细
 - **文件夹行四态底色（P2）**：DirTab 文件行按状态铺红/琥珀/蓝底（选中与 hover 优先）
 
+### BC 5.2.5 设计稿对齐（P61 · 逐视图 P2）
+
+- **difftab（文本比较）**：行高拆用 `ROW_H_CODE`(20)（上-下布局 ×2）；对侧缺行与文件末尾铺 45° 斜纹留白（`hatch_line`，间距 4px）；新增右侧 `MINIMAP_W`(76px) 差异小地图（每行色块内缩 16px / 圆角 2px，视口框 1px accent + 7% 填充，底部 9.5px「差异图」）
+- **dirtab（文件夹比较）**：列头改 名称 / 大小 / 已修改 / 属性 四列；属性列显示 Unix 权限串（`mode_to_rwx`，非 Unix 或读失败降级为空串，不 panic）；列表行高 `ROW_H_LIST`(26)
+- **csvtab（表格比较）**：新增列字母行（A…Z / AA…，行高 20）、行号左侧行状态槽（差异 ▶ / 相同 ■）、差异单元格描边；行高 26
+- **imagetab / imgcmp（图片比较）**：遮罩改为 仅左 = `mask_left` #E13C32 / 仅右 = `mask_right` #FFC83C；画布底 `img_canvas` #292821；比较画布改为两侧并集，右图超出区域也参与统计与着色
+- **mediatab / mediacmp（媒体比较）**：新增真实波形——WAV PCM 解码 + 每列 min/max 包络降采样折线，左右各一条；元数据表字段名弱色 + 差异值等宽高亮
+- **mergetab（文本合并）**：记录输出路径 `last_save_path` 与未解决冲突数 `last_unresolved`
+- **状态栏第二行收口**：图片（遮罩图例 · 差异像素占比 · 偏移）、媒体（波形差异区段 · 进度 · 模式）、合并（冲突数 · 已解决 n/N · 输出路径）三个视图的第 2 行字段统一并入 `mod.rs:status_bar`，移除三处 tab 内重复状态条，保证「单一两行状态栏」与设计稿一致
+- **新增纯函数单测**：小地图色块生成、45° 斜纹线段、权限串与列字母（含 AA 边界）、WAV 解码与包络降采样、波形差异区段、冲突计数 / 已解决 / 输出路径文案
+
 ### 正式安装流程（P59）
 
 - **Windows MSI 完整化**：重写 `scripts/package-windows.ps1`——WiX 构建完整安装向导（License 页 + 目录选择 + 完成页）、开始菜单快捷方式、控制面板卸载入口（ARP 含 Manufacturer/HelpLink/图标）、perMachine 安装 + MajorUpgrade 自动升级；`build.rs` 用 winresource 把 `assets/bcr.ico` 嵌入 bcr.exe 资源节；zip 便携版保留
