@@ -6,6 +6,14 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### BC 5.2.5 设计稿对齐（P60 · 菜单与状态栏）
+
+- **设计稿入库**：`design/BC菜单和状态栏/`（8 张会话稿 + `menus.html` + `status-bar.html` + `交接/实现交接.md` + `交接/design-tokens.json`），作为 UI 对齐的唯一设计基准
+- **Token 对齐（P0）**：新增布局阶梯（`ROW_H_LIST` 26 / `ROW_H_CODE` 20、菜单/标签/工具栏/状态栏高度、`MID_GAP` 26→22）；新增语义色 `menubar_hl` `#228EF4`、`menubar_disabled_fg`、`bg_status` `#DFE4EA`、`bg_sidebar`、`line_soft`、`status_cell_sep` `#C7CDD4`、`fg`/`fg2`、`bg_window` `#F0F4F5`
+- **配色语义按设计稿（路线2）**：强调色 `#0078F0`、删除/仅左前景 `#E01E10`、仅左底 `#FDE0DF`、新增底 `#CCE1D8`（新增独立 `diff_ins_bg` token）、修改行两侧统一琥珀 `#FBF0C8`、文件夹四态「仅左红 / 仅右琥珀 / 已修改蓝 / 二进制紫」（`status_left/right/modified/binary` + 行底色）
+- **状态栏两行分格（P2）**：`status_bar` 重构为两行 24px、格间 1px `#C7CDD4`、底 `#DFE4EA`；第 1 行通用（`✗ N 个差异部分` ｜ `☐ 忽略的不重要差异` ｜ 忽略摘要 ｜ 右对齐 `加载时间`），第 2 行沿用各视图明细
+- **文件夹行四态底色（P2）**：DirTab 文件行按状态铺红/琥珀/蓝底（选中与 hover 优先）
+
 ### 正式安装流程（P59）
 
 - **Windows MSI 完整化**：重写 `scripts/package-windows.ps1`——WiX 构建完整安装向导（License 页 + 目录选择 + 完成页）、开始菜单快捷方式、控制面板卸载入口（ARP 含 Manufacturer/HelpLink/图标）、perMachine 安装 + MajorUpgrade 自动升级；`build.rs` 用 winresource 把 `assets/bcr.ico` 嵌入 bcr.exe 资源节；zip 便携版保留
