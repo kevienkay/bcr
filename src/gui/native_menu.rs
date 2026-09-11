@@ -267,29 +267,126 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
     })
 }
 
+// ---- P1：原生菜单置灰计划（跨平台纯函数，便于单测）----
+
+/// P1（BC 5.2.5 设计稿 §5.1）：原生菜单项「是否可用」计划（菜单项 id → enabled）。
+///
+/// 抽成纯函数的好处：不需要构建真实 NSMenu/HMENU 即可单测规则，
+/// 平台侧 `sync_state` 只负责把计划逐条 `set_enabled` 应用到注册表里的句柄。
+///
+/// 只映射原生菜单里**确实存在**的项；设计稿提到但原生菜单尚未提供的项
+/// （关闭标签页 / 关闭其它标签页 / 移动标签页到新窗口 / 合并所有窗口 /
+/// 剪切 / 复制 / 粘贴 / 删除）留待补齐菜单项时一并接入。
+pub fn menu_state_plan(app: &crate::gui::DiffApp) -> Vec<(&'static str, bool)> {
+    let (multi_tab, edit_enabled) = crate::gui::menu_rules::menu_flags(app);
+    let image_offset = crate::gui::menu_rules::image_offset_nonzero(app);
+    let mut plan: Vec<(&'static str, bool)> = vec![
+        // 会话 / 窗口：多标签项（tabs.len() <= 1 置灰）
+        ("compare_parent", multi_tab),
+        ("next_tab", multi_tab),
+        ("prev_tab", multi_tab),
+    ];
+    // 编辑：只读比较会话置灰（Merge / TextEdit 可用）
+    for id in [
+        "undo",
+        "redo",
+        "select_all_diff",
+        "dir_select_all",
+        "patch_select_all",
+        "selection_clip",
+    ] {
+        plan.push((id, edit_enabled));
+    }
+    // 视图：图片「重置差异偏移」在偏移为 0 时置灰
+    plan.push(("image_reset_diff", image_offset));
+    plan
+}
+
 // ---- macOS / Windows：muda 实现 ----
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod plat {
     use super::*;
     use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    // P1：原生菜单项句柄注册表（id → MenuItem），用于每帧同步可用/勾选状态。
+    //
+    // muda 的 `MenuItem` 是 `Clone` 的轻量句柄（内部指向 NSMenuItem/HMENU），
+    // 因此可以克隆一份留在注册表里，而把另一份交给菜单树。
+    //
+    // 用 `thread_local!` 而非全局 `Mutex`：muda 的 `MenuItem` 内部是 `Rc`，不是 `Send`，
+    // 无法放进要求 `Send` 的静态容器；而菜单的构建与状态同步都发生在 eframe 主线程，
+    // 线程本地存储既满足约束又无需加锁。
+    //
+    // 注意：原生菜单里 `next_diff` / `prev_diff` 在两个子菜单里重复出现，
+    // 同 id 会互相覆盖（只保留最后注册的一个）——这两个 id 不参与置灰规则，故无影响。
+    thread_local! {
+        static ITEMS: RefCell<HashMap<String, MenuItem>> = RefCell::new(HashMap::new());
+    }
+
+    fn register(id: &str, item: MenuItem) {
+        ITEMS.with(|m| {
+            m.borrow_mut().insert(id.to_string(), item);
+        });
+    }
 
     fn submenu(id: &str, key: crate::i18n::Key) -> Submenu {
         Submenu::with_id(id, crate::i18n::t(key), true)
     }
 
     fn item(id: &str, key: crate::i18n::Key) -> MenuItem {
-        MenuItem::with_id(id, crate::i18n::t(key), true, None)
+        let it = MenuItem::with_id(id, crate::i18n::t(key), true, None);
+        register(id, it.clone());
+        it
     }
 
     /// 无对应 i18n 键时用固定标签（原生菜单构建一次，语言切换不刷新系统菜单）。
     fn fixed(id: &str, label: &str) -> MenuItem {
-        MenuItem::with_id(id, label, true, None)
+        let it = MenuItem::with_id(id, label, true, None);
+        register(id, it.clone());
+        it
+    }
+
+    /// P1（BC 5.2.5 设计稿 §5.1）：把置灰计划同步到原生菜单项（每帧调用）。
+    /// 规则来自跨平台共享的 `crate::gui::menu_rules`（经 `super::menu_state_plan` 展开为 id 列表）。
+    pub fn sync_state(app: &crate::gui::DiffApp) {
+        let plan = super::menu_state_plan(app);
+        ITEMS.with(|m| {
+            let map = m.borrow();
+            for (id, enabled) in plan {
+                if let Some(it) = map.get(id) {
+                    it.set_enabled(enabled);
+                }
+            }
+        });
     }
 
     /// 构建 bcr 菜单（顶级菜单 → 子菜单 → 菜单项；项 id 即命令字符串）。
     #[allow(unused_must_use)] // muda append 返回 Result，构建期无需逐个处理
     fn build_menu() -> Menu {
         let menu = Menu::new();
+        // ---- 应用菜单（macOS 必需；对齐设计稿菜单栏首项「Beyond Compare」）----
+        // macOS 把主菜单的**第一个子菜单**当作「应用菜单」，其标题由系统替换为 App 名。
+        // 若不显式提供这一项，第一个业务子菜单（会话）会被系统当成应用菜单，
+        // 于是「会话」在菜单栏里消失（标题变成 App 名）。这里补齐标准应用菜单。
+        {
+            let m = Submenu::with_id("app", "bcr", true);
+            m.append(&PredefinedMenuItem::about(
+                None,
+                Some(muda::AboutMetadata::default()),
+            ));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item("settings", crate::i18n::Key::MenuSettings));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&PredefinedMenuItem::services(None));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&PredefinedMenuItem::hide(None));
+            m.append(&PredefinedMenuItem::hide_others(None));
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&PredefinedMenuItem::quit(None));
+            menu.append(&m);
+        }
         // ---- 会话 ----
         {
             let m = submenu("session", crate::i18n::Key::MenuSession);
@@ -556,9 +653,11 @@ mod plat {
     pub fn drain() -> Vec<MenuCmd> {
         Vec::new()
     }
+    /// Linux 无原生菜单（用窗口内 `menubar.rs`），状态同步为 no-op。
+    pub fn sync_state(_app: &crate::gui::DiffApp) {}
 }
 
-pub use crate::gui::native_menu::plat::{drain, install, reinstall};
+pub use crate::gui::native_menu::plat::{drain, install, reinstall, sync_state};
 
 #[cfg(test)]
 mod tests {
@@ -602,5 +701,54 @@ mod tests {
     fn cmd_from_id_unknown_returns_none() {
         assert_eq!(cmd_from_id("nonexistent"), None);
         assert_eq!(cmd_from_id(""), None);
+    }
+
+    // ---- P1：原生菜单置灰计划（不构建真实菜单即可验证规则）----
+
+    fn plan_enabled(app: &crate::gui::DiffApp, id: &str) -> bool {
+        super::menu_state_plan(app)
+            .into_iter()
+            .find(|(k, _)| *k == id)
+            .map(|(_, v)| v)
+            .unwrap_or_else(|| panic!("计划中应包含菜单项 id `{id}`"))
+    }
+
+    #[test]
+    fn menu_state_plan_disables_multi_tab_and_edit_for_single_readonly_tab() {
+        let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
+        app.add_tab(crate::gui::Tab::Diff(super::super::difftab::DiffTab::new()));
+        // 单标签：会话/窗口多标签项置灰
+        assert!(!plan_enabled(&app, "next_tab"), "单标签：下一标签页应置灰");
+        assert!(!plan_enabled(&app, "prev_tab"), "单标签：上一标签页应置灰");
+        assert!(
+            !plan_enabled(&app, "compare_parent"),
+            "单标签：比较父文件夹应置灰"
+        );
+        // 只读比较会话：编辑项置灰
+        assert!(!plan_enabled(&app, "undo"), "只读会话：撤销应置灰");
+        assert!(!plan_enabled(&app, "redo"), "只读会话：重做应置灰");
+        assert!(
+            !plan_enabled(&app, "dir_select_all"),
+            "只读会话：全选应置灰"
+        );
+        assert!(
+            !plan_enabled(&app, "selection_clip"),
+            "只读会话：选择内容应置灰"
+        );
+    }
+
+    #[test]
+    fn menu_state_plan_enables_edit_for_merge_and_multi_tab() {
+        let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
+        app.add_tab(crate::gui::Tab::Merge(super::super::mergetab::MergeTab::new(
+            "", "", "",
+        )));
+        // 可编辑会话：编辑项可用
+        assert!(plan_enabled(&app, "undo"), "合并会话：撤销应可用");
+        // 仍是单标签：多标签项依旧置灰
+        assert!(!plan_enabled(&app, "next_tab"), "单标签：下一标签页应置灰");
+        // 再加一个标签 → 多标签项可用
+        app.add_tab(crate::gui::Tab::Diff(super::super::difftab::DiffTab::new()));
+        assert!(plan_enabled(&app, "next_tab"), "多标签：下一标签页应可用");
     }
 }

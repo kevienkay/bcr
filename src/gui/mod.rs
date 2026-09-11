@@ -13,6 +13,8 @@ mod foldermergetab;
 mod icons;
 mod imagetab;
 mod mediatab;
+/// P1：菜单可用性规则（跨平台共享，menubar 与 native_menu 共用）
+mod menu_rules;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod menubar;
 mod mergetab;
@@ -1727,6 +1729,8 @@ impl eframe::App for DiffApp {
         for cmd in crate::gui::native_menu::drain() {
             self.run_menu_cmd(ui, cmd);
         }
+        // P1（BC 5.2.5 设计稿）：把菜单置灰规则同步到原生菜单（macOS/Windows）
+        crate::gui::native_menu::sync_state(self);
         // P58：空文件对比页(打开对比页面) 的两半分栏 —— 同步最近路径历史 + 汲取其待记历史
         let mut pending: Vec<(bool, String)> = Vec::new();
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {

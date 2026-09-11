@@ -86,30 +86,9 @@ fn menu_item_state(
     }
 }
 
-/// P1：菜单可用性判定的纯函数（便于单测，不依赖 egui）。
-///
-/// 返回 `(多标签项可用, 编辑项可用)`：
-/// - 会话 / 窗口菜单的多标签项（关闭标签页 / 切换标签页 / 移动标签页 / 合并窗口）
-///   在 `tabs.len() <= 1` 时置灰；
-/// - 编辑菜单项仅在**可编辑会话**（`Tab::Merge` / `Tab::TextEdit`）可用；
-///   只读比较会话（Diff / Dir / Csv / Image / Media / Patch）与无标签（主页）一律置灰。
-pub fn menu_flags(app: &DiffApp) -> (bool, bool) {
-    let multi_tab = app.tabs.len() > 1;
-    let edit_enabled = matches!(
-        app.tabs.get(app.active),
-        Some(Tab::Merge(_)) | Some(Tab::TextEdit(_))
-    );
-    (multi_tab, edit_enabled)
-}
-
-/// P1：图片比较「重置差异偏移」是否可用（偏移为 0 时置灰，见 design-tokens
-/// `menus.grayedRules` 视图项）。非图片会话该项不显示，返回值无意义。
-pub fn image_offset_nonzero(app: &DiffApp) -> bool {
-    match app.tabs.get(app.active) {
-        Some(Tab::Image(t)) => t.scroll != egui::Vec2::ZERO,
-        _ => false,
-    }
-}
+// P1：菜单可用性判定的纯函数已抽到跨平台共享模块 `super::menu_rules`
+//（macOS/Windows 的 muda 原生菜单也用同一套规则），此处再导出以保持既有调用点不变。
+pub use super::menu_rules::{image_offset_nonzero, menu_flags};
 
 /// 对当前标签为 DiffTab 时执行操作（菜单转发撤销/重做/跳转等）
 fn with_diff_tab(app: &mut DiffApp, f: impl FnOnce(&mut super::difftab::DiffTab)) {
