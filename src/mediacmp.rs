@@ -227,6 +227,174 @@ pub fn compare_media(left: &str, right: &str) -> Vec<MediaFieldDiff> {
     out
 }
 
+// ===== P2（BC 5.2.5）：真实波形（PCM 降采样 min/max 包络）=====
+
+/// 单声道 PCM 采样（f32，约 -1.0 ~ 1.0）
+#[derive(Debug, Clone, PartialEq)]
+pub struct PcmData {
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub bits: u16,
+    pub samples: Vec<f32>,
+}
+
+impl PcmData {
+    /// 时长（秒）；无采样或采样率缺失时为 0
+    pub fn duration_secs(&self) -> f64 {
+        if self.sample_rate == 0 {
+            0.0
+        } else {
+            self.samples.len() as f64 / self.sample_rate as f64
+        }
+    }
+}
+
+/// 单个采样字节 → f32（按位深；越界返回 None）
+fn decode_sample(b: &[u8], bits: u16, is_float: bool) -> Option<f32> {
+    match (bits, is_float) {
+        (8, _) => Some((*b.first()? as f32 - 128.0) / 128.0),
+        (16, false) => {
+            let v = i16::from_le_bytes([*b.first()?, *b.get(1)?]);
+            Some(v as f32 / 32768.0)
+        }
+        (24, false) => {
+            let raw = (*b.first()? as i32)
+                | ((*b.get(1)? as i32) << 8)
+                | ((*b.get(2)? as i32) << 16);
+            // 24 → 32 位符号扩展
+            let v = (raw << 8) >> 8;
+            Some(v as f32 / 8_388_608.0)
+        }
+        (32, true) => {
+            let v = f32::from_le_bytes([*b.first()?, *b.get(1)?, *b.get(2)?, *b.get(3)?]);
+            if v.is_finite() {
+                Some(v)
+            } else {
+                None
+            }
+        }
+        (32, false) => {
+            let v = i32::from_le_bytes([*b.first()?, *b.get(1)?, *b.get(2)?, *b.get(3)?]);
+            Some(v as f32 / 2_147_483_648.0)
+        }
+        _ => None,
+    }
+}
+
+/// 解析 WAV（RIFF）为 PCM 采样。
+/// 仅支持未压缩 PCM（fmt 的 audio_format = 1）与 IEEE float（= 3）；
+/// 多声道按平均混为单声道；格式不支持/文件损坏/路径不可读一律返回 None（不 panic）。
+pub fn read_wav_pcm(path: &str) -> Option<PcmData> {
+    let data = std::fs::read(path).ok()?;
+    read_wav_pcm_bytes(&data)
+}
+
+/// 从字节解析 WAV PCM（供单测直接构造字节流）
+pub fn read_wav_pcm_bytes(data: &[u8]) -> Option<PcmData> {
+    if data.len() < 12 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
+        return None;
+    }
+    let mut pos = 12usize;
+    let mut fmt: Option<(u16, u16, u32, u16)> = None; // format, channels, rate, bits
+    let mut pcm_bytes: Option<&[u8]> = None;
+    while pos + 8 <= data.len() {
+        let id = &data[pos..pos + 4];
+        let size = u32::from_le_bytes([
+            data[pos + 4],
+            data[pos + 5],
+            data[pos + 6],
+            data[pos + 7],
+        ]) as usize;
+        let body_start = pos + 8;
+        let body_end = body_start.saturating_add(size).min(data.len());
+        let body = &data[body_start..body_end];
+        if id == b"fmt " && body.len() >= 16 {
+            let audio_format = u16::from_le_bytes([body[0], body[1]]);
+            let channels = u16::from_le_bytes([body[2], body[3]]);
+            let rate = u32::from_le_bytes([body[4], body[5], body[6], body[7]]);
+            let bits = u16::from_le_bytes([body[14], body[15]]);
+            fmt = Some((audio_format, channels, rate, bits));
+        } else if id == b"data" {
+            pcm_bytes = Some(body);
+        }
+        // chunk 按偶数字节对齐
+        pos = body_start + size + (size & 1);
+        if pos <= body_start {
+            break; // 防零步进死循环
+        }
+    }
+    let (audio_format, channels, sample_rate, bits) = fmt?;
+    if !matches!(audio_format, 1 | 3) || channels == 0 || sample_rate == 0 || bits == 0 {
+        return None;
+    }
+    let is_float = audio_format == 3;
+    let bytes_per_sample = (bits as usize).div_ceil(8);
+    let frame_bytes = bytes_per_sample.checked_mul(channels as usize)?;
+    if frame_bytes == 0 {
+        return None;
+    }
+    let raw = pcm_bytes?;
+    let frames = raw.len() / frame_bytes;
+    let mut samples = Vec::with_capacity(frames);
+    for f in 0..frames {
+        let base = f * frame_bytes;
+        let mut sum = 0f32;
+        let mut n = 0u32;
+        for c in 0..channels as usize {
+            let off = base + c * bytes_per_sample;
+            if let Some(v) = decode_sample(&raw[off..], bits, is_float) {
+                sum += v;
+                n += 1;
+            }
+        }
+        if n > 0 {
+            samples.push(sum / n as f32);
+        }
+    }
+    Some(PcmData {
+        sample_rate,
+        channels,
+        bits,
+        samples,
+    })
+}
+
+/// 降采样为每列 min/max 包络（columns 列）。
+/// 空采样 → 全 0 包络；列数多于采样数时多列会落在同一样本上（包络重复）。
+pub fn downsample_envelope(samples: &[f32], columns: usize) -> Vec<(f32, f32)> {
+    if columns == 0 {
+        return Vec::new();
+    }
+    if samples.is_empty() {
+        return vec![(0.0, 0.0); columns];
+    }
+    let n = samples.len() as f64;
+    let mut out = Vec::with_capacity(columns);
+    for c in 0..columns {
+        let start = (((c as f64 / columns as f64) * n).floor() as usize).min(samples.len());
+        let end = ((((c + 1) as f64 / columns as f64) * n).ceil() as usize)
+            .max(start + 1)
+            .min(samples.len());
+        let slice = &samples[start.min(end)..end];
+        let mut mn = f32::INFINITY;
+        let mut mx = f32::NEG_INFINITY;
+        for &s in slice {
+            if s < mn {
+                mn = s;
+            }
+            if s > mx {
+                mx = s;
+            }
+        }
+        if !mn.is_finite() || !mx.is_finite() {
+            mn = 0.0;
+            mx = 0.0;
+        }
+        out.push((mn, mx));
+    }
+    out
+}
+
 /// `bcr media` 子命令参数（P49-2：P27 契约扩展新视图）
 #[derive(clap::Args, Debug)]
 pub struct MediaArgs {
@@ -337,5 +505,132 @@ mod tests {
         assert_eq!(info.sample_rate, Some(44100));
         assert!(info.duration_secs.is_some(), "应有时长估算");
         assert_eq!(info.duration_secs, Some(2));
+    }
+}
+
+/// P2：媒体波形新增逻辑的纯函数单测（WAV PCM 解析 / 包络降采样）
+#[cfg(test)]
+mod p2_tests {
+    use super::*;
+
+    /// 构造 WAV 字节流（未压缩 PCM / IEEE float）
+    fn wav(audio_format: u16, channels: u16, rate: u32, bits: u16, data: &[u8]) -> Vec<u8> {
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36u32 + data.len() as u32).to_le_bytes());
+        b.extend_from_slice(b"WAVE");
+        b.extend_from_slice(b"fmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&audio_format.to_le_bytes());
+        b.extend_from_slice(&channels.to_le_bytes());
+        b.extend_from_slice(&rate.to_le_bytes());
+        let block = channels * bits / 8;
+        b.extend_from_slice(&(rate * block as u32).to_le_bytes());
+        b.extend_from_slice(&block.to_le_bytes());
+        b.extend_from_slice(&bits.to_le_bytes());
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        b.extend_from_slice(data);
+        b
+    }
+
+    #[test]
+    fn wav_pcm16_samples_decoded() {
+        // 4 个 16 位采样：0, 32767, -32768, 16384
+        let mut data = Vec::new();
+        for v in [0i16, 32767, -32768, 16384] {
+            data.extend_from_slice(&v.to_le_bytes());
+        }
+        let pcm = read_wav_pcm_bytes(&wav(1, 1, 44100, 16, &data)).unwrap();
+        assert_eq!(pcm.sample_rate, 44100);
+        assert_eq!(pcm.channels, 1);
+        assert_eq!(pcm.bits, 16);
+        assert_eq!(pcm.samples.len(), 4);
+        assert!((pcm.samples[0] - 0.0).abs() < 1e-6);
+        assert!((pcm.samples[1] - 32767.0 / 32768.0).abs() < 1e-6);
+        assert!((pcm.samples[2] + 1.0).abs() < 1e-6);
+        assert!((pcm.samples[3] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn wav_stereo_mixed_to_mono() {
+        // 立体声：左 32767 / 右 -32768 → 平均 ≈ -0.0000153
+        let mut data = Vec::new();
+        data.extend_from_slice(&32767i16.to_le_bytes());
+        data.extend_from_slice(&(-32768i16).to_le_bytes());
+        let pcm = read_wav_pcm_bytes(&wav(1, 2, 8000, 16, &data)).unwrap();
+        assert_eq!(pcm.channels, 2);
+        assert_eq!(pcm.samples.len(), 1, "两声道合成一个采样");
+        assert!(pcm.samples[0].abs() < 1e-4);
+    }
+
+    #[test]
+    fn wav_8bit_and_float32_decoded() {
+        // 8 位无符号：128 → 0.0，255 → ≈0.992
+        let pcm8 = read_wav_pcm_bytes(&wav(1, 1, 8000, 8, &[128, 255])).unwrap();
+        assert!((pcm8.samples[0]).abs() < 1e-6);
+        assert!((pcm8.samples[1] - 127.0 / 128.0).abs() < 1e-6);
+        // IEEE float32（audio_format = 3）
+        let mut f = Vec::new();
+        f.extend_from_slice(&0.25f32.to_le_bytes());
+        let pcmf = read_wav_pcm_bytes(&wav(3, 1, 8000, 32, &f)).unwrap();
+        assert!((pcmf.samples[0] - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn wav_24bit_signed_decoded() {
+        // 24 位 -1 → ≈ -1/8388608；+8388607 → ≈ 1
+        let neg: [u8; 3] = [0xFF, 0xFF, 0xFF];
+        let pos: [u8; 3] = [0xFF, 0xFF, 0x7F];
+        let mut data = Vec::new();
+        data.extend_from_slice(&neg);
+        data.extend_from_slice(&pos);
+        let pcm = read_wav_pcm_bytes(&wav(1, 1, 8000, 24, &data)).unwrap();
+        assert!((pcm.samples[0] + 1.0 / 8_388_608.0).abs() < 1e-9);
+        assert!((pcm.samples[1] - 8_388_607.0 / 8_388_608.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn invalid_or_unsupported_wav_returns_none() {
+        assert!(read_wav_pcm_bytes(b"").is_none(), "空输入不 panic");
+        assert!(read_wav_pcm_bytes(b"NOTAWAVE....").is_none());
+        // 压缩格式（audio_format = 0x0055 = MP3-in-WAV）不支持
+        assert!(read_wav_pcm_bytes(&wav(0x0055, 1, 44100, 16, &[0, 0])).is_none());
+        // 截断的 RIFF 头不 panic
+        let mut truncated = wav(1, 1, 44100, 16, &[0, 0]);
+        truncated.truncate(30);
+        let _ = read_wav_pcm_bytes(&truncated);
+    }
+
+    #[test]
+    fn envelope_min_max_per_column() {
+        let samples: Vec<f32> = vec![-1.0, 0.5, 1.0, -0.5, 0.25, 0.75, -0.25, 0.0];
+        let env = downsample_envelope(&samples, 4);
+        assert_eq!(env.len(), 4);
+        // 每列取均分区间 [i/4, (i+1)/4) 上的 min/max
+        assert_eq!(env[0], (-1.0, 0.5));
+        assert_eq!(env[1], (-0.5, 1.0));
+        assert_eq!(env[2], (0.25, 0.75));
+        assert_eq!(env[3], (-0.25, 0.0));
+        // min 与 max 顺序固定（min <= max）
+        for (mn, mx) in &env {
+            assert!(mn <= mx, "包络 min 必须 <= max");
+        }
+    }
+
+    #[test]
+    fn envelope_empty_and_oversized_column_counts() {
+        let empty = downsample_envelope(&[], 5);
+        assert_eq!(empty, vec![(0.0, 0.0); 5], "空采样 → 全 0 包络（不 panic）");
+        assert!(downsample_envelope(&[0.5], 0).is_empty());
+        // 列数多于采样数：多列落在同一样本上（不 panic，包络可重复）
+        let env = downsample_envelope(&[1.0, -1.0], 4);
+        assert_eq!(env.len(), 4);
+        assert_eq!(env[0], (1.0, 1.0));
+        assert_eq!(env[1], (1.0, 1.0));
+        assert_eq!(env[2], (-1.0, -1.0));
+        assert_eq!(env[3], (-1.0, -1.0));
+        // 单列 → 覆盖全部采样的 min/max
+        assert_eq!(downsample_envelope(&[0.5, -0.5, 1.0], 1), vec![(-0.5, 1.0)]);
     }
 }
