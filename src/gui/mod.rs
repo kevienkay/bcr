@@ -3500,11 +3500,7 @@ impl DiffApp {
                             // 冲突数（有冲突黄 / 无冲突绿）
                             let (label, color) = if t.view.conflicts > 0 {
                                 (
-                                    format!(
-                                        "{} {}",
-                                        crate::i18n::t(crate::i18n::Key::ConflictsCount),
-                                        t.view.conflicts
-                                    ),
+                                    crate::gui::mergetab::conflict_label(t.view.conflicts),
                                     theme::conflict_color(dark),
                                 )
                             } else {
@@ -3518,6 +3514,23 @@ impl DiffApp {
                             if let Some(secs) = t.elapsed_secs {
                                 ui.label(RichText::new(format!("耗时 {:.2}s", secs)).weak());
                             }
+                            // P2（BC 5.2.5）：已解决 n/N · 输出路径
+                            ui.separator();
+                            let resolved = crate::gui::mergetab::resolved_count(
+                                t.view.conflicts,
+                                t.last_unresolved,
+                            );
+                            ui.label(crate::gui::mergetab::resolved_label(
+                                resolved,
+                                t.view.conflicts,
+                            ));
+                            ui.separator();
+                            ui.label(
+                                RichText::new(crate::gui::mergetab::output_label(
+                                    t.last_save_path.as_deref(),
+                                ))
+                                .weak(),
+                            );
                         }
                         Tab::Image(t) => {
                             let dark = ui.visuals().dark_mode;
@@ -3555,6 +3568,23 @@ impl DiffApp {
                                 )
                             };
                             ui.label(RichText::new(label).color(color));
+                            // P2（BC 5.2.5）：遮罩图例（红=仅左 · 黄=仅右）· 差异像素与占比 · 当前偏移
+                            ui.separator();
+                            for (color, text) in crate::gui::imagetab::ImageTab::mask_legend() {
+                                let (r, _) = ui.allocate_exact_size(
+                                    egui::vec2(10.0, 10.0),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter().rect_filled(r, 2.0, color);
+                                ui.label(RichText::new(text).weak());
+                                ui.add_space(6.0);
+                            }
+                            ui.separator();
+                            ui.label(crate::gui::imagetab::ImageTab::diff_pixel_summary(
+                                t.pair.as_ref().map(|p| p.stats),
+                            ));
+                            ui.separator();
+                            ui.label(crate::gui::imagetab::ImageTab::offset_label(t.scroll));
                         }
                         Tab::TextEdit(t) => {
                             // 左：路径弱色 + 行/字符数
@@ -3669,6 +3699,21 @@ impl DiffApp {
                                 )
                             };
                             ui.label(RichText::new(label).color(color));
+                            // P2（BC 5.2.5）：波形差异区段 · 播放进度 · 播放模式
+                            ui.separator();
+                            let regions = t.wave_regions();
+                            ui.label(
+                                RichText::new(crate::gui::mediatab::wave_regions_label(regions))
+                                    .color(if regions > 0 {
+                                        theme::diff_modify(dark)
+                                    } else {
+                                        ui.visuals().weak_text_color()
+                                    }),
+                            );
+                            ui.separator();
+                            ui.label(t.progress_text());
+                            ui.separator();
+                            ui.label(crate::gui::mediatab::PLAYBACK_MODE_LABEL);
                         }
                     }
                 } else {

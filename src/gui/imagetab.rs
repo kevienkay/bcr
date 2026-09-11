@@ -363,34 +363,6 @@ impl ImageTab {
         format!("偏移: {:.1}, {:.1}", scroll.x, scroll.y)
     }
 
-    /// P2（BC 5.2.5 状态栏第二行）：遮罩图例（红=仅左 · 黄=仅右）·
-    /// 差异像素数与占比 · 当前偏移（滚动偏移 px）
-    fn status_row2(&self, ui: &mut egui::Ui) {
-        let dark = ui.visuals().dark_mode;
-        let full = ui.max_rect();
-        ui.painter().rect_filled(full, 0.0, super::theme::bg_status(dark));
-        ui.painter().hline(
-            full.x_range(),
-            full.top(),
-            egui::Stroke::new(1.0, super::theme::mid_sep(dark)),
-        );
-        ui.horizontal_centered(|ui| {
-            ui.add_space(8.0);
-            // 遮罩图例（色块 + 文字，设计稿 .sw）
-            for (color, text) in Self::mask_legend() {
-                let (r, _) =
-                    ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
-                ui.painter().rect_filled(r, 2.0, color);
-                ui.label(RichText::new(text).weak());
-                ui.add_space(6.0);
-            }
-            ui.separator();
-            ui.label(Self::diff_pixel_summary(self.pair.as_ref().map(|p| p.stats)));
-            ui.separator();
-            ui.label(Self::offset_label(self.scroll));
-        });
-    }
-
     /// 懒加载纹理（需要 ctx）
     fn ensure_textures(&mut self, ctx: &egui::Context) {
         if self.textures.is_some() {
@@ -700,13 +672,6 @@ impl ImageTab {
             });
             return;
         }
-
-        // P2（BC 5.2.5 状态栏第二行）：遮罩图例 · 差异像素与占比 · 当前偏移
-        // 说明：全局 status_bar 由 mod.rs（P0）固定，这里以会话内底部条呈现同一组字段。
-        egui::Panel::bottom("img_status_row2")
-            .default_size(super::theme::STATUSBAR_ROW_H)
-            .resizable(false)
-            .show(ui, |ui| self.status_row2(ui));
 
         egui::CentralPanel::default().show(ui, |ui| {
             // 定位差异请求：按当前可视区计算缩放与滚动（需 &mut self，先于纹理借用处理）

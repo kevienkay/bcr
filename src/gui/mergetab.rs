@@ -30,6 +30,8 @@ pub struct MergeTab {
     pub cur_line: usize,
     /// P2：最近一次保存的输出路径（未保存为 None）
     pub last_save_path: Option<String>,
+    /// P2：最近一帧的未解决冲突数（供全局状态栏第二行读取）
+    pub last_unresolved: usize,
 }
 
 impl MergeTab {
@@ -49,6 +51,7 @@ impl MergeTab {
             show_preview: true,
             cur_line: 0,
             last_save_path: None,
+            last_unresolved: 0,
         };
         t.reload();
         t
@@ -355,35 +358,6 @@ impl MergeTab {
             .sum()
     }
 
-    /// P2（BC 5.2.5 状态栏第二行）：冲突数 · 已解决 n/N · 输出路径
-    fn status_row2(&self, ui: &mut egui::Ui, unresolved: usize) {
-        let dark = ui.visuals().dark_mode;
-        let full = ui.max_rect();
-        ui.painter().rect_filled(full, 0.0, super::theme::bg_status(dark));
-        ui.painter().hline(
-            full.x_range(),
-            full.top(),
-            egui::Stroke::new(1.0, super::theme::mid_sep(dark)),
-        );
-        ui.horizontal_centered(|ui| {
-            ui.add_space(8.0);
-            let conflicts = self.view.conflicts;
-            let resolved = resolved_count(conflicts, unresolved);
-            // 冲突数（有冲突黄 / 无冲突绿）
-            ui.label(egui::RichText::new(conflict_label(conflicts)).color(if conflicts > 0 {
-                super::theme::conflict_color(dark)
-            } else {
-                super::theme::resolved_color(dark)
-            }));
-            ui.separator();
-            ui.label(resolved_label(resolved, conflicts));
-            ui.separator();
-            ui.label(
-                egui::RichText::new(output_label(self.last_save_path.as_deref())).weak(),
-            );
-        });
-    }
-
     pub fn save(&mut self) -> bool {
         let Some(path) = rfd::FileDialog::new()
             .set_file_name("merged.txt")
@@ -639,12 +613,9 @@ impl MergeTab {
 
         // 底部实时预览窗格（显示保存将得到的结果，未解决冲突高亮）
         let (lines, unresolved) = render_merged(&self.view, &self.label_l, &self.label_r);
-        // P2（BC 5.2.5 状态栏第二行）：冲突数 · 已解决 n/N · 输出路径
-        // 声明在预览窗格之前，使其位于预览窗格下方（贴近全局状态栏）
-        egui::Panel::bottom("mergetab_status_row2")
-            .default_size(super::theme::STATUSBAR_ROW_H)
-            .resizable(false)
-            .show(ui, |ui| self.status_row2(ui, unresolved));
+        // P2（BC 5.2.5）：未解决冲突数交给全局状态栏（mod.rs status_bar 第二行）呈现，
+        // 避免在会话内再出一条状态栏、与设计稿「单一两行状态栏」不符。
+        self.last_unresolved = unresolved;
         if self.show_preview {
             let preview_lines: Vec<(&str, bool)> = lines
                 .iter()
