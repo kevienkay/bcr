@@ -11,10 +11,11 @@
 //! - 表头点击排序（纯显示排序，不改对齐数据）
 
 use super::common::*;
+use super::theme::ROW_H_LIST;
 use super::{icons, widgets};
 use crate::csvcmp::{align_tables, serialize_csv, RowStats, RowStatus, Table};
 use crate::i18n::{fmt, t, Key as I18nKey};
-use eframe::egui::{self, Pos2, Rect, Vec2};
+use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
 
 /// CSV 表格行过滤（对齐 BC 显示过滤器；CSV 无 Moved 状态）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -861,10 +862,39 @@ impl CsvTab {
             };
             let hrect = ui.max_rect();
             ui.painter().rect_filled(hrect, 0.0, header_bg);
+            // P2（BC 5.2.5）：列字母行（A…Z、AA…），行高 20；与下方列名逐列对齐
             ui.horizontal(|ui| {
                 ui.add_space(4.0);
-                // 行号 + 状态 占位（与数据行同宽）
-                let gutter = gutter_width(a.rows.len().max(b.rows.len())) + 26.0;
+                let gutter = ROW_SLOT_W + gutter_width(a.rows.len().max(b.rows.len())) + 26.0;
+                ui.add_space(gutter);
+                for (side, t) in [(true, a), (false, b)] {
+                    if side {
+                        ui.separator();
+                    }
+                    for (ci, _h) in t.headers.iter().enumerate() {
+                        if let Some(vc) = &vis_cols {
+                            if !vc.contains(&ci) {
+                                continue;
+                            }
+                        }
+                        let w = widths.get(ci).copied().unwrap_or(110.0);
+                        let (lrect, _) = ui
+                            .allocate_exact_size(Vec2::new(w, COL_LETTER_H), egui::Sense::hover());
+                        ui.painter().text(
+                            Pos2::new(lrect.left() + 4.0, lrect.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            col_letter(ci),
+                            egui::FontId::monospace(11.0),
+                            ui.visuals().weak_text_color(),
+                        );
+                        ui.add_space(2.0);
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.add_space(4.0);
+                // 行号 + 状态槽 占位（与数据行同宽）
+                let gutter = ROW_SLOT_W + gutter_width(a.rows.len().max(b.rows.len())) + 26.0;
                 ui.add_space(gutter);
                 let fg = text_color(ui);
                 let mut click: Option<(bool, usize)> = None;
@@ -921,7 +951,7 @@ impl CsvTab {
                 for (ci, side) in [(0usize, true), (1, false)].into_iter() {
                     let ui = &mut cols[ci];
                     let table = if side { a } else { b };
-                    let out = super::show_rows(ui, total, ROW_H, |ui, range| {
+                    let out = super::show_rows(ui, total, ROW_H_LIST, |ui, range| {
                         let fg = text_color(ui);
                         for vi in range {
                             let aligned_idx = visible[vi];
@@ -938,7 +968,7 @@ impl CsvTab {
                                 )
                             };
                             let (rect, resp) = ui.allocate_exact_size(
-                                Vec2::new(ui.available_width().max(200.0), ROW_H),
+                                Vec2::new(ui.available_width().max(200.0), ROW_H_LIST),
                                 egui::Sense::click(),
                             );
                             // P32-A4：行右键菜单（复制路径/打开文件）+ P37-1c 复制单元格至右侧
@@ -1006,10 +1036,27 @@ impl CsvTab {
                                 bg
                             };
                             paint_bg(ui, rect, bg);
-                            // 行号
+                            // P2：行状态槽（差异行 ▶ / 相同行 ■）—— 行号槽左侧
+                            let slot_rect =
+                                Rect::from_min_size(rect.min, vec2(ROW_SLOT_W, ROW_H_LIST));
+                            ui.painter().text(
+                                slot_rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                row_slot_mark(ar.status),
+                                egui::FontId::proportional(8.0),
+                                if ar.status == RowStatus::Same {
+                                    ui.visuals().weak_text_color()
+                                } else {
+                                    super::theme::diff_modify(ui.visuals().dark_mode)
+                                },
+                            );
+                            // 行号（状态槽右侧）
                             paint_line_no(
                                 ui,
-                                Rect::from_min_size(rect.min, vec2(gutter_width(total), ROW_H)),
+                                Rect::from_min_size(
+                                    Pos2::new(rect.left() + ROW_SLOT_W, rect.top()),
+                                    vec2(gutter_width(total), ROW_H_LIST),
+                                ),
                                 row_no,
                             );
                             // 状态字母
@@ -1021,14 +1068,17 @@ impl CsvTab {
                             };
                             let sc = status_color(ui, letter);
                             ui.painter().text(
-                                Pos2::new(rect.left() + gutter_width(total) + 8.0, rect.center().y),
+                                Pos2::new(
+                                    rect.left() + ROW_SLOT_W + gutter_width(total) + 8.0,
+                                    rect.center().y,
+                                ),
                                 egui::Align2::LEFT_CENTER,
                                 letter.to_string(),
                                 egui::FontId::monospace(12.0),
                                 sc,
                             );
                             // 单元格（P37-1c：隐藏相同列过滤 + 自适应宽度 + 点击选中）
-                            let mut x0 = rect.left() + gutter_width(total) + 24.0;
+                            let mut x0 = rect.left() + ROW_SLOT_W + gutter_width(total) + 24.0;
                             for (col_idx, cell) in
                                 row.map(|r| r.iter().enumerate()).into_iter().flatten()
                             {
@@ -1041,7 +1091,7 @@ impl CsvTab {
                                 let col_w = widths.get(col_idx).copied().unwrap_or(110.0);
                                 let crect = Rect::from_min_size(
                                     Pos2::new(x0, rect.top()),
-                                    vec2(col_w, ROW_H),
+                                    vec2(col_w, ROW_H_LIST),
                                 );
                                 // 单元格点击选中（P37-1c）
                                 let cell_resp = ui.interact(
@@ -1070,6 +1120,22 @@ impl CsvTab {
                                 };
                                 if let Some(c) = hl {
                                     paint_bg(ui, crect, Some(c));
+                                }
+                                // P2：差异单元格描边（复用既有差异判定，不改判定逻辑）
+                                if cell_is_diff(ar.status, &ar.changed_cols, col_idx) {
+                                    ui.painter().rect_stroke(
+                                        crect,
+                                        0.0,
+                                        egui::Stroke::new(
+                                            1.0,
+                                            cell_diff_stroke(
+                                                ui.visuals().dark_mode,
+                                                ar.status,
+                                                side,
+                                            ),
+                                        ),
+                                        egui::StrokeKind::Inside,
+                                    );
                                 }
                                 ui.painter().text(
                                     Pos2::new(x0 + 4.0, rect.center().y),
@@ -1223,6 +1289,54 @@ fn parse_sort_col(name: &str) -> (bool, usize) {
         }
     }
     (side, col)
+}
+
+// ===== P2（BC 5.2.5 设计稿）：列字母行 / 行状态槽 / 单元格标色 =====
+
+/// 行状态槽宽（位于行号槽左侧）
+pub(crate) const ROW_SLOT_W: f32 = 14.0;
+/// 列字母行高
+pub(crate) const COL_LETTER_H: f32 = 20.0;
+
+/// 列序号 → 列字母（0→A … 25→Z、26→AA、27→AB；BC 表格列字母）
+pub(crate) fn col_letter(i: usize) -> String {
+    let mut n = i + 1;
+    let mut s: Vec<char> = Vec::new();
+    while n > 0 {
+        let r = (n - 1) % 26;
+        s.push((b'A' + r as u8) as char);
+        n = (n - 1) / 26;
+    }
+    s.iter().rev().collect()
+}
+
+/// 行状态槽标记：相同行 ■，其余（差异）行 ▶
+pub(crate) fn row_slot_mark(status: RowStatus) -> &'static str {
+    match status {
+        RowStatus::Same => "■",
+        _ => "▶",
+    }
+}
+
+/// 单元格是否属于差异单元格（复用既有判定：修改行看 changed_cols；
+/// 一侧独有的行整体均差异）——不改变任何判定逻辑。
+pub(crate) fn cell_is_diff(status: RowStatus, changed_cols: &[usize], col: usize) -> bool {
+    match status {
+        RowStatus::Same => false,
+        RowStatus::Modified => changed_cols.contains(&col),
+        RowStatus::LeftOnly | RowStatus::RightOnly => true,
+    }
+}
+
+/// 差异单元格描边色（沿用既有语义色：仅左红 / 仅右琥珀 / 修改琥珀）
+pub(crate) fn cell_diff_stroke(dark: bool, status: RowStatus, side_is_left: bool) -> Color32 {
+    let _ = side_is_left;
+    match status {
+        RowStatus::LeftOnly => super::theme::status_left(),
+        RowStatus::RightOnly => super::theme::status_right(),
+        RowStatus::Modified => super::theme::diff_modify(dark),
+        RowStatus::Same => super::theme::mid_sep(dark),
+    }
 }
 
 #[cfg(test)]
@@ -1479,5 +1593,85 @@ mod tests {
         // 左侧不变
         let lc = fs::read_to_string(&l).unwrap();
         assert!(lc.contains("alice"), "左侧不应变: {lc}");
+    }
+}
+
+/// P2：表格比较新增逻辑的纯函数单测（列字母 / 行状态槽 / 单元格标色 / 行高）
+#[cfg(test)]
+mod p2_tests {
+    use super::*;
+
+    #[test]
+    fn col_letter_covers_az_and_aa_boundary() {
+        assert_eq!(col_letter(0), "A");
+        assert_eq!(col_letter(1), "B");
+        assert_eq!(col_letter(25), "Z");
+        // AA 边界（第 27 列）
+        assert_eq!(col_letter(26), "AA");
+        assert_eq!(col_letter(27), "AB");
+        assert_eq!(col_letter(51), "AZ");
+        assert_eq!(col_letter(52), "BA");
+        assert_eq!(col_letter(701), "ZZ");
+        assert_eq!(col_letter(702), "AAA");
+    }
+
+    #[test]
+    fn col_letter_is_strictly_increasing_in_length() {
+        assert_eq!(col_letter(0).chars().count(), 1);
+        assert_eq!(col_letter(25).chars().count(), 1);
+        assert_eq!(col_letter(26).chars().count(), 2);
+        assert_eq!(col_letter(701).chars().count(), 2);
+        assert_eq!(col_letter(702).chars().count(), 3);
+    }
+
+    #[test]
+    fn row_slot_marks_same_vs_diff() {
+        assert_eq!(row_slot_mark(RowStatus::Same), "■");
+        assert_eq!(row_slot_mark(RowStatus::Modified), "▶");
+        assert_eq!(row_slot_mark(RowStatus::LeftOnly), "▶");
+        assert_eq!(row_slot_mark(RowStatus::RightOnly), "▶");
+    }
+
+    #[test]
+    fn cell_is_diff_reuses_existing_judgement() {
+        // 相同行：任何列都不是差异
+        assert!(!cell_is_diff(RowStatus::Same, &[1, 2], 1));
+        // 修改行：只有 changed_cols 命中
+        assert!(cell_is_diff(RowStatus::Modified, &[1, 2], 1));
+        assert!(cell_is_diff(RowStatus::Modified, &[1, 2], 2));
+        assert!(!cell_is_diff(RowStatus::Modified, &[1, 2], 0));
+        assert!(!cell_is_diff(RowStatus::Modified, &[], 0));
+        // 一侧独有：整行单元格均为差异
+        assert!(cell_is_diff(RowStatus::LeftOnly, &[], 7));
+        assert!(cell_is_diff(RowStatus::RightOnly, &[], 7));
+    }
+
+    #[test]
+    fn cell_diff_stroke_uses_existing_semantic_colors() {
+        // 仅左红 / 仅右琥珀 / 修改琥珀（深浅主题同语义）
+        for dark in [false, true] {
+            assert_eq!(
+                cell_diff_stroke(dark, RowStatus::LeftOnly, true),
+                super::super::theme::status_left()
+            );
+            assert_eq!(
+                cell_diff_stroke(dark, RowStatus::RightOnly, false),
+                super::super::theme::status_right()
+            );
+            assert_eq!(
+                cell_diff_stroke(dark, RowStatus::Modified, true),
+                super::super::theme::diff_modify(dark)
+            );
+        }
+    }
+
+    #[test]
+    fn p2_layout_tokens_match_design() {
+        let row_h = ROW_H_LIST;
+        let letter_h = COL_LETTER_H;
+        let slot_w = ROW_SLOT_W;
+        assert!((row_h - 26.0).abs() < 1e-3, "列表行高 26");
+        assert!((letter_h - 20.0).abs() < 1e-3, "列字母行高 20");
+        assert!((slot_w - 14.0).abs() < 1e-3, "行状态槽宽 14");
     }
 }
