@@ -5,6 +5,7 @@
 //! 目录对比标签页：树形差异视图（可折叠）+ 键盘导航 + 双击打开并排 Diff。
 
 use super::common::*;
+use super::theme::ROW_H_LIST;
 use super::{icons, widgets};
 use crate::compare::{compare_dirs, CompareResult, FileStatus};
 use crate::fsscan::Filter;
@@ -2110,7 +2111,7 @@ impl DirTab {
                 paint_bg(ui, h_rect, Some(head_bg));
                 let head_fg = ui.visuals().weak_text_color();
                 let font = egui::FontId::proportional(12.0);
-                // P55-5：列头改为左右双组（每组 名称 | 大小 | 修改时间，对齐 BC 双栏）
+                // P55-5：列头左右双组（对齐 BC 双栏）；P2：四列 名称 | 大小 | 已修改 | 属性
                 ui.painter().text(
                     Pos2::new(h_rect.left() + 8.0, h_rect.center().y),
                     egui::Align2::LEFT_CENTER,
@@ -2119,48 +2120,44 @@ impl DirTab {
                     head_fg,
                 );
                 let mid_hx = h_rect.center().x;
-                ui.painter().text(
-                    Pos2::new(mid_hx - 108.0, h_rect.center().y),
-                    egui::Align2::RIGHT_CENTER,
-                    "大小",
-                    font.clone(),
-                    head_fg,
-                );
-                ui.painter().text(
-                    Pos2::new(mid_hx - 8.0, h_rect.center().y),
-                    egui::Align2::RIGHT_CENTER,
-                    "修改时间",
-                    font.clone(),
-                    head_fg,
-                );
+                for edge in [mid_hx, h_rect.right()] {
+                    ui.painter().text(
+                        Pos2::new(edge - COL_SIZE_DX, h_rect.center().y),
+                        egui::Align2::RIGHT_CENTER,
+                        "大小",
+                        font.clone(),
+                        head_fg,
+                    );
+                    ui.painter().text(
+                        Pos2::new(edge - COL_MTIME_DX, h_rect.center().y),
+                        egui::Align2::RIGHT_CENTER,
+                        "已修改",
+                        font.clone(),
+                        head_fg,
+                    );
+                    ui.painter().text(
+                        Pos2::new(edge - COL_ATTR_DX, h_rect.center().y),
+                        egui::Align2::RIGHT_CENTER,
+                        "属性",
+                        font.clone(),
+                        head_fg,
+                    );
+                }
+                let _ = font;
                 // 中缝分隔线
                 ui.painter().vline(
                     mid_hx,
                     h_rect.y_range(),
                     egui::Stroke::new(1.0, super::theme::mid_sep(ui.visuals().dark_mode)),
                 );
-                ui.painter().text(
-                    Pos2::new(h_rect.right() - 108.0, h_rect.center().y),
-                    egui::Align2::RIGHT_CENTER,
-                    "大小",
-                    font.clone(),
-                    head_fg,
-                );
-                ui.painter().text(
-                    Pos2::new(h_rect.right() - 8.0, h_rect.center().y),
-                    egui::Align2::RIGHT_CENTER,
-                    "修改时间",
-                    font,
-                    head_fg,
-                );
                 ui.separator();
             }
 
-            let out = super::show_rows(ui, self.flat.len(), ROW_H, |ui, range| {
+            let out = super::show_rows(ui, self.flat.len(), ROW_H_LIST, |ui, range| {
                 for idx in range {
                     let row = &self.flat[idx];
                     let (rect, resp) = ui.allocate_exact_size(
-                        Vec2::new(ui.available_width().max(400.0), ROW_H),
+                        Vec2::new(ui.available_width().max(400.0), ROW_H_LIST),
                         egui::Sense::click(),
                     );
                     let is_sel = selected == Some(idx) || self.selected_set.contains(&idx);
@@ -2255,19 +2252,33 @@ impl DirTab {
                                 if let Some(l) = dl {
                                     let mt = crate::report::fmt_mtime_pub(l.mtime);
                                     ui.painter().text(
-                                        Pos2::new(mid_x - 108.0, rect.center().y),
+                                        Pos2::new(mid_x - COL_SIZE_DX, rect.center().y),
                                         egui::Align2::RIGHT_CENTER,
                                         crate::report::fmt_size_raw(l.size),
                                         egui::FontId::monospace(12.0),
                                         ui.visuals().weak_text_color(),
                                     );
                                     ui.painter().text(
-                                        Pos2::new(mid_x - 8.0, rect.center().y),
+                                        Pos2::new(mid_x - COL_MTIME_DX, rect.center().y),
                                         egui::Align2::RIGHT_CENTER,
                                         mt,
                                         egui::FontId::monospace(12.0),
                                         ui.visuals().weak_text_color(),
                                     );
+                                    // P2：属性列（Unix 权限串；不支持则为空串不绘制）
+                                    let attr = attr_text(
+                                        Some(l),
+                                        &std::path::Path::new(&self.left).join(&e.rel),
+                                    );
+                                    if !attr.is_empty() {
+                                        ui.painter().text(
+                                            Pos2::new(mid_x - COL_ATTR_DX, rect.center().y),
+                                            egui::Align2::RIGHT_CENTER,
+                                            attr,
+                                            egui::FontId::monospace(12.0),
+                                            ui.visuals().weak_text_color(),
+                                        );
+                                    }
                                 }
                                 let _ = half_w;
                             }
@@ -2304,21 +2315,35 @@ impl DirTab {
                                     egui::FontId::monospace(14.0),
                                     fg,
                                 );
-                                // 右文件大小 + 修改时间（右对齐到右缘）
+                                // 右文件大小 + 已修改 + 属性（右对齐到右缘）
                                 ui.painter().text(
-                                    Pos2::new(rect.right() - 108.0, rect.center().y),
+                                    Pos2::new(rect.right() - COL_SIZE_DX, rect.center().y),
                                     egui::Align2::RIGHT_CENTER,
                                     crate::report::fmt_size_raw(r.size),
                                     egui::FontId::monospace(12.0),
                                     ui.visuals().weak_text_color(),
                                 );
                                 ui.painter().text(
-                                    Pos2::new(rect.right() - 8.0, rect.center().y),
+                                    Pos2::new(rect.right() - COL_MTIME_DX, rect.center().y),
                                     egui::Align2::RIGHT_CENTER,
                                     crate::report::fmt_mtime_pub(r.mtime),
                                     egui::FontId::monospace(12.0),
                                     ui.visuals().weak_text_color(),
                                 );
+                                // P2：属性列（Unix 权限串；不支持则为空串不绘制）
+                                let attr = attr_text(
+                                    Some(r),
+                                    &std::path::Path::new(&self.right).join(&e.rel),
+                                );
+                                if !attr.is_empty() {
+                                    ui.painter().text(
+                                        Pos2::new(rect.right() - COL_ATTR_DX, rect.center().y),
+                                        egui::Align2::RIGHT_CENTER,
+                                        attr,
+                                        egui::FontId::monospace(12.0),
+                                        ui.visuals().weak_text_color(),
+                                    );
+                                }
                             }
                             if resp.double_clicked() {
                                 pending_open = Some(e.rel.clone());
@@ -2469,6 +2494,59 @@ impl DirTab {
     }
 }
 
+// ===== P2（BC 5.2.5 设计稿）：属性列（Unix 权限串）=====
+
+/// 四列右对齐锚点（相对所在半区右缘的像素偏移）：大小 / 已修改 / 属性
+pub(crate) const COL_SIZE_DX: f32 = 178.0;
+pub(crate) const COL_MTIME_DX: f32 = 78.0;
+pub(crate) const COL_ATTR_DX: f32 = 8.0;
+
+/// 由 Unix 权限模式位推导 rwx 串（例 0o755 → "rwxr-xr-x"）。
+/// 只取低 9 位（owner/group/other），忽略 setuid/setgid/sticky 与文件类型位。
+pub(crate) fn mode_to_rwx(mode: u32) -> String {
+    let mut s = String::with_capacity(9);
+    for shift in [6u32, 3, 0] {
+        for (i, c) in ['r', 'w', 'x'].iter().enumerate() {
+            let bit = 1u32 << (shift + (2 - i as u32));
+            s.push(if mode & bit != 0 { *c } else { '-' });
+        }
+    }
+    s
+}
+
+/// 读取路径的 Unix 权限串（例 "rwxr-xr-x"）。
+/// 非 Unix 平台或读取失败返回空串——绝不 panic。
+pub(crate) fn permissions_string(path: &std::path::Path) -> String {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match std::fs::metadata(path) {
+            Ok(m) => mode_to_rwx(m.permissions().mode()),
+            Err(_) => String::new(),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        String::new()
+    }
+}
+
+/// 属性列文本：优先用扫描到的权限位（含压缩包/远程后端），
+/// 无权限位（非 Unix 后端）时回退到 fs::metadata；两者都不可用则为空串。
+pub(crate) fn attr_text(
+    meta: Option<&crate::fsscan::FileMeta>,
+    full: &std::path::Path,
+) -> String {
+    match meta {
+        Some(m) => match m.mode {
+            Some(mode) => mode_to_rwx(mode),
+            None => permissions_string(full),
+        },
+        None => String::new(),
+    }
+}
+
 fn split_globs(s: &str) -> Vec<String> {
     s.split(',')
         .map(|p| p.trim().to_string())
@@ -2514,4 +2592,80 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> Option<i64> {
     let doy = (153 * mp + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     Some(era * 146097 + doe - 719468)
+}
+
+/// P2：文件夹比较新增逻辑的纯函数单测（权限串 / 属性列文本 / 行高）
+#[cfg(test)]
+mod p2_tests {
+    use super::*;
+    use std::time::SystemTime;
+
+    #[test]
+    fn mode_to_rwx_common_modes() {
+        assert_eq!(mode_to_rwx(0o755), "rwxr-xr-x");
+        assert_eq!(mode_to_rwx(0o644), "rw-r--r--");
+        assert_eq!(mode_to_rwx(0o600), "rw-------");
+        assert_eq!(mode_to_rwx(0o777), "rwxrwxrwx");
+        assert_eq!(mode_to_rwx(0o400), "r--------");
+        assert_eq!(mode_to_rwx(0o000), "---------");
+        assert_eq!(mode_to_rwx(0o000).chars().count(), 9);
+    }
+
+    #[test]
+    fn mode_to_rwx_ignores_high_bits() {
+        // 文件类型位（0o100000 = 普通文件）与 setuid/sticky 不进 9 位串
+        assert_eq!(mode_to_rwx(0o100_755), "rwxr-xr-x");
+        assert_eq!(mode_to_rwx(0o104_755), "rwxr-xr-x");
+        assert_eq!(mode_to_rwx(0o041_777), "rwxrwxrwx");
+    }
+
+    #[test]
+    fn attr_text_uses_scanned_mode() {
+        let meta = crate::fsscan::FileMeta {
+            size: 1,
+            mtime: SystemTime::now(),
+            mode: Some(0o755),
+            symlink: None,
+        };
+        let p = std::path::Path::new("/definitely/not/here");
+        assert_eq!(attr_text(Some(&meta), p), "rwxr-xr-x");
+        // 无元数据（对侧缺失）→ 空串，不 panic
+        assert_eq!(attr_text(None, p), "");
+    }
+
+    #[test]
+    fn attr_text_falls_back_and_degrades_safely() {
+        // mode=None（非 Unix 后端）+ 路径不存在 → 空串而非 panic
+        let meta = crate::fsscan::FileMeta {
+            size: 0,
+            mtime: SystemTime::now(),
+            mode: None,
+            symlink: None,
+        };
+        let missing = std::path::Path::new("/definitely/not/here/at/all");
+        assert_eq!(attr_text(Some(&meta), missing), "");
+        assert_eq!(permissions_string(missing), "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn permissions_string_reads_real_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("perm.txt");
+        std::fs::write(&f, "x").unwrap();
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(permissions_string(&f), "rwxr-xr-x");
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o640)).unwrap();
+        assert_eq!(permissions_string(&f), "rw-r-----");
+    }
+
+    #[test]
+    fn list_row_height_is_26() {
+        assert!((ROW_H_LIST - 26.0).abs() < 1e-3, "列表行高 26（设计稿）");
+        assert!(
+            (ROW_H_LIST - super::super::theme::ROW_H).abs() > 1e-3,
+            "列表行高应与旧 ROW_H(22) 区分"
+        );
+    }
 }
