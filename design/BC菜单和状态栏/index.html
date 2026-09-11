@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Beyond Compare 5.2.5 · 界面设计稿</title>
+<style>
+:root{
+  /* 取样自 14 张 BC 截图的真实界面色 */
+  --bg-window:#F0F4F5; --bg-panel:#F7F9F8; --bg-content:#FFFFFF; --bg-gutter:#ECEFF0;
+  --bg-status:#DFE4EA; --bg-sidebar:#DEE0E2; --bg-selsoft:#9CC3EA;
+  --line:#D4D7D8; --line-soft:#E0E4E5; --fg:#1C1C1E; --fg2:#4A4A4F; --dim:#8B8B8B;
+  --accent:#0078F0; --menu-hl:#228EF4;
+  /* 差异语义色 */
+  --c-red:#E01E10;   --c-red-bg:#FDE0DF;   /* 删除 · 仅左侧 */
+  --c-amber:#A9761A; --c-amber-bg:#FBF0C8; /* 修改行 · 仅右侧 */
+  --c-green:#1F7A3D; --c-green-bg:#CCE1D8; /* 新增 */
+  --c-blue:#0A63C9;  --c-blue-bg:#DCE9FA;  /* 已修改(文件夹) · 选中 */
+  --c-violet:#6A3FA0;--c-violet-bg:#EFE6F8;/* 二进制不同 */
+  --img-canvas:#292821; --mask-l:#E13C32; --mask-r:#FFC83C;
+  --font:-apple-system,"SF Pro Text","Helvetica Neue","PingFang SC",sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#7E7E82;overflow-x:hidden;font-family:var(--font);color:var(--fg);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+html{--fit:1}
+.sheet{width:2560px;margin:0 auto;padding:40px 0 60px;zoom:var(--fit)}
+.art{width:2560px;height:1320px;background:#fff;position:relative;overflow:hidden;
+  box-shadow:0 18px 60px -20px rgba(0,0,0,.45)}
+.art+.art{margin-top:56px}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column}
+
+/* ① 顶部菜单栏 30px */
+.mbar{height:30px;flex:0 0 auto;display:flex;align-items:center;gap:1px;padding:0 8px;
+  background:rgba(246,246,247,.94);border-bottom:1px solid #CBCBCB;font-size:13px}
+.mbar .mi{padding:2px 10px;border-radius:5px;color:#1C1C1E;white-space:nowrap}
+.mbar .app{font-weight:700}
+.mbar .mi.on{background:var(--menu-hl);color:#fff}
+.mbar .mi.dim{color:#B4B4B6}
+.mbar .mright{margin-left:auto;display:flex;align-items:center;gap:14px;color:#3A3A3C;font-size:12.5px}
+.mbar .mright svg{width:15px;height:15px}
+
+/* ② 会话标签页栏 40px */
+.tabbar{height:40px;flex:0 0 auto;display:flex;align-items:flex-end;gap:3px;padding:0 12px;
+  background:var(--bg-window);border-bottom:1px solid var(--line)}
+.lights{display:flex;gap:8px;align-self:center;margin-right:10px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.tab{height:29px;display:flex;align-items:center;gap:7px;padding:0 12px;font-size:12.5px;color:#55555A;
+  border:1px solid transparent;border-bottom:0;border-radius:5px 5px 0 0;white-space:nowrap}
+.tab .x{color:#9A9A9E;font-size:12px}
+.tab.on{background:#fff;border-color:var(--line);color:var(--fg);font-weight:600;
+  margin-bottom:-1px;padding-bottom:1px}
+.tab .k{width:13px;height:13px;border-radius:3px;flex:0 0 auto}
+.tab .m{font-family:var(--mono);font-size:11px;color:var(--dim);font-weight:400}
+.tab.on .m{color:#6E6E73}
+
+/* ③ 工具栏 56px */
+.toolbar{height:56px;flex:0 0 auto;display:flex;align-items:center;padding:0 10px;
+  background:var(--bg-window);border-bottom:1px solid var(--line)}
+.tgroup{display:flex;align-items:center;gap:1px;height:100%;padding:0 7px}
+.tgroup+.tgroup{border-left:1px solid var(--line-soft)}
+.tbtn{width:62px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;border-radius:5px;font-size:10.5px;color:var(--fg2);white-space:nowrap}
+.tbtn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.tbtn.on{background:#D3E3F8;color:#0A4FA0}
+.tbtn.off{color:#B7B7BB}
+.seg{display:flex;height:26px;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#fff}
+.seg b{display:flex;align-items:center;padding:0 11px;font-size:11.5px;font-weight:400;color:var(--fg2);
+  border-right:1px solid var(--line-soft)}
+.seg b:last-child{border-right:0}
+.seg b.on{background:var(--accent);color:#fff;font-weight:600}
+
+/* ④ 内容区 */
+.content{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:var(--bg-content)}
+
+/* 两栏文件头（BC 式：路径行 + 明细行） */
+.chead{display:grid;grid-template-columns:1fr 22px 1fr;flex:0 0 auto;
+  background:var(--bg-panel);border-bottom:1px solid var(--line);padding:7px 0}
+.chead .side{display:flex;flex-direction:column;gap:2px;padding:0 12px;min-width:0}
+.chead .p{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chead .p svg{width:14px;height:14px;flex:0 0 auto;stroke:var(--accent);fill:none;stroke-width:1.5}
+.chead .d{font-family:var(--mono);font-size:11px;color:var(--dim);padding-left:21px}
+.chead .mid{display:grid;place-items:center;color:var(--dim)}
+
+/* 文本比较 */
+.tcode{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 76px}
+.trows{display:flex;flex-direction:column;overflow:hidden}
+.trow{flex:0 0 auto;display:grid;grid-template-columns:56px 1fr 1px 56px 1fr;min-height:20px;font-family:var(--mono);
+  font-size:12px;line-height:20px}
+.trow .g{text-align:right;padding:0 8px;color:var(--dim);background:var(--bg-gutter);font-size:11px}
+.trow .g.cur{color:var(--accent);font-weight:600}
+.trow .c{padding:0 10px;white-space:pre;overflow:hidden}
+.trow .sp{background:var(--line-soft)}
+.trow.mod .c.l,.trow.mod .c.r{background:var(--c-amber-bg)}
+.trow.mod .c.l{color:var(--c-amber)}.trow.mod .c.r{color:var(--c-amber)}
+.trow.del .c.l,.trow.del .g.l{background:var(--c-red-bg)}
+.trow.del .c.l{color:var(--c-red)}
+.trow.ins .c.r,.trow.ins .g.r{background:var(--c-green-bg)}
+.trow.ins .c.r{color:var(--c-green)}
+.trow.mod .g.l,.trow.mod .g.r{background:#F1E5C8}
+.trow.gap .c{background:var(--bg-gutter);
+  background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.055) 3px 4px)}
+.trow.cur .c.l{box-shadow:inset 3px 0 0 var(--accent)}
+.trow .hl{background:rgba(169,118,26,.22);border-radius:2px}
+.eof{flex:1 1 auto;min-height:36px;background:#fff;background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.05) 3px 4px),repeating-linear-gradient(-45deg,transparent 0 3px,rgba(0,0,0,.05) 3px 4px)}
+/* 差异导航小地图 */
+.minimap{background:var(--bg-panel);border-left:1px solid var(--line);position:relative;padding:8px 0}
+.minimap .blk{position:absolute;left:16px;right:16px;border-radius:2px}
+.minimap .vp{position:absolute;left:4px;right:4px;border:1px solid var(--accent);border-radius:3px;
+  background:rgba(0,122,240,.07)}
+.minimap .cap{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:var(--dim)}
+
+/* 文件夹比较 */
+.dhead{display:grid;grid-template-columns:1fr 22px 1fr;flex:0 0 auto;background:var(--bg-panel);
+  border-bottom:1px solid var(--line);height:24px;font-size:11.5px;color:var(--fg2)}
+.dhead .grp,.drow .cell{display:grid;grid-template-columns:18px 1fr 76px 132px 96px;align-items:center;
+  gap:8px;padding:0 12px 0 6px}
+.dhead .grp{padding-left:6px}
+.dhead .num,.drow .sz,.drow .dt,.drow .at{text-align:right;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.dhead .at{text-align:left}
+.dhead .mid{background:var(--bg-gutter);border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.drows{overflow:hidden}
+.drow{display:grid;grid-template-columns:1fr 22px 1fr;height:26px;border-bottom:1px solid #F0F2F3}
+.drow .mid{background:var(--bg-gutter)}
+.drow .mid b{display:block;width:3px;height:100%;margin:0 auto}
+.drow .cell{position:relative}
+.dcell-ico{width:13px;height:12px;flex:0 0 auto;justify-self:center}
+.dcell-ico.dir{clip-path:polygon(0 26%,42% 26%,52% 0,100% 0,100% 100%,0 100%);background:#9FC7EC}
+.dcell-ico.file{clip-path:polygon(0 0,68% 0,100% 26%,100% 100%,0 100%);background:#C9CDD2}
+.drow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+.drow.l .nm{color:var(--c-red)}.drow.l{background:var(--c-red-bg)}
+.drow.r .nm{color:var(--c-amber)}.drow.r{background:var(--c-amber-bg)}
+.drow.m .nm{color:var(--c-blue)}.drow.m{background:var(--c-blue-bg)}
+.drow.b .nm{color:var(--c-violet)}.drow.b{background:var(--c-violet-bg)}
+.drow.sel{background:var(--accent)}
+.drow.sel .nm,.drow.sel .sz,.drow.sel .dt,.drow.sel .at{color:#fff}
+.drow.sel .dcell-ico.file{background:rgba(255,255,255,.85)}
+.drow .tag{font-family:var(--mono);font-size:9.5px;padding:0 4px;border-radius:3px;
+  border:1px solid currentColor;margin-left:6px}
+.drow.sel .tag{color:#fff}
+
+/* 十六进制 */
+.hexwrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr}
+.hexcol{overflow:hidden}
+.hexrow{display:grid;grid-template-columns:88px 1fr 178px;gap:14px;padding:0 12px;
+  font-family:var(--mono);font-size:12px;line-height:20px;height:20px;white-space:pre}
+.hexrow.head{background:var(--bg-panel);border-bottom:1px solid var(--line);color:var(--dim);font-size:10.5px}
+.hexrow .a{color:#8A8A8E}
+.hexrow.head .a,.hexrow.head .h,.hexrow.head .asc{background:none;color:var(--dim)}
+.hexrow .h{color:#2C6FB5}
+.hexrow .asc{color:#5A5A5E}
+.hexrow.diff{background:var(--c-red-bg)}
+.hexrow.diff .h,.hexrow.diff .asc{color:var(--c-red)}
+.hexrow.diff .b{background:#F6BDB8;border-radius:2px;font-weight:600}
+.hexrow .b.ins{background:var(--c-green-bg);color:var(--c-green);border-radius:2px;font-weight:600}
+.hexwrap>.mid{background:var(--bg-gutter);border-left:1px solid var(--line);border-right:1px solid var(--line)}
+
+/* 表格比较 */
+.tablewrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr}
+.tbl{border-collapse:collapse;font-family:var(--mono);font-size:12px;width:100%}
+.tbl th,.tbl td{border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
+  padding:2px 9px;text-align:left;white-space:nowrap}
+.tbl thead th{background:var(--bg-panel);font-weight:600;font-size:11.5px}
+.tbl tr.letters th{background:var(--bg-panel);color:var(--dim);text-align:center;height:19px;font-size:10.5px}
+.tbl tr.letters th.dc{color:var(--c-red)}
+.tbl tr.letters th.cur{background:#D3E3F8;color:var(--accent);font-weight:700}
+.tbl td.rn,.tbl th.rn{background:var(--bg-gutter);color:var(--dim);text-align:right;width:34px}
+.tbl td.mk,.tbl th.mk{width:16px;text-align:center;color:var(--dim);font-size:10px}
+.tbl tr.m td.mk{color:var(--c-violet)}
+.tbl tr.i td.mk{color:var(--c-green)}
+.tbl tr.d td.mk{color:var(--c-red)}
+.tbl tr.mod td{background:var(--c-amber-bg)}
+.tbl tr.mod td.cd{background:#F3D79B;color:var(--c-red);font-weight:600}
+.tbl tr.d td{background:var(--c-red-bg)}
+.tbl tr.i td{background:var(--c-green-bg)}
+.tbl tr.selcell td.cur{box-shadow:inset 0 0 0 2px var(--accent)}
+
+/* 媒体 / 元数据 */
+.metawrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr}
+.metacol{padding:10px 12px;overflow:hidden}
+.mtable{width:100%;border-collapse:collapse;font-size:12.5px}
+.mtable th{background:#D3E3F8;border-bottom:1px solid var(--line);text-align:left;padding:4px 9px;
+  font-size:11.5px;color:#123B6B}
+.mtable td{padding:4px 9px;border-bottom:1px solid var(--line-soft);font-family:var(--mono);font-size:12px}
+.mtable td.k{width:38%;font-family:var(--font);font-size:12.5px;color:var(--fg2)}
+.mtable tr.d td{background:var(--c-red-bg);color:var(--c-red)}
+.wave{height:132px;margin-top:10px;border:1px solid var(--line);border-radius:4px;background:#FAFBFB;position:relative;overflow:hidden}
+.wave .wv{position:absolute;inset:0;background:
+  repeating-linear-gradient(90deg,rgba(31,122,61,.75) 0 1px,transparent 1px 4px)}
+.wave .wv.m{background:repeating-linear-gradient(90deg,rgba(224,30,16,.7) 0 1px,transparent 1px 4px);opacity:.85}
+.wave .ax{position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
+
+/* 文本合并（三栏 左/右/输出） */
+.mwrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr 1fr}
+.mcol{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+.mcol.out{border-right:0;background:#FCFCFD}
+.mhead{height:24px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:0 10px;
+  background:var(--bg-panel);border-bottom:1px solid var(--line);font-size:11.5px;font-weight:600}
+.mhead .st{font-weight:400;font-size:10.5px;padding:0 5px;border-radius:3px;color:#fff}
+.mbody{flex:1 1 auto;min-height:0;overflow:hidden}
+.mrow{display:grid;grid-template-columns:46px 1fr;min-height:20px;font-family:var(--mono);
+  font-size:12px;line-height:20px}
+.mrow .g{text-align:right;padding:0 8px;color:var(--dim);background:var(--bg-gutter);font-size:11px}
+.mrow .c{padding:0 9px;white-space:pre;overflow:hidden}
+.mrow.cf .c{background:var(--c-amber-bg)}
+.mrow.cf .g{background:#F1E5C8}
+.mrow.sel .c{box-shadow:inset 0 0 0 2px var(--accent)}
+.mbar2{height:26px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 8px;
+  background:var(--bg-panel);border-top:1px solid var(--line);font-size:11px;color:var(--fg2)}
+.mbang{display:flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;
+  background:var(--accent);color:#fff;font-size:11px}
+.mbang.g{background:#5A9E6F}
+
+/* 图片比较 */
+.imgwrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr;background:var(--img-canvas)}
+.imgpane{display:grid;place-items:center;padding:24px}
+.canvas{position:relative;width:520px;height:333px;background:#EDEDED;border:1px solid #101010;
+  box-shadow:0 8px 26px rgba(0,0,0,.5)}
+.canvas i{position:absolute;display:block}
+.canvas .shot{display:block;width:100%;height:100%;object-fit:contain}
+.canvas .mask{position:absolute;inset:0;pointer-events:none}
+.canvas .mask u{position:absolute;display:block}
+
+/* 状态栏 48px */
+.status{flex:0 0 auto;background:var(--bg-status);border-top:1px solid var(--line);font-size:11.5px}
+.srow{height:24px;display:flex;align-items:center}
+.srow+.srow{border-top:1px solid #CDD3DA}
+.scell{display:flex;align-items:center;gap:7px;padding:0 13px;height:100%;white-space:nowrap}
+.scell+.scell{border-left:1px solid #C7CDD4}
+.scell.grow{flex:1 1 auto;justify-content:center;color:var(--fg2)}
+.scell .x{color:var(--c-red);font-weight:700}
+.scell .num{font-family:var(--mono)}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.chk{width:12px;height:12px;border:1px solid #9AA0A8;border-radius:3px;display:inline-block;background:#fff}
+.chk.on{background:var(--accent);border-color:var(--accent);position:relative}
+.chk.on::after{content:"";position:absolute;left:3px;top:0.5px;width:4px;height:7px;
+  border-right:1.6px solid #fff;border-bottom:1.6px solid #fff;transform:rotate(40deg)}
+.split2{display:grid;grid-template-columns:1fr 1fr;flex:1 1 auto;height:100%}
+.split2>.scell+.scell{border-left:1px solid #C7CDD4}
+.pane-ft{display:grid;grid-template-columns:1fr 1fr;height:100%}
+.pane-ft .scell{border-left:0}
+.pane-ft .scell+.scell{border-left:1px solid #C7CDD4}
+
+/* 菜单展开态 */
+.menu{position:absolute;min-width:262px;background:rgba(246,246,247,.97);border:1px solid rgba(0,0,0,.14);
+  border-radius:8px;padding:4px;box-shadow:0 16px 40px -8px rgba(0,0,0,.34),0 2px 8px -2px rgba(0,0,0,.2)}
+.menu .it{display:flex;align-items:center;height:22px;padding:0 12px 0 8px;border-radius:5px;
+  font-size:13px;color:#1C1C1E}
+.menu .it .tk{width:15px;flex:0 0 auto;color:var(--menu-hl);font-size:12px}
+.menu .it .lb{flex:1 1 auto;white-space:nowrap}
+.menu .it .kb{margin-left:auto;padding-left:26px;color:#6E6E73;font-size:12.5px;letter-spacing:.06em}
+.menu .it .ar{margin-left:auto;padding-left:22px;color:#3A3A3C;font-size:13px}
+.menu .it.hl{background:var(--menu-hl);color:#fff}
+.menu .it.hl .kb,.menu .it.hl .ar{color:rgba(255,255,255,.82)}
+.menu .it.dis{color:#B0B0B2}
+.menu .sep{height:1px;background:rgba(0,0,0,.13);margin:5px 10px}
+.fly{position:absolute;left:100%;top:0;margin-left:-4px;min-width:190px;background:rgba(240,240,241,.98);
+  border:1px solid rgba(0,0,0,.14);border-radius:8px;padding:4px;
+  box-shadow:0 16px 40px -8px rgba(0,0,0,.34),0 2px 8px -2px rgba(0,0,0,.2)}
+
+/* 注释标签（规格稿用） */
+.note{position:absolute;background:#FFF7D6;border:1px solid #E0C46A;border-radius:6px;
+  padding:9px 12px;font-size:12.5px;line-height:1.55;color:#4A3B08;max-width:330px;
+  box-shadow:0 6px 18px -6px rgba(0,0,0,.28)}
+.note b{color:#8A6B00}
+.note .bar{position:absolute;height:2px;background:#E0C46A}
+.tag-num{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;
+  background:#C8452F;color:#fff;font-size:11px;font-weight:700;margin-right:6px;vertical-align:-3px}
+
+/* 规格页（index / tokens / components / status bar） */
+.doc{width:1800px;margin:0 auto;padding:56px 0 90px;color:#1C1C1E;zoom:var(--fit)}
+.doc h1{font-size:34px;letter-spacing:-.02em;margin-bottom:6px}
+.doc h2{font-size:20px;margin:44px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.doc p.lead{color:var(--fg2);font-size:14px;line-height:1.7;max-width:1040px}
+.doc .grid{display:grid;gap:16px}
+.doc .cards{grid-template-columns:repeat(4,1fr)}
+.doc a.card{display:block;background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px;
+  text-decoration:none;color:inherit}
+.doc a.card:hover{border-color:var(--accent)}
+.doc a.card .n{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.doc a.card .t{font-size:15px;font-weight:600;margin:5px 0 4px}
+.doc a.card .d{font-size:12.5px;color:var(--fg2);line-height:1.55}
+table.spec{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
+table.spec th,table.spec td{border:1px solid var(--line);padding:7px 11px;text-align:left;vertical-align:top}
+table.spec th{background:var(--bg-panel);font-weight:600;font-size:12.5px}
+table.spec td.mono{font-family:var(--mono);font-size:12px}
+.swatch{display:inline-block;width:38px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.16);
+  vertical-align:-5px;margin-right:8px}
+.rowset{display:flex;gap:26px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);
+  border-radius:8px;padding:18px 20px}
+.rowset div{font-family:var(--mono);font-size:11.5px;color:var(--fg2)}
+.strip{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.strip .cap{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--bg-panel);
+  border-bottom:1px solid var(--line);font-size:13px}
+.strip .cap b{font-size:13.5px}
+.strip .cap .n{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.strip .cap .d{margin-left:auto;font-size:12px;color:var(--fg2)}
+.strip .body{padding:0}
+.artlabel{font-size:13px;color:#F2F2F2;padding:0 0 10px 2px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="doc"><h1>Beyond Compare 5.2.5 · 界面设计稿</h1><p class="lead">2560×1320（macOS 1440p）固定画布，顶部菜单栏 30px。原生 macOS 桌面工具风：浅色、系统字体、紧凑行高、细分割线、低饱和；圆角 4–6px，不使用大卡片阴影。所有取色均从 14 张截图逐像素采样，未凭印象编造。</p><h2>① 八个会话主界面 + 两份专项稿</h2><div class="grid cards"><a class="card" href="screens/text-compare.html"><div class="n">01</div><div class="t">文本比较</div><div class="d">双栏 + 行号槽 + 三色差异 + 行对齐留白 + 差异小地图</div></a><a class="card" href="screens/folder-compare.html"><div class="n">02</div><div class="t">文件夹比较</div><div class="d">名称/大小/已修改/属性 + 仅左·仅右·已修改·二进制不同</div></a><a class="card" href="screens/image-compare.html"><div class="n">03</div><div class="t">图片比较</div><div class="d">左右预览 + 差异遮罩（红=仅左、黄=仅右）</div></a><a class="card" href="screens/hex-compare.html"><div class="n">04</div><div class="t">十六进制比较</div><div class="d">偏移列 + 16 字节列 + ASCII 列</div></a><a class="card" href="screens/table-compare.html"><div class="n">05</div><div class="t">表格比较</div><div class="d">列字母行 + 行状态槽 + 单元格级差异标色</div></a><a class="card" href="screens/media-compare.html"><div class="n">06</div><div class="t">媒体比较</div><div class="d">属性/元数据对照 + 波形</div></a><a class="card" href="screens/text-merge.html"><div class="n">07</div><div class="t">文本合并</div><div class="d">三栏 左 / 右 / 输出，左右可编辑</div></a><a class="card" href="screens/home.html"><div class="n">08</div><div class="t">主页</div><div class="d">左侧最近会话 + 右侧全部会话类型入口</div></a><a class="card" href="screens/menus.html"><div class="n">09</div><div class="t">菜单展开态</div><div class="d">会话 / 窗口 / 编辑 / 视图，标注置灰项</div></a><a class="card" href="screens/status-bar.html"><div class="n">10</div><div class="t">状态栏组件稿</div><div class="d">8 种会话各一条</div></a></div><h2>② 设计 Token · 颜色</h2><table class="spec"><tr><th>Token</th><th>值</th><th>用途</th><th>来源</th></tr><tr><td class="mono">--bg-window</td><td><span class="swatch" style="background:#F0F4F5"></span><span class="mono">#F0F4F5</span></td><td>标题栏 / 标签栏 / 工具栏底</td><td>截图取样</td></tr><tr><td class="mono">--bg-panel</td><td><span class="swatch" style="background:#F7F9F8"></span><span class="mono">#F7F9F8</span></td><td>路径头 / 列头 / 分组头</td><td>截图取样</td></tr><tr><td class="mono">--bg-content</td><td><span class="swatch" style="background:#FFFFFF"></span><span class="mono">#FFFFFF</span></td><td>内容区底</td><td>截图取样</td></tr><tr><td class="mono">--bg-gutter</td><td><span class="swatch" style="background:#ECEFF0"></span><span class="mono">#ECEFF0</span></td><td>行号槽 / 分隔槽</td><td>截图取样</td></tr><tr><td class="mono">--bg-status</td><td><span class="swatch" style="background:#DFE4EA"></span><span class="mono">#DFE4EA</span></td><td>状态栏底</td><td>截图取样</td></tr><tr><td class="mono">--bg-sidebar</td><td><span class="swatch" style="background:#DEE0E2"></span><span class="mono">#DEE0E2</span></td><td>主页左侧栏底</td><td>截图取样</td></tr><tr><td class="mono">--line</td><td><span class="swatch" style="background:#D4D7D8"></span><span class="mono">#D4D7D8</span></td><td>区域分割线 1px</td><td>截图取样</td></tr><tr><td class="mono">--line-soft</td><td><span class="swatch" style="background:#E0E4E5"></span><span class="mono">#E0E4E5</span></td><td>行内细线</td><td>截图取样</td></tr><tr><td class="mono">--fg</td><td><span class="swatch" style="background:#1C1C1E"></span><span class="mono">#1C1C1E</span></td><td>正文 / 菜单可用项</td><td>截图取样</td></tr><tr><td class="mono">--fg2</td><td><span class="swatch" style="background:#4A4A4F"></span><span class="mono">#4A4A4F</span></td><td>次级文字</td><td>截图取样</td></tr><tr><td class="mono">--dim</td><td><span class="swatch" style="background:#8B8B8B"></span><span class="mono">#8B8B8B</span></td><td>禁用 / 辅助文字</td><td>截图取样</td></tr><tr><td class="mono">--accent</td><td><span class="swatch" style="background:#0078F0"></span><span class="mono">#0078F0</span></td><td>选中 · 焦点 · 主按钮</td><td>截图取样</td></tr><tr><td class="mono">--menu-hl</td><td><span class="swatch" style="background:#228EF4"></span><span class="mono">#228EF4</span></td><td>菜单高亮底（白字）</td><td>截图取样</td></tr><tr><td class="mono">--c-red / -bg</td><td><span class="swatch" style="background:#E01E10"></span><span class="mono">#E01E10 / #FDE0DF</span></td><td>删除 · 仅左侧</td><td>截图取样</td></tr><tr><td class="mono">--c-amber / -bg</td><td><span class="swatch" style="background:#A9761A"></span><span class="mono">#A9761A / #FBF0C8</span></td><td>修改行 · 仅右侧</td><td>截图取样</td></tr><tr><td class="mono">--c-green / -bg</td><td><span class="swatch" style="background:#1F7A3D"></span><span class="mono">#1F7A3D / #CCE1D8</span></td><td>新增（仅右侧有）</td><td>截图取样</td></tr><tr><td class="mono">--c-blue / -bg</td><td><span class="swatch" style="background:#0A63C9"></span><span class="mono">#0A63C9 / #DCE9FA</span></td><td>已修改（文件夹）</td><td>取自强调蓝</td></tr><tr><td class="mono">--c-violet / -bg</td><td><span class="swatch" style="background:#6A3FA0"></span><span class="mono">#6A3FA0 / #EFE6F8</span></td><td>二进制不同</td><td>截图取样</td></tr><tr><td class="mono">--img-canvas</td><td><span class="swatch" style="background:#292821"></span><span class="mono">#292821</span></td><td>图片比较画布底</td><td>截图取样</td></tr><tr><td class="mono">--mask-l / --mask-r</td><td><span class="swatch" style="background:#E13C32"></span><span class="mono">#E13C32 / #FFC83C</span></td><td>差异遮罩：仅左 / 仅右</td><td>截图取样</td></tr></table><h2>③ 设计 Token · 字号与行高阶梯</h2><table class="spec"><tr><th>层级</th><th>字号 / 行高</th><th>字重</th><th>用途</th><th>备注</th></tr><tr><td>顶级标题</td><td class="mono">34px / 40px</td><td class="mono">600</td><td>规格页标题</td><td>—</td></tr><tr><td>区段标题</td><td class="mono">20px / 28px</td><td class="mono">600</td><td>规格页小节</td><td>—</td></tr><tr><td>窗口/菜单文字</td><td class="mono">13px / 22px</td><td class="mono">400 · 高亮 600</td><td>菜单栏、菜单项、对话框</td><td>菜单行高 22px</td></tr><tr><td>标签页文字</td><td class="mono">12.5px / 29px</td><td class="mono">600（当前）/ 400</td><td>会话标签页</td><td>标签高 29px</td></tr><tr><td>工具栏标签</td><td class="mono">10.5px / 12px</td><td class="mono">400</td><td>工具栏按钮下方文字</td><td>图标 19px + 间距 3px</td></tr><tr><td>列表正文</td><td class="mono">12.5px / 26px</td><td class="mono">400</td><td>文件夹列表行</td><td>行高 26px</td></tr><tr><td>等宽正文</td><td class="mono">12px / 20px</td><td class="mono">400</td><td>代码、Hex、CSV、路径</td><td>行高 = 20px，行槽 56px</td></tr><tr><td>状态栏</td><td class="mono">11.5px / 24px</td><td class="mono">400 · 数字等宽</td><td>状态栏单元格</td><td>每格内边距 13px</td></tr><tr><td>辅助/注释</td><td class="mono">11px / 16px</td><td class="mono">400</td><td>文件明细行、图例</td><td>色值 --dim</td></tr></table><h2>④ 设计 Token · 间距 / 圆角 / 图标</h2><div class="rowset" style="margin-bottom:6px"><div><b style="color:#1C1C1E">间距</b><br>2 · 4 · 6 · 8 · 12 · 16 · 24 · 32</div><div><b style="color:#1C1C1E">内边距</b><br>状态栏格 13px ｜ 菜单项 8/12px ｜ 列表行 12px</div><div><b style="color:#1C1C1E">圆角</b><br>3 · 4 · 5 · 6px（标签页仅上圆角）</div><div><b style="color:#1C1C1E">图标</b><br>工具栏 19 ｜ 行内 13–14 ｜ 状态栏 12 ｜ 会话类型 30</div><div><b style="color:#1C1C1E">描边</b><br>分割线 1px；差异色条 3px；选中框 2px</div></div><h2>⑤ 组件清单</h2><table class="spec"><tr><th>组件</th><th>规格</th><th>示例页</th></tr><tr><td><b>会话标签页</b></td><td>高 29px，圆角 5px 5px 0 0，当前页白底 + 1px 边框并与内容区相接；每页含类型色块 13px、名称 12.5px、会话对象 11px 等宽、关闭 ✕</td><td class="mono">screens/home.html</td></tr><tr><td><b>工具栏按钮</b></td><td>宽 62px 高 46px，图标 19px 描边 1.5px + 文字 10.5px；选中态 #D3E3F8 底 + #0A4FA0 字；置灰 #B7B7BB</td><td class="mono">screens/folder-compare.html</td></tr><tr><td><b>视图模式切换</b></td><td>分段控件高 26px，圆角 5px，选中段实心 #0078F0 + 白字；文本/Hex 用「边并排 / 上-下 / 缩略图」，图片用「容差 / 不匹配范围 / 混合」</td><td class="mono">screens/text-compare.html</td></tr><tr><td><b>差异色条</b></td><td>每行高度铺满，宽 3px，居中于 22px 分隔槽；红=删除/仅左，琥珀=修改/仅右，绿=新增，蓝=已修改，紫=二进制不同</td><td class="mono">screens/folder-compare.html</td></tr><tr><td><b>差异小地图</b></td><td>宽 76px，块内缩 16px、圆角 2px；当前视口框 1px #0078F0 + 7% 填充；底部标签「差异图」9.5px</td><td class="mono">screens/text-compare.html</td></tr><tr><td><b>状态栏</b></td><td>高 48px = 两行 24px；通用行 + 类型行；单元格 1px 竖线分隔；数字等宽</td><td class="mono">screens/status-bar.html</td></tr><tr><td><b>菜单项</b></td><td>高 22px，圆角 5px，内缩 4px；可用 #1C1C1E，置灰 #B0B0B2，勾选列 15px，快捷键右对齐；高亮 #228EF4 + 白字</td><td class="mono">screens/menus.html</td></tr><tr><td><b>文件信息头</b></td><td>高 46px 两行：路径 12px 等宽 + 明细 11px（大小 · 编码 · 行尾 · 时间）</td><td class="mono">screens/text-compare.html</td></tr><tr><td><b>行对齐留白</b></td><td>对侧无对应行时用 45° 斜纹填充 #ECEFF0（斜线 rgba(0,0,0,.055)，间距 4px）</td><td class="mono">screens/text-compare.html</td></tr></table><h2>⑥ 交给编码 Agent 实现</h2><p class="lead">本稿是「对齐规格」，不是从零实现——bcr 已有 egui 版本。实现交接文档与机器可读 token：</p><div class="grid cards"><a class="card" href="交接/实现交接.md"><div class="n">HANDOFF</div><div class="t">实现交接说明</div><div class="d">设计稿→源码映射表 · token 差异与决策项 · 16 条置灰规则 · P0–P3 分阶段任务 · 可直接粘贴的提示词</div></a><a class="card" href="交接/design-tokens.json"><div class="n">TOKENS</div><div class="t">design-tokens.json</div><div class="d">色值 / 字号阶梯 / 间距 / 圆角 / 图标尺寸，以及菜单状态与 9 条状态栏的机器可读规格</div></a><a class="card" href="screens/menus.html"><div class="n">STATES</div><div class="t">菜单状态稿</div><div class="d">3 张画板 · 16 个置灰项 · 5 处标注</div></a><a class="card" href="screens/status-bar.html"><div class="n">STATUSBAR</div><div class="t">状态栏组件稿</div><div class="d">通用行 + 8 种会话各一条</div></a></div></div>
+<script>
+(function(){var base=null;function fit(){var el=document.querySelector(".sheet")||document.querySelector(".doc");if(!el)return;if(base===null)base=el.offsetWidth||2560;var k=Math.min(1,(window.innerWidth-32)/base);document.documentElement.style.setProperty("--fit",k);}fit();window.addEventListener("resize",fit);})();
+</script>
+</body>
+</html>

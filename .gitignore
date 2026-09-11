@@ -8,3 +8,6 @@
 
 # UI 截图分析临时产物
 ui_review/
+
+# macOS 目录元数据
+.DS_Store

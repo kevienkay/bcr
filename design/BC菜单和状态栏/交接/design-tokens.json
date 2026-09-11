@@ -1,0 +1,141 @@
+{
+  "meta": {
+    "design": "Beyond Compare 5.2.5 (macOS) 界面设计稿",
+    "entry": "BC菜单和状态栏/index.html",
+    "canvas": { "w": 2560, "h": 1320, "note": "macOS 1440p；顶栏为系统菜单栏 30px，其余为窗口" },
+    "target": {
+      "repo": "bcr",
+      "stack": "Rust + eframe/egui 0.36.1",
+      "gui_root": "src/gui/",
+      "existing": "已有 difftab/dirtab/csvtab/imagetab/mergetab/mediatab/patchtab/textedit/foldermergetab 与 menubar/theme/widgets/icons"
+    },
+    "sampling": "全部颜色逐像素取自 14 张 BC 截图（样例文件真实对比）"
+  },
+
+  "layout": {
+    "menubar": 30,
+    "tabbar": 40,
+    "toolbar": 56,
+    "content": 1146,
+    "statusbar": 48,
+    "statusbar_row": 24,
+    "list_row": 26,
+    "code_row": 20,
+    "tab_height": 29,
+    "toolbar_button": { "w": 62, "h": 46, "icon": 19, "label": 10.5 },
+    "segmented": { "h": 26, "radius": 5 },
+    "divider_slot": 22,
+    "diff_bar": 3
+  },
+
+  "colors": [
+    { "token": "bg-window",   "spec": "#F0F4F5", "role": "标题栏/标签栏/工具栏底", "bcrTheme": { "fn": "head_bg / 自定", "light": "#E8E9EE" }, "action": "decide" },
+    { "token": "bg-panel",    "spec": "#F7F9F8", "role": "路径头/列头/分组头",     "bcrTheme": { "fn": "column_head_bg", "light": "#F9FAFC" }, "action": "keep-bcr" },
+    { "token": "bg-content",  "spec": "#FFFFFF", "role": "内容区底",             "bcrTheme": { "fn": "—", "light": "#FFFFFF" }, "action": "keep-bcr" },
+    { "token": "bg-gutter",   "spec": "#ECEFF0", "role": "行号槽/分隔槽",         "bcrTheme": { "fn": "gutter_bg", "light": "#F0F1F5" }, "action": "keep-bcr" },
+    { "token": "bg-status",   "spec": "#DFE4EA", "role": "状态栏底",             "bcrTheme": { "fn": "—", "light": "#DFE4EA" }, "action": "apply-spec" },
+    { "token": "bg-sidebar",  "spec": "#DEE0E2", "role": "主页左侧栏底",         "bcrTheme": { "fn": "—", "light": "—" }, "action": "apply-spec" },
+    { "token": "line",        "spec": "#D4D7D8", "role": "区域分割线 1px",       "bcrTheme": { "fn": "mid_sep", "light": "#D6D8DE" }, "action": "keep-bcr" },
+    { "token": "line-soft",   "spec": "#E0E4E5", "role": "行内细线",             "bcrTheme": { "fn": "—", "light": "#E0E4E5" }, "action": "apply-spec" },
+    { "token": "fg",          "spec": "#1C1C1E", "role": "正文/菜单可用项",       "bcrTheme": { "fn": "—", "light": "—" }, "action": "apply-spec" },
+    { "token": "fg-2",        "spec": "#4A4A4F", "role": "次级文字",             "bcrTheme": { "fn": "—", "light": "—" }, "action": "apply-spec" },
+    { "token": "fg-dim",      "spec": "#8B8B8B", "role": "辅助文字",             "bcrTheme": { "fn": "GUTTER", "light": "#808080" }, "action": "keep-bcr" },
+    { "token": "menu-disabled","spec": "#B0B0B2","role": "菜单置灰项",           "bcrTheme": { "fn": "—", "light": "—" }, "action": "add" },
+    { "token": "accent",      "spec": "#0078F0", "role": "选中/焦点/主按钮",     "bcrTheme": { "fn": "accent", "light": "#285AC8" }, "action": "apply-spec" },
+    { "token": "menu-hl",     "spec": "#228EF4", "role": "菜单高亮底（白字）",   "bcrTheme": { "fn": "—", "light": "—" }, "action": "add" },
+
+    { "token": "diff-del-fg", "spec": "#E01E10", "role": "删除行/仅左侧 前景",   "bcrTheme": { "fn": "diff_delete", "light": "#C43C3C" }, "action": "apply-spec" },
+    { "token": "diff-del-bg", "spec": "#FDE0DF", "role": "删除行/仅左侧 底色",   "bcrTheme": { "fn": "bg_left_only", "light": "rgba(246,96,96,40)" }, "action": "keep-bcr" },
+    { "token": "diff-ins-fg", "spec": "#1F7A3D", "role": "新增行 前景",          "bcrTheme": { "fn": "diff_insert", "light": "#288C50" }, "action": "keep-bcr" },
+    { "token": "diff-ins-bg", "spec": "#CCE1D8", "role": "新增行 底色",          "bcrTheme": { "fn": "bg_modified_r(?)", "light": "rgba(96,196,118,38)" }, "action": "decide" },
+    { "token": "diff-mod-fg", "spec": "#A9761A", "role": "修改行 前景",          "bcrTheme": { "fn": "diff_modify", "light": "#B08C28" }, "action": "keep-bcr" },
+    { "token": "diff-mod-bg", "spec": "#FBF0C8", "role": "修改行 底色",          "bcrTheme": { "fn": "bg_match", "light": "rgba(224,190,96,32)" }, "action": "keep-bcr" },
+
+    { "token": "st-right-fg", "spec": "#A9761A", "role": "仅右侧 前景（设计：黄）","bcrTheme": { "fn": "status_orphan / bg_right_only", "light": "绿色系" }, "action": "decide" },
+    { "token": "st-modified", "spec": "#0A63C9", "role": "已修改 前景（设计：蓝）","bcrTheme": { "fn": "bg_modified_l / bg_modified_r", "light": "红 + 绿" }, "action": "decide" },
+    { "token": "st-binary-fg","spec": "#6A3FA0", "role": "二进制不同 前景",      "bcrTheme": { "fn": "—", "light": "—" }, "action": "add" },
+
+    { "token": "mask-left",   "spec": "#E13C32", "role": "图片差异遮罩：仅左图有","bcrTheme": { "fn": "—", "light": "—" }, "action": "add" },
+    { "token": "mask-right",  "spec": "#FFC83C", "role": "图片差异遮罩：仅右图有","bcrTheme": { "fn": "—", "light": "—" }, "action": "add" },
+    { "token": "img-canvas",  "spec": "#292821", "role": "图片比较画布底",       "bcrTheme": { "fn": "—", "light": "—" }, "action": "apply-spec" }
+  ],
+
+  "typeScale": [
+    { "name": "窗口/菜单", "size": 13,   "lineHeight": 22, "weight": "400 / 高亮 600", "use": "菜单栏、菜单项、对话框" },
+    { "name": "标签页",   "size": 12.5, "lineHeight": 29, "weight": "600 当前 / 400", "use": "会话标签页" },
+    { "name": "工具栏标签","size": 10.5,"lineHeight": 12, "weight": "400",             "use": "按钮下方文字" },
+    { "name": "列表正文", "size": 12.5, "lineHeight": 26, "weight": "400",             "use": "文件夹列表行" },
+    { "name": "等宽正文", "size": 12,   "lineHeight": 20, "weight": "400",             "use": "代码 / Hex / CSV / 路径" },
+    { "name": "状态栏",   "size": 11.5, "lineHeight": 24, "weight": "400 / 数字等宽",  "use": "状态栏单元格" },
+    { "name": "辅助注释", "size": 11,   "lineHeight": 16, "weight": "400",             "use": "文件明细、图例" }
+  ],
+
+  "spacing": { "scale": [2, 4, 6, 8, 12, 16, 24, 32], "statusCellPadX": 13, "menuItemPadX": [8, 12], "listRowPadX": 12 },
+  "radius": { "scale": [3, 4, 5, 6], "tab": "5px 5px 0 0", "menu": 8, "panel": 4 },
+  "icons": { "toolbar": 19, "inline": 14, "statusbar": 12, "tree": 13, "sessionType": 30, "strokeWidth": 1.5 },
+
+  "menus": {
+    "bar": ["Beyond Compare", "会话", "文件", "编辑", "视图", "工具", "窗口", "帮助"],
+    "itemHeight": 22,
+    "states": ["enabled #1C1C1E", "disabled #B0B0B2", "checked ✓ 蓝", "highlight #228EF4 + 白字"],
+    "grayedRules": [
+      { "menu": "会话", "items": ["关闭标签页", "关闭其它标签页", "比较父文件夹"], "when": "tabs.len() <= 1" },
+      { "menu": "窗口", "items": ["选择上一个标签页", "选择下一个标签页", "移动标签页到新窗口", "合并所有窗口"], "when": "tabs.len() <= 1" },
+      { "menu": "编辑", "items": ["撤销", "重做", "剪切", "复制", "粘贴", "删除", "全选", "选择选择内容"], "when": "只读比较会话 (Diff/Dir/Csv/Image/Media/Patch)" },
+      { "menu": "编辑", "items": [], "when": "可编辑会话 (Merge/TextEdit) 时上述全部可用", "note": "同一位置恢复黑色可用" },
+      { "menu": "视图", "items": ["重置差异偏移"], "when": "图片比较且偏移=0" }
+    ]
+  },
+
+  "viewMenus": {
+    "text":  ["显示全部(1)", "显示差异(2)", "显示相同(3)", "可见空白", "语法加亮", "自动换行", "边并排布局", "缩略图", "图例(L)", "日志", "工具栏"],
+    "folder":["显示全部(1)", "显示差异(2)", "显示相同(3)", "显示不独有", "显示独有", "显示左边较新项", "显示右边较新项", "总是显示文件夹", "比较文件和文件夹结构", "仅比较文件", "忽略文件夹结构", "忽略不重要差异", "列", "图例(L)", "日志", "工具栏"],
+    "hex":   ["显示全部(1)", "显示差异(2)", "显示相同(3)", "字节地址(偏移/小尾/大端)", "布局(边并排/上-下)", "缩略图", "文件信息"],
+    "table": ["显示全部(1)", "显示差异(2)", "显示相同(3)", "隐藏相同列", "调整列大小为适合大小", "可见空白", "行号", "边并排布局", "上-下布局", "缩略图"],
+    "image": ["容差模式(1)", "不匹配范围模式(2)", "混合模式(3)", "自动缩放", "顺时针旋转", "逆时针旋转", "水平翻转", "垂直翻转", "重置差异偏移(置灰)", "比较元数据", "全屏", "缩放"],
+    "media": ["显示全部(1)", "显示差别(2)", "显示相同(3)", "波形", "频谱", "元数据", "图例(L)", "日志", "工具栏"],
+    "merge": ["显示全部(1)", "显示差别(2)", "显示相同(3)", "冲突", "上下文", "图例(L)", "日志", "工具栏"],
+    "home":  ["显示会话管理", "显示网络资源", "工具栏", "状态栏", "日志"]
+  },
+
+  "statusBar": {
+    "row1_common": ["差异计数（如 15 个差异部分）", "忽略的不重要差异（勾选开关）", "编辑模式（插入）", "加载时间: 0.05 秒"],
+    "row2_byView": {
+      "folder": ["左：N 个文件, 大小", "左：磁盘可用", "维度计数（仅左/仅右/已修改/二进制不同/相同）", "右：N 个文件, 大小", "右：磁盘可用"],
+      "text":   ["每栏：行号:列号 + 注释 + 语法上下文（左右各一组）"],
+      "hex":    ["差异字节数", "相同字节数", "当前差异 n/N", "小尾值"],
+      "table":  ["差异行数", "相同行数", "当前单元格 A3 = 3", "差异列清单"],
+      "image":  ["遮罩图例（红=仅左 黄=仅右）", "差异像素 + 占比", "偏移"],
+      "media":  ["差异项", "播放进度", "播放模式"],
+      "merge":  ["冲突数", "已解决 n/N", "输出路径"],
+      "home":   ["显示会话管理 / 显示网络资源", "最近会话数 + 磁盘"]
+    },
+    "realSamples": {
+      "folder": { "left": "3 个文件, 4.09 KB", "right": "4 个文件, 3.19 KB", "cnt": { "onlyLeft": 0, "onlyRight": 1, "modified": 2, "binary": 1, "same": 2 } },
+      "archive":{ "left": "5 个文件, 2.14 KB", "right": "5 个文件, 1.17 KB", "cnt": { "onlyLeft": 1, "onlyRight": 1, "modified": 2, "binary": 1, "same": 1 } },
+      "text":   { "blocks": 15, "insert": 10, "delete": 0, "modify": 9, "note": "删除为 0；用交换两边后 delete=10 展示第三种颜色" },
+      "hex":    { "bytes": 855, "diffBytes": 458, "ranges": 5 },
+      "table":  { "diffRows": 2, "diffCols": ["salary", "joined"] },
+      "image":  { "v1": "8,717 字节 1000x640", "v2": "7,911 字节 1000x640" },
+      "media":  { "size": "132,344 字节", "rate": "44100 Hz", "duration": "00:00:01.500" }
+    }
+  },
+
+  "components": [
+    { "name": "会话标签页", "spec": "高 29px，圆角 5px 5px 0 0，当前页白底 + 1px 边框并与内容区相接；类型色块 13px + 名称 12.5px + 会话对象 11px 等宽 + ✕", "target": "src/gui/mod.rs:1765 Panel::top(\"tabbar\")" },
+    { "name": "工具栏按钮", "spec": "62×46，图标 19px 描边 1.5 + 文字 10.5px；选中 #D3E3F8 / #0A4FA0；置灰 #B7B7BB", "target": "各 *tab.rs 顶部" },
+    { "name": "视图模式分段控件", "spec": "高 26px，圆角 5px，选中段实心 accent + 白字", "target": "各 *tab.rs" },
+    { "name": "差异色条", "spec": "宽 3px，铺满行高，居中于 22px 分隔槽；红=删除/仅左，琥珀=修改/仅右，绿=新增，蓝=已修改，紫=二进制不同", "target": "difftab.rs / dirtab.rs 的 mid 区" },
+    { "name": "差异小地图", "spec": "宽 76px，色块内缩 16px、圆角 2px，视口框 1px accent + 7% 填充，底部「差异图」9.5px", "target": "difftab.rs" },
+    { "name": "状态栏", "spec": "两行各 24px，格间 1px #C7CDD4；第 1 行通用、第 2 行按视图", "target": "src/gui/mod.rs:3152 status_bar" },
+    { "name": "菜单项", "spec": "高 22px，圆角 5px，内缩 4px；可用/置灰/勾选/高亮 四态", "target": "src/gui/menubar.rs:36 menu_item" },
+    { "name": "文件信息头", "spec": "高 46px 两行：路径 12px 等宽 + 明细 11px（大小·编码·行尾·时间）", "target": "各 *tab.rs" },
+    { "name": "行对齐留白", "spec": "对侧无对应行时 45° 斜纹填充，斜线 rgba(0,0,0,.055)、间距 4px；文件末尾之后同样铺斜纹", "target": "difftab.rs" }
+  ],
+
+  "decisionsRequired": [
+    "仅右侧 / 已修改 的配色语义：设计=黄/蓝，bcr 现值=绿/红绿（§4.3 路线 1 或 2）",
+    "bg-window 是否采用设计值 #F0F4F5，或保留 egui 默认面板色",
+    "新增行底色 diff-ins-bg 与 bg_modified_r 的复用关系"
+  ]
+}

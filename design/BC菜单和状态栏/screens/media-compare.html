@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>媒体比较</title>
+<style>
+:root{
+  /* 取样自 14 张 BC 截图的真实界面色 */
+  --bg-window:#F0F4F5; --bg-panel:#F7F9F8; --bg-content:#FFFFFF; --bg-gutter:#ECEFF0;
+  --bg-status:#DFE4EA; --bg-sidebar:#DEE0E2; --bg-selsoft:#9CC3EA;
+  --line:#D4D7D8; --line-soft:#E0E4E5; --fg:#1C1C1E; --fg2:#4A4A4F; --dim:#8B8B8B;
+  --accent:#0078F0; --menu-hl:#228EF4;
+  /* 差异语义色 */
+  --c-red:#E01E10;   --c-red-bg:#FDE0DF;   /* 删除 · 仅左侧 */
+  --c-amber:#A9761A; --c-amber-bg:#FBF0C8; /* 修改行 · 仅右侧 */
+  --c-green:#1F7A3D; --c-green-bg:#CCE1D8; /* 新增 */
+  --c-blue:#0A63C9;  --c-blue-bg:#DCE9FA;  /* 已修改(文件夹) · 选中 */
+  --c-violet:#6A3FA0;--c-violet-bg:#EFE6F8;/* 二进制不同 */
+  --img-canvas:#292821; --mask-l:#E13C32; --mask-r:#FFC83C;
+  --font:-apple-system,"SF Pro Text","Helvetica Neue","PingFang SC",sans-serif;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#7E7E82;overflow-x:hidden;font-family:var(--font);color:var(--fg);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+html{--fit:1}
+.sheet{width:2560px;margin:0 auto;padding:40px 0 60px;zoom:var(--fit)}
+.art{width:2560px;height:1320px;background:#fff;position:relative;overflow:hidden;
+  box-shadow:0 18px 60px -20px rgba(0,0,0,.45)}
+.art+.art{margin-top:56px}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column}
+
+/* ① 顶部菜单栏 30px */
+.mbar{height:30px;flex:0 0 auto;display:flex;align-items:center;gap:1px;padding:0 8px;
+  background:rgba(246,246,247,.94);border-bottom:1px solid #CBCBCB;font-size:13px}
+.mbar .mi{padding:2px 10px;border-radius:5px;color:#1C1C1E;white-space:nowrap}
+.mbar .app{font-weight:700}
+.mbar .mi.on{background:var(--menu-hl);color:#fff}
+.mbar .mi.dim{color:#B4B4B6}
+.mbar .mright{margin-left:auto;display:flex;align-items:center;gap:14px;color:#3A3A3C;font-size:12.5px}
+.mbar .mright svg{width:15px;height:15px}
+
+/* ② 会话标签页栏 40px */
+.tabbar{height:40px;flex:0 0 auto;display:flex;align-items:flex-end;gap:3px;padding:0 12px;
+  background:var(--bg-window);border-bottom:1px solid var(--line)}
+.lights{display:flex;gap:8px;align-self:center;margin-right:10px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.tab{height:29px;display:flex;align-items:center;gap:7px;padding:0 12px;font-size:12.5px;color:#55555A;
+  border:1px solid transparent;border-bottom:0;border-radius:5px 5px 0 0;white-space:nowrap}
+.tab .x{color:#9A9A9E;font-size:12px}
+.tab.on{background:#fff;border-color:var(--line);color:var(--fg);font-weight:600;
+  margin-bottom:-1px;padding-bottom:1px}
+.tab .k{width:13px;height:13px;border-radius:3px;flex:0 0 auto}
+.tab .m{font-family:var(--mono);font-size:11px;color:var(--dim);font-weight:400}
+.tab.on .m{color:#6E6E73}
+
+/* ③ 工具栏 56px */
+.toolbar{height:56px;flex:0 0 auto;display:flex;align-items:center;padding:0 10px;
+  background:var(--bg-window);border-bottom:1px solid var(--line)}
+.tgroup{display:flex;align-items:center;gap:1px;height:100%;padding:0 7px}
+.tgroup+.tgroup{border-left:1px solid var(--line-soft)}
+.tbtn{width:62px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;border-radius:5px;font-size:10.5px;color:var(--fg2);white-space:nowrap}
+.tbtn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.tbtn.on{background:#D3E3F8;color:#0A4FA0}
+.tbtn.off{color:#B7B7BB}
+.seg{display:flex;height:26px;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#fff}
+.seg b{display:flex;align-items:center;padding:0 11px;font-size:11.5px;font-weight:400;color:var(--fg2);
+  border-right:1px solid var(--line-soft)}
+.seg b:last-child{border-right:0}
+.seg b.on{background:var(--accent);color:#fff;font-weight:600}
+
+/* ④ 内容区 */
+.content{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;background:var(--bg-content)}
+
+/* 两栏文件头（BC 式：路径行 + 明细行） */
+.chead{display:grid;grid-template-columns:1fr 22px 1fr;flex:0 0 auto;
+  background:var(--bg-panel);border-bottom:1px solid var(--line);padding:7px 0}
+.chead .side{display:flex;flex-direction:column;gap:2px;padding:0 12px;min-width:0}
+.chead .p{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chead .p svg{width:14px;height:14px;flex:0 0 auto;stroke:var(--accent);fill:none;stroke-width:1.5}
+.chead .d{font-family:var(--mono);font-size:11px;color:var(--dim);padding-left:21px}
+.chead .mid{display:grid;place-items:center;color:var(--dim)}
+
+/* 文本比较 */
+.tcode{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 76px}
+.trows{display:flex;flex-direction:column;overflow:hidden}
+.trow{flex:0 0 auto;display:grid;grid-template-columns:56px 1fr 1px 56px 1fr;min-height:20px;font-family:var(--mono);
+  font-size:12px;line-height:20px}
+.trow .g{text-align:right;padding:0 8px;color:var(--dim);background:var(--bg-gutter);font-size:11px}
+.trow .g.cur{color:var(--accent);font-weight:600}
+.trow .c{padding:0 10px;white-space:pre;overflow:hidden}
+.trow .sp{background:var(--line-soft)}
+.trow.mod .c.l,.trow.mod .c.r{background:var(--c-amber-bg)}
+.trow.mod .c.l{color:var(--c-amber)}.trow.mod .c.r{color:var(--c-amber)}
+.trow.del .c.l,.trow.del .g.l{background:var(--c-red-bg)}
+.trow.del .c.l{color:var(--c-red)}
+.trow.ins .c.r,.trow.ins .g.r{background:var(--c-green-bg)}
+.trow.ins .c.r{color:var(--c-green)}
+.trow.mod .g.l,.trow.mod .g.r{background:#F1E5C8}
+.trow.gap .c{background:var(--bg-gutter);
+  background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.055) 3px 4px)}
+.trow.cur .c.l{box-shadow:inset 3px 0 0 var(--accent)}
+.trow .hl{background:rgba(169,118,26,.22);border-radius:2px}
+.eof{flex:1 1 auto;min-height:36px;background:#fff;background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.05) 3px 4px),repeating-linear-gradient(-45deg,transparent 0 3px,rgba(0,0,0,.05) 3px 4px)}
+/* 差异导航小地图 */
+.minimap{background:var(--bg-panel);border-left:1px solid var(--line);position:relative;padding:8px 0}
+.minimap .blk{position:absolute;left:16px;right:16px;border-radius:2px}
+.minimap .vp{position:absolute;left:4px;right:4px;border:1px solid var(--accent);border-radius:3px;
+  background:rgba(0,122,240,.07)}
+.minimap .cap{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:9.5px;color:var(--dim)}
+
+/* 文件夹比较 */
+.dhead{display:grid;grid-template-columns:1fr 22px 1fr;flex:0 0 auto;background:var(--bg-panel);
+  border-bottom:1px solid var(--line);height:24px;font-size:11.5px;color:var(--fg2)}
+.dhead .grp,.drow .cell{display:grid;grid-template-columns:18px 1fr 76px 132px 96px;align-items:center;
+  gap:8px;padding:0 12px 0 6px}
+.dhead .grp{padding-left:6px}
+.dhead .num,.drow .sz,.drow .dt,.drow .at{text-align:right;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.dhead .at{text-align:left}
+.dhead .mid{background:var(--bg-gutter);border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.drows{overflow:hidden}
+.drow{display:grid;grid-template-columns:1fr 22px 1fr;height:26px;border-bottom:1px solid #F0F2F3}
+.drow .mid{background:var(--bg-gutter)}
+.drow .mid b{display:block;width:3px;height:100%;margin:0 auto}
+.drow .cell{position:relative}
+.dcell-ico{width:13px;height:12px;flex:0 0 auto;justify-self:center}
+.dcell-ico.dir{clip-path:polygon(0 26%,42% 26%,52% 0,100% 0,100% 100%,0 100%);background:#9FC7EC}
+.dcell-ico.file{clip-path:polygon(0 0,68% 0,100% 26%,100% 100%,0 100%);background:#C9CDD2}
+.drow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+.drow.l .nm{color:var(--c-red)}.drow.l{background:var(--c-red-bg)}
+.drow.r .nm{color:var(--c-amber)}.drow.r{background:var(--c-amber-bg)}
+.drow.m .nm{color:var(--c-blue)}.drow.m{background:var(--c-blue-bg)}
+.drow.b .nm{color:var(--c-violet)}.drow.b{background:var(--c-violet-bg)}
+.drow.sel{background:var(--accent)}
+.drow.sel .nm,.drow.sel .sz,.drow.sel .dt,.drow.sel .at{color:#fff}
+.drow.sel .dcell-ico.file{background:rgba(255,255,255,.85)}
+.drow .tag{font-family:var(--mono);font-size:9.5px;padding:0 4px;border-radius:3px;
+  border:1px solid currentColor;margin-left:6px}
+.drow.sel .tag{color:#fff}
+
+/* 十六进制 */
+.hexwrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr}
+.hexcol{overflow:hidden}
+.hexrow{display:grid;grid-template-columns:88px 1fr 178px;gap:14px;padding:0 12px;
+  font-family:var(--mono);font-size:12px;line-height:20px;height:20px;white-space:pre}
+.hexrow.head{background:var(--bg-panel);border-bottom:1px solid var(--line);color:var(--dim);font-size:10.5px}
+.hexrow .a{color:#8A8A8E}
+.hexrow.head .a,.hexrow.head .h,.hexrow.head .asc{background:none;color:var(--dim)}
+.hexrow .h{color:#2C6FB5}
+.hexrow .asc{color:#5A5A5E}
+.hexrow.diff{background:var(--c-red-bg)}
+.hexrow.diff .h,.hexrow.diff .asc{color:var(--c-red)}
+.hexrow.diff .b{background:#F6BDB8;border-radius:2px;font-weight:600}
+.hexrow .b.ins{background:var(--c-green-bg);color:var(--c-green);border-radius:2px;font-weight:600}
+.hexwrap>.mid{background:var(--bg-gutter);border-left:1px solid var(--line);border-right:1px solid var(--line)}
+
+/* 表格比较 */
+.tablewrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr}
+.tbl{border-collapse:collapse;font-family:var(--mono);font-size:12px;width:100%}
+.tbl th,.tbl td{border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
+  padding:2px 9px;text-align:left;white-space:nowrap}
+.tbl thead th{background:var(--bg-panel);font-weight:600;font-size:11.5px}
+.tbl tr.letters th{background:var(--bg-panel);color:var(--dim);text-align:center;height:19px;font-size:10.5px}
+.tbl tr.letters th.dc{color:var(--c-red)}
+.tbl tr.letters th.cur{background:#D3E3F8;color:var(--accent);font-weight:700}
+.tbl td.rn,.tbl th.rn{background:var(--bg-gutter);color:var(--dim);text-align:right;width:34px}
+.tbl td.mk,.tbl th.mk{width:16px;text-align:center;color:var(--dim);font-size:10px}
+.tbl tr.m td.mk{color:var(--c-violet)}
+.tbl tr.i td.mk{color:var(--c-green)}
+.tbl tr.d td.mk{color:var(--c-red)}
+.tbl tr.mod td{background:var(--c-amber-bg)}
+.tbl tr.mod td.cd{background:#F3D79B;color:var(--c-red);font-weight:600}
+.tbl tr.d td{background:var(--c-red-bg)}
+.tbl tr.i td{background:var(--c-green-bg)}
+.tbl tr.selcell td.cur{box-shadow:inset 0 0 0 2px var(--accent)}
+
+/* 媒体 / 元数据 */
+.metawrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr}
+.metacol{padding:10px 12px;overflow:hidden}
+.mtable{width:100%;border-collapse:collapse;font-size:12.5px}
+.mtable th{background:#D3E3F8;border-bottom:1px solid var(--line);text-align:left;padding:4px 9px;
+  font-size:11.5px;color:#123B6B}
+.mtable td{padding:4px 9px;border-bottom:1px solid var(--line-soft);font-family:var(--mono);font-size:12px}
+.mtable td.k{width:38%;font-family:var(--font);font-size:12.5px;color:var(--fg2)}
+.mtable tr.d td{background:var(--c-red-bg);color:var(--c-red)}
+.wave{height:132px;margin-top:10px;border:1px solid var(--line);border-radius:4px;background:#FAFBFB;position:relative;overflow:hidden}
+.wave .wv{position:absolute;inset:0;background:
+  repeating-linear-gradient(90deg,rgba(31,122,61,.75) 0 1px,transparent 1px 4px)}
+.wave .wv.m{background:repeating-linear-gradient(90deg,rgba(224,30,16,.7) 0 1px,transparent 1px 4px);opacity:.85}
+.wave .ax{position:absolute;left:0;right:0;top:50%;height:1px;background:var(--line)}
+
+/* 文本合并（三栏 左/右/输出） */
+.mwrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr 1fr}
+.mcol{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+.mcol.out{border-right:0;background:#FCFCFD}
+.mhead{height:24px;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:0 10px;
+  background:var(--bg-panel);border-bottom:1px solid var(--line);font-size:11.5px;font-weight:600}
+.mhead .st{font-weight:400;font-size:10.5px;padding:0 5px;border-radius:3px;color:#fff}
+.mbody{flex:1 1 auto;min-height:0;overflow:hidden}
+.mrow{display:grid;grid-template-columns:46px 1fr;min-height:20px;font-family:var(--mono);
+  font-size:12px;line-height:20px}
+.mrow .g{text-align:right;padding:0 8px;color:var(--dim);background:var(--bg-gutter);font-size:11px}
+.mrow .c{padding:0 9px;white-space:pre;overflow:hidden}
+.mrow.cf .c{background:var(--c-amber-bg)}
+.mrow.cf .g{background:#F1E5C8}
+.mrow.sel .c{box-shadow:inset 0 0 0 2px var(--accent)}
+.mbar2{height:26px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 8px;
+  background:var(--bg-panel);border-top:1px solid var(--line);font-size:11px;color:var(--fg2)}
+.mbang{display:flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:4px;
+  background:var(--accent);color:#fff;font-size:11px}
+.mbang.g{background:#5A9E6F}
+
+/* 图片比较 */
+.imgwrap{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 22px 1fr;background:var(--img-canvas)}
+.imgpane{display:grid;place-items:center;padding:24px}
+.canvas{position:relative;width:520px;height:333px;background:#EDEDED;border:1px solid #101010;
+  box-shadow:0 8px 26px rgba(0,0,0,.5)}
+.canvas i{position:absolute;display:block}
+.canvas .shot{display:block;width:100%;height:100%;object-fit:contain}
+.canvas .mask{position:absolute;inset:0;pointer-events:none}
+.canvas .mask u{position:absolute;display:block}
+
+/* 状态栏 48px */
+.status{flex:0 0 auto;background:var(--bg-status);border-top:1px solid var(--line);font-size:11.5px}
+.srow{height:24px;display:flex;align-items:center}
+.srow+.srow{border-top:1px solid #CDD3DA}
+.scell{display:flex;align-items:center;gap:7px;padding:0 13px;height:100%;white-space:nowrap}
+.scell+.scell{border-left:1px solid #C7CDD4}
+.scell.grow{flex:1 1 auto;justify-content:center;color:var(--fg2)}
+.scell .x{color:var(--c-red);font-weight:700}
+.scell .num{font-family:var(--mono)}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.chk{width:12px;height:12px;border:1px solid #9AA0A8;border-radius:3px;display:inline-block;background:#fff}
+.chk.on{background:var(--accent);border-color:var(--accent);position:relative}
+.chk.on::after{content:"";position:absolute;left:3px;top:0.5px;width:4px;height:7px;
+  border-right:1.6px solid #fff;border-bottom:1.6px solid #fff;transform:rotate(40deg)}
+.split2{display:grid;grid-template-columns:1fr 1fr;flex:1 1 auto;height:100%}
+.split2>.scell+.scell{border-left:1px solid #C7CDD4}
+.pane-ft{display:grid;grid-template-columns:1fr 1fr;height:100%}
+.pane-ft .scell{border-left:0}
+.pane-ft .scell+.scell{border-left:1px solid #C7CDD4}
+
+/* 菜单展开态 */
+.menu{position:absolute;min-width:262px;background:rgba(246,246,247,.97);border:1px solid rgba(0,0,0,.14);
+  border-radius:8px;padding:4px;box-shadow:0 16px 40px -8px rgba(0,0,0,.34),0 2px 8px -2px rgba(0,0,0,.2)}
+.menu .it{display:flex;align-items:center;height:22px;padding:0 12px 0 8px;border-radius:5px;
+  font-size:13px;color:#1C1C1E}
+.menu .it .tk{width:15px;flex:0 0 auto;color:var(--menu-hl);font-size:12px}
+.menu .it .lb{flex:1 1 auto;white-space:nowrap}
+.menu .it .kb{margin-left:auto;padding-left:26px;color:#6E6E73;font-size:12.5px;letter-spacing:.06em}
+.menu .it .ar{margin-left:auto;padding-left:22px;color:#3A3A3C;font-size:13px}
+.menu .it.hl{background:var(--menu-hl);color:#fff}
+.menu .it.hl .kb,.menu .it.hl .ar{color:rgba(255,255,255,.82)}
+.menu .it.dis{color:#B0B0B2}
+.menu .sep{height:1px;background:rgba(0,0,0,.13);margin:5px 10px}
+.fly{position:absolute;left:100%;top:0;margin-left:-4px;min-width:190px;background:rgba(240,240,241,.98);
+  border:1px solid rgba(0,0,0,.14);border-radius:8px;padding:4px;
+  box-shadow:0 16px 40px -8px rgba(0,0,0,.34),0 2px 8px -2px rgba(0,0,0,.2)}
+
+/* 注释标签（规格稿用） */
+.note{position:absolute;background:#FFF7D6;border:1px solid #E0C46A;border-radius:6px;
+  padding:9px 12px;font-size:12.5px;line-height:1.55;color:#4A3B08;max-width:330px;
+  box-shadow:0 6px 18px -6px rgba(0,0,0,.28)}
+.note b{color:#8A6B00}
+.note .bar{position:absolute;height:2px;background:#E0C46A}
+.tag-num{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;
+  background:#C8452F;color:#fff;font-size:11px;font-weight:700;margin-right:6px;vertical-align:-3px}
+
+/* 规格页（index / tokens / components / status bar） */
+.doc{width:1800px;margin:0 auto;padding:56px 0 90px;color:#1C1C1E;zoom:var(--fit)}
+.doc h1{font-size:34px;letter-spacing:-.02em;margin-bottom:6px}
+.doc h2{font-size:20px;margin:44px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.doc p.lead{color:var(--fg2);font-size:14px;line-height:1.7;max-width:1040px}
+.doc .grid{display:grid;gap:16px}
+.doc .cards{grid-template-columns:repeat(4,1fr)}
+.doc a.card{display:block;background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px;
+  text-decoration:none;color:inherit}
+.doc a.card:hover{border-color:var(--accent)}
+.doc a.card .n{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.doc a.card .t{font-size:15px;font-weight:600;margin:5px 0 4px}
+.doc a.card .d{font-size:12.5px;color:var(--fg2);line-height:1.55}
+table.spec{width:100%;border-collapse:collapse;background:#fff;font-size:13px}
+table.spec th,table.spec td{border:1px solid var(--line);padding:7px 11px;text-align:left;vertical-align:top}
+table.spec th{background:var(--bg-panel);font-weight:600;font-size:12.5px}
+table.spec td.mono{font-family:var(--mono);font-size:12px}
+.swatch{display:inline-block;width:38px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.16);
+  vertical-align:-5px;margin-right:8px}
+.rowset{display:flex;gap:26px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);
+  border-radius:8px;padding:18px 20px}
+.rowset div{font-family:var(--mono);font-size:11.5px;color:var(--fg2)}
+.strip{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.strip .cap{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--bg-panel);
+  border-bottom:1px solid var(--line);font-size:13px}
+.strip .cap b{font-size:13.5px}
+.strip .cap .n{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.strip .cap .d{margin-left:auto;font-size:12px;color:var(--fg2)}
+.strip .body{padding:0}
+.artlabel{font-size:13px;color:#F2F2F2;padding:0 0 10px 2px;font-family:var(--mono)}
+
+.content.home{display:grid;grid-template-columns:392px 1fr}
+.hside{background:var(--bg-sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column}
+.hs-head{padding:9px 14px 7px;font-size:12px;color:var(--fg2);font-weight:600}
+.htree{flex:1 1 auto;padding:0 6px}
+.tgrp{padding:7px 8px 4px;font-size:11.5px;color:#6E6E73}
+.titem{display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-radius:5px;font-size:12.5px}
+.titem.sub{padding-left:22px;color:var(--fg2)}
+.titem .dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+.titem .tn{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.titem .tm{font-size:11px;color:#8E8E93;white-space:nowrap}
+.titem.on{background:var(--accent);color:#fff}
+.titem.on .tm{color:rgba(255,255,255,.85)}
+.hs-foot{height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;border-top:1px solid #CDD3DA;
+  font-size:11.5px;color:var(--fg2)}
+.hs-foot svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5}
+.hmain{background:#F8F8F8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px}
+.hcard{width:1120px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 20px;
+  display:flex;flex-direction:column;gap:6px}
+.hc-top{display:flex;align-items:center;gap:9px;font-size:14px}
+.hc-ico svg{width:17px;height:17px;stroke:var(--accent);fill:none;stroke-width:1.5}
+.hc-t{font-weight:600}
+.hc-p{font-family:var(--mono);font-size:12px;color:var(--fg2);padding-left:26px}
+.hc-act{display:flex;gap:9px;padding:8px 0 2px 26px}
+.bpri{background:var(--accent);color:#fff;border-radius:5px;padding:5px 18px;font-size:12.5px}
+.bgho{border:1px solid var(--line);border-radius:5px;padding:4px 18px;font-size:12.5px}
+.hint{text-align:center;font-size:12.5px;color:var(--fg2);line-height:1.7}
+.kgrid{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 26px;max-width:1240px}
+.kbtn{display:flex;flex-direction:column;align-items:center;gap:6px;width:108px;font-size:12px;
+  color:var(--fg2);padding:8px 0;border-radius:6px}
+.kbtn .ki svg{width:30px;height:30px;stroke:currentColor;fill:none;stroke-width:1.4}
+.wave2{height:132px;margin-top:10px;border:1px solid var(--line);border-radius:4px;background:#FAFBFB;overflow:hidden}
+.wave2 svg{width:100%;height:100%;display:block}
+</style>
+</head>
+<body>
+<div class="art "><div class="screen"><div class="art "><div class="screen"><div class="mbar"><span class="mi app">Beyond Compare</span><span class="mi">会话</span><span class="mi">文件</span><span class="mi">编辑</span><span class="mi">视图</span><span class="mi">工具</span><span class="mi">窗口</span><span class="mi">帮助</span><span class="mright"><svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 1 5 5v3H7V8a5 5 0 0 1 5-5z"/><path d="M4 11h16v9H4z"/></svg><svg viewBox="0 0 24 24"><path d="M4 12a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v6H4z"/></svg><span>周二 09:41</span></span></div><div class="tabbar"><span class="lights"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></span><span class="tab"><span class="k" style="background:#2C7BE5"></span>主页<span class="m">会话中心</span><span class="x">✕</span></span><span class="tab"><span class="k" style="background:#2C7BE5"></span>文件夹比较<span class="m">webapp-v1 ⇄ webapp-v2</span><span class="x">✕</span></span><span class="tab"><span class="k" style="background:#2C7BE5"></span>文本比较<span class="m">order_main_v1.c</span><span class="x">✕</span></span><span class="tab"><span class="k" style="background:#2C7BE5"></span>图片比较<span class="m">logo_v1.png</span><span class="x">✕</span></span><span class="tab"><span class="k" style="background:#B3271E"></span>十六进制比较<span class="m">firmware_v1.bin</span><span class="x">✕</span></span><span class="tab"><span class="k" style="background:#2C7BE5"></span>表格比较<span class="m">staff_v1.csv</span><span class="x">✕</span></span><span class="tab on"><span class="k" style="background:#1F7A3D"></span>媒体比较<span class="m">tone_v1.wav</span><span class="x">✕</span></span><span class="tab"><span class="k" style="background:#C87C1E"></span>文本合并<span class="m">app_v1.conf</span><span class="x">✕</span></span></div><div class="toolbar"><div class="tgroup"><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3z"/></svg><span>主页</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M3 7h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 7V4h6v3"/></svg><span>会话</span></span></div><div class="tgroup"><span class="tbtn on"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M3 12h18"/></svg><span>显示全部</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M5 8l6 4-6 4"/><path d="M19 8l-6 4 6 4"/></svg><span>显示差别</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg><span>显示相同</span></span></div><div class="tgroup"><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 3 12 3-9 2 3h5"/></svg><span>波形</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16"/><path d="M9 10v9"/></svg><span>元数据</span></span></div><div class="tgroup"><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>播放</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"/><path d="M9.5 9.5l5 5"/><path d="M14.5 9.5l-5 5"/></svg><span>停止</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M12 19V6"/><path d="M6 12l6-6 6 6"/></svg><span>上一对比</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M12 5v13"/><path d="M6 12l6 6 6-6"/></svg><span>下一对比</span></span></div><div class="tgroup"><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M11 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/><path d="M11 8v6"/><path d="M8 11h6"/></svg><span>放大</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M11 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/><path d="M8 11h6"/></svg><span>缩小</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg><span>适应窗口</span></span></div><div class="tgroup"><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M20 11A8 8 0 1 0 18 17"/><path d="M20 5v6h-6"/></svg><span>刷新</span></span><span class="tbtn "><svg viewBox="0 0 24 24"><path d="M7 4l-3 4 3 4"/><path d="M4 8h13"/><path d="M17 12l3 4-3 4"/><path d="M20 16H7"/></svg><span>交换</span></span></div></div><div class="content"><div class="chead"><div class="side"><span class="p"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 14l2 2 4-4"/></svg>/样例文件/media/tone_v1.wav</span><span class="d">今天, 00:24:13 · 132,344 字节</span></div><span class="mid"><svg viewBox="0 0 24 24"><path d="M7 4l-3 4 3 4"/><path d="M4 8h13"/><path d="M17 12l3 4-3 4"/><path d="M20 16H7"/></svg></span><div class="side"><span class="p"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 14l2 2 4-4"/></svg>/样例文件/media/tone_v2.wav</span><span class="d">今天, 00:24:13 · 132,344 字节</span></div></div><div class="metawrap"><div class="metacol"><table class="mtable"><thead><tr><th>名称</th><th>值</th></tr></thead><tbody><tr class="d"><td class="k">数值</td><td>132,344 字节</td></tr><tr class=""><td class="k">音频</td><td>PCM 16-bit 单声道</td></tr><tr class=""><td class="k">采样率</td><td>44100 Hz</td></tr><tr class=""><td class="k">时长</td><td>00:00:01.500</td></tr><tr class=""><td class="k">比特率</td><td>706 kbps</td></tr><tr class=""><td class="k">声道</td><td>1（单声道）</td></tr></tbody></table><div class="wavedraw"><div class="wave2"><svg viewBox="0 0 1000 132" preserveAspectRatio="none"><line x1="0" y1="66" x2="1000" y2="66" stroke="#D4D7D8" stroke-width="1"/><polyline points="0.0,66.0 3.3,62.2 6.7,58.5 10.0,54.8 13.4,51.1 16.7,47.5 20.1,44.0 23.4,40.5 26.8,37.2 30.1,33.9 33.4,30.8 36.8,27.8 40.1,25.0 43.5,22.3 46.8,19.8 50.2,17.5 53.5,15.4 56.9,13.5 60.2,11.8 63.5,10.3 66.9,9.0 70.2,7.9 73.6,7.1 76.9,6.5 80.3,6.1 83.6,6.0 87.0,6.1 90.3,6.4 93.6,7.0 97.0,7.8 100.3,8.9 103.7,10.1 107.0,11.6 110.4,13.3 113.7,15.2 117.1,17.3 120.4,19.6 123.7,22.1 127.1,24.8 130.4,27.6 133.8,30.5 137.1,33.6 140.5,36.9 143.8,40.2 147.2,43.7 150.5,47.2 153.8,50.8 157.2,54.5 160.5,58.2 163.9,62.0 167.2,65.7 170.6,69.5 173.9,73.2 177.3,77.0 180.6,80.6 183.9,84.3 187.3,87.8 190.6,91.3 194.0,94.6 197.3,97.9 200.7,101.0 204.0,104.0 207.4,106.8 210.7,109.5 214.0,112.0 217.4,114.4 220.7,116.5 224.1,118.4 227.4,120.2 230.8,121.7 234.1,123.0 237.5,124.0 240.8,124.9 244.1,125.5 247.5,125.9 250.8,126.0 254.2,125.9 257.5,125.6 260.9,125.0 264.2,124.2 267.6,123.2 270.9,121.9 274.2,120.4 277.6,118.7 280.9,116.8 284.3,114.7 287.6,112.4 291.0,110.0 294.3,107.3 297.7,104.5 301.0,101.5 304.3,98.4 307.7,95.2 311.0,91.8 314.4,88.4 317.7,84.8 321.1,81.2 324.4,77.5 327.8,73.8 331.1,70.1 334.4,66.3 337.8,62.5 341.1,58.8 344.5,55.0 347.8,51.3 351.2,47.7 354.5,44.2 357.9,40.7 361.2,37.3 364.5,34.1 367.9,30.9 371.2,27.9 374.6,25.1 377.9,22.4 381.3,19.9 384.6,17.6 388.0,15.5 391.3,13.5 394.6,11.8 398.0,10.3 401.3,9.0 404.7,7.9 408.0,7.1 411.4,6.5 414.7,6.1 418.1,6.0 421.4,6.1 424.7,6.5 428.1,7.0 431.4,7.8 434.8,8.9 438.1,10.2 441.5,11.7 444.8,13.4 448.2,15.3 451.5,17.4 454.8,19.7 458.2,22.2 461.5,24.9 464.9,27.7 468.2,30.7 471.6,33.8 474.9,37.0 478.3,40.4 481.6,43.9 484.9,47.4 488.3,51.0 491.6,54.7 495.0,58.5 498.3,62.2 501.7,66.0 505.0,69.8 508.4,73.5 511.7,77.3 515.1,81.0 518.4,84.6 521.7,88.1 525.1,91.6 528.4,95.0 531.8,98.2 535.1,101.3 538.5,104.3 541.8,107.2 545.2,109.8 548.5,112.3 551.8,114.6 555.2,116.7 558.5,118.7 561.9,120.4 565.2,121.9 568.6,123.1 571.9,124.2 575.3,125.0 578.6,125.6 581.9,125.9 585.3,126.0 588.6,125.9 592.0,125.5 595.3,124.9 598.7,124.0 602.0,123.0 605.4,121.7 608.7,120.1 612.0,118.4 615.4,116.5 618.7,114.3 622.1,112.0 625.4,109.5 628.8,106.8 632.1,103.9 635.5,100.9 638.8,97.8 642.1,94.5 645.5,91.1 648.8,87.6 652.2,84.1 655.5,80.4 658.9,76.7 662.2,73.0 665.6,69.2 668.9,65.4 672.2,61.7 675.6,57.9 678.9,54.2 682.3,50.5 685.6,46.9 689.0,43.3 692.3,39.9 695.7,36.5 699.0,33.3 702.3,30.2 705.7,27.2 709.0,24.4 712.4,21.7 715.7,19.3 719.1,17.0 722.4,14.9 725.8,13.0 729.1,11.4 732.4,9.9 735.8,8.7 739.1,7.7 742.5,6.9 745.8,6.4 749.2,6.1 752.5,6.0 755.9,6.2 759.2,6.6 762.5,7.3 765.9,8.1 769.2,9.3 772.6,10.6 775.9,12.2 779.3,14.0 782.6,15.9 786.0,18.1 789.3,20.5 792.6,23.1 796.0,25.8 799.3,28.7 802.7,31.7 806.0,34.9 809.4,38.2 812.7,41.6 816.1,45.1 819.4,48.7 822.7,52.4 826.1,56.1 829.4,59.8 832.8,63.6 836.1,67.4 839.5,71.2 842.8,75.0 846.2,78.7 849.5,82.4 852.8,86.0 856.2,89.5 859.5,92.9 862.9,96.3 866.2,99.5 869.6,102.6 872.9,105.5 876.3,108.3 879.6,110.9 882.9,113.3 886.3,115.5 889.6,117.6 893.0,119.4 896.3,121.0 899.7,122.4 903.0,123.6 906.4,124.5 909.7,125.3 913.0,125.7 916.4,126.0 919.7,126.0 923.1,125.7 926.4,125.2 929.8,124.5 933.1,123.6 936.5,122.4 939.8,121.0 943.1,119.4 946.5,117.5 949.8,115.5 953.2,113.2 956.5,110.8 959.9,108.2 963.2,105.4 966.6,102.5 969.9,99.4 973.2,96.2 976.6,92.8 979.9,89.4 983.3,85.8 986.6,82.2 990.0,78.5 993.3,74.8 996.7,71.0 1000.0,67.2" fill="none" stroke="#1F7A3D" stroke-width="1.4"/></svg></div></div></div><div class="mid"></div><div class="metacol"><table class="mtable"><thead><tr><th>名称</th><th>值</th></tr></thead><tbody><tr class="d"><td class="k">数值</td><td>132,344 字节</td></tr><tr class=""><td class="k">音频</td><td>PCM 16-bit 单声道</td></tr><tr class=""><td class="k">采样率</td><td>44100 Hz</td></tr><tr class=""><td class="k">时长</td><td>00:00:01.500</td></tr><tr class=""><td class="k">比特率</td><td>706 kbps</td></tr><tr class=""><td class="k">声道</td><td>1（单声道）</td></tr></tbody></table><div class="wavedraw"><div class="wave2"><svg viewBox="0 0 1000 132" preserveAspectRatio="none"><line x1="0" y1="66" x2="1000" y2="66" stroke="#D4D7D8" stroke-width="1"/><polyline points="0.0,66.0 3.3,62.2 6.7,58.5 10.0,54.8 13.4,51.1 16.7,47.5 20.1,44.0 23.4,40.5 26.8,37.2 30.1,33.9 33.4,30.8 36.8,27.8 40.1,25.0 43.5,22.3 46.8,19.8 50.2,17.5 53.5,15.4 56.9,13.5 60.2,11.8 63.5,10.3 66.9,9.0 70.2,7.9 73.6,7.1 76.9,6.5 80.3,6.1 83.6,6.0 87.0,6.1 90.3,6.4 93.6,7.0 97.0,7.8 100.3,8.9 103.7,10.1 107.0,11.6 110.4,13.3 113.7,15.2 117.1,17.3 120.4,19.6 123.7,22.1 127.1,24.7 130.4,27.5 133.8,30.5 137.1,33.6 140.5,36.8 143.8,40.2 147.2,43.6 150.5,47.1 153.8,50.8 157.2,54.4 160.5,58.1 163.9,61.9 167.2,65.6 170.6,69.4 173.9,73.2 177.3,76.9 180.6,80.6 183.9,84.2 187.3,87.7 190.6,91.2 194.0,94.6 197.3,97.8 200.7,100.9 204.0,103.9 207.4,106.8 210.7,109.4 214.0,112.0 217.4,114.3 220.7,116.4 224.1,118.4 227.4,120.1 230.8,121.6 234.1,122.9 237.5,124.0 240.8,124.8 244.1,125.5 247.5,125.8 250.8,126.0 254.2,125.9 257.5,125.6 260.9,125.0 264.2,124.2 267.6,123.2 270.9,122.0 274.2,120.5 277.6,118.8 280.9,116.9 284.3,114.8 287.6,112.6 291.0,110.1 294.3,107.5 297.7,104.7 301.0,101.7 304.3,98.6 307.7,95.4 311.0,92.0 314.4,88.6 317.7,85.1 321.1,81.5 324.4,77.8 327.8,74.1 331.1,70.3 334.4,66.6 337.8,62.8 341.1,59.1 344.5,55.3 347.8,51.6 351.2,48.0 354.5,44.5 357.9,41.0 361.2,37.6 364.5,34.4 367.9,31.2 371.2,28.2 374.6,25.4 377.9,22.7 381.3,20.2 384.6,17.8 388.0,15.7 391.3,13.7 394.6,12.0 398.0,10.4 401.3,9.1 404.7,8.0 408.0,7.2 411.4,6.6 414.7,6.2 418.1,6.0 421.4,6.1 424.7,6.4 428.1,6.9 431.4,7.7 434.8,8.7 438.1,10.0 441.5,11.4 444.8,13.1 448.2,15.0 451.5,17.1 454.8,19.4 458.2,21.8 461.5,24.5 464.9,27.3 468.2,30.2 471.6,33.3 474.9,36.5 478.3,39.9 481.6,43.3 484.9,46.8 488.3,50.5 491.6,54.1 495.0,57.8 498.3,61.6 501.7,65.4 505.0,69.1 508.4,72.9 511.7,76.6 515.1,80.3 518.4,83.9 521.7,87.5 525.1,91.0 528.4,94.3 531.8,97.6 535.1,100.7 538.5,103.8 541.8,106.6 545.2,109.3 548.5,111.8 551.8,114.2 555.2,116.3 558.5,118.3 561.9,120.0 565.2,121.6 568.6,122.9 571.9,124.0 575.3,124.8 578.6,125.4 581.9,125.8 585.3,126.0 588.6,125.9 592.0,125.6 595.3,125.1 598.7,124.3 602.0,123.3 605.4,122.0 608.7,120.5 612.0,118.9 615.4,117.0 618.7,114.9 622.1,112.6 625.4,110.1 628.8,107.5 632.1,104.7 635.5,101.7 638.8,98.7 642.1,95.4 645.5,92.1 648.8,88.6 652.2,85.1 655.5,81.5 658.9,77.8 662.2,74.1 665.6,70.3 668.9,66.6 672.2,62.8 675.6,59.0 678.9,55.3 682.3,51.6 685.6,48.0 689.0,44.4 692.3,41.0 695.7,37.6 699.0,34.3 702.3,31.2 705.7,28.2 709.0,25.3 712.4,22.6 715.7,20.1 719.1,17.8 722.4,15.6 725.8,13.7 729.1,11.9 732.4,10.4 735.8,9.1 739.1,8.0 742.5,7.2 745.8,6.5 749.2,6.2 752.5,6.0 755.9,6.1 759.2,6.4 762.5,7.0 765.9,7.8 769.2,8.8 772.6,10.0 775.9,11.5 779.3,13.2 782.6,15.1 786.0,17.2 789.3,19.5 792.6,22.0 796.0,24.6 799.3,27.4 802.7,30.4 806.0,33.5 809.4,36.7 812.7,40.1 816.1,43.5 819.4,47.1 822.7,50.7 826.1,54.4 829.4,58.1 832.8,61.9 836.1,65.6 839.5,69.4 842.8,73.2 846.2,76.9 849.5,80.6 852.8,84.2 856.2,87.8 859.5,91.3 862.9,94.6 866.2,97.9 869.6,101.0 872.9,104.0 876.3,106.9 879.6,109.5 882.9,112.1 886.3,114.4 889.6,116.5 893.0,118.5 896.3,120.2 899.7,121.7 903.0,123.0 906.4,124.1 909.7,124.9 913.0,125.5 916.4,125.9 919.7,126.0 923.1,125.9 926.4,125.5 929.8,125.0 933.1,124.2 936.5,123.1 939.8,121.8 943.1,120.4 946.5,118.6 949.8,116.7 953.2,114.6 956.5,112.3 959.9,109.8 963.2,107.1 966.6,104.3 969.9,101.3 973.2,98.2 976.6,95.0 979.9,91.6 983.3,88.1 986.6,84.6 990.0,81.0 993.3,77.3 996.7,73.5 1000.0,69.8" fill="none" stroke="#1F7A3D" stroke-width="1.4"/></svg></div></div></div></div></div><div class="status"><div class="srow"><span class="scell "><span class="x">✗</span>1 处差异（音频内容）</span><span class="scell "><span class="chk"></span>忽略不重要差异</span><span class="scell grow">元数据完全一致 · 差异在波形内容（440 Hz vs 880 Hz）</span><span class="scell ">加载时间: <span class="num">0.05</span> 秒</span></div><div class="srow"><span class="scell">波形差异区段 <b class="num">1</b></span><span class="scell grow">播放 00:00:00.860 / 00:00:01.500</span><span class="scell">并列播放</span></div></div></div></div></div></div>
+<script>
+(function(){var base=null;function fit(){var el=document.querySelector(".sheet")||document.querySelector(".doc");if(!el)return;if(base===null)base=el.offsetWidth||2560;var k=Math.min(1,(window.innerWidth-32)/base);document.documentElement.style.setProperty("--fit",k);}fit();window.addEventListener("resize",fit);})();
+</script>
+</body>
+</html>
