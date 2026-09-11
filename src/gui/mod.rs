@@ -738,10 +738,11 @@ impl DiffApp {
                 ui.label(RichText::new("文件夹比较状态徽标").strong());
                 for (letter, color, label) in [
                     ('S', ui.visuals().text_color(), "相同"),
-                    ('C', theme::status_differ(), "差异"),
-                    ('L', theme::status_orphan(), "仅左侧"),
-                    ('R', theme::status_orphan(), "仅右侧"),
-                    ('M', theme::status_differ(), "移动/重命名"),
+                    ('C', theme::status_modified(), "已修改/差异"),
+                    ('L', theme::status_left(), "仅左侧"),
+                    ('R', theme::status_right(), "仅右侧"),
+                    ('M', theme::status_modified(), "移动/重命名"),
+                    ('B', theme::status_binary(), "二进制不同"),
                 ] {
                     ui.horizontal(|ui| {
                         let badge_c = ui.cursor().min + egui::vec2(9.0, 10.0);
@@ -3149,19 +3150,123 @@ impl DiffApp {
         self.theme_changed = true;
     }
 
+    /// BC 5.2.5 设计稿 · 状态栏第 1 行（通用，所有会话类型共用）：
+    /// 差异计数 · 忽略的不重要差异开关态 · 忽略摘要 · 加载时间
+    fn status_common_row(&self, ui: &mut egui::Ui, dark: bool) {
+        let mut parts: usize = 0;
+        let mut secs: Option<f32> = None;
+        let mut ignore_minor = false;
+        let mut summary: Vec<&str> = Vec::new();
+        match self.tabs.get(self.active) {
+            Some(Tab::Diff(t)) => {
+                parts = t.diff_blocks.len();
+                secs = t.elapsed_secs;
+                ignore_minor = t.opts.ignore_whitespace
+                    && t.opts.ignore_trailing
+                    && t.opts.ignore_case
+                    && t.opts.ignore_crlf;
+                if t.opts.ignore_whitespace {
+                    summary.push("忽略空白");
+                }
+                if t.opts.ignore_trailing {
+                    summary.push("忽略行尾空白");
+                }
+                if t.opts.ignore_case {
+                    summary.push("忽略大小写");
+                }
+                if t.opts.ignore_crlf {
+                    summary.push("忽略行尾符");
+                }
+            }
+            Some(Tab::Dir(t)) => {
+                secs = t.elapsed_secs;
+                if let Some(r) = &t.result {
+                    parts = (r.stats.left_only + r.stats.right_only + r.stats.differ) as usize;
+                }
+            }
+            Some(Tab::Csv(t)) => {
+                secs = t.elapsed_secs;
+                let s = t.stats();
+                parts = (s.left_only + s.right_only + s.modified) as usize;
+            }
+            Some(Tab::Merge(t)) => {
+                secs = t.elapsed_secs;
+                parts = t.view.conflicts;
+            }
+            Some(Tab::Media(t)) => {
+                parts = t.diffs.len();
+            }
+            Some(Tab::Image(t)) => {
+                parts = t.frame_diffs.iter().filter(|&&d| d).count();
+            }
+            Some(Tab::FolderMerge(t)) => {
+                parts = t.stats.conflicts;
+            }
+            Some(Tab::Patch(_)) | Some(Tab::TextEdit(_)) | None => {}
+        }
+        // 单元格：差异计数（有差异用红，无差异用弱色）
+        let cnt_color = if parts > 0 {
+            theme::status_left()
+        } else {
+            ui.visuals().weak_text_color()
+        };
+        ui.label(RichText::new(format!("✗ {parts} 个差异部分")).color(cnt_color));
+        status_vsep(ui, dark);
+        // 单元格：忽略的不重要差异（勾选态显示）
+        ui.label(
+            RichText::new(format!(
+                "{} 忽略的不重要差异",
+                if ignore_minor { "☑" } else { "☐" }
+            ))
+            .color(theme::fg2(dark)),
+        );
+        status_vsep(ui, dark);
+        // 单元格：忽略摘要（弹性区）
+        let text = if summary.is_empty() {
+            "—".to_string()
+        } else {
+            summary.join(" · ")
+        };
+        ui.label(RichText::new(text).color(ui.visuals().weak_text_color()));
+        // 右侧：加载时间
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let txt = match secs {
+                Some(s) => format!("加载时间: {s:.2} 秒"),
+                None => "加载时间: —".to_string(),
+            };
+            ui.label(RichText::new(txt).color(theme::fg2(dark)));
+            ui.add_space(theme::PANEL_PAD);
+        });
+    }
+
     fn status_bar(&self, ui: &mut egui::Ui) {
-        // 底部全局状态栏（P31，对标 BC 状态栏：当前标签统计汇总；B3 补路径/行列数/选中项数）
+        // BC 5.2.5 设计稿：状态栏两行分格（第 1 行通用 / 第 2 行按视图）
         egui::Panel::bottom("status_bar").show(ui, |ui| {
-            // P56-UI：顶部 1px 分隔线，与内容区层次分明
-            let top = ui.available_rect_before_wrap().top();
             let dark = ui.visuals().dark_mode;
+            // 面板底色 #DFE4EA（设计稿 bg-status）
+            let full = ui.available_rect_before_wrap();
+            ui.painter().rect_filled(full, 0.0, theme::bg_status(dark));
+            // 顶部 1px 分隔线，与内容区层次分明
             ui.painter().hline(
                 0.0..=ui.available_width(),
-                top,
-                egui::Stroke::new(1.0, crate::gui::theme::mid_sep(dark)),
+                full.top(),
+                egui::Stroke::new(1.0, theme::mid_sep(dark)),
             );
+            ui.spacing_mut().item_spacing.x = 0.0;
+
+            // ===== 第 1 行：通用（所有会话类型）=====
+            let row1_top = ui.cursor().top();
             ui.horizontal(|ui| {
-                ui.add_space(6.0);
+                ui.set_min_height(theme::STATUSBAR_ROW_H);
+                ui.add_space(theme::PANEL_PAD);
+                self.status_common_row(ui, dark);
+            });
+            status_row_line(ui, dark, row1_top);
+
+            // ===== 第 2 行：按会话类型 =====
+            ui.horizontal(|ui| {
+                ui.set_min_height(theme::STATUSBAR_ROW_H);
+                ui.add_space(theme::PANEL_PAD);
                 if let Some(tab) = self.tabs.get(self.active) {
                     match tab {
                         Tab::Diff(t) => {
@@ -3861,6 +3966,29 @@ pub fn run(args: &GuiArgs) -> i32 {
             2
         }
     }
+}
+
+// ===== BC 5.2.5 设计稿：状态栏分格绘制helper =====
+
+/// 状态栏单元格竖向分隔线（设计稿：1px #C7CDD4，贯穿行高）
+fn status_vsep(ui: &mut egui::Ui, dark: bool) {
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(1.0, theme::STATUSBAR_ROW_H), egui::Sense::hover());
+    ui.painter().vline(
+        rect.center().x,
+        rect.y_range(),
+        egui::Stroke::new(1.0, theme::status_cell_sep(dark)),
+    );
+}
+
+/// 状态栏两行之间的横向分隔线（绘制在第 1 行底部）
+fn status_row_line(ui: &mut egui::Ui, dark: bool, row_top: f32) {
+    let y = row_top + theme::STATUSBAR_ROW_H;
+    ui.painter().hline(
+        ui.max_rect().x_range(),
+        y,
+        egui::Stroke::new(1.0, theme::status_cell_sep(dark)),
+    );
 }
 
 #[cfg(test)]

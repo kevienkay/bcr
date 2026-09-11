@@ -35,7 +35,8 @@ pub fn bg_delete() -> Color32 {
     super::theme::bg_left_only()
 }
 pub fn bg_insert() -> Color32 {
-    super::theme::bg_right_only()
+    // BC 5.2.5 设计稿：新增/仅右行底色（独立 token diff-ins-bg）
+    super::theme::diff_ins_bg()
 }
 pub fn bg_replace_l() -> Color32 {
     super::theme::bg_modified_l()
@@ -283,14 +284,14 @@ pub fn show_rows_offset<R>(
     out
 }
 
-/// 状态色（目录对比/合并视图用，P33 对齐 BC 语义）
-/// BC 5.2.5 实测：孤儿（仅一侧）= 紫 rgb(83,44,199)；差异/较新 = 红 rgb(246,39,16)；相同 = 黑；未知/未扫 = 灰
+/// 状态色（目录对比/合并视图用，P60 对齐 BC 5.2.5 设计稿 · 路线2）
+/// 仅左 = 红 · 仅右 = 琥珀 · 已修改/差异 = 蓝 · 二进制不同 = 紫 · 相同 = 默认
 pub fn status_color(ui: &egui::Ui, letter: char) -> Color32 {
     match letter {
-        // 仅左侧/仅右侧 = 孤儿（BC 紫）
-        'L' | 'R' => super::theme::status_orphan(),
-        // 内容不同/移动 = 差异（BC 红）
-        'C' | 'M' => super::theme::status_differ(),
+        'L' => super::theme::status_left(),
+        'R' => super::theme::status_right(),
+        'C' | 'M' => super::theme::status_modified(),
+        'B' => super::theme::status_binary(),
         // 相同 = 默认文本色（BC 黑）
         'S' => ui.visuals().text_color(),
         // 未知/其他 = 弱色（BC 灰）

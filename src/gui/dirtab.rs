@@ -2164,6 +2164,22 @@ impl DirTab {
                         egui::Sense::click(),
                     );
                     let is_sel = selected == Some(idx) || self.selected_set.contains(&idx);
+                    // P60（BC 5.2.5 设计稿 · 路线2）：文件夹行四态底色
+                    // 仅左=红 / 仅右=琥珀 / 已修改=蓝 / 二进制不同=紫（相同/目录无底色）
+                    let status_bg = if row.is_dir {
+                        None
+                    } else {
+                        row.entry
+                            .and_then(|ei| self.result.as_ref().and_then(|r| r.entries.get(ei)))
+                            .and_then(|e| match e.status {
+                                FileStatus::LeftOnly => Some(super::theme::bg_only_left()),
+                                FileStatus::RightOnly => Some(super::theme::bg_only_right()),
+                                FileStatus::Differ | FileStatus::Moved => {
+                                    Some(super::theme::bg_modified_row())
+                                }
+                                FileStatus::Same => None,
+                            })
+                    };
                     // P56-UI：zebra 条纹（偶数行轻微底色）+ 选中/hover 层次，BC 表格观感
                     let zebra = if idx % 2 == 1 && !is_sel && !resp.hovered() {
                         Some(super::theme::zebra_bg(ui.visuals().dark_mode))
@@ -2175,7 +2191,7 @@ impl DirTab {
                     } else if resp.hovered() {
                         Some(bg_match())
                     } else {
-                        zebra
+                        status_bg.or(zebra)
                     };
                     paint_bg(ui, rect, bg);
                     let indent = row.depth as f32 * 16.0;

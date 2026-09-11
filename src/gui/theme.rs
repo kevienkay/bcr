@@ -8,6 +8,12 @@ use eframe::egui::{self, Color32, FontId};
 
 /// 行高（文本对比/目录树/表格行统一）
 pub const ROW_H: f32 = 22.0;
+/// BC 5.2.5 设计稿：列表行高（文件夹/表格）——逐视图对齐时接入
+#[allow(dead_code)]
+pub const ROW_H_LIST: f32 = 26.0;
+/// BC 5.2.5 设计稿：代码/十六进制行高——逐视图对齐时接入
+#[allow(dead_code)]
+pub const ROW_H_CODE: f32 = 20.0;
 /// 等宽字号
 pub const FONT_SIZE: f32 = 14.0;
 /// 行号字号
@@ -23,7 +29,44 @@ pub const ITEM_GAP: f32 = 6.0;
 #[allow(dead_code)]
 pub const CURRENT_BAR: f32 = 3.0;
 /// P32-A1：左右面板之间空隙宽度（画差异连接线 + P58 内联覆盖箭头 ◀▶）
-pub const MID_GAP: f32 = 26.0;
+/// BC 5.2.5 设计稿：分隔槽 22px（原 26）
+pub const MID_GAP: f32 = 22.0;
+
+// ===== BC 5.2.5 设计稿布局阶梯（design-tokens.json → layout）=====
+// 说明：这些是设计稿的布局 token 目录；逐视图对齐（P2/P3）时逐步接入。
+// 未接入前统一 allow(dead_code)，与 theme.rs 既有 token 目录约定一致。
+/// 顶部菜单栏高度
+#[allow(dead_code)]
+pub const MENUBAR_H: f32 = 30.0;
+/// 会话标签栏高度
+#[allow(dead_code)]
+pub const TABBAR_H: f32 = 40.0;
+/// 单个标签页高度
+#[allow(dead_code)]
+pub const TAB_H: f32 = 29.0;
+/// 工具栏高度（图标 19 + 文字 10.5）
+#[allow(dead_code)]
+pub const TOOLBAR_H: f32 = 56.0;
+/// 工具栏按钮尺寸（宽 × 高）
+#[allow(dead_code)]
+pub const TOOLBAR_BTN: [f32; 2] = [62.0, 46.0];
+/// 工具栏图标字号
+#[allow(dead_code)]
+pub const TOOLBAR_ICON: f32 = 19.0;
+/// 工具栏按钮文字字号
+#[allow(dead_code)]
+pub const TOOLBAR_LABEL: f32 = 10.5;
+/// 视图模式分段控件高度
+#[allow(dead_code)]
+pub const SEG_H: f32 = 26.0;
+/// 状态栏总高（两行）
+#[allow(dead_code)]
+pub const STATUSBAR_H: f32 = 48.0;
+/// 状态栏单行高度（两行分格，已接入 status_bar）
+pub const STATUSBAR_ROW_H: f32 = 24.0;
+/// 差异色条宽度（中缝）
+#[allow(dead_code)]
+pub const DIFF_BAR: f32 = 3.0;
 
 /// 差异色（BC 语义：仅左/删除=红，仅右/插入=绿，修改=黄）
 /// P39-2b：对齐 BC 5.2.5 柔和色调（深色主题：淡红/淡绿/淡黄）
@@ -32,7 +75,8 @@ pub fn diff_delete(dark: bool) -> Color32 {
     if dark {
         Color32::from_rgb(226, 110, 110)
     } else {
-        Color32::from_rgb(196, 60, 60)
+        // BC 5.2.5 设计稿 diff-del-fg #E01E10（更饱和、更接近 BC）
+        Color32::from_rgb(224, 30, 16)
     }
 }
 #[allow(dead_code)]
@@ -60,18 +104,21 @@ pub fn current_bar(dark: bool) -> Color32 {
     }
 }
 
-/// 行级底色（半透明，深浅主题通用；BC 5.2.5 实测浅红/浅绿/浅黄）
+/// 行级底色（BC 5.2.5 设计稿采样值）
+/// 仅左/删除 = 红底 #FDE0DF；仅右/新增 = 绿底 #CCE1D8；修改行 = 琥珀底 #FBF0C8
 pub fn bg_left_only() -> Color32 {
-    Color32::from_rgba_unmultiplied(246, 96, 96, 40)
+    Color32::from_rgb(253, 224, 223)
 }
-pub fn bg_right_only() -> Color32 {
-    Color32::from_rgba_unmultiplied(96, 196, 118, 38)
-}
+/// 文本比较「修改行」两侧底色（设计稿：均为琥珀 #FBF0C8）
 pub fn bg_modified_l() -> Color32 {
-    Color32::from_rgba_unmultiplied(246, 96, 96, 48)
+    Color32::from_rgb(251, 240, 200)
 }
 pub fn bg_modified_r() -> Color32 {
-    Color32::from_rgba_unmultiplied(96, 196, 118, 48)
+    Color32::from_rgb(251, 240, 200)
+}
+/// BC 5.2.5 设计稿 diff-ins-bg：新增/仅右行底色（独立 token，不复用 bg_modified_r）
+pub fn diff_ins_bg() -> Color32 {
+    Color32::from_rgb(204, 225, 216)
 }
 pub fn bg_match() -> Color32 {
     Color32::from_rgba_unmultiplied(224, 190, 96, 32)
@@ -119,7 +166,85 @@ pub fn accent(dark: bool) -> Color32 {
     if dark {
         Color32::from_rgb(86, 148, 240)
     } else {
-        Color32::from_rgb(40, 90, 200)
+        // BC 5.2.5 设计稿 accent #0078F0
+        Color32::from_rgb(0, 120, 240)
+    }
+}
+
+// ===== BC 5.2.5 设计稿新增 token（菜单 / 状态栏 / 面板）=====
+
+/// 菜单高亮底（白字）：#228EF4
+#[allow(dead_code)]
+pub fn menubar_hl(_dark: bool) -> Color32 {
+    Color32::from_rgb(34, 142, 244)
+}
+/// 菜单置灰项前景：#B0B0B2（深色主题提亮）
+#[allow(dead_code)]
+pub fn menubar_disabled_fg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(110)
+    } else {
+        Color32::from_rgb(176, 176, 178)
+    }
+}
+/// 状态栏底：#DFE4EA
+pub fn bg_status(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(30)
+    } else {
+        Color32::from_rgb(223, 228, 234)
+    }
+}
+/// 主页左侧栏底：#DEE0E2
+#[allow(dead_code)]
+pub fn bg_sidebar(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(34)
+    } else {
+        Color32::from_rgb(222, 224, 226)
+    }
+}
+/// 行内细线：#E0E4E5
+#[allow(dead_code)]
+pub fn line_soft(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(52)
+    } else {
+        Color32::from_rgb(224, 228, 229)
+    }
+}
+/// 状态栏单元格分隔线：#C7CDD4
+pub fn status_cell_sep(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(58)
+    } else {
+        Color32::from_rgb(199, 205, 212)
+    }
+}
+/// 正文色：#1C1C1E
+#[allow(dead_code)]
+pub fn fg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(230, 230, 232)
+    } else {
+        Color32::from_rgb(28, 28, 30)
+    }
+}
+/// 次级文字：#4A4A4F
+pub fn fg2(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(170, 170, 175)
+    } else {
+        Color32::from_rgb(74, 74, 79)
+    }
+}
+/// 面板/标题栏底：#F0F4F5（浅色，对齐设计稿）
+#[allow(dead_code)]
+pub fn bg_window(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_gray(38)
+    } else {
+        Color32::from_rgb(240, 244, 245)
     }
 }
 
@@ -136,13 +261,15 @@ pub fn zebra_bg(dark: bool) -> Color32 {
 }
 
 /// 状态徽标前景色（目录对比/合并视图，批次 3 使用）
+/// P60 路线2：仅左红 · 仅右琥珀 · 已修改蓝
 #[allow(dead_code)]
 pub fn status_fg(ui: &egui::Ui, letter: char) -> Color32 {
     let dark = ui.visuals().dark_mode;
     match letter {
         'L' => diff_delete(dark),
-        'R' => Color32::from_rgb(110, 150, 240),
-        'C' | 'M' => diff_modify(dark),
+        'R' => status_right(),
+        'C' | 'M' => status_modified(),
+        'B' => status_binary(),
         _ => ui.visuals().weak_text_color(),
     }
 }
@@ -154,14 +281,38 @@ pub fn error_color() -> Color32 {
 }
 
 // ===== P51 批次 1：语义化颜色收敛（替代各 tab 散落硬编码）=====
+// P60（BC 5.2.5 设计稿 · 路线2）：文件夹四态语义色
+//   仅左 = 红 #E01E10 · 仅右 = 琥珀 #A9761A · 已修改 = 蓝 #0A63C9 · 二进制不同 = 紫 #6A3FA0
 
-/// BC 状态徽标：孤儿（仅左/仅右）紫
-pub fn status_orphan() -> Color32 {
-    Color32::from_rgb(83, 44, 199)
+/// 文件夹状态：仅左侧（红）
+pub fn status_left() -> Color32 {
+    Color32::from_rgb(224, 30, 16)
 }
-/// BC 状态徽标：差异/移动红
-pub fn status_differ() -> Color32 {
-    Color32::from_rgb(246, 39, 16)
+/// 文件夹状态：仅右侧（琥珀/黄）
+pub fn status_right() -> Color32 {
+    Color32::from_rgb(169, 118, 26)
+}
+/// 文件夹状态：已修改 / 内容不同（蓝）
+pub fn status_modified() -> Color32 {
+    Color32::from_rgb(10, 99, 201)
+}
+/// 文件夹状态：二进制不同（紫）
+pub fn status_binary() -> Color32 {
+    Color32::from_rgb(106, 63, 160)
+}
+/// 文件夹状态行底色：仅左红 / 仅右琥珀 / 已修改蓝 / 二进制紫（设计稿 .drow 各级底）
+pub fn bg_only_left() -> Color32 {
+    Color32::from_rgb(253, 224, 223)
+}
+pub fn bg_only_right() -> Color32 {
+    Color32::from_rgb(251, 240, 200)
+}
+pub fn bg_modified_row() -> Color32 {
+    Color32::from_rgb(220, 233, 250)
+}
+#[allow(dead_code)]
+pub fn bg_binary_row() -> Color32 {
+    Color32::from_rgb(239, 230, 248)
 }
 /// 文件信息头背景（DiffTab 头部两栏）
 #[allow(dead_code)]
