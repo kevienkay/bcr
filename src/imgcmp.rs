@@ -199,8 +199,30 @@ pub fn compare_images_opt(left: RgbaImage, right: RgbaImage, opts: CompareOption
     let size_differs = (lw, lh) != (rw, rh);
     let w = lw.min(rw);
     let h = lh.min(rh);
+    // 遮罩画布尺寸 = 两侧并集
+    let ow = lw.max(rw);
+    let oh = lh.max(rh);
 
-    let mut overlay = left.clone();
+    let mut overlay = if size_differs {
+        // P2（BC 5.2.5）：遮罩画布覆盖两侧并集——仅右图有的区域也要能着色为黄
+        let mut ov = RgbaImage::new(ow, oh);
+        for y in 0..lh {
+            for x in 0..lw {
+                ov.put_pixel(x, y, *left.get_pixel(x, y));
+            }
+        }
+        // 左图之外的区域以右图为底（这些像素仅右图有）
+        for y in 0..rh {
+            for x in 0..rw {
+                if x >= lw || y >= lh {
+                    ov.put_pixel(x, y, *right.get_pixel(x, y));
+                }
+            }
+        }
+        ov
+    } else {
+        left.clone()
+    };
     let mut diff_pixels: u64 = 0;
     let mut total: u64 = 0;
     // 差异包围盒（原始像素坐标，闭区间外扩 1px 保证可见）
@@ -278,7 +300,10 @@ pub fn compare_images_opt(left: RgbaImage, right: RgbaImage, opts: CompareOption
             if diff_mask[(y as usize) * (w as usize) + x as usize] {
                 diff_pixels += 1;
                 let lp = *left.get_pixel(x, y);
-                overlay.put_pixel(x, y, blend_overlay(lp, HIGHLIGHT_OVERLAY));
+                let rp = *right.get_pixel(x, y);
+                // P2：按遮罩类别着色（仅左红 / 仅右黄 / 修改红）
+                let kind = classify_mask_pixel(&lp, &rp);
+                overlay.put_pixel(x, y, blend_overlay(lp, mask_overlay(kind)));
                 min_x = min_x.min(x);
                 min_y = min_y.min(y);
                 max_x = max_x.max(x);
@@ -287,13 +312,16 @@ pub fn compare_images_opt(left: RgbaImage, right: RgbaImage, opts: CompareOption
         }
     }
 
-    // 尺寸不同：左侧超出区域（右侧无对应像素）全部计为差异并染红
+    // 尺寸不同：两侧超出区域全部计为差异并着色
+    // 仅左图有 → 红（mask-left）；仅右图有 → 黄（mask-right）
     if size_differs {
+        let left_solid = mask_solid(MaskKind::LeftOnly);
+        let right_solid = mask_solid(MaskKind::RightOnly);
         for y in 0..lh {
             for x in w..lw {
                 diff_pixels += 1;
                 total += 1;
-                overlay.put_pixel(x, y, HIGHLIGHT);
+                overlay.put_pixel(x, y, left_solid);
                 min_x = min_x.min(x);
                 min_y = min_y.min(y);
                 max_x = max_x.max(x);
@@ -304,7 +332,29 @@ pub fn compare_images_opt(left: RgbaImage, right: RgbaImage, opts: CompareOption
             for x in 0..w {
                 diff_pixels += 1;
                 total += 1;
-                overlay.put_pixel(x, y, HIGHLIGHT);
+                overlay.put_pixel(x, y, left_solid);
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
+            }
+        }
+        for y in 0..rh {
+            for x in w..rw {
+                diff_pixels += 1;
+                total += 1;
+                overlay.put_pixel(x, y, right_solid);
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x);
+                max_y = max_y.max(y);
+            }
+        }
+        for y in h..rh {
+            for x in 0..w {
+                diff_pixels += 1;
+                total += 1;
+                overlay.put_pixel(x, y, right_solid);
                 min_x = min_x.min(x);
                 min_y = min_y.min(y);
                 max_x = max_x.max(x);
@@ -409,10 +459,51 @@ pub fn flip_image(img: &RgbaImage, horizontal: bool) -> RgbaImage {
     out
 }
 
-/// 差异高亮色：不透明红（尺寸超出区域）或作为叠加层 alpha 混合
-const HIGHLIGHT: Rgba<u8> = Rgba([255, 40, 40, 255]);
-/// 叠加层红色（半透明）
-const HIGHLIGHT_OVERLAY: Rgba<u8> = Rgba([255, 40, 40, 150]);
+/// 差异遮罩色（BC 5.2.5 设计稿 mask-left #E13C32）：仅左图有
+pub const MASK_LEFT: Rgba<u8> = Rgba([225, 60, 50, 255]);
+/// 差异遮罩色（BC 5.2.5 设计稿 mask-right #FFC83C）：仅右图有
+pub const MASK_RIGHT: Rgba<u8> = Rgba([255, 200, 60, 255]);
+/// 叠加层（半透明）：公共区域像素差异，保留底色可见
+const MASK_LEFT_OVERLAY: Rgba<u8> = Rgba([225, 60, 50, 150]);
+const MASK_RIGHT_OVERLAY: Rgba<u8> = Rgba([255, 200, 60, 150]);
+
+/// 遮罩类别（BC 5.2.5：仅左图有 / 仅右图有 / 两侧都有但像素不同）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaskKind {
+    /// 仅左图有该像素（右图透明）
+    LeftOnly,
+    /// 仅右图有该像素（左图透明）
+    RightOnly,
+    /// 两侧都有内容但像素值不同
+    Modified,
+}
+
+/// 按像素对判定遮罩类别（纯函数，供单测覆盖）。
+/// 仅左/仅右由 alpha 判定；两侧都有内容属于“修改型”差异。
+pub fn classify_mask_pixel(l: &Rgba<u8>, r: &Rgba<u8>) -> MaskKind {
+    match (l[3] > 0, r[3] > 0) {
+        (true, false) => MaskKind::LeftOnly,
+        (false, true) => MaskKind::RightOnly,
+        _ => MaskKind::Modified,
+    }
+}
+
+/// 遮罩实色（尺寸超出区域，不透明）
+pub fn mask_solid(kind: MaskKind) -> Rgba<u8> {
+    match kind {
+        MaskKind::RightOnly => MASK_RIGHT,
+        // 修改型差异设计稿未给第三种掩码色，沿用红色（“差异 = 红”既有语义）
+        MaskKind::LeftOnly | MaskKind::Modified => MASK_LEFT,
+    }
+}
+
+/// 遮罩叠加色（半透明，画在图像之上）
+pub fn mask_overlay(kind: MaskKind) -> Rgba<u8> {
+    match kind {
+        MaskKind::RightOnly => MASK_RIGHT_OVERLAY,
+        MaskKind::LeftOnly | MaskKind::Modified => MASK_LEFT_OVERLAY,
+    }
+}
 
 // ---------- CLI ----------
 
@@ -584,8 +675,8 @@ mod tests {
         // 公共 2x2 相同；左侧超出 12 像素计差异
         assert_eq!(p.stats.diff_pixels, 12);
         assert_eq!(p.stats.total_pixels, 16);
-        // 超出区域染红
-        assert_eq!(*p.overlay.get_pixel(3, 3), HIGHLIGHT);
+        // 超出区域着色：仅左红（mask-left）
+        assert_eq!(*p.overlay.get_pixel(3, 3), MASK_LEFT);
     }
 
     #[test]
@@ -860,5 +951,72 @@ mod bounds_tests {
         assert_eq!(image_format_name(txt.to_str().unwrap()), "?".to_string());
         // 不存在文件 → ?
         assert_eq!(image_format_name("/nonexistent/x.png"), "?".to_string());
+    }
+}
+
+/// P2：图片遮罩新增逻辑的纯函数单测（仅左红 / 仅右黄 / 画布并集）
+#[cfg(test)]
+mod p2_tests {
+    use super::*;
+
+    fn solid(w: u32, h: u32, rgba: [u8; 4]) -> RgbaImage {
+        RgbaImage::from_pixel(w, h, Rgba(rgba))
+    }
+
+    #[test]
+    fn classify_mask_pixel_by_alpha() {
+        let opaque = Rgba([10u8, 20, 30, 255]);
+        let clear = Rgba([0u8, 0, 0, 0]);
+        assert_eq!(classify_mask_pixel(&opaque, &clear), MaskKind::LeftOnly);
+        assert_eq!(classify_mask_pixel(&clear, &opaque), MaskKind::RightOnly);
+        assert_eq!(classify_mask_pixel(&opaque, &opaque), MaskKind::Modified);
+        assert_eq!(classify_mask_pixel(&clear, &clear), MaskKind::Modified);
+    }
+
+    #[test]
+    fn mask_colors_match_design_tokens() {
+        // BC 5.2.5 设计稿：mask-left #E13C32 / mask-right #FFC83C
+        // （theme::mask_left()/mask_right() 为同一组色值）
+        assert_eq!([MASK_LEFT[0], MASK_LEFT[1], MASK_LEFT[2]], [0xE1, 0x3C, 0x32]);
+        assert_eq!(
+            [MASK_RIGHT[0], MASK_RIGHT[1], MASK_RIGHT[2]],
+            [0xFF, 0xC8, 0x3C]
+        );
+        assert_eq!(MASK_LEFT[3], 255, "实色遮罩不透明");
+        // 仅左红、仅右黄、修改沿用红
+        assert_eq!(mask_solid(MaskKind::LeftOnly), MASK_LEFT);
+        assert_eq!(mask_solid(MaskKind::RightOnly), MASK_RIGHT);
+        assert_eq!(mask_solid(MaskKind::Modified), MASK_LEFT);
+    }
+
+    #[test]
+    fn bigger_right_image_masks_yellow() {
+        // 左侧 2x2、右侧 4x4：公共 2x2 相同，右侧超出 12 像素 → 黄色遮罩
+        let a = solid(2, 2, [1, 1, 1, 255]);
+        let b = solid(4, 4, [1, 1, 1, 255]);
+        let p = compare_images(a, b);
+        assert!(p.stats.size_differs);
+        assert_eq!(p.stats.diff_pixels, 12, "仅右图有的 12 像素计为差异");
+        assert_eq!(p.overlay.dimensions(), (4, 4), "遮罩画布 = 两侧并集");
+        assert_eq!(*p.overlay.get_pixel(3, 3), MASK_RIGHT, "仅右图有 → 黄");
+    }
+
+    #[test]
+    fn bigger_left_image_masks_red() {
+        let a = solid(4, 4, [1, 1, 1, 255]);
+        let b = solid(2, 2, [1, 1, 1, 255]);
+        let p = compare_images(a, b);
+        assert_eq!(p.stats.diff_pixels, 12);
+        assert_eq!(*p.overlay.get_pixel(3, 3), MASK_LEFT, "仅左图有 → 红");
+    }
+
+    #[test]
+    fn alpha_only_pixel_classified_left() {
+        // 同尺寸，仅 alpha 不同：像素值的差异不改变 alpha 分类（两者 alpha>0 → Modified）
+        let a = solid(2, 2, [1, 1, 1, 255]);
+        let b = solid(2, 2, [1, 1, 1, 254]);
+        let p = compare_images(a, b);
+        assert_eq!(p.stats.diff_pixels, 4);
+        assert_eq!(p.overlay.dimensions(), (2, 2));
     }
 }

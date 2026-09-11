@@ -338,6 +338,59 @@ impl ImageTab {
         self.frames_l.len().max(self.frames_r.len())
     }
 
+    /// 遮罩图例项（颜色 + 文案）：红=仅左 · 黄=仅右
+    pub(crate) fn mask_legend() -> [(egui::Color32, &'static str); 2] {
+        [
+            (super::theme::mask_left(), "仅左图有"),
+            (super::theme::mask_right(), "仅右图有"),
+        ]
+    }
+
+    /// 差异像素摘要文案（无图片数据时显示 0）
+    pub(crate) fn diff_pixel_summary(stats: Option<crate::imgcmp::DiffStats>) -> String {
+        match stats {
+            Some(s) => format!(
+                "差异像素 {} · 占 {:.2}%",
+                crate::report::fmt_size_raw(s.diff_pixels),
+                s.diff_ratio * 100.0
+            ),
+            None => "差异像素 0 · 占 0.00%".to_string(),
+        }
+    }
+
+    /// 当前偏移文案（滚动偏移 px）
+    pub(crate) fn offset_label(scroll: egui::Vec2) -> String {
+        format!("偏移: {:.1}, {:.1}", scroll.x, scroll.y)
+    }
+
+    /// P2（BC 5.2.5 状态栏第二行）：遮罩图例（红=仅左 · 黄=仅右）·
+    /// 差异像素数与占比 · 当前偏移（滚动偏移 px）
+    fn status_row2(&self, ui: &mut egui::Ui) {
+        let dark = ui.visuals().dark_mode;
+        let full = ui.max_rect();
+        ui.painter().rect_filled(full, 0.0, super::theme::bg_status(dark));
+        ui.painter().hline(
+            full.x_range(),
+            full.top(),
+            egui::Stroke::new(1.0, super::theme::mid_sep(dark)),
+        );
+        ui.horizontal_centered(|ui| {
+            ui.add_space(8.0);
+            // 遮罩图例（色块 + 文字，设计稿 .sw）
+            for (color, text) in Self::mask_legend() {
+                let (r, _) =
+                    ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                ui.painter().rect_filled(r, 2.0, color);
+                ui.label(RichText::new(text).weak());
+                ui.add_space(6.0);
+            }
+            ui.separator();
+            ui.label(Self::diff_pixel_summary(self.pair.as_ref().map(|p| p.stats)));
+            ui.separator();
+            ui.label(Self::offset_label(self.scroll));
+        });
+    }
+
     /// 懒加载纹理（需要 ctx）
     fn ensure_textures(&mut self, ctx: &egui::Context) {
         if self.textures.is_some() {
@@ -648,6 +701,13 @@ impl ImageTab {
             return;
         }
 
+        // P2（BC 5.2.5 状态栏第二行）：遮罩图例 · 差异像素与占比 · 当前偏移
+        // 说明：全局 status_bar 由 mod.rs（P0）固定，这里以会话内底部条呈现同一组字段。
+        egui::Panel::bottom("img_status_row2")
+            .default_size(super::theme::STATUSBAR_ROW_H)
+            .resizable(false)
+            .show(ui, |ui| self.status_row2(ui));
+
         egui::CentralPanel::default().show(ui, |ui| {
             // 定位差异请求：按当前可视区计算缩放与滚动（需 &mut self，先于纹理借用处理）
             if self.locate_diff_req {
@@ -807,11 +867,18 @@ fn img_block(
                 .size(12.0)
                 .color(ui.visuals().weak_text_color()),
         );
-        ui.add(
-            egui::Image::new((tex.id(), size))
-                .fit_to_exact_size(size)
-                .sense(egui::Sense::click()),
-        )
+        // P2（BC 5.2.5）：图片画布底 #292821（设计稿 .canvas）
+        egui::Frame::new()
+            .fill(super::theme::img_canvas())
+            .inner_margin(egui::Margin::symmetric(8, 8))
+            .show(ui, |ui| {
+                ui.add(
+                    egui::Image::new((tex.id(), size))
+                        .fit_to_exact_size(size)
+                        .sense(egui::Sense::click()),
+                )
+            })
+            .inner
     })
     .inner
 }
@@ -835,4 +902,54 @@ fn to_texture(ctx: &egui::Context, img: &RgbaImage, name: &str) -> egui::Texture
     };
     let color = egui::ColorImage::from_rgba_unmultiplied([dw as usize, dh as usize], &rgba);
     ctx.load_texture(name, color, egui::TextureOptions::LINEAR)
+}
+
+/// P2：图片比较新增逻辑的纯函数单测（图例 / 差异像素摘要 / 偏移文案）
+#[cfg(test)]
+mod p2_tests {
+    use super::*;
+
+    #[test]
+    fn legend_uses_mask_left_and_right() {
+        let legend = ImageTab::mask_legend();
+        assert_eq!(legend[0].0, super::super::theme::mask_left());
+        assert_eq!(legend[0].1, "仅左图有");
+        assert_eq!(legend[1].0, super::super::theme::mask_right());
+        assert_eq!(legend[1].1, "仅右图有");
+        assert_ne!(legend[0].0, legend[1].0, "红与黄必须可区分");
+    }
+
+    #[test]
+    fn diff_pixel_summary_without_pair() {
+        assert_eq!(ImageTab::diff_pixel_summary(None), "差异像素 0 · 占 0.00%");
+    }
+
+    #[test]
+    fn diff_pixel_summary_formats_thousands_and_percent() {
+        // 设计稿取样值：31,842 像素 / 4.98%
+        let s = crate::imgcmp::DiffStats {
+            left_w: 1000,
+            left_h: 640,
+            right_w: 1000,
+            right_h: 640,
+            size_differs: false,
+            diff_pixels: 31_842,
+            total_pixels: 640_000,
+            diff_ratio: 0.0498,
+            bounds: None,
+        };
+        assert_eq!(ImageTab::diff_pixel_summary(Some(s)), "差异像素 31,842 · 占 4.98%");
+    }
+
+    #[test]
+    fn offset_label_formats_one_decimal() {
+        assert_eq!(
+            ImageTab::offset_label(egui::Vec2::new(0.0, 0.0)),
+            "偏移: 0.0, 0.0"
+        );
+        assert_eq!(
+            ImageTab::offset_label(egui::Vec2::new(12.25, 3.5)),
+            "偏移: 12.2, 3.5"
+        );
+    }
 }
