@@ -3611,3 +3611,79 @@ fn difftab_inline_arrow_copies_block_to_other_side() {
     h.run();
     assert!(tab.borrow().dirty, "点击 ◀ 箭头后应触发拷贝（dirty 置位）");
 }
+
+// ---- P1：菜单状态规则（design-tokens.json `menus.grayedRules`） ----
+//
+// 注意：bcr 的 `gui::menubar` 模块仅在 Linux 编译（macOS/Windows 走 muda 原生菜单，
+// 见 `gui/mod.rs` 的 `mod menubar;` cfg），因此这些针对菜单可用性纯函数的用例
+// 与既有 `menubar_session_new_text_creates_diff_tab` 一样只在 Linux 运行。
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[test]
+fn menu_flags_session_window_disabled_for_single_tab() {
+    // 无标签（主页）：多标签项与编辑项均置灰
+    let app = super::DiffApp::new(super::Settings::default());
+    assert_eq!(
+        super::menubar::menu_flags(&app),
+        (false, false),
+        "无标签时多标签项与编辑项应置灰"
+    );
+
+    // 单标签（只读比较会话）：多标签项置灰、编辑项置灰
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Diff(DiffTab::new()));
+    assert_eq!(
+        super::menubar::menu_flags(&app),
+        (false, false),
+        "单标签只读会话：会话/窗口菜单多标签项应置灰"
+    );
+
+    // 两个标签（只读比较会话）：多标签项可用、编辑项仍置灰
+    app.add_tab(super::Tab::Dir(DirTab::new("", "")));
+    assert_eq!(
+        super::menubar::menu_flags(&app),
+        (true, false),
+        "多标签只读会话：多标签项可用、编辑项置灰"
+    );
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[test]
+fn menu_flags_edit_disabled_for_readonly_enabled_for_editable() {
+    // 只读比较会话：编辑项一律置灰（Diff/Dir/Csv/Image/Media/Patch）
+    for tab in [
+        super::Tab::Diff(DiffTab::new()),
+        super::Tab::Dir(DirTab::new("", "")),
+        super::Tab::Csv(CsvTab::new("", "")),
+        super::Tab::Image(ImageTab::new("", "")),
+        super::Tab::Media(super::MediaTab::new("", "")),
+        super::Tab::Patch(PatchTab::new("")),
+    ] {
+        let mut app = super::DiffApp::new(super::Settings::default());
+        app.add_tab(tab);
+        let (_, edit_enabled) = super::menubar::menu_flags(&app);
+        assert!(!edit_enabled, "只读比较会话的编辑项应置灰");
+    }
+
+    // 可编辑会话：编辑项可用（Merge/TextEdit）
+    for tab in [
+        super::Tab::Merge(MergeTab::new("", "", "")),
+        super::Tab::TextEdit(TextEditTab::new("")),
+    ] {
+        let mut app = super::DiffApp::new(super::Settings::default());
+        app.add_tab(tab);
+        let (_, edit_enabled) = super::menubar::menu_flags(&app);
+        assert!(edit_enabled, "可编辑会话的编辑项应可用");
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[test]
+fn image_reset_offset_disabled_when_offset_zero() {
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Image(ImageTab::new("", "")));
+    assert!(
+        !super::menubar::image_offset_nonzero(&app),
+        "图片偏移为 0 时「重置差异偏移」应置灰"
+    );
+}

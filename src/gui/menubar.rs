@@ -11,15 +11,31 @@ use crate::i18n::{t, Key as I18nKey};
 
 /// 顶部菜单栏（BC 式 7 个主菜单）
 pub fn menu_bar(app: &mut DiffApp, ui: &mut egui::Ui) {
-    egui::MenuBar::new().ui(ui, |ui| {
-        session_menu(app, ui);
-        file_menu(app, ui);
-        edit_menu(app, ui);
-        search_menu(app, ui);
-        view_menu(app, ui);
-        tools_menu(app, ui);
-        window_menu(app, ui);
-        help_menu(app, ui);
+    // P1：菜单高亮底 #228EF4 + 白字（BC 菜单选中态）。
+    // 这里只对菜单栏顶层按钮的 hover/展开态着色；弹出菜单内的高亮色走全局
+    // 主题（theme 工作组负责），不改 theme.rs。
+    let dark = ui.visuals().dark_mode;
+    let hl = super::theme::menubar_hl(dark);
+    ui.scope(|ui| {
+        let v = &mut ui.style_mut().visuals;
+        v.widgets.hovered.bg_fill = hl;
+        v.widgets.hovered.weak_bg_fill = hl;
+        v.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+        v.widgets.active.bg_fill = hl;
+        v.widgets.active.weak_bg_fill = hl;
+        v.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+        v.selection.bg_fill = hl;
+        v.selection.stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+        egui::MenuBar::new().ui(ui, |ui| {
+            session_menu(app, ui);
+            file_menu(app, ui);
+            edit_menu(app, ui);
+            search_menu(app, ui);
+            view_menu(app, ui);
+            tools_menu(app, ui);
+            window_menu(app, ui);
+            help_menu(app, ui);
+        });
     });
 }
 
@@ -33,12 +49,66 @@ fn sc(mac: &str, win: &str) -> String {
 }
 
 /// P51-3：菜单项按钮（带右侧快捷键文本，BC 观感）
+///
+/// P1：保留原签名；委托到 `menu_item_state`（默认可用、未勾选），
+/// 因此既有 138 处调用点无需改动。
 fn menu_item(
     ui: &mut egui::Ui,
     label: impl Into<egui::WidgetText>,
     shortcut: String,
 ) -> egui::Response {
-    ui.add(egui::Button::new(label).shortcut_text(shortcut))
+    menu_item_state(ui, label, shortcut, true, false)
+}
+
+/// P1：菜单项按钮（可用 / 置灰 / 勾选 三态）。
+///
+/// - `enabled == false` → 置灰（前景由 `theme::menubar_disabled_fg` 全局着色）
+/// - `checked == true` → 加 `✓` 勾选列前缀并 `selected(true)` 高亮，
+///   对齐设计稿 `.menu .it .tk` 的勾选列。
+fn menu_item_state(
+    ui: &mut egui::Ui,
+    label: impl Into<egui::WidgetText>,
+    shortcut: String,
+    enabled: bool,
+    checked: bool,
+) -> egui::Response {
+    let text: egui::WidgetText = label.into();
+    if checked {
+        let marked = format!("✓ {}", text.text());
+        ui.add_enabled(
+            enabled,
+            egui::Button::new(marked)
+                .shortcut_text(shortcut)
+                .selected(true),
+        )
+    } else {
+        ui.add_enabled(enabled, egui::Button::new(text).shortcut_text(shortcut))
+    }
+}
+
+/// P1：菜单可用性判定的纯函数（便于单测，不依赖 egui）。
+///
+/// 返回 `(多标签项可用, 编辑项可用)`：
+/// - 会话 / 窗口菜单的多标签项（关闭标签页 / 切换标签页 / 移动标签页 / 合并窗口）
+///   在 `tabs.len() <= 1` 时置灰；
+/// - 编辑菜单项仅在**可编辑会话**（`Tab::Merge` / `Tab::TextEdit`）可用；
+///   只读比较会话（Diff / Dir / Csv / Image / Media / Patch）与无标签（主页）一律置灰。
+pub fn menu_flags(app: &DiffApp) -> (bool, bool) {
+    let multi_tab = app.tabs.len() > 1;
+    let edit_enabled = matches!(
+        app.tabs.get(app.active),
+        Some(Tab::Merge(_)) | Some(Tab::TextEdit(_))
+    );
+    (multi_tab, edit_enabled)
+}
+
+/// P1：图片比较「重置差异偏移」是否可用（偏移为 0 时置灰，见 design-tokens
+/// `menus.grayedRules` 视图项）。非图片会话该项不显示，返回值无意义。
+pub fn image_offset_nonzero(app: &DiffApp) -> bool {
+    match app.tabs.get(app.active) {
+        Some(Tab::Image(t)) => t.scroll != egui::Vec2::ZERO,
+        _ => false,
+    }
 }
 
 /// 对当前标签为 DiffTab 时执行操作（菜单转发撤销/重做/跳转等）
@@ -58,6 +128,8 @@ fn with_merge_tab(app: &mut DiffApp, f: impl FnOnce(&mut super::mergetab::MergeT
 /// Session：新建各类会话 + 保存会话
 fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuSession), |ui| {
+        // P1：多标签项可用性（tabs.len() <= 1 时置灰）
+        let (multi_tab, _) = menu_flags(app);
         if ui.button(t(I18nKey::MenuNewText)).clicked() {
             ui.close();
             app.open_empty_diff();
@@ -101,7 +173,15 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                     t.up_level();
                 }
             }
-            if ui.button(t(I18nKey::MenuCompareParent)).clicked() {
+            if menu_item_state(
+                ui,
+                t(I18nKey::MenuCompareParent),
+                String::new(),
+                multi_tab,
+                false,
+            )
+            .clicked()
+            {
                 ui.close();
                 if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
                     t.compare_parent();
@@ -117,6 +197,25 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if menu_item(ui, t(I18nKey::MenuNewWindow), sc("⌘N", "Ctrl+N")).clicked() {
             ui.close();
             super::DiffApp::open_new_window();
+        }
+        ui.separator();
+        // P1：关闭标签页 / 关闭其它标签页（BC 会话菜单；单标签时置灰）
+        if menu_item_state(ui, "关闭标签页", sc("⌘W", "Ctrl+W"), multi_tab, false).clicked() {
+            ui.close();
+            app.close_tab(app.active);
+        }
+        if menu_item_state(ui, "关闭其它标签页", String::new(), multi_tab, false).clicked() {
+            ui.close();
+            // 仅保留当前标签
+            let keep = app.active;
+            let mut i = app.tabs.len();
+            while i > 0 {
+                i -= 1;
+                if i != keep {
+                    app.tabs.remove(i);
+                }
+            }
+            app.active = 0;
         }
         ui.separator();
         // 保存会话：打开会话中心（GUI 内管理已保存会话）
@@ -327,14 +426,25 @@ fn file_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
 /// Edit：撤销/重做（转发当前文本标签）
 fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuEdit), |ui| {
-        if menu_item(ui, t(I18nKey::MenuUndo), sc("⌘Z", "Ctrl+Z")).clicked() {
+        // P1：编辑项仅在可编辑会话（Merge/TextEdit）可用；只读比较会话与主页置灰
+        let (_, edit_enabled) = menu_flags(app);
+        if menu_item_state(ui, t(I18nKey::MenuUndo), sc("⌘Z", "Ctrl+Z"), edit_enabled, false).clicked()
+        {
             ui.close();
             with_diff_tab(app, |tab| tab.undo());
         }
-        if menu_item(ui, t(I18nKey::MenuRedo), sc("⌘Y", "Ctrl+Y")).clicked() {
+        if menu_item_state(ui, t(I18nKey::MenuRedo), sc("⌘Y", "Ctrl+Y"), edit_enabled, false).clicked()
+        {
             ui.close();
             with_diff_tab(app, |tab| tab.redo());
         }
+        ui.separator();
+        // P1：标准编辑项（BC 编辑菜单）。只读比较会话置灰、可编辑会话可用；
+        // 剪切/复制/粘贴/删除 的剪贴板动作尚未接线，此处按 BC 结构占位。
+        menu_item_state(ui, "剪切", sc("⌘X", "Ctrl+X"), edit_enabled, false);
+        menu_item_state(ui, "复制", sc("⌘C", "Ctrl+C"), edit_enabled, false);
+        menu_item_state(ui, "粘贴", sc("⌘V", "Ctrl+V"), edit_enabled, false);
+        menu_item_state(ui, "删除", String::new(), edit_enabled, false);
         ui.separator();
         // P40-1：编辑左/右侧（原工具栏低频按钮，收进菜单）
         if ui.button(t(I18nKey::EditLeft)).clicked() {
@@ -367,7 +477,9 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
             ui.separator();
             // P41-3：选择操作（DirTab 分支，BC 编辑菜单「选择较新项/独有项/反向选择」）
-            if ui.button(t(I18nKey::MenuSelectAll)).clicked() {
+            if menu_item_state(ui, t(I18nKey::MenuSelectAll), sc("⌘A", "Ctrl+A"), edit_enabled, false)
+                .clicked()
+            {
                 ui.close();
                 if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
                     t.select_all();
@@ -425,7 +537,16 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
                 }
             });
             // P43-2：文本选区操作（BC 编辑菜单 选择选择内容/把选择内容和剪贴板比较）
-            if ui.button(t(I18nKey::MenuSelectSelection)).clicked() {
+            // P1：只读比较会话置灰（可编辑会话恢复可用）
+            if menu_item_state(
+                ui,
+                t(I18nKey::MenuSelectSelection),
+                String::new(),
+                edit_enabled,
+                false,
+            )
+            .clicked()
+            {
                 ui.close();
                 if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
                     tab.select_selection();
@@ -535,7 +656,15 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         // P45-5：PatchTab 分支——选择选择内容（BC 编辑菜单，D）
         if matches!(app.tabs.get(app.active), Some(Tab::Patch(_))) {
             ui.separator();
-            if ui.button(t(I18nKey::MenuSelectSelection)).clicked() {
+            if menu_item_state(
+                ui,
+                t(I18nKey::MenuSelectSelection),
+                String::new(),
+                edit_enabled,
+                false,
+            )
+            .clicked()
+            {
                 ui.close();
                 if let Some(Tab::Patch(tab)) = app.tabs.get_mut(app.active) {
                     tab.select_selection();
@@ -798,7 +927,48 @@ fn search_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     });
 }
 
-/// View：设置 / 统计栏 / 缩略图（主题与语言切换已移入设置对话框，对标 BC 设置集中管理）
+/// P1：视图菜单的会话类型分组（按 Tab 变体整组切换，BC 5.2.5 视图菜单）
+enum ViewKind {
+    Home,
+    Text,
+    Hex,
+    Folder,
+    Table,
+    Image,
+    Media,
+    Merge,
+    TextEdit,
+    FolderMerge,
+    Patch,
+}
+
+/// P1：取当前标签所属的视图分组（DiffTab 已切 hex 视图时归入 Hex 组）
+fn view_kind(app: &DiffApp) -> ViewKind {
+    match app.tabs.get(app.active) {
+        None => ViewKind::Home,
+        Some(Tab::Diff(t)) => {
+            if t.hex.is_some() {
+                ViewKind::Hex
+            } else {
+                ViewKind::Text
+            }
+        }
+        Some(Tab::Dir(_)) => ViewKind::Folder,
+        Some(Tab::Csv(_)) => ViewKind::Table,
+        Some(Tab::Image(_)) => ViewKind::Image,
+        Some(Tab::Media(_)) => ViewKind::Media,
+        Some(Tab::Merge(_)) => ViewKind::Merge,
+        Some(Tab::TextEdit(_)) => ViewKind::TextEdit,
+        Some(Tab::FolderMerge(_)) => ViewKind::FolderMerge,
+        Some(Tab::Patch(_)) => ViewKind::Patch,
+    }
+}
+
+/// View：按会话类型整组切换（BC 5.2.5 视图菜单）。
+///
+/// 顶部保留「设置…」集中入口；主体按 `Tab` 变体换整组；尾部为各视图共有的
+/// 图例 / 日志 / 工具栏开关（`design/BC菜单和状态栏/交接/design-tokens.json`
+/// 的 `viewMenus`）。
 fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuView), |ui| {
         // P39-2a：设置…（⌘,）集中管理对话框
@@ -807,309 +977,22 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             app.show_settings = true;
         }
         ui.separator();
-        // P39-2e：忽略不重要差异（空白/行尾/大小写一键切换，对标 BC View>Ignore Minor）
-        let minor = app.tabs.get(app.active).and_then(|t| match t {
-            super::Tab::Diff(tab) => Some(
-                tab.opts.ignore_whitespace
-                    && tab.opts.ignore_trailing
-                    && tab.opts.ignore_case
-                    && tab.opts.ignore_crlf,
-            ),
-            _ => None,
-        });
-        if let Some(m) = minor {
-            let mut mm = m;
-            if widgets::check(ui, &mut mm, t(I18nKey::IgnoreMinor)).changed() {
-                if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
-                    tab.opts.ignore_whitespace = mm;
-                    tab.opts.ignore_trailing = mm;
-                    tab.opts.ignore_case = mm;
-                    tab.opts.ignore_crlf = mm;
-                    tab.recompute();
-                }
-            }
-            // P40-1：单项忽略选项（原工具栏 checkbox，收进 View 菜单）
-            if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
-                let mut iw = tab.opts.ignore_whitespace;
-                let mut it = tab.opts.ignore_trailing;
-                let mut ic = tab.opts.ignore_case;
-                let mut icr = tab.opts.ignore_crlf;
-                let mut changed = false;
-                if widgets::check(ui, &mut iw, t(I18nKey::IgnoreWs)).changed() {
-                    tab.opts.ignore_whitespace = iw;
-                    changed = true;
-                }
-                if widgets::check(ui, &mut it, t(I18nKey::IgnoreTrailing)).changed() {
-                    tab.opts.ignore_trailing = it;
-                    changed = true;
-                }
-                if widgets::check(ui, &mut ic, t(I18nKey::IgnoreCase)).changed() {
-                    tab.opts.ignore_case = ic;
-                    changed = true;
-                }
-                if widgets::check(ui, &mut icr, t(I18nKey::SettingsIgnoreCrlf)).changed() {
-                    tab.opts.ignore_crlf = icr;
-                    changed = true;
-                }
-                if changed {
-                    tab.recompute();
-                }
-            }
-            ui.separator();
-            // P40-1：显示选项（原工具栏 checkbox，收进 View 菜单）
-            if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
-                let mut wrap = tab.wrap;
-                let mut ws = tab.show_whitespace;
-                if widgets::check(ui, &mut wrap, t(I18nKey::WordWrap)).changed() {
-                    tab.wrap = wrap;
-                }
-                if widgets::check(ui, &mut ws, t(I18nKey::VisibleWs)).changed() {
-                    tab.show_whitespace = ws;
-                }
-                // P42-3：字符列标尺
-                let mut ruler = tab.show_ruler;
-                if widgets::check(ui, &mut ruler, t(I18nKey::ShowRuler)).changed() {
-                    tab.show_ruler = ruler;
-                }
-            }
-            // P40-1：hex 显示选项（原工具栏 ComboBox，收进 View 菜单）
-            if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
-                if let Some(h) = tab.hex.as_mut() {
-                    ui.separator();
-                    widgets::check(ui, &mut h.show_addr, t(I18nKey::HexShowAddr));
-                    let cur_addr_hex = h.addr_hex;
-                    widgets::combo(
-                        ui,
-                        if cur_addr_hex {
-                            t(I18nKey::HexAddrHex)
-                        } else {
-                            t(I18nKey::HexAddrDec)
-                        },
-                        "",
-                        |ui| {
-                            if ui
-                                .selectable_label(cur_addr_hex, t(I18nKey::HexAddrHex))
-                                .clicked()
-                            {
-                                h.addr_hex = true;
-                            }
-                            if ui
-                                .selectable_label(!cur_addr_hex, t(I18nKey::HexAddrDec))
-                                .clicked()
-                            {
-                                h.addr_hex = false;
-                            }
-                        },
-                    );
-                    use crate::hexview::HexValueMode;
-                    let cur = h.value_mode;
-                    let label = match cur {
-                        HexValueMode::Raw => t(I18nKey::HexValRaw),
-                        HexValueMode::LittleEndian => t(I18nKey::HexValLittle),
-                        HexValueMode::BigEndian => t(I18nKey::HexValBig),
-                    };
-                    widgets::combo(ui, label, "", |ui| {
-                        for (mode, k) in [
-                            (HexValueMode::Raw, I18nKey::HexValRaw),
-                            (HexValueMode::LittleEndian, I18nKey::HexValLittle),
-                            (HexValueMode::BigEndian, I18nKey::HexValBig),
-                        ] {
-                            if ui.selectable_label(cur == mode, t(k)).clicked() {
-                                h.value_mode = mode;
-                            }
-                        }
-                    });
-                    // P46-3：hex 视图过滤（BC 16进制 显示全部/差异/相同，1/2/3）
-                    let cur_f = tab.hex_filter;
-                    ui.label(t(I18nKey::MenuFilter));
-                    for (f, k) in [
-                        (super::difftab::HexViewFilter::All, I18nKey::HexFilterAll),
-                        (super::difftab::HexViewFilter::Diff, I18nKey::HexFilterDiff),
-                        (super::difftab::HexViewFilter::Same, I18nKey::HexFilterSame),
-                    ] {
-                        if ui.selectable_label(cur_f == f, t(k)).clicked() {
-                            tab.hex_filter = f;
-                        }
-                    }
-                    // P46-3：hex 布局（BC 16进制 边并排/上-下）
-                    let cur_l = tab.hex_layout;
-                    for (l, k) in [
-                        (
-                            super::difftab::HexViewLayout::SideBySide,
-                            I18nKey::HexLayoutSideBySide,
-                        ),
-                        (
-                            super::difftab::HexViewLayout::TopBottom,
-                            I18nKey::HexLayoutTopBottom,
-                        ),
-                    ] {
-                        if ui.selectable_label(cur_l == l, t(k)).clicked() {
-                            tab.hex_layout = l;
-                        }
-                    }
-                }
-            }
-        }
-        // 统计栏 / 缩略图（当前文本标签）
-        if ui.button(t(I18nKey::MenuStats)).clicked() {
-            ui.close();
-            with_diff_tab(app, |tab| tab.show_stats = !tab.show_stats);
-        }
-        if ui.button(t(I18nKey::MenuThumb)).clicked() {
-            ui.close();
-            with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
-        }
-        // P46-1：TextEdit 视图开关（BC 文本编辑视图菜单 行号/自动换行/文件信息）
-        if matches!(app.tabs.get(app.active), Some(Tab::TextEdit(_))) {
-            let mut show_ln = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::TextEdit(tab) => Some(tab.show_line_numbers),
-                    _ => None,
-                })
-                .unwrap_or(true);
-            if widgets::check(ui, &mut show_ln, t(I18nKey::MenuLineNumbers)).changed() {
-                if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
-                    tab.show_line_numbers = show_ln;
-                }
-            }
-            let mut show_wrap = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::TextEdit(tab) => Some(tab.show_wrap),
-                    _ => None,
-                })
-                .unwrap_or(false);
-            if widgets::check(ui, &mut show_wrap, t(I18nKey::WordWrap)).changed() {
-                if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
-                    tab.show_wrap = show_wrap;
-                }
-            }
-            let mut show_fi = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::TextEdit(tab) => Some(tab.show_file_info),
-                    _ => None,
-                })
-                .unwrap_or(true);
-            if widgets::check(ui, &mut show_fi, t(I18nKey::MenuFileInfo)).changed() {
-                if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
-                    tab.show_file_info = show_fi;
-                }
-            }
-        }
-        // P45-4：图片比较补齐（BC View 菜单 重置差异偏移/比较元数据，ImageTab 分支）
-        if matches!(app.tabs.get(app.active), Some(Tab::Image(_))) {
-            // P57-5：图片旋转/翻转（BC View 菜单）
-            if ui.button(t(I18nKey::ImgRotateCw)).clicked() {
-                ui.close();
-                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
-                    t.rotate_cw();
-                }
-            }
-            if ui.button(t(I18nKey::ImgRotateCcw)).clicked() {
-                ui.close();
-                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
-                    t.rotate_ccw();
-                }
-            }
-            if ui.button(t(I18nKey::ImgFlipH)).clicked() {
-                ui.close();
-                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
-                    t.flip_horizontal();
-                }
-            }
-            if ui.button(t(I18nKey::ImgFlipV)).clicked() {
-                ui.close();
-                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
-                    t.flip_vertical();
-                }
-            }
-            // P57-5：图片差异模式子菜单（Exact/Tolerance/MismatchRange/Mixed，BC 视图菜单）
-            ui.menu_button("差异模式", |ui| {
-                let modes = [
-                    (t(I18nKey::ImgModeExact), crate::imgcmp::DiffMode::Exact),
-                    (
-                        t(I18nKey::ImgModeTolerance),
-                        crate::imgcmp::DiffMode::Tolerance,
-                    ),
-                    (
-                        t(I18nKey::ImgModeMismatch),
-                        crate::imgcmp::DiffMode::MismatchRange,
-                    ),
-                    (t(I18nKey::ImgModeMixed), crate::imgcmp::DiffMode::Mixed),
-                ];
-                for (label, mode) in modes {
-                    if ui.button(label).clicked() {
-                        ui.close();
-                        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
-                            t.diff_mode = mode;
-                            t.recompute_current();
-                        }
-                    }
-                }
-            });
-            if ui.button(t(I18nKey::ImgResetOffset)).clicked() {
-                ui.close();
-                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
-                    t.reset_diff_offset();
-                }
-            }
-            if ui.button(t(I18nKey::ImgCompareMeta)).clicked() {
-                ui.close();
-                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
-                    t.compare_meta();
-                }
-            }
-        }
-        // P44-6：行号 / 语法加亮开关（BC 视图菜单；DiffTab 分支）
-        // P57-6：CsvTab 分支——隐藏相同列/调整列宽为适合大小（BC 表格比较视图菜单）
-        if matches!(app.tabs.get(app.active), Some(Tab::Csv(_))) {
-            if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
-                let mut h = tab.hide_same_cols;
-                if widgets::check(ui, &mut h, t(I18nKey::HideSameCols)).changed() {
-                    tab.hide_same_cols = h;
-                }
-                let mut f = tab.auto_fit;
-                if widgets::check(ui, &mut f, t(I18nKey::FitColumns)).changed() {
-                    tab.auto_fit = f;
-                }
-            }
-        }
-        if matches!(app.tabs.get(app.active), Some(Tab::Diff(_))) {
-            let show_ln = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::Diff(tab) => Some(tab.show_line_numbers),
-                    _ => None,
-                })
-                .unwrap_or(true);
-            if widgets::check(ui, &mut show_ln.clone(), t(I18nKey::MenuLineNumbers)).changed() {
-                if let Tab::Diff(tab) = &mut app.tabs[app.active] {
-                    tab.show_line_numbers = show_ln;
-                }
-            }
-            let show_syn = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::Diff(tab) => Some(tab.show_syntax),
-                    _ => None,
-                })
-                .unwrap_or(true);
-            if widgets::check(ui, &mut show_syn.clone(), t(I18nKey::MenuSyntaxHighlight)).changed()
-            {
-                if let Tab::Diff(tab) = &mut app.tabs[app.active] {
-                    tab.show_syntax = show_syn;
-                }
-            }
+        // P1：按 Tab 变体整组切换
+        match view_kind(app) {
+            ViewKind::Home => view_menu_home(app, ui),
+            ViewKind::Text => view_menu_text(app, ui),
+            ViewKind::Hex => view_menu_hex(app, ui),
+            ViewKind::Folder => view_menu_folder(app, ui),
+            ViewKind::Table => view_menu_table(app, ui),
+            ViewKind::Image => view_menu_image(app, ui),
+            ViewKind::Media => view_menu_media(app, ui),
+            ViewKind::Merge => view_menu_merge(app, ui),
+            ViewKind::TextEdit => view_menu_text_edit(app, ui),
+            ViewKind::FolderMerge => view_menu_folder_merge(app, ui),
+            ViewKind::Patch => view_menu_patch(app, ui),
         }
         ui.separator();
-        // P42-4：图例 / 日志 / 工具栏开关（BC 视图菜单）
+        // 各视图共有：图例 / 日志 / 工具栏（BC 视图菜单尾部）
         if menu_item(ui, t(I18nKey::MenuLegend), sc("⇧L", "Shift+L")).clicked() {
             ui.close();
             app.show_legend = !app.show_legend;
@@ -1122,206 +1005,628 @@ fn view_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if widgets::check(ui, &mut tb, t(I18nKey::MenuToolbar)).changed() {
             crate::gui::common::SHOW_TOOLBAR.store(tb, std::sync::atomic::Ordering::Relaxed);
         }
-        ui.separator();
-        // P45-2：文件夹合并视图过滤（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化，1-7）
-        if matches!(app.tabs.get(app.active), Some(Tab::FolderMerge(_))) {
-            ui.label(t(I18nKey::MenuFilter));
-            let cur = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::FolderMerge(tab) => Some(tab.view_filter),
-                    _ => None,
-                })
-                .unwrap_or(super::foldermergetab::MergeFilter::All);
-            for (f, key) in [
-                (
-                    super::foldermergetab::MergeFilter::All,
-                    I18nKey::MergeFilterAll,
-                ),
-                (
-                    super::foldermergetab::MergeFilter::Changed,
-                    I18nKey::MergeFilterChanged,
-                ),
-                (
-                    super::foldermergetab::MergeFilter::Conflict,
-                    I18nKey::MergeFilterConflict,
-                ),
-                (
-                    super::foldermergetab::MergeFilter::LeftChanged,
-                    I18nKey::MergeFilterLeftChanged,
-                ),
-                (
-                    super::foldermergetab::MergeFilter::RightChanged,
-                    I18nKey::MergeFilterRightChanged,
-                ),
-                (
-                    super::foldermergetab::MergeFilter::Mergeable,
-                    I18nKey::MergeFilterMergeable,
-                ),
-                (
-                    super::foldermergetab::MergeFilter::Unchanged,
-                    I18nKey::MergeFilterUnchanged,
-                ),
-            ] {
-                if ui.selectable_label(cur == f, t(key)).clicked() {
-                    if let Tab::FolderMerge(tab) = &mut app.tabs[app.active] {
-                        tab.view_filter = f;
-                    }
-                    ui.close();
-                }
-            }
-            ui.separator();
-        }
-        // P45-3：文件夹比较视图过滤扩展（BC View 菜单 显示独有/不独有/差异但无独有/组合项）
-        if matches!(app.tabs.get(app.active), Some(Tab::Dir(_))) {
-            ui.label(t(I18nKey::MenuFilter));
-            let cur = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::Dir(tab) => Some(tab.view_filter),
-                    _ => None,
-                })
-                .unwrap_or(super::dirtab::ViewFilter::All);
-            for (f, key) in [
-                (super::dirtab::ViewFilter::All, I18nKey::ShowAll),
-                (super::dirtab::ViewFilter::Diff, I18nKey::OnlyDiff),
-                (super::dirtab::ViewFilter::Same, I18nKey::ShowSame),
-                (
-                    super::dirtab::ViewFilter::Orphans,
-                    I18nKey::DirFilterOrphans,
-                ),
-                (
-                    super::dirtab::ViewFilter::NonOrphans,
-                    I18nKey::DirFilterNonOrphans,
-                ),
-                (
-                    super::dirtab::ViewFilter::DiffNoOrphans,
-                    I18nKey::DirFilterDiffNoOrphans,
-                ),
-                (super::dirtab::ViewFilter::LeftNewer, I18nKey::ViewLeftNewer),
-                (
-                    super::dirtab::ViewFilter::RightNewer,
-                    I18nKey::ViewRightNewer,
-                ),
-                (
-                    super::dirtab::ViewFilter::LeftNewerOrOrphan,
-                    I18nKey::DirFilterLeftNewerOrOrphan,
-                ),
-                (
-                    super::dirtab::ViewFilter::RightNewerOrOrphan,
-                    I18nKey::DirFilterRightNewerOrOrphan,
-                ),
-            ] {
-                if ui.selectable_label(cur == f, t(key)).clicked() {
-                    if let Tab::Dir(tab) = &mut app.tabs[app.active] {
-                        tab.view_filter = f;
-                        tab.rebuild_tree();
-                    }
-                    ui.close();
-                }
-            }
-            // P46-4：结构选项（BC 文件夹比较视图菜单 总是显示文件夹/仅比较文件）
-            let mut show_dirs = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::Dir(tab) => Some(tab.show_all_dirs),
-                    _ => None,
-                })
-                .unwrap_or(true);
-            if widgets::check(ui, &mut show_dirs, t(I18nKey::DirShowAllDirs)).changed() {
-                if let Tab::Dir(tab) = &mut app.tabs[app.active] {
-                    tab.show_all_dirs = show_dirs;
-                    tab.rebuild_tree();
-                }
-            }
-            let mut only_files = app
-                .tabs
-                .get(app.active)
-                .and_then(|t| match t {
-                    Tab::Dir(tab) => Some(tab.only_files),
-                    _ => None,
-                })
-                .unwrap_or(false);
-            if widgets::check(ui, &mut only_files, t(I18nKey::DirOnlyFiles)).changed() {
-                if let Tab::Dir(tab) = &mut app.tabs[app.active] {
-                    tab.only_files = only_files;
-                    tab.rebuild_tree();
-                }
-            }
-            ui.separator();
-        }
-        // P39-2d：细节三模式（BC 视图菜单「细节」）
-        ui.label(t(I18nKey::MenuDetail));
-        let cur_detail = app.tabs.get(app.active).and_then(|t| match t {
-            super::Tab::Diff(tab) => Some(tab.detail_mode),
-            _ => None,
-        });
-        if let Some(cur) = cur_detail {
-            for (mode, key) in [
-                (super::difftab::DiffDetailMode::Text, I18nKey::DetailText),
-                (super::difftab::DiffDetailMode::Hex, I18nKey::DetailHex),
-                (super::difftab::DiffDetailMode::Align, I18nKey::DetailAlign),
-            ] {
-                if ui.selectable_label(cur == mode, t(key)).clicked() {
-                    if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
-                        tab.set_detail_mode(mode);
-                    }
-                    ui.close();
-                }
-            }
-        }
-        ui.separator();
-        // P39-2d：布局（BC 视图菜单「布局」）
-        ui.label(t(I18nKey::MenuLayout));
-        let cur_layout = app.tabs.get(app.active).and_then(|t| match t {
-            super::Tab::Diff(tab) => Some(tab.layout),
-            _ => None,
-        });
-        if let Some(cur) = cur_layout {
-            for (layout, key) in [
-                (
-                    super::difftab::DiffLayout::SideBySide,
-                    I18nKey::LayoutSideBySide,
-                ),
-                (
-                    super::difftab::DiffLayout::TopBottom,
-                    I18nKey::LayoutTopBottom,
-                ),
-                (super::difftab::DiffLayout::Web, I18nKey::LayoutWeb),
-            ] {
-                if ui.selectable_label(cur == layout, t(key)).clicked() {
-                    if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
-                        tab.set_layout(layout);
-                    }
-                    ui.close();
-                }
-            }
-        }
-        ui.separator();
-        // P39-2d：书签（BC 书签 0-9，⌘⌥⌃0-9 切换 / ⌘0-9 跳转）
-        ui.label(t(I18nKey::MenuBookmark));
-        if menu_item(
-            ui,
-            t(I18nKey::MenuToggleBookmark),
-            sc("⌘⌥⌃0-9", "Ctrl+Alt+Shift+0-9"),
-        )
-        .clicked()
-        {
-            ui.close();
-            with_diff_tab(app, |tab| tab.toggle_bookmark(0));
-        }
-        if menu_item(ui, t(I18nKey::MenuGotoBookmark), sc("⌘0-9", "Ctrl+0-9")).clicked() {
-            ui.close();
-            with_diff_tab(app, |tab| tab.goto_bookmark(0));
-        }
-        if ui.button(t(I18nKey::MenuClearBookmarks)).clicked() {
-            ui.close();
-            with_diff_tab(app, |tab| tab.clear_bookmarks());
-        }
     });
+}
+
+/// 主页（无标签）视图组（BC 主页视图菜单）
+fn view_menu_home(app: &mut DiffApp, ui: &mut egui::Ui) {
+    if ui.button("显示会话管理").clicked() {
+        ui.close();
+        app.show_sessions = true;
+    }
+    if ui.button("显示网络资源").clicked() {
+        ui.close();
+        app.show_cloud = true;
+    }
+}
+
+/// 文本比较视图组（显示过滤 / 忽略 / 显示选项 / 细节 / 布局 / 缩略图 / 书签）
+fn view_menu_text(app: &mut DiffApp, ui: &mut egui::Ui) {
+    // 显示过滤（BC 显示全部/差异/相同/上下文，1/2/3/4）
+    let cur_filter = app.tabs.get(app.active).and_then(|t| match t {
+        Tab::Diff(tab) => Some(tab.view_filter),
+        _ => None,
+    });
+    if let Some(cur) = cur_filter {
+        for (f, key) in [
+            (super::difftab::DiffViewFilter::All, I18nKey::ShowAll),
+            (super::difftab::DiffViewFilter::Diff, I18nKey::OnlyDiff),
+            (super::difftab::DiffViewFilter::Same, I18nKey::ShowSame),
+            (super::difftab::DiffViewFilter::Context, I18nKey::ShowContext),
+        ] {
+            if ui.selectable_label(cur == f, t(key)).clicked() {
+                if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+                    tab.view_filter = f;
+                }
+                ui.close();
+            }
+        }
+    }
+    ui.separator();
+
+    // P39-2e：忽略不重要差异（空白/行尾/大小写一键切换，BC View>Ignore Minor）
+    let minor = app.tabs.get(app.active).and_then(|t| match t {
+        super::Tab::Diff(tab) => Some(
+            tab.opts.ignore_whitespace
+                && tab.opts.ignore_trailing
+                && tab.opts.ignore_case
+                && tab.opts.ignore_crlf,
+        ),
+        _ => None,
+    });
+    if let Some(m) = minor {
+        let mut mm = m;
+        if widgets::check(ui, &mut mm, t(I18nKey::IgnoreMinor)).changed() {
+            if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                tab.opts.ignore_whitespace = mm;
+                tab.opts.ignore_trailing = mm;
+                tab.opts.ignore_case = mm;
+                tab.opts.ignore_crlf = mm;
+                tab.recompute();
+            }
+        }
+        // P40-1：单项忽略选项（原工具栏 checkbox，收进 View 菜单）
+        if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+            let mut iw = tab.opts.ignore_whitespace;
+            let mut it = tab.opts.ignore_trailing;
+            let mut ic = tab.opts.ignore_case;
+            let mut icr = tab.opts.ignore_crlf;
+            let mut changed = false;
+            if widgets::check(ui, &mut iw, t(I18nKey::IgnoreWs)).changed() {
+                tab.opts.ignore_whitespace = iw;
+                changed = true;
+            }
+            if widgets::check(ui, &mut it, t(I18nKey::IgnoreTrailing)).changed() {
+                tab.opts.ignore_trailing = it;
+                changed = true;
+            }
+            if widgets::check(ui, &mut ic, t(I18nKey::IgnoreCase)).changed() {
+                tab.opts.ignore_case = ic;
+                changed = true;
+            }
+            if widgets::check(ui, &mut icr, t(I18nKey::SettingsIgnoreCrlf)).changed() {
+                tab.opts.ignore_crlf = icr;
+                changed = true;
+            }
+            if changed {
+                tab.recompute();
+            }
+        }
+        ui.separator();
+        // P40-1：显示选项（原工具栏 checkbox，收进 View 菜单）
+        if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+            let mut wrap = tab.wrap;
+            let mut ws = tab.show_whitespace;
+            if widgets::check(ui, &mut wrap, t(I18nKey::WordWrap)).changed() {
+                tab.wrap = wrap;
+            }
+            if widgets::check(ui, &mut ws, t(I18nKey::VisibleWs)).changed() {
+                tab.show_whitespace = ws;
+            }
+            // P42-3：字符列标尺
+            let mut ruler = tab.show_ruler;
+            if widgets::check(ui, &mut ruler, t(I18nKey::ShowRuler)).changed() {
+                tab.show_ruler = ruler;
+            }
+        }
+    }
+    // P44-6：行号 / 语法加亮开关（BC 视图菜单；DiffTab 分支）
+    let show_ln = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::Diff(tab) => Some(tab.show_line_numbers),
+            _ => None,
+        })
+        .unwrap_or(true);
+    let mut show_ln = show_ln;
+    if widgets::check(ui, &mut show_ln, t(I18nKey::MenuLineNumbers)).changed() {
+        if let Tab::Diff(tab) = &mut app.tabs[app.active] {
+            tab.show_line_numbers = show_ln;
+        }
+    }
+    let show_syn = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::Diff(tab) => Some(tab.show_syntax),
+            _ => None,
+        })
+        .unwrap_or(true);
+    let mut show_syn = show_syn;
+    if widgets::check(ui, &mut show_syn, t(I18nKey::MenuSyntaxHighlight)).changed() {
+        if let Tab::Diff(tab) = &mut app.tabs[app.active] {
+            tab.show_syntax = show_syn;
+        }
+    }
+    // 统计栏 / 缩略图（当前文本标签）
+    if ui.button(t(I18nKey::MenuStats)).clicked() {
+        ui.close();
+        with_diff_tab(app, |tab| tab.show_stats = !tab.show_stats);
+    }
+    if ui.button(t(I18nKey::MenuThumb)).clicked() {
+        ui.close();
+        with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
+    }
+    ui.separator();
+    // P39-2d：细节三模式（BC 视图菜单「细节」）
+    ui.label(t(I18nKey::MenuDetail));
+    let cur_detail = app.tabs.get(app.active).and_then(|t| match t {
+        super::Tab::Diff(tab) => Some(tab.detail_mode),
+        _ => None,
+    });
+    if let Some(cur) = cur_detail {
+        for (mode, key) in [
+            (super::difftab::DiffDetailMode::Text, I18nKey::DetailText),
+            (super::difftab::DiffDetailMode::Hex, I18nKey::DetailHex),
+            (super::difftab::DiffDetailMode::Align, I18nKey::DetailAlign),
+        ] {
+            if ui.selectable_label(cur == mode, t(key)).clicked() {
+                if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                    tab.set_detail_mode(mode);
+                }
+                ui.close();
+            }
+        }
+    }
+    ui.separator();
+    // P39-2d：布局（BC 视图菜单「布局」）
+    ui.label(t(I18nKey::MenuLayout));
+    let cur_layout = app.tabs.get(app.active).and_then(|t| match t {
+        super::Tab::Diff(tab) => Some(tab.layout),
+        _ => None,
+    });
+    if let Some(cur) = cur_layout {
+        for (layout, key) in [
+            (
+                super::difftab::DiffLayout::SideBySide,
+                I18nKey::LayoutSideBySide,
+            ),
+            (
+                super::difftab::DiffLayout::TopBottom,
+                I18nKey::LayoutTopBottom,
+            ),
+            (super::difftab::DiffLayout::Web, I18nKey::LayoutWeb),
+        ] {
+            if ui.selectable_label(cur == layout, t(key)).clicked() {
+                if let super::Tab::Diff(tab) = &mut app.tabs[app.active] {
+                    tab.set_layout(layout);
+                }
+                ui.close();
+            }
+        }
+    }
+    ui.separator();
+    // P39-2d：书签（BC 书签 0-9，⌘⌥⌃0-9 切换 / ⌘0-9 跳转）
+    ui.label(t(I18nKey::MenuBookmark));
+    if menu_item(
+        ui,
+        t(I18nKey::MenuToggleBookmark),
+        sc("⌘⌥⌃0-9", "Ctrl+Alt+Shift+0-9"),
+    )
+    .clicked()
+    {
+        ui.close();
+        with_diff_tab(app, |tab| tab.toggle_bookmark(0));
+    }
+    if menu_item(ui, t(I18nKey::MenuGotoBookmark), sc("⌘0-9", "Ctrl+0-9")).clicked() {
+        ui.close();
+        with_diff_tab(app, |tab| tab.goto_bookmark(0));
+    }
+    if ui.button(t(I18nKey::MenuClearBookmarks)).clicked() {
+        ui.close();
+        with_diff_tab(app, |tab| tab.clear_bookmarks());
+    }
+}
+
+/// 十六进制比较视图组（过滤 / 字节地址 / 值模式 / 布局 / 缩略图）
+fn view_menu_hex(app: &mut DiffApp, ui: &mut egui::Ui) {
+    if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
+        if let Some(h) = tab.hex.as_mut() {
+            // P46-3：hex 视图过滤（BC 16进制 显示全部/差异/相同，1/2/3）
+            let cur_f = tab.hex_filter;
+            ui.label(t(I18nKey::MenuFilter));
+            for (f, k) in [
+                (super::difftab::HexViewFilter::All, I18nKey::HexFilterAll),
+                (super::difftab::HexViewFilter::Diff, I18nKey::HexFilterDiff),
+                (super::difftab::HexViewFilter::Same, I18nKey::HexFilterSame),
+            ] {
+                if ui.selectable_label(cur_f == f, t(k)).clicked() {
+                    tab.hex_filter = f;
+                }
+            }
+            ui.separator();
+            // 字节地址：显示开关 + 偏移进制
+            widgets::check(ui, &mut h.show_addr, t(I18nKey::HexShowAddr));
+            let cur_addr_hex = h.addr_hex;
+            widgets::combo(
+                ui,
+                if cur_addr_hex {
+                    t(I18nKey::HexAddrHex)
+                } else {
+                    t(I18nKey::HexAddrDec)
+                },
+                "",
+                |ui| {
+                    if ui
+                        .selectable_label(cur_addr_hex, t(I18nKey::HexAddrHex))
+                        .clicked()
+                    {
+                        h.addr_hex = true;
+                    }
+                    if ui
+                        .selectable_label(!cur_addr_hex, t(I18nKey::HexAddrDec))
+                        .clicked()
+                    {
+                        h.addr_hex = false;
+                    }
+                },
+            );
+            // 值显示模式（逐字节/小尾/大端）
+            use crate::hexview::HexValueMode;
+            let cur = h.value_mode;
+            let label = match cur {
+                HexValueMode::Raw => t(I18nKey::HexValRaw),
+                HexValueMode::LittleEndian => t(I18nKey::HexValLittle),
+                HexValueMode::BigEndian => t(I18nKey::HexValBig),
+            };
+            widgets::combo(ui, label, "", |ui| {
+                for (mode, k) in [
+                    (HexValueMode::Raw, I18nKey::HexValRaw),
+                    (HexValueMode::LittleEndian, I18nKey::HexValLittle),
+                    (HexValueMode::BigEndian, I18nKey::HexValBig),
+                ] {
+                    if ui.selectable_label(cur == mode, t(k)).clicked() {
+                        h.value_mode = mode;
+                    }
+                }
+            });
+            ui.separator();
+            // P46-3：hex 布局（BC 16进制 边并排/上-下）
+            let cur_l = tab.hex_layout;
+            for (l, k) in [
+                (
+                    super::difftab::HexViewLayout::SideBySide,
+                    I18nKey::HexLayoutSideBySide,
+                ),
+                (
+                    super::difftab::HexViewLayout::TopBottom,
+                    I18nKey::HexLayoutTopBottom,
+                ),
+            ] {
+                if ui.selectable_label(cur_l == l, t(k)).clicked() {
+                    tab.hex_layout = l;
+                }
+            }
+        }
+    }
+    // 缩略图
+    if ui.button(t(I18nKey::MenuThumb)).clicked() {
+        ui.close();
+        with_diff_tab(app, |tab| tab.show_overview = !tab.show_overview);
+    }
+}
+
+/// 文件夹比较视图组（过滤 10 项 / 结构选项）
+fn view_menu_folder(app: &mut DiffApp, ui: &mut egui::Ui) {
+    ui.label(t(I18nKey::MenuFilter));
+    let cur = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::Dir(tab) => Some(tab.view_filter),
+            _ => None,
+        })
+        .unwrap_or(super::dirtab::ViewFilter::All);
+    for (f, key) in [
+        (super::dirtab::ViewFilter::All, I18nKey::ShowAll),
+        (super::dirtab::ViewFilter::Diff, I18nKey::OnlyDiff),
+        (super::dirtab::ViewFilter::Same, I18nKey::ShowSame),
+        (super::dirtab::ViewFilter::Orphans, I18nKey::DirFilterOrphans),
+        (
+            super::dirtab::ViewFilter::NonOrphans,
+            I18nKey::DirFilterNonOrphans,
+        ),
+        (
+            super::dirtab::ViewFilter::DiffNoOrphans,
+            I18nKey::DirFilterDiffNoOrphans,
+        ),
+        (super::dirtab::ViewFilter::LeftNewer, I18nKey::ViewLeftNewer),
+        (
+            super::dirtab::ViewFilter::RightNewer,
+            I18nKey::ViewRightNewer,
+        ),
+        (
+            super::dirtab::ViewFilter::LeftNewerOrOrphan,
+            I18nKey::DirFilterLeftNewerOrOrphan,
+        ),
+        (
+            super::dirtab::ViewFilter::RightNewerOrOrphan,
+            I18nKey::DirFilterRightNewerOrOrphan,
+        ),
+    ] {
+        if ui.selectable_label(cur == f, t(key)).clicked() {
+            if let Tab::Dir(tab) = &mut app.tabs[app.active] {
+                tab.view_filter = f;
+                tab.rebuild_tree();
+            }
+            ui.close();
+        }
+    }
+    ui.separator();
+    // P46-4：结构选项（BC 文件夹比较视图菜单 总是显示文件夹/仅比较文件）
+    let mut show_dirs = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::Dir(tab) => Some(tab.show_all_dirs),
+            _ => None,
+        })
+        .unwrap_or(true);
+    if widgets::check(ui, &mut show_dirs, t(I18nKey::DirShowAllDirs)).changed() {
+        if let Tab::Dir(tab) = &mut app.tabs[app.active] {
+            tab.show_all_dirs = show_dirs;
+            tab.rebuild_tree();
+        }
+    }
+    let mut only_files = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::Dir(tab) => Some(tab.only_files),
+            _ => None,
+        })
+        .unwrap_or(false);
+    if widgets::check(ui, &mut only_files, t(I18nKey::DirOnlyFiles)).changed() {
+        if let Tab::Dir(tab) = &mut app.tabs[app.active] {
+            tab.only_files = only_files;
+            tab.rebuild_tree();
+        }
+    }
+}
+
+/// 表格比较视图组（隐藏相同列 / 列宽自适应）
+fn view_menu_table(app: &mut DiffApp, ui: &mut egui::Ui) {
+    if let Some(Tab::Csv(tab)) = app.tabs.get_mut(app.active) {
+        let mut h = tab.hide_same_cols;
+        if widgets::check(ui, &mut h, t(I18nKey::HideSameCols)).changed() {
+            tab.hide_same_cols = h;
+        }
+        let mut f = tab.auto_fit;
+        if widgets::check(ui, &mut f, t(I18nKey::FitColumns)).changed() {
+            tab.auto_fit = f;
+        }
+    }
+}
+
+/// 图片比较视图组（变换 / 差异模式 / 重置偏移 / 元数据 / 自动缩放）
+fn view_menu_image(app: &mut DiffApp, ui: &mut egui::Ui) {
+    // P57-5：旋转 / 翻转（BC View 菜单）
+    if ui.button(t(I18nKey::ImgRotateCw)).clicked() {
+        ui.close();
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.rotate_cw();
+        }
+    }
+    if ui.button(t(I18nKey::ImgRotateCcw)).clicked() {
+        ui.close();
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.rotate_ccw();
+        }
+    }
+    if ui.button(t(I18nKey::ImgFlipH)).clicked() {
+        ui.close();
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.flip_horizontal();
+        }
+    }
+    if ui.button(t(I18nKey::ImgFlipV)).clicked() {
+        ui.close();
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.flip_vertical();
+        }
+    }
+    ui.separator();
+    // P1：差异模式（BC 容差模式 1 / 不匹配范围模式 2 / 混合模式 3 / 精确）
+    let cur_mode = app.tabs.get(app.active).and_then(|t| match t {
+        Tab::Image(tab) => Some(tab.diff_mode),
+        _ => None,
+    });
+    if let Some(cur) = cur_mode {
+        for (mode, key) in [
+            (crate::imgcmp::DiffMode::Tolerance, I18nKey::ImgModeTolerance),
+            (
+                crate::imgcmp::DiffMode::MismatchRange,
+                I18nKey::ImgModeMismatch,
+            ),
+            (crate::imgcmp::DiffMode::Mixed, I18nKey::ImgModeMixed),
+            (crate::imgcmp::DiffMode::Exact, I18nKey::ImgModeExact),
+        ] {
+            if ui.selectable_label(cur == mode, t(key)).clicked() {
+                if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+                    t.diff_mode = mode;
+                    t.recompute_current();
+                }
+                ui.close();
+            }
+        }
+    }
+    // P1：自动缩放（适应窗口）
+    let fit = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::Image(tab) => Some(tab.fit),
+            _ => None,
+        })
+        .unwrap_or(false);
+    let mut fit = fit;
+    if widgets::check(ui, &mut fit, "自动缩放").changed() {
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.fit = fit;
+        }
+    }
+    ui.separator();
+    // P45-4：重置差异偏移（偏移为 0 时置灰，见 design-tokens grayedRules）
+    if menu_item_state(
+        ui,
+        t(I18nKey::ImgResetOffset),
+        String::new(),
+        image_offset_nonzero(app),
+        false,
+    )
+    .clicked()
+    {
+        ui.close();
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.reset_diff_offset();
+        }
+    }
+    // P45-4：比较元数据
+    if ui.button(t(I18nKey::ImgCompareMeta)).clicked() {
+        ui.close();
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.compare_meta();
+        }
+    }
+    // 文件信息（元数据面板）
+    let sm = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::Image(tab) => Some(tab.show_meta),
+            _ => None,
+        })
+        .unwrap_or(false);
+    let mut sm = sm;
+    if widgets::check(ui, &mut sm, t(I18nKey::MenuFileInfo)).changed() {
+        if let Some(Tab::Image(t)) = app.tabs.get_mut(app.active) {
+            t.show_meta = sm;
+        }
+    }
+}
+
+/// 媒体比较视图组（当前无视图级状态，仅保留共有尾部）
+fn view_menu_media(_app: &mut DiffApp, _ui: &mut egui::Ui) {
+    // BC 媒体视图菜单（波形/频谱/元数据）尚无对应状态；保留共有尾部（图例/日志/工具栏）。
+}
+
+/// 文本合并视图组（输出预览）
+fn view_menu_merge(app: &mut DiffApp, ui: &mut egui::Ui) {
+    let sp = app.tabs.get(app.active).and_then(|t| match t {
+        Tab::Merge(tab) => Some(tab.show_preview),
+        _ => None,
+    });
+    if let Some(sp) = sp {
+        let mut sp = sp;
+        if widgets::check(ui, &mut sp, "预览").changed() {
+            if let Some(Tab::Merge(t)) = app.tabs.get_mut(app.active) {
+                t.show_preview = sp;
+            }
+        }
+    }
+}
+
+/// 文本编辑视图组（行号 / 自动换行 / 文件信息）
+fn view_menu_text_edit(app: &mut DiffApp, ui: &mut egui::Ui) {
+    // P46-1：TextEdit 视图开关（BC 文本编辑视图菜单 行号/自动换行/文件信息）
+    let show_ln = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::TextEdit(tab) => Some(tab.show_line_numbers),
+            _ => None,
+        })
+        .unwrap_or(true);
+    let mut show_ln = show_ln;
+    if widgets::check(ui, &mut show_ln, t(I18nKey::MenuLineNumbers)).changed() {
+        if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
+            tab.show_line_numbers = show_ln;
+        }
+    }
+    let show_wrap = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::TextEdit(tab) => Some(tab.show_wrap),
+            _ => None,
+        })
+        .unwrap_or(false);
+    let mut show_wrap = show_wrap;
+    if widgets::check(ui, &mut show_wrap, t(I18nKey::WordWrap)).changed() {
+        if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
+            tab.show_wrap = show_wrap;
+        }
+    }
+    let show_fi = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::TextEdit(tab) => Some(tab.show_file_info),
+            _ => None,
+        })
+        .unwrap_or(true);
+    let mut show_fi = show_fi;
+    if widgets::check(ui, &mut show_fi, t(I18nKey::MenuFileInfo)).changed() {
+        if let Tab::TextEdit(tab) = &mut app.tabs[app.active] {
+            tab.show_file_info = show_fi;
+        }
+    }
+}
+
+/// 文件夹合并视图组（BC View 菜单 显示全部/更改/冲突/左变/右变/可合并/未变化，1-7）
+fn view_menu_folder_merge(app: &mut DiffApp, ui: &mut egui::Ui) {
+    ui.label(t(I18nKey::MenuFilter));
+    let cur = app
+        .tabs
+        .get(app.active)
+        .and_then(|t| match t {
+            Tab::FolderMerge(tab) => Some(tab.view_filter),
+            _ => None,
+        })
+        .unwrap_or(super::foldermergetab::MergeFilter::All);
+    for (f, key) in [
+        (
+            super::foldermergetab::MergeFilter::All,
+            I18nKey::MergeFilterAll,
+        ),
+        (
+            super::foldermergetab::MergeFilter::Changed,
+            I18nKey::MergeFilterChanged,
+        ),
+        (
+            super::foldermergetab::MergeFilter::Conflict,
+            I18nKey::MergeFilterConflict,
+        ),
+        (
+            super::foldermergetab::MergeFilter::LeftChanged,
+            I18nKey::MergeFilterLeftChanged,
+        ),
+        (
+            super::foldermergetab::MergeFilter::RightChanged,
+            I18nKey::MergeFilterRightChanged,
+        ),
+        (
+            super::foldermergetab::MergeFilter::Mergeable,
+            I18nKey::MergeFilterMergeable,
+        ),
+        (
+            super::foldermergetab::MergeFilter::Unchanged,
+            I18nKey::MergeFilterUnchanged,
+        ),
+    ] {
+        if ui.selectable_label(cur == f, t(key)).clicked() {
+            if let Tab::FolderMerge(tab) = &mut app.tabs[app.active] {
+                tab.view_filter = f;
+            }
+            ui.close();
+        }
+    }
+}
+
+/// 补丁视图组（当前无视图级状态，仅保留共有尾部）
+fn view_menu_patch(_app: &mut DiffApp, _ui: &mut egui::Ui) {
+    // BC 补丁视图无专属视图菜单项；保留共有尾部（图例/日志/工具栏）。
 }
 
 /// Tools：Git 配置 / 会话中心 / 规则 / 云盘 / 外部工具
@@ -1398,20 +1703,24 @@ fn tools_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
 /// P44-1：窗口菜单（BC Window>选择下一/上一标签页/最小化/关闭所有窗口）
 fn window_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuWindow), |ui| {
-        if app.tabs.is_empty() {
-            ui.add_enabled(false, egui::Button::new(t(I18nKey::MenuNextTab)));
-            ui.add_enabled(false, egui::Button::new(t(I18nKey::MenuPrevTab)));
-            ui.add_enabled(false, egui::Button::new(t(I18nKey::MenuCloseAllWindows)));
-            return;
-        }
-        if menu_item(ui, t(I18nKey::MenuNextTab), sc("⌘]", "Ctrl+]")).clicked() {
+        // P1：多标签项在 tabs.len() <= 1 时置灰（BC 窗口菜单）
+        let (multi_tab, _) = menu_flags(app);
+        if menu_item_state(ui, t(I18nKey::MenuNextTab), sc("⌘]", "Ctrl+]"), multi_tab, false)
+            .clicked()
+        {
             ui.close();
             app.next_tab();
         }
-        if menu_item(ui, t(I18nKey::MenuPrevTab), sc("⌘[", "Ctrl+[")).clicked() {
+        if menu_item_state(ui, t(I18nKey::MenuPrevTab), sc("⌘[", "Ctrl+["), multi_tab, false)
+            .clicked()
+        {
             ui.close();
             app.prev_tab();
         }
+        // 移动标签页到新窗口 / 合并所有窗口：单窗口应用暂无实现，
+        // 按 BC 结构占位并遵守可用性规则（>1 标签时可点，动作待实现）。
+        menu_item_state(ui, "移动标签页到新窗口", String::new(), multi_tab, false);
+        menu_item_state(ui, "合并所有窗口", String::new(), multi_tab, false);
         ui.separator();
         if menu_item(ui, t(I18nKey::MenuMinimize), sc("⌘M", "Ctrl+M")).clicked() {
             ui.close();
