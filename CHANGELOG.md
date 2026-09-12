@@ -6,6 +6,22 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 
 ## [Unreleased]
 
+### BC 5.2.5 设计稿对齐（P65 · 编辑菜单标准动作接线 + 窗口菜单多窗口）
+
+> 收口 P64 记录的最后 7 项菜单缺口（`design/BC菜单和状态栏/screens/menus.html` 画板①②）。
+
+- **编辑菜单五项真实接线（剪切 ⌘X / 复制 ⌘C / 粘贴 ⌘V / 删除 / 全选 ⌘A）**：新增 `src/gui/edit_ops.rs`（纯函数：char 索引选区钳位 / 取值 / 替换 + arboard 剪贴板读写）与 `TextEditTab::apply_edit_op`——文本编辑会话的选区来自 `egui::TextEdit`（char 索引），动作改内容而非注入合成键，故可脱离输入事件单测；全选/替换后把选区与光标写回 `TextEditState` 并请求焦点（`sync_egui_cursor`），egui 里立刻可见
+- **置灰规则（设计稿 `menus.grayedRules`）**：只读比较会话（Diff/Dir/Csv/Image/Media/Patch）与主页一律置灰；文本编辑会话（编辑模式，语法高亮预览时为只读渲染亦置灰）可用；新增 `menu_rules::clipboard_ops_enabled`，窗口内菜单栏与 macOS/Windows 原生菜单（muda，带 Accelerator）共用同一判定
+- **撤销/重做路由修复**：此前窗口内菜单与原生菜单的撤销/重做只转发 `DiffTab`，文本编辑/合并会话里点撤销是**空操作**（菜单却按设计稿显示可用）；现按会话类型转发（Diff 行编辑 / TextEdit 文本 / Merge 冲突解决），`MergeTab` 新增解决动作撤销/重做栈（`push_snapshot`，上限 100 步，撤销后未解决冲突数与状态栏同步）
+- **窗口菜单「移动标签页到新窗口」**：新增 CLI `--workspace <file>`（启动即载入工作空间）+ `DiffApp::move_tab_to_new_window`——把当前标签写成单标签工作空间（临时目录），启动新进程 `bcr gui --workspace <file>`，并在本窗口关闭该标签；未保存的内存态会话（文本编辑/补丁/文件夹合并）拒绝移动并给出提示
+- **窗口菜单「合并所有窗口」**：新增 `src/gui/windows.rs` 窗口注册表（`~/.bcr-windows/window-<pid>.toml`，心跳 2 秒 / TTL 10 秒，`BCR_WINDOWS_DIR` 可覆盖，原子写）——每个 GUI 进程登记自己的可重建会话；合并时把对端会话在本窗口重建，**仅对「全部标签都可重建」的对端**写 `<pid>.merge` 退出请求（含未保存编辑缓冲区的窗口保持原样，避免丢内容）；空闲窗口每秒请求一次重绘以确保心跳与退出请求按时生效
+- **多窗口置灰规则**：`menu_rules::move_tab_enabled` / `merge_windows_enabled`——单标签时两项都置灰（设计稿窗口菜单规则）；「移动」还要求当前标签有可重建的会话表示，「合并」要求存在心跳有效的对端窗口
+- **顺带收敛**：`save_workspace` / `load_workspace` 改用统一的 `tab_session` / `tab_from_session`（工作空间与多窗口共用一份类型映射，现覆盖 diff/dir/merge/image/csv/media 六种会话往返）；窗口菜单「选择上一个/下一个标签页」快捷键文案对齐设计稿 ⇧⌘[ / ⇧⌘]
+- **i18n**：新增 `MenuCut/MenuCopy/MenuPaste/MenuDelete/MenuMoveTabToWindow/MenuMergeAllWindows` 六键 × 10 语言
+- **验收**：`cargo test` 657 全绿（新增 21 条：纯函数 5、文本编辑会话 6、合并撤销 2、菜单规则 4、窗口注册表 5、应用级路由/多窗口 4 等）；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 干净
+- **真实 GUI 实测（macOS，AX + 辅助功能驱动 + 剪贴板回读）**：只读比较会话「剪切/复制/粘贴/删除/全选」全为 off、文本编辑会话全为 on；「编辑>全选」后 ⌘C 复制到整篇文件内容；「编辑>粘贴」把剪贴板追加进缓冲区；「编辑>全选 > 删除 > 粘贴」后读回仅剩粘贴内容（删除生效）；「编辑>剪切 > 撤销」内容恢复；窗口菜单在单标签时「移动标签页到新窗口/合并所有窗口」为 off，多标签时为 on；点击「移动标签页到新窗口」写出 `bcr-move-<pid>-1.toml` 并新起进程（源窗口标签 3→2）；点击「合并所有窗口」后对端窗口自行退出、源窗口标签 2→3
+- **仍缺（已明确边界）**：① 合并会话（左/右/输出三栏）的这 5 项仍置灰——本实现左/右栏是「对齐后的绘制行」、无文本选区模型，输出栏按设计稿为只读（设计稿要求左右栏可编辑，需先补合并栏的文本编辑模型）；② 窗口菜单的「最小化全部 / 缩放 / 缩放全部 / 全部前移 / 在前面排列」为 macOS 系统级窗口项，未实现（画板①中为可用态，但不属于对比工具功能）
+
 ### BC 5.2.5 设计稿对齐（P60 · 菜单与状态栏）
 
 - **设计稿入库**：`design/BC菜单和状态栏/`（8 张会话稿 + `menus.html` + `status-bar.html` + `交接/实现交接.md` + `交接/design-tokens.json`），作为 UI 对齐的唯一设计基准
