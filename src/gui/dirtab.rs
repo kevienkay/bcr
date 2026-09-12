@@ -1363,7 +1363,8 @@ impl DirTab {
             self.refresh();
         }
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
-            egui::Panel::top("dirtab_tools").show(ui, |ui| {
+            let tools = egui::Panel::top("dirtab_tools").min_size(crate::gui::theme::TOOLBAR_H);
+            tools.show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     // P31 路径栏：左路径 ⇄ 右路径（弱色只读，BC 观感）
                     ui.label(

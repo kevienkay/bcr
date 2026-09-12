@@ -130,7 +130,8 @@ impl MediaTab {
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         // 工具栏：重新加载 / 交换两侧
-        egui::Panel::top("mediatab_tools").show(ui, |ui| {
+        let tools = egui::Panel::top("mediatab_tools").min_size(crate::gui::theme::TOOLBAR_H);
+        tools.show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if widgets::stack_button(ui, icons::Icon::Refresh, t(I18nKey::Reload), "", 15.0)
                     .clicked()

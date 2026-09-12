@@ -714,7 +714,8 @@ impl CsvTab {
             }
         }
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
-            egui::Panel::top("csvtab_tools").show(ui, |ui| {
+            let tools = egui::Panel::top("csvtab_tools").min_size(crate::gui::theme::TOOLBAR_H);
+            tools.show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     // 主键下拉
                     let opts = self.key_options();

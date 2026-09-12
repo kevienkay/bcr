@@ -413,7 +413,8 @@ impl MergeTab {
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
-            egui::Panel::top("mergetab_tools").show(ui, |ui| {
+            let tools = egui::Panel::top("mergetab_tools").min_size(crate::gui::theme::TOOLBAR_H);
+            tools.show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     if widgets::stack_button(ui, icons::Icon::Refresh, t(I18nKey::Reload), "", 15.0)
                         .clicked()

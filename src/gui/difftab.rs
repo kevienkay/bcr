@@ -2289,7 +2289,8 @@ impl DiffTab {
         // 搜索/跳转工具条
         // P42-4：工具栏开关（BC View>工具栏）
         if super::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
-            egui::Panel::top("difftab_tools").show(ui, |ui| {
+            let tools = egui::Panel::top("difftab_tools").min_size(crate::gui::theme::TOOLBAR_H);
+            tools.show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     // ---- 打开（BC: Open 按钮组）----
                     if widgets::stack_button(

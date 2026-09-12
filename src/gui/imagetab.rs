@@ -383,7 +383,8 @@ impl ImageTab {
         self.ensure_textures(ui.ctx());
         // 工具栏
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
-            egui::Panel::top("img-toolbar").show(ui, |ui| {
+            let tools = egui::Panel::top("img-toolbar").min_size(crate::gui::theme::TOOLBAR_H);
+            tools.show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     if ui.button("↺").on_hover_text("重新加载").clicked() {
                         let (l, r) = (self.left.clone(), self.right.clone());

@@ -249,7 +249,9 @@ impl FolderMergeTab {
             }
         }
         if crate::gui::common::SHOW_TOOLBAR.load(std::sync::atomic::Ordering::Relaxed) {
-            egui::Panel::top("foldermerge_tools").show(ui, |ui| {
+            let tools =
+                egui::Panel::top("foldermerge_tools").min_size(crate::gui::theme::TOOLBAR_H);
+            tools.show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     if widgets::stack_button(
                         ui,

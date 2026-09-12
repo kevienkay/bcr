@@ -1773,13 +1773,17 @@ impl eframe::App for DiffApp {
 
         // 顶部菜单栏（P33）：仅 Linux 显示窗口内菜单栏（macOS/Windows 用 muda 原生菜单）。
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        egui::Panel::top("menu").show(ui, |ui| {
+        let menu_panel = egui::Panel::top("menu").min_size(crate::gui::theme::MENUBAR_H);
+        // cfg 属性只作用于单条语句，拆成两条时需各自标注
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        menu_panel.show(ui, |ui| {
             menubar::menu_bar(self, ui);
         });
 
         // 标签栏（P33：菜单栏之下独立一行，BC 观感）
         // P56-UI：顶部工具栏区加垂直渐变底（上亮下暗）+ 底部 1px 分隔线，与内容区层次分明
-        egui::Panel::top("tabbar").show(ui, |ui| {
+        let tabbar_panel = egui::Panel::top("tabbar").min_size(crate::gui::theme::TABBAR_H);
+        tabbar_panel.show(ui, |ui| {
             let full = ui.available_rect_before_wrap();
             let dark = ui.visuals().dark_mode;
             let (top_c, bot_c) = if dark {
@@ -3257,7 +3261,10 @@ impl DiffApp {
 
     fn status_bar(&self, ui: &mut egui::Ui) {
         // BC 5.2.5 设计稿：状态栏两行分格（第 1 行通用 / 第 2 行按视图）
-        egui::Panel::bottom("status_bar").show(ui, |ui| {
+        let status_panel = egui::Panel::bottom("status_bar")
+            .frame(egui::Frame::NONE)
+            .exact_size(theme::STATUSBAR_H);
+        status_panel.show(ui, |ui| {
             let dark = ui.visuals().dark_mode;
             // 面板底色 #DFE4EA（设计稿 bg-status）
             let full = ui.available_rect_before_wrap();
@@ -3269,6 +3276,8 @@ impl DiffApp {
                 egui::Stroke::new(1.0, theme::mid_sep(dark)),
             );
             ui.spacing_mut().item_spacing.x = 0.0;
+            // 两行紧贴：行间距归零，48px 全留给两行 ×24px（设计稿 layout.statusbar）
+            ui.spacing_mut().item_spacing.y = 0.0;
 
             // ===== 第 1 行：通用（所有会话类型）=====
             let row1_top = ui.cursor().top();
