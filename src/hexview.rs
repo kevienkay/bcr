@@ -24,10 +24,15 @@ pub fn build_hex_rows(left: &[u8], right: &[u8]) -> Vec<HexRow> {
     let mut offset = 0usize;
     while offset < n {
         let end = (offset + 16).min(n);
+        // 外层 offset 按两侧较长的推进，故短的那侧在后续分块里
+        // offset 已越过自身长度（如 16B vs 33B 的第三块）——
+        // 取值前必须按各自长度钳位，否则 `[offset..end]` 起始越界 panic。
+        let l_start = offset.min(left.len());
+        let r_start = offset.min(right.len());
         let l_end = left.len().min(end);
         let r_end = right.len().min(end);
-        let l = left[offset..l_end].to_vec();
-        let r = right[offset..r_end].to_vec();
+        let l = left[l_start..l_end].to_vec();
+        let r = right[r_start..r_end].to_vec();
         let diff = l != r;
         rows.push(HexRow {
             offset,
@@ -284,6 +289,32 @@ mod tests {
         let rows = build_hex_rows(b"", b"x");
         assert_eq!(rows.len(), 1);
         assert!(rows[0].diff);
+    }
+
+    /// 回归：短的一侧在后续分块里 offset 已越过自身长度，不得越界 panic。
+    /// 实例：`gui pkg_v1.zip pkg_v2.zip`（2725B vs 1726B）在 offset=1728 越界。
+    #[test]
+    fn shorter_side_past_own_length_does_not_panic() {
+        // 16B vs 33B：第三块 offset=32 已越过左侧长度
+        let rows = build_hex_rows(&[0u8; 16], &[0u8; 33]);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[2].offset, 32);
+        assert!(rows[2].left.is_empty(), "左侧越界块应为空");
+        assert_eq!(rows[2].right.len(), 1);
+        assert!(rows[2].diff);
+
+        // 反向：短侧在右
+        let rows = build_hex_rows(&[0u8; 33], &[0u8; 16]);
+        assert_eq!(rows.len(), 3);
+        assert!(rows[2].right.is_empty());
+        assert_eq!(rows[2].left.len(), 1);
+
+        // 复现打包样例的落点：1726B vs 2725B
+        let l = vec![1u8; 2725];
+        let r = vec![2u8; 1726];
+        let rows = build_hex_rows(&l, &r);
+        assert_eq!(rows.len(), 2725usize.div_ceil(16));
+        assert!(rows.last().unwrap().right.is_empty());
     }
 
     #[test]
