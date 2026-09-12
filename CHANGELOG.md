@@ -32,6 +32,18 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **基准图刷新**：`ui_review/baseline-2026-09-12/`（无头快照 12 张 + `analyze.py` 分析），用于后续逐视图回归比对。
 - **验证**：`cargo test` 615+4 全绿；`cargo fmt --check`；`cargo clippy --all-targets -- -D warnings`。客观核验——浅色快照仍含设计稿 pastel（`#FBF0C8` 5.6% / `#CCE1D8` 0.8%），深色快照已无任何浅色 pastel。
 
+### BC 5.2.5 设计稿对齐（P63 · 布局常量接线）
+
+- **布局常量接线**：`design-tokens.json` 的 `layout` 常量（`MENUBAR_H` 30 / `TABBAR_H` 40 / `TOOLBAR_H` 56 / `STATUSBAR_H` 48）此前只是 token 目录（带 `allow(dead_code)`），绘制代码从未引用。本轮接入 9 个视图的工具栏面板（`min_size`）+ 标签栏 + 窗口内菜单带 + 状态栏（`Frame::NONE` + `exact_size` + 行间距归零）。实测：标签栏 38→**39px**、工具栏 40→**55px**、状态栏 58→**48px**（皆与设计稿一致）。
+- **坑**：`exact_size` 按外框裁剪内容（窄视口下工具栏按钮换行会裁掉搜索框，导致两条 uikit 用例失败），故工具栏用 `min_size`（下限=设计值、允许内容长高），只有内容固定为 2×24 的状态栏用 `exact_size`；`cfg` 属性只作用于单条语句，把 `#[cfg] Panel::top(..).show(..)` 拆成 `let` + `show` 两条时需各自标注。
+
+### BC 5.2.5 设计稿对齐（P64 · 压缩包会话与菜单态核对）
+
+- **修 hexview 越界 panic**（`fc5513a`）：`build_hex_rows` 用两侧较长者推进 `offset`，但取值时两侧共用同一 `offset`，短的另一侧在后续分块里已越界 → 比较任意两个**大小不同**的二进制文件都会 panic（实测 `gui pkg_v1.zip pkg_v2.zip`）。修法：取值前按各自长度钳位起始下标，补回归用例。
+- **压缩包以文件夹会话打开**（`b5c9b03`，设计稿 folder-compare 画板②）：新增 `vfs::archive_spec`（本地归档路径 → `zip://`/`tar://`/`7z://` 规范，带单测）；GUI 两条文件路由（CLI + 拖拽）统一判定「两侧均为压缩包 → `DirTab`」；并补上 CLI 缺失的**媒体**判定（与拖拽路径对齐）。`DirTab::refresh` 在任一侧为虚拟后端时改走 `compare_vfs`（原先只走本地 `compare_dirs`，导致 `zip://` 扫不到内容、内容区空白）。实测：压缩包对现为文件夹会话，列头 名称/大小/已修改/属性，状态栏「✗ 5 个差异部分 · 相同1 删除1 插入1 修改3」。
+- **菜单展开态核对**（`menus.html` 3 张画板）：以 AX（`kAXEnabledAttribute`）为权威 + 全屏截图（展开态经像素校验，差异率阈值 0.002）。实测**只读**比较会话「撤销/重做/补丁全选/目录全选」为 `off`、**合并**会话「编辑」菜单全部 `ON`，与 §5.1 规则一致。
+- **已知缺口**（设计稿有、原生菜单未提供，共 10 项）：`关闭标签页 / 关闭其它标签页 / 剪切 / 复制 / 粘贴 / 删除 / 全选 / 选择选择内容 / 移动标签页到新窗口 / 合并所有窗口` —— 待补齐菜单项时一并接入。
+
 ### 正式安装流程（P59）
 
 - **Windows MSI 完整化**：重写 `scripts/package-windows.ps1`——WiX 构建完整安装向导（License 页 + 目录选择 + 完成页）、开始菜单快捷方式、控制面板卸载入口（ARP 含 Manufacturer/HelpLink/图标）、perMachine 安装 + MajorUpgrade 自动升级；`build.rs` 用 winresource 把 `assets/bcr.ico` 嵌入 bcr.exe 资源节；zip 便携版保留
