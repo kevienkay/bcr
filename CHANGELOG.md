@@ -25,6 +25,13 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **状态栏第二行收口**：图片（遮罩图例 · 差异像素占比 · 偏移）、媒体（波形差异区段 · 进度 · 模式）、合并（冲突数 · 已解决 n/N · 输出路径）三个视图的第 2 行字段统一并入 `mod.rs:status_bar`，移除三处 tab 内重复状态条，保证「单一两行状态栏」与设计稿一致
 - **新增纯函数单测**：小地图色块生成、45° 斜纹线段、权限串与列字母（含 AA 边界）、WAV 解码与包络降采样、波形差异区段、冲突计数 / 已解决 / 输出路径文案
 
+### BC 5.2.5 设计稿对齐（P62 · P3 收口）
+
+- **深色主题同步**：P60 引入的差异/状态语义色（仅左红 · 仅右琥珀 · 已修改蓝 · 二进制紫）此前**无 dark 分支**，深色主题下会把浅色 pastel 当行底铺到深色行上（烧亮块）。本轮补齐 `bg_left_only / bg_modified_l·r / diff_ins_bg / status_left·right·modified·binary / (bg_only_left·right / bg_modified_row / bg_binary_row)` 共 12 个函数的 dark 分支，深色一律取**同语义半透明饱和色**（与 `hl_*` 家族同口径）；浅色分支保持设计稿采样值不变。
+- **调用点透传**：`common.rs` 的 `bg_delete/bg_insert/bg_replace_l·r` 别名与 `status_color`、`theme::status_fg`，以及 `mod.rs`（图例与差异计数）、`difftab`（行底色 / hex 行）、`csvtab`（行底色 / 单元格描边）、`dirtab`（文件夹行四态底）、`mergetab`（`merge_row_bg`）、`patchtab`（行底色）共 14 处调用点改为按当前主题取色。
+- **基准图刷新**：`ui_review/baseline-2026-09-12/`（无头快照 12 张 + `analyze.py` 分析），用于后续逐视图回归比对。
+- **验证**：`cargo test` 615+4 全绿；`cargo fmt --check`；`cargo clippy --all-targets -- -D warnings`。客观核验——浅色快照仍含设计稿 pastel（`#FBF0C8` 5.6% / `#CCE1D8` 0.8%），深色快照已无任何浅色 pastel。
+
 ### 正式安装流程（P59）
 
 - **Windows MSI 完整化**：重写 `scripts/package-windows.ps1`——WiX 构建完整安装向导（License 页 + 目录选择 + 完成页）、开始菜单快捷方式、控制面板卸载入口（ARP 含 Manufacturer/HelpLink/图标）、perMachine 安装 + MajorUpgrade 自动升级；`build.rs` 用 winresource 把 `assets/bcr.ico` 嵌入 bcr.exe 资源节；zip 便携版保留
