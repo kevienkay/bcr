@@ -277,6 +277,10 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
 /// 只映射原生菜单里**确实存在**的项；设计稿提到但原生菜单尚未提供的项
 /// （关闭标签页 / 关闭其它标签页 / 移动标签页到新窗口 / 合并所有窗口 /
 /// 剪切 / 复制 / 粘贴 / 删除）留待补齐菜单项时一并接入。
+///
+/// Linux 无原生菜单（见模块头注释），此函数仅在测试中被调用，故按本文件
+/// 既有惯例在 Linux 目标上放行 dead_code（与 `MenuCmd` 同处理）。
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 pub fn menu_state_plan(app: &crate::gui::DiffApp) -> Vec<(&'static str, bool)> {
     let (multi_tab, edit_enabled) = crate::gui::menu_rules::menu_flags(app);
     let image_offset = crate::gui::menu_rules::image_offset_nonzero(app);
