@@ -2534,10 +2534,7 @@ pub(crate) fn permissions_string(path: &std::path::Path) -> String {
 
 /// 属性列文本：优先用扫描到的权限位（含压缩包/远程后端），
 /// 无权限位（非 Unix 后端）时回退到 fs::metadata；两者都不可用则为空串。
-pub(crate) fn attr_text(
-    meta: Option<&crate::fsscan::FileMeta>,
-    full: &std::path::Path,
-) -> String {
+pub(crate) fn attr_text(meta: Option<&crate::fsscan::FileMeta>, full: &std::path::Path) -> String {
     match meta {
         Some(m) => match m.mode {
             Some(mode) => mode_to_rwx(mode),

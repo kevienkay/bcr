@@ -4021,8 +4021,10 @@ pub fn run(args: &GuiArgs) -> i32 {
 
 /// 状态栏单元格竖向分隔线（设计稿：1px #C7CDD4，贯穿行高）
 fn status_vsep(ui: &mut egui::Ui, dark: bool) {
-    let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(1.0, theme::STATUSBAR_ROW_H), egui::Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(1.0, theme::STATUSBAR_ROW_H),
+        egui::Sense::hover(),
+    );
     ui.painter().vline(
         rect.center().x,
         rect.y_range(),

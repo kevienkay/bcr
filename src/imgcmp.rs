@@ -977,7 +977,10 @@ mod p2_tests {
     fn mask_colors_match_design_tokens() {
         // BC 5.2.5 设计稿：mask-left #E13C32 / mask-right #FFC83C
         // （theme::mask_left()/mask_right() 为同一组色值）
-        assert_eq!([MASK_LEFT[0], MASK_LEFT[1], MASK_LEFT[2]], [0xE1, 0x3C, 0x32]);
+        assert_eq!(
+            [MASK_LEFT[0], MASK_LEFT[1], MASK_LEFT[2]],
+            [0xE1, 0x3C, 0x32]
+        );
         assert_eq!(
             [MASK_RIGHT[0], MASK_RIGHT[1], MASK_RIGHT[2]],
             [0xFF, 0xC8, 0x3C]

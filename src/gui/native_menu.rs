@@ -740,9 +740,9 @@ mod tests {
     #[test]
     fn menu_state_plan_enables_edit_for_merge_and_multi_tab() {
         let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
-        app.add_tab(crate::gui::Tab::Merge(super::super::mergetab::MergeTab::new(
-            "", "", "",
-        )));
+        app.add_tab(crate::gui::Tab::Merge(
+            super::super::mergetab::MergeTab::new("", "", ""),
+        ));
         // 可编辑会话：编辑项可用
         assert!(plan_enabled(&app, "undo"), "合并会话：撤销应可用");
         // 仍是单标签：多标签项依旧置灰

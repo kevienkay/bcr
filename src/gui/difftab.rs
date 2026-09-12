@@ -3849,7 +3849,10 @@ fn paint_diff_row(
     }
     let mid_gap = super::theme::MID_GAP;
     let (rect, resp) = ui.allocate_exact_size(
-        Vec2::new(gutter_l + content_w + mid_gap + gutter_r + content_w, ROW_H_CODE),
+        Vec2::new(
+            gutter_l + content_w + mid_gap + gutter_r + content_w,
+            ROW_H_CODE,
+        ),
         egui::Sense::click(),
     );
     let x = rect.left();
@@ -3911,10 +3914,7 @@ fn paint_diff_row(
     if row.left.is_none() {
         paint_hatch(
             ui,
-            Rect::from_min_size(
-                Pos2::new(x, y),
-                vec2(gutter_l + content_w, ROW_H_CODE),
-            ),
+            Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l + content_w, ROW_H_CODE)),
             ui.visuals().dark_mode,
         );
     }
@@ -4045,16 +4045,14 @@ fn paint_diff_row(
     let gutter_rect = Rect::from_min_size(Pos2::new(x_r, y), vec2(gutter_r, ROW_H_CODE));
     paint_bg(ui, gutter_rect, gutter_bg);
     paint_line_no(ui, gutter_rect, row.right_no);
-    let content_rect = Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H_CODE));
+    let content_rect =
+        Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H_CODE));
     paint_bg(ui, content_rect, bg_r);
     // P2：对侧缺行 → 该侧 gutter+content 铺 45° 斜纹（文件末尾之后同样铺）
     if row.right.is_none() {
         paint_hatch(
             ui,
-            Rect::from_min_size(
-                Pos2::new(x_r, y),
-                vec2(gutter_r + content_w, ROW_H_CODE),
-            ),
+            Rect::from_min_size(Pos2::new(x_r, y), vec2(gutter_r + content_w, ROW_H_CODE)),
             ui.visuals().dark_mode,
         );
     }
@@ -4092,7 +4090,8 @@ fn paint_diff_row(
     // P32-A2：双击行内容 → 进入行内编辑（左/右内容区命中）
     if resp.double_clicked() {
         if let Some(pos) = resp.interact_pointer_pos() {
-            let left_zone = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H_CODE));
+            let left_zone =
+                Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H_CODE));
             let right_zone =
                 Rect::from_min_size(Pos2::new(x_r + gutter_r, y), vec2(content_w, ROW_H_CODE));
             if left_zone.contains(pos) {
@@ -4165,7 +4164,8 @@ fn paint_diff_row_v(
         let gutter_rect = Rect::from_min_size(Pos2::new(x, y), vec2(gutter_l, ROW_H_CODE));
         paint_bg(ui, gutter_rect, Some(gutter_bg));
         paint_line_no(ui, gutter_rect, row.left_no);
-        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H_CODE));
+        let content_rect =
+            Rect::from_min_size(Pos2::new(x + gutter_l, y), vec2(content_w, ROW_H_CODE));
         paint_bg(ui, content_rect, l_bg);
         // P2：对侧缺行 → 斜纹留白（上半=左侧）
         if row.left.is_none() {
@@ -4212,7 +4212,8 @@ fn paint_diff_row_v(
         let gutter_rect = Rect::from_min_size(Pos2::new(x, y2), vec2(gutter_r, ROW_H_CODE));
         paint_bg(ui, gutter_rect, Some(gutter_bg));
         paint_line_no(ui, gutter_rect, row.right_no);
-        let content_rect = Rect::from_min_size(Pos2::new(x + gutter_r, y2), vec2(content_w, ROW_H_CODE));
+        let content_rect =
+            Rect::from_min_size(Pos2::new(x + gutter_r, y2), vec2(content_w, ROW_H_CODE));
         paint_bg(ui, content_rect, r_bg);
         // P2：对侧缺行 → 斜纹留白（下半=右侧）
         if row.right.is_none() {

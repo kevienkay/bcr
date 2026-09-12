@@ -952,7 +952,10 @@ mod p2_tests {
 
     #[test]
     fn output_label_uses_basename_or_placeholder() {
-        assert_eq!(output_label(Some("/tmp/out/merged.txt")), "输出: merged.txt");
+        assert_eq!(
+            output_label(Some("/tmp/out/merged.txt")),
+            "输出: merged.txt"
+        );
         assert_eq!(output_label(Some("merged.txt")), "输出: merged.txt");
         assert_eq!(output_label(None), "输出: 未保存");
         assert_eq!(output_label(Some("")), "输出: 未保存");

@@ -85,7 +85,10 @@ impl MediaTab {
 
     /// P2：波形时长（优先左，其次右；均无则 None）
     pub(crate) fn wave_duration_secs(&self) -> Option<f64> {
-        for p in [self.wave_l.as_ref(), self.wave_r.as_ref()].into_iter().flatten() {
+        for p in [self.wave_l.as_ref(), self.wave_r.as_ref()]
+            .into_iter()
+            .flatten()
+        {
             if !p.samples.is_empty() {
                 return Some(p.duration_secs());
             }
@@ -238,7 +241,6 @@ impl MediaTab {
             }
         });
     }
-
 }
 
 // ===== P2（BC 5.2.5）：波形差异区段 / 状态栏第二行 =====
@@ -275,7 +277,13 @@ pub(crate) fn timecode(secs: f64) -> String {
     let total_ms = (secs.max(0.0) * 1000.0).round() as u64;
     let ms = total_ms % 1000;
     let s = total_ms / 1000;
-    format!("{}:{}:{}.{:03}", fmt2(s / 3600), fmt2((s / 60) % 60), fmt2(s % 60), ms)
+    format!(
+        "{}:{}:{}.{:03}",
+        fmt2(s / 3600),
+        fmt2((s / 60) % 60),
+        fmt2(s % 60),
+        ms
+    )
 }
 
 fn fmt2(v: u64) -> String {

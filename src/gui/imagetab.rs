@@ -903,7 +903,10 @@ mod p2_tests {
             diff_ratio: 0.0498,
             bounds: None,
         };
-        assert_eq!(ImageTab::diff_pixel_summary(Some(s)), "差异像素 31,842 · 占 4.98%");
+        assert_eq!(
+            ImageTab::diff_pixel_summary(Some(s)),
+            "差异像素 31,842 · 占 4.98%"
+        );
     }
 
     #[test]

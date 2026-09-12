@@ -258,9 +258,8 @@ fn decode_sample(b: &[u8], bits: u16, is_float: bool) -> Option<f32> {
             Some(v as f32 / 32768.0)
         }
         (24, false) => {
-            let raw = (*b.first()? as i32)
-                | ((*b.get(1)? as i32) << 8)
-                | ((*b.get(2)? as i32) << 16);
+            let raw =
+                (*b.first()? as i32) | ((*b.get(1)? as i32) << 8) | ((*b.get(2)? as i32) << 16);
             // 24 → 32 位符号扩展
             let v = (raw << 8) >> 8;
             Some(v as f32 / 8_388_608.0)
@@ -299,12 +298,8 @@ pub fn read_wav_pcm_bytes(data: &[u8]) -> Option<PcmData> {
     let mut pcm_bytes: Option<&[u8]> = None;
     while pos + 8 <= data.len() {
         let id = &data[pos..pos + 4];
-        let size = u32::from_le_bytes([
-            data[pos + 4],
-            data[pos + 5],
-            data[pos + 6],
-            data[pos + 7],
-        ]) as usize;
+        let size = u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]])
+            as usize;
         let body_start = pos + 8;
         let body_end = body_start.saturating_add(size).min(data.len());
         let body = &data[body_start..body_end];

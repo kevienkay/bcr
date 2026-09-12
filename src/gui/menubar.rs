@@ -179,7 +179,8 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         ui.separator();
         // P1：关闭标签页 / 关闭其它标签页（BC 会话菜单；单标签时置灰）
-        if menu_item_state(ui, "关闭标签页", sc("⌘W", "Ctrl+W"), multi_tab, false).clicked() {
+        if menu_item_state(ui, "关闭标签页", sc("⌘W", "Ctrl+W"), multi_tab, false).clicked()
+        {
             ui.close();
             app.close_tab(app.active);
         }
@@ -407,12 +408,26 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuEdit), |ui| {
         // P1：编辑项仅在可编辑会话（Merge/TextEdit）可用；只读比较会话与主页置灰
         let (_, edit_enabled) = menu_flags(app);
-        if menu_item_state(ui, t(I18nKey::MenuUndo), sc("⌘Z", "Ctrl+Z"), edit_enabled, false).clicked()
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuUndo),
+            sc("⌘Z", "Ctrl+Z"),
+            edit_enabled,
+            false,
+        )
+        .clicked()
         {
             ui.close();
             with_diff_tab(app, |tab| tab.undo());
         }
-        if menu_item_state(ui, t(I18nKey::MenuRedo), sc("⌘Y", "Ctrl+Y"), edit_enabled, false).clicked()
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuRedo),
+            sc("⌘Y", "Ctrl+Y"),
+            edit_enabled,
+            false,
+        )
+        .clicked()
         {
             ui.close();
             with_diff_tab(app, |tab| tab.redo());
@@ -456,8 +471,14 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             }
             ui.separator();
             // P41-3：选择操作（DirTab 分支，BC 编辑菜单「选择较新项/独有项/反向选择」）
-            if menu_item_state(ui, t(I18nKey::MenuSelectAll), sc("⌘A", "Ctrl+A"), edit_enabled, false)
-                .clicked()
+            if menu_item_state(
+                ui,
+                t(I18nKey::MenuSelectAll),
+                sc("⌘A", "Ctrl+A"),
+                edit_enabled,
+                false,
+            )
+            .clicked()
             {
                 ui.close();
                 if let Some(Tab::Dir(t)) = app.tabs.get_mut(app.active) {
@@ -1011,7 +1032,10 @@ fn view_menu_text(app: &mut DiffApp, ui: &mut egui::Ui) {
             (super::difftab::DiffViewFilter::All, I18nKey::ShowAll),
             (super::difftab::DiffViewFilter::Diff, I18nKey::OnlyDiff),
             (super::difftab::DiffViewFilter::Same, I18nKey::ShowSame),
-            (super::difftab::DiffViewFilter::Context, I18nKey::ShowContext),
+            (
+                super::difftab::DiffViewFilter::Context,
+                I18nKey::ShowContext,
+            ),
         ] {
             if ui.selectable_label(cur == f, t(key)).clicked() {
                 if let Some(Tab::Diff(tab)) = app.tabs.get_mut(app.active) {
@@ -1301,7 +1325,10 @@ fn view_menu_folder(app: &mut DiffApp, ui: &mut egui::Ui) {
         (super::dirtab::ViewFilter::All, I18nKey::ShowAll),
         (super::dirtab::ViewFilter::Diff, I18nKey::OnlyDiff),
         (super::dirtab::ViewFilter::Same, I18nKey::ShowSame),
-        (super::dirtab::ViewFilter::Orphans, I18nKey::DirFilterOrphans),
+        (
+            super::dirtab::ViewFilter::Orphans,
+            I18nKey::DirFilterOrphans,
+        ),
         (
             super::dirtab::ViewFilter::NonOrphans,
             I18nKey::DirFilterNonOrphans,
@@ -1413,7 +1440,10 @@ fn view_menu_image(app: &mut DiffApp, ui: &mut egui::Ui) {
     });
     if let Some(cur) = cur_mode {
         for (mode, key) in [
-            (crate::imgcmp::DiffMode::Tolerance, I18nKey::ImgModeTolerance),
+            (
+                crate::imgcmp::DiffMode::Tolerance,
+                I18nKey::ImgModeTolerance,
+            ),
             (
                 crate::imgcmp::DiffMode::MismatchRange,
                 I18nKey::ImgModeMismatch,
@@ -1684,14 +1714,26 @@ fn window_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
     ui.menu_button(t(I18nKey::MenuWindow), |ui| {
         // P1：多标签项在 tabs.len() <= 1 时置灰（BC 窗口菜单）
         let (multi_tab, _) = menu_flags(app);
-        if menu_item_state(ui, t(I18nKey::MenuNextTab), sc("⌘]", "Ctrl+]"), multi_tab, false)
-            .clicked()
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuNextTab),
+            sc("⌘]", "Ctrl+]"),
+            multi_tab,
+            false,
+        )
+        .clicked()
         {
             ui.close();
             app.next_tab();
         }
-        if menu_item_state(ui, t(I18nKey::MenuPrevTab), sc("⌘[", "Ctrl+["), multi_tab, false)
-            .clicked()
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuPrevTab),
+            sc("⌘[", "Ctrl+["),
+            multi_tab,
+            false,
+        )
+        .clicked()
         {
             ui.close();
             app.prev_tab();
