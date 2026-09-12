@@ -42,6 +42,7 @@ pub enum MenuCmd {
     CloseAllTabs,
     CloseTab,
     CloseOtherTabs,
+    SelectSelection,
     LayoutSideBySide,
     LayoutTopBottom,
     LayoutWeb,
@@ -171,6 +172,7 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "close_all" => MenuCmd::CloseAllTabs,
         "close_tab" => MenuCmd::CloseTab,
         "close_others" => MenuCmd::CloseOtherTabs,
+        "select_selection" => MenuCmd::SelectSelection,
         "layout_side" => MenuCmd::LayoutSideBySide,
         "layout_top" => MenuCmd::LayoutTopBottom,
         "layout_web" => MenuCmd::LayoutWeb,
@@ -279,10 +281,11 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
 /// 平台侧 `sync_state` 只负责把计划逐条 `set_enabled` 应用到注册表里的句柄。
 ///
 /// 只映射原生菜单里**确实存在**的项；设计稿提到但原生菜单尚未提供的项
-/// （移动标签页到新窗口 / 合并所有窗口 / 剪切 / 复制 / 粘贴 / 删除 /
-/// 全选 / 选择选择内容）留待补齐菜单项时一并接入。
+/// （移动标签页到新窗口 / 合并所有窗口 / 剪切 / 复制 / 粘贴 / 删除 / 全选）
+/// 留待补齐菜单项时一并接入。
 ///
-/// P64：会话菜单「关闭标签页 / 关闭其它标签页」已接入原生菜单，纳入本计划。
+/// P64：会话菜单「关闭标签页 / 关闭其它标签页」与编辑菜单「选择选择内容 /
+/// 选择内容和剪贴板比较」已接入原生菜单，纳入本计划。
 ///
 /// Linux 无原生菜单（见模块头注释），此函数仅在测试中被调用，故按本文件
 /// 既有惯例在 Linux 目标上放行 dead_code（与 `MenuCmd` 同处理）。
@@ -306,6 +309,7 @@ pub fn menu_state_plan(app: &crate::gui::DiffApp) -> Vec<(&'static str, bool)> {
         "dir_select_all",
         "patch_select_all",
         "selection_clip",
+        "select_selection",
     ] {
         plan.push((id, edit_enabled));
     }
@@ -473,6 +477,16 @@ mod plat {
             m.append(&fixed("dir_invert", "目录反向选择"));
             m.append(&fixed("dir_select_orphans", "目录选独有项"));
             m.append(&fixed("dir_select_newer", "目录选较新项"));
+            // P64：选择选择内容（只读比较会话置灰，见 menu_state_plan）
+            m.append(&PredefinedMenuItem::separator());
+            m.append(&item(
+                "select_selection",
+                crate::i18n::Key::MenuSelectSelection,
+            ));
+            m.append(&item(
+                "selection_clip",
+                crate::i18n::Key::MenuSelectionToClipboard,
+            ));
             menu.append(&m);
         }
         // ---- 搜索 ----
@@ -757,6 +771,24 @@ mod tests {
         assert!(
             !plan_enabled(&app, "selection_clip"),
             "只读会话：选择内容应置灰"
+        );
+        // P64：选择选择内容同样归编辑组（只读会话置灰）
+        assert!(
+            !plan_enabled(&app, "select_selection"),
+            "只读会话：选择选择内容应置灰"
+        );
+    }
+
+    /// P64：可编辑会话（文本合并）下，编辑组（含选择选择内容）恢复可用
+    #[test]
+    fn select_selection_enabled_for_merge_tab() {
+        let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
+        app.add_tab(crate::gui::Tab::Merge(
+            super::super::mergetab::MergeTab::new("", "", ""),
+        ));
+        assert!(
+            plan_enabled(&app, "select_selection"),
+            "合并会话：选择选择内容应可用"
         );
     }
 

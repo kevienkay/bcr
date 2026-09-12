@@ -3037,6 +3037,8 @@ impl DiffApp {
             Cmd::SelectionToClipboard => self.with_active_diff(|t| {
                 t.selection_to_clipboard();
             }),
+            // P64：选择选择内容（BC 编辑菜单；只读比较会话置灰）
+            Cmd::SelectSelection => self.with_active_diff(|t| t.select_selection()),
             Cmd::StartEdit => self.with_active_diff(|t| t.start_edit(EditSide::Left)),
             Cmd::NextReplace => self.with_active_diff(|t| t.next_replace()),
             Cmd::PrevReplace => self.with_active_diff(|t| t.prev_replace()),
