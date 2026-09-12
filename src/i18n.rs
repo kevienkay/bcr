@@ -760,6 +760,10 @@ pub enum Key {
     MenuMinimize,
     /// 关闭所有窗口
     MenuCloseAllWindows,
+    /// 关闭标签页（⌘W）
+    MenuCloseTab,
+    /// 关闭其它标签页（⇧⌘W）
+    MenuCloseOtherTabs,
     /// 新建文本对比
     MenuNewText,
     /// 新建图片对比

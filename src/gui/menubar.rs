@@ -179,23 +179,30 @@ fn session_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         }
         ui.separator();
         // P1：关闭标签页 / 关闭其它标签页（BC 会话菜单；单标签时置灰）
-        if menu_item_state(ui, "关闭标签页", sc("⌘W", "Ctrl+W"), multi_tab, false).clicked()
+        // P64：文案接入 i18n，动作统一走 DiffApp::close_tab / close_other_tabs
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuCloseTab),
+            sc("⌘W", "Ctrl+W"),
+            multi_tab,
+            false,
+        )
+        .clicked()
         {
             ui.close();
             app.close_tab(app.active);
         }
-        if menu_item_state(ui, "关闭其它标签页", String::new(), multi_tab, false).clicked() {
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuCloseOtherTabs),
+            sc("⇧⌘W", "Ctrl+Shift+W"),
+            multi_tab,
+            false,
+        )
+        .clicked()
+        {
             ui.close();
-            // 仅保留当前标签
-            let keep = app.active;
-            let mut i = app.tabs.len();
-            while i > 0 {
-                i -= 1;
-                if i != keep {
-                    app.tabs.remove(i);
-                }
-            }
-            app.active = 0;
+            app.close_other_tabs();
         }
         ui.separator();
         // 保存会话：打开会话中心（GUI 内管理已保存会话）

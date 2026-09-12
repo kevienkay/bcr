@@ -466,6 +466,18 @@ impl DiffApp {
     }
 
     /// P44-1：关闭所有窗口（BC Window>关闭所有窗口）——单窗口应用 = 清空所有标签回主页
+    /// P64：关闭其它标签页（仅保留当前标签，BC 会话菜单 ⇧⌘W）。
+    /// 无标签时为空操作（对齐菜单置灰规则：tabs.len() <= 1 时置灰）。
+    fn close_other_tabs(&mut self) {
+        if self.tabs.len() <= 1 {
+            return;
+        }
+        let keep = self.tabs.remove(self.active);
+        self.tabs.clear();
+        self.tabs.push(keep);
+        self.active = 0;
+    }
+
     fn close_all_tabs(&mut self) {
         self.tabs.clear();
         self.active = 0;
@@ -2883,6 +2895,8 @@ impl DiffApp {
                 .ctx()
                 .send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
             Cmd::CloseAllTabs => self.close_all_tabs(),
+            Cmd::CloseTab => self.close_tab(self.active),
+            Cmd::CloseOtherTabs => self.close_other_tabs(),
             Cmd::LayoutSideBySide => self.with_active_diff(|t| t.set_layout(DL::SideBySide)),
             Cmd::LayoutTopBottom => self.with_active_diff(|t| t.set_layout(DL::TopBottom)),
             Cmd::LayoutWeb => self.with_active_diff(|t| t.set_layout(DL::Web)),

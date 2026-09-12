@@ -40,6 +40,8 @@ pub enum MenuCmd {
     PrevTab,
     Minimize,
     CloseAllTabs,
+    CloseTab,
+    CloseOtherTabs,
     LayoutSideBySide,
     LayoutTopBottom,
     LayoutWeb,
@@ -167,6 +169,8 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "prev_tab" => MenuCmd::PrevTab,
         "minimize" => MenuCmd::Minimize,
         "close_all" => MenuCmd::CloseAllTabs,
+        "close_tab" => MenuCmd::CloseTab,
+        "close_others" => MenuCmd::CloseOtherTabs,
         "layout_side" => MenuCmd::LayoutSideBySide,
         "layout_top" => MenuCmd::LayoutTopBottom,
         "layout_web" => MenuCmd::LayoutWeb,
@@ -275,8 +279,10 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
 /// 平台侧 `sync_state` 只负责把计划逐条 `set_enabled` 应用到注册表里的句柄。
 ///
 /// 只映射原生菜单里**确实存在**的项；设计稿提到但原生菜单尚未提供的项
-/// （关闭标签页 / 关闭其它标签页 / 移动标签页到新窗口 / 合并所有窗口 /
-/// 剪切 / 复制 / 粘贴 / 删除）留待补齐菜单项时一并接入。
+/// （移动标签页到新窗口 / 合并所有窗口 / 剪切 / 复制 / 粘贴 / 删除 /
+/// 全选 / 选择选择内容）留待补齐菜单项时一并接入。
+///
+/// P64：会话菜单「关闭标签页 / 关闭其它标签页」已接入原生菜单，纳入本计划。
 ///
 /// Linux 无原生菜单（见模块头注释），此函数仅在测试中被调用，故按本文件
 /// 既有惯例在 Linux 目标上放行 dead_code（与 `MenuCmd` 同处理）。
@@ -286,6 +292,8 @@ pub fn menu_state_plan(app: &crate::gui::DiffApp) -> Vec<(&'static str, bool)> {
     let image_offset = crate::gui::menu_rules::image_offset_nonzero(app);
     let mut plan: Vec<(&'static str, bool)> = vec![
         // 会话 / 窗口：多标签项（tabs.len() <= 1 置灰）
+        ("close_tab", multi_tab),
+        ("close_others", multi_tab),
         ("compare_parent", multi_tab),
         ("next_tab", multi_tab),
         ("prev_tab", multi_tab),
@@ -400,6 +408,10 @@ mod plat {
             m.append(&item("new_media", crate::i18n::Key::SessionMedia));
             m.append(&PredefinedMenuItem::separator());
             m.append(&fixed("new_tab_like", "新建类似标签"));
+            m.append(&PredefinedMenuItem::separator());
+            // P64：关闭标签页 / 关闭其它标签页（单标签时置灰，见 menu_state_plan）
+            m.append(&item("close_tab", crate::i18n::Key::MenuCloseTab));
+            m.append(&item("close_others", crate::i18n::Key::MenuCloseOtherTabs));
             m.append(&PredefinedMenuItem::separator());
             m.append(&fixed("save_workspace", "保存工作空间…"));
             m.append(&fixed("load_workspace", "加载工作空间…"));
@@ -691,6 +703,8 @@ mod tests {
             ("shortcuts", MenuCmd::Shortcuts),
             ("about", MenuCmd::About),
             ("quit", MenuCmd::Quit),
+            ("close_tab", MenuCmd::CloseTab),
+            ("close_others", MenuCmd::CloseOtherTabs),
         ] {
             assert_eq!(
                 cmd_from_id(id),
@@ -722,6 +736,11 @@ mod tests {
         let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
         app.add_tab(crate::gui::Tab::Diff(super::super::difftab::DiffTab::new()));
         // 单标签：会话/窗口多标签项置灰
+        assert!(!plan_enabled(&app, "close_tab"), "单标签：关闭标签页应置灰");
+        assert!(
+            !plan_enabled(&app, "close_others"),
+            "单标签：关闭其它标签页应置灰"
+        );
         assert!(!plan_enabled(&app, "next_tab"), "单标签：下一标签页应置灰");
         assert!(!plan_enabled(&app, "prev_tab"), "单标签：上一标签页应置灰");
         assert!(
@@ -751,8 +770,14 @@ mod tests {
         assert!(plan_enabled(&app, "undo"), "合并会话：撤销应可用");
         // 仍是单标签：多标签项依旧置灰
         assert!(!plan_enabled(&app, "next_tab"), "单标签：下一标签页应置灰");
+        assert!(!plan_enabled(&app, "close_tab"), "单标签：关闭标签页应置灰");
         // 再加一个标签 → 多标签项可用
         app.add_tab(crate::gui::Tab::Diff(super::super::difftab::DiffTab::new()));
         assert!(plan_enabled(&app, "next_tab"), "多标签：下一标签页应可用");
+        assert!(plan_enabled(&app, "close_tab"), "多标签：关闭标签页应可用");
+        assert!(
+            plan_enabled(&app, "close_others"),
+            "多标签：关闭其它标签页应可用"
+        );
     }
 }

@@ -3687,3 +3687,44 @@ fn image_reset_offset_disabled_when_offset_zero() {
         "图片偏移为 0 时「重置差异偏移」应置灰"
     );
 }
+
+// ---- P64：关闭标签页 / 关闭其它标签页（会话菜单，⌘W / ⇧⌘W）----
+// 这两条用例直接驱动 DiffApp 方法，不依赖 menubar 模块，故**不做**平台门控
+// （对比上方 menu_flags_* 用例：它们引用仅在 Linux 编译的 gui::menubar，
+//  因此被 #[cfg(not(any(target_os = "macos", target_os = "windows")))] 限定）。
+
+#[test]
+fn close_other_tabs_keeps_active_tab() {
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Diff(DiffTab::new()));
+    app.add_tab(super::Tab::Dir(DirTab::new("", "")));
+    app.add_tab(super::Tab::Csv(CsvTab::new("", "")));
+    app.active = 1;
+    app.close_other_tabs();
+    assert_eq!(app.tabs.len(), 1, "应仅保留当前标签");
+    assert_eq!(app.active, 0, "保留后 active 归零");
+    assert!(
+        matches!(app.tabs[0], super::Tab::Dir(_)),
+        "应保留原 active 指向的 Dir 标签"
+    );
+}
+
+#[test]
+fn close_other_tabs_is_noop_for_single_tab() {
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Diff(DiffTab::new()));
+    app.close_other_tabs();
+    assert_eq!(app.tabs.len(), 1, "单标签时为空操作（对应菜单置灰）");
+    assert_eq!(app.active, 0);
+}
+
+#[test]
+fn close_tab_removes_and_fixes_active() {
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Diff(DiffTab::new()));
+    app.add_tab(super::Tab::Csv(CsvTab::new("", "")));
+    app.active = 1;
+    app.close_tab(1);
+    assert_eq!(app.tabs.len(), 1, "应关闭一个标签");
+    assert_eq!(app.active, 0, "关闭末尾标签后 active 应回退");
+}
