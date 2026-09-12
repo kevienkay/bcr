@@ -30,19 +30,19 @@ pub const ROW_H: f32 = super::theme::ROW_H;
 /// 等宽字体大小
 pub const FONT_SIZE: f32 = super::theme::FONT_SIZE;
 
-/// 差异底色（兼容别名，指向 theme 的统一配色）
-pub fn bg_delete() -> Color32 {
-    super::theme::bg_left_only()
+/// 差异底色（兼容别名，指向 theme 的统一配色；P3：透传 dark 以取深色分支）
+pub fn bg_delete(dark: bool) -> Color32 {
+    super::theme::bg_left_only(dark)
 }
-pub fn bg_insert() -> Color32 {
+pub fn bg_insert(dark: bool) -> Color32 {
     // BC 5.2.5 设计稿：新增/仅右行底色（独立 token diff-ins-bg）
-    super::theme::diff_ins_bg()
+    super::theme::diff_ins_bg(dark)
 }
-pub fn bg_replace_l() -> Color32 {
-    super::theme::bg_modified_l()
+pub fn bg_replace_l(dark: bool) -> Color32 {
+    super::theme::bg_modified_l(dark)
 }
-pub fn bg_replace_r() -> Color32 {
-    super::theme::bg_modified_r()
+pub fn bg_replace_r(dark: bool) -> Color32 {
+    super::theme::bg_modified_r(dark)
 }
 pub fn bg_match() -> Color32 {
     super::theme::bg_match()
@@ -287,11 +287,12 @@ pub fn show_rows_offset<R>(
 /// 状态色（目录对比/合并视图用，P60 对齐 BC 5.2.5 设计稿 · 路线2）
 /// 仅左 = 红 · 仅右 = 琥珀 · 已修改/差异 = 蓝 · 二进制不同 = 紫 · 相同 = 默认
 pub fn status_color(ui: &egui::Ui, letter: char) -> Color32 {
+    let dark = ui.visuals().dark_mode;
     match letter {
-        'L' => super::theme::status_left(),
-        'R' => super::theme::status_right(),
-        'C' | 'M' => super::theme::status_modified(),
-        'B' => super::theme::status_binary(),
+        'L' => super::theme::status_left(dark),
+        'R' => super::theme::status_right(dark),
+        'C' | 'M' => super::theme::status_modified(dark),
+        'B' => super::theme::status_binary(dark),
         // 相同 = 默认文本色（BC 黑）
         'S' => ui.visuals().text_color(),
         // 未知/其他 = 弱色（BC 灰）

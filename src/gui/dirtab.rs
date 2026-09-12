@@ -2169,10 +2169,14 @@ impl DirTab {
                         row.entry
                             .and_then(|ei| self.result.as_ref().and_then(|r| r.entries.get(ei)))
                             .and_then(|e| match e.status {
-                                FileStatus::LeftOnly => Some(super::theme::bg_only_left()),
-                                FileStatus::RightOnly => Some(super::theme::bg_only_right()),
+                                FileStatus::LeftOnly => {
+                                    Some(super::theme::bg_only_left(ui.visuals().dark_mode))
+                                }
+                                FileStatus::RightOnly => {
+                                    Some(super::theme::bg_only_right(ui.visuals().dark_mode))
+                                }
                                 FileStatus::Differ | FileStatus::Moved => {
-                                    Some(super::theme::bg_modified_row())
+                                    Some(super::theme::bg_modified_row(ui.visuals().dark_mode))
                                 }
                                 FileStatus::Same => None,
                             })

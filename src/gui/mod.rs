@@ -740,11 +740,23 @@ impl DiffApp {
                 ui.label(RichText::new("文件夹比较状态徽标").strong());
                 for (letter, color, label) in [
                     ('S', ui.visuals().text_color(), "相同"),
-                    ('C', theme::status_modified(), "已修改/差异"),
-                    ('L', theme::status_left(), "仅左侧"),
-                    ('R', theme::status_right(), "仅右侧"),
-                    ('M', theme::status_modified(), "移动/重命名"),
-                    ('B', theme::status_binary(), "二进制不同"),
+                    (
+                        'C',
+                        theme::status_modified(ui.visuals().dark_mode),
+                        "已修改/差异",
+                    ),
+                    ('L', theme::status_left(ui.visuals().dark_mode), "仅左侧"),
+                    ('R', theme::status_right(ui.visuals().dark_mode), "仅右侧"),
+                    (
+                        'M',
+                        theme::status_modified(ui.visuals().dark_mode),
+                        "移动/重命名",
+                    ),
+                    (
+                        'B',
+                        theme::status_binary(ui.visuals().dark_mode),
+                        "二进制不同",
+                    ),
                 ] {
                     ui.horizontal(|ui| {
                         let badge_c = ui.cursor().min + egui::vec2(9.0, 10.0);
@@ -3210,7 +3222,7 @@ impl DiffApp {
         }
         // 单元格：差异计数（有差异用红，无差异用弱色）
         let cnt_color = if parts > 0 {
-            theme::status_left()
+            theme::status_left(dark)
         } else {
             ui.visuals().weak_text_color()
         };

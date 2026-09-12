@@ -496,8 +496,8 @@ impl PatchTab {
                     );
                     // 状态底色
                     let bg = match row.tag {
-                        RowTag::Delete => Some(bg_replace_l()),
-                        RowTag::Insert => Some(bg_replace_r()),
+                        RowTag::Delete => Some(bg_replace_l(ui.visuals().dark_mode)),
+                        RowTag::Insert => Some(bg_replace_r(ui.visuals().dark_mode)),
                         _ => None,
                     };
                     // P45-5：选区行叠加蓝色高亮（选择选择内容）

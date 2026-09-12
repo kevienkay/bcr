@@ -728,7 +728,7 @@ impl MergeTab {
                     );
                     for i in range {
                         let row = &rows[i];
-                        let (bg_b, bg_l, bg_r) = merge_row_bg(row);
+                        let (bg_b, bg_l, bg_r) = merge_row_bg(row, ui.visuals().dark_mode);
                         let (hl_l, hl_r) = merge_row_hl(row, ui.visuals().dark_mode);
                         let resp = paint_merge_row(
                             ui, row, gutter, col_w, bg_b, bg_l, bg_r, hl_l, hl_r, fg, syn_b, syn_l,
@@ -807,20 +807,21 @@ impl MergeTab {
 
 fn merge_row_bg(
     row: &crate::mergeview::MergeRow,
+    dark: bool,
 ) -> (Option<Color32>, Option<Color32>, Option<Color32>) {
     use crate::mergeview::BlockKind;
     if row.in_conflict {
         // 冲突行：base 灰红、left 红、right 绿
         return (
             Some(super::theme::merge_conflict_bg()),
-            Some(bg_replace_l()),
-            Some(bg_replace_r()),
+            Some(bg_replace_l(dark)),
+            Some(bg_replace_r(dark)),
         );
     }
     // 单侧修改行：仅该侧着色，便于快速定位
     match row.kind {
-        BlockKind::LeftOnly | BlockKind::Same => (None, Some(bg_replace_l()), None),
-        BlockKind::RightOnly => (None, None, Some(bg_replace_r())),
+        BlockKind::LeftOnly | BlockKind::Same => (None, Some(bg_replace_l(dark)), None),
+        BlockKind::RightOnly => (None, None, Some(bg_replace_r(dark))),
         BlockKind::Context | BlockKind::Conflict => (None, None, None),
     }
 }

@@ -1022,7 +1022,7 @@ impl CsvTab {
                             // 行级底色（P31：hover 浅色 + 状态色）
                             let bg = match (ar.status, side) {
                                 (RowStatus::LeftOnly, true) | (RowStatus::RightOnly, false) => {
-                                    Some(bg_replace_l())
+                                    Some(bg_replace_l(ui.visuals().dark_mode))
                                 }
                                 (RowStatus::RightOnly, true) | (RowStatus::LeftOnly, false) => {
                                     Some(bg_match())
@@ -1332,8 +1332,8 @@ pub(crate) fn cell_is_diff(status: RowStatus, changed_cols: &[usize], col: usize
 pub(crate) fn cell_diff_stroke(dark: bool, status: RowStatus, side_is_left: bool) -> Color32 {
     let _ = side_is_left;
     match status {
-        RowStatus::LeftOnly => super::theme::status_left(),
-        RowStatus::RightOnly => super::theme::status_right(),
+        RowStatus::LeftOnly => super::theme::status_left(dark),
+        RowStatus::RightOnly => super::theme::status_right(dark),
         RowStatus::Modified => super::theme::diff_modify(dark),
         RowStatus::Same => super::theme::mid_sep(dark),
     }
@@ -1652,11 +1652,11 @@ mod p2_tests {
         for dark in [false, true] {
             assert_eq!(
                 cell_diff_stroke(dark, RowStatus::LeftOnly, true),
-                super::super::theme::status_left()
+                super::super::theme::status_left(dark)
             );
             assert_eq!(
                 cell_diff_stroke(dark, RowStatus::RightOnly, false),
-                super::super::theme::status_right()
+                super::super::theme::status_right(dark)
             );
             assert_eq!(
                 cell_diff_stroke(dark, RowStatus::Modified, true),

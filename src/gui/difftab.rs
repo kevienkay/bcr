@@ -2771,7 +2771,11 @@ impl DiffTab {
                                         egui::Sense::click(),
                                     );
                                     if row.diff {
-                                        paint_bg(ui, rect, Some(bg_replace_l()));
+                                        paint_bg(
+                                            ui,
+                                            rect,
+                                            Some(bg_replace_l(ui.visuals().dark_mode)),
+                                        );
                                     }
                                     ui.painter().text(
                                         Pos2::new(rect.left() + HEX_OFF_X, rect.top() + 2.0),
@@ -3223,11 +3227,12 @@ impl DiffTab {
                         continue;
                     }
                     let row = &display_rows[vi];
+                    let dark = ui.visuals().dark_mode;
                     let (bg_l, bg_r) = match row.tag {
                         RowTag::Equal => (None, None),
-                        RowTag::Delete => (Some(bg_delete()), None),
-                        RowTag::Insert => (None, Some(bg_insert())),
-                        RowTag::Replace => (Some(bg_replace_l()), Some(bg_replace_r())),
+                        RowTag::Delete => (Some(bg_delete(dark)), None),
+                        RowTag::Insert => (None, Some(bg_insert(dark))),
+                        RowTag::Replace => (Some(bg_replace_l(dark)), Some(bg_replace_r(dark))),
                     };
                     // P43-2：文本选区高亮（蓝色系叠加）
                     let (bg_l, bg_r) = if self.selection.is_some_and(|(s, e)| oi >= s && oi <= e) {
@@ -4395,7 +4400,7 @@ fn paint_hex_row(
 
     // 差异行底色
     if row.diff {
-        paint_bg(ui, rect, Some(bg_replace_l()));
+        paint_bg(ui, rect, Some(bg_replace_l(ui.visuals().dark_mode)));
     }
 
     // 偏移（P37-1d：hex/dec 可切换、可隐藏）

@@ -106,19 +106,38 @@ pub fn current_bar(dark: bool) -> Color32 {
 
 /// 行级底色（BC 5.2.5 设计稿采样值）
 /// 仅左/删除 = 红底 #FDE0DF；仅右/新增 = 绿底 #CCE1D8；修改行 = 琥珀底 #FBF0C8
-pub fn bg_left_only() -> Color32 {
-    Color32::from_rgb(253, 224, 223)
+///
+/// P3：深色主题不吃浅色 pastel（会在深底上烧出亮块），改用同语义的半透明饱和色；
+/// 与 `hl_*` 家族同一套取色口径（浅色 pastel / 深色 translucent）。
+pub fn bg_left_only(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(226, 110, 110, 70)
+    } else {
+        Color32::from_rgb(253, 224, 223)
+    }
 }
 /// 文本比较「修改行」两侧底色（设计稿：均为琥珀 #FBF0C8）
-pub fn bg_modified_l() -> Color32 {
-    Color32::from_rgb(251, 240, 200)
+pub fn bg_modified_l(dark: bool) -> Color32 {
+    bg_modified(dark)
 }
-pub fn bg_modified_r() -> Color32 {
-    Color32::from_rgb(251, 240, 200)
+pub fn bg_modified_r(dark: bool) -> Color32 {
+    bg_modified(dark)
+}
+/// 修改行底色（琥珀）：浅色取设计稿值，深色取半透明琥珀
+fn bg_modified(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(200, 160, 60, 70)
+    } else {
+        Color32::from_rgb(251, 240, 200)
+    }
 }
 /// BC 5.2.5 设计稿 diff-ins-bg：新增/仅右行底色（独立 token，不复用 bg_modified_r）
-pub fn diff_ins_bg() -> Color32 {
-    Color32::from_rgb(204, 225, 216)
+pub fn diff_ins_bg(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(110, 196, 128, 70)
+    } else {
+        Color32::from_rgb(204, 225, 216)
+    }
 }
 pub fn bg_match() -> Color32 {
     Color32::from_rgba_unmultiplied(224, 190, 96, 32)
@@ -296,9 +315,9 @@ pub fn status_fg(ui: &egui::Ui, letter: char) -> Color32 {
     let dark = ui.visuals().dark_mode;
     match letter {
         'L' => diff_delete(dark),
-        'R' => status_right(),
-        'C' | 'M' => status_modified(),
-        'B' => status_binary(),
+        'R' => status_right(dark),
+        'C' | 'M' => status_modified(dark),
+        'B' => status_binary(dark),
         _ => ui.visuals().weak_text_color(),
     }
 }
@@ -314,34 +333,69 @@ pub fn error_color() -> Color32 {
 //   仅左 = 红 #E01E10 · 仅右 = 琥珀 #A9761A · 已修改 = 蓝 #0A63C9 · 二进制不同 = 紫 #6A3FA0
 
 /// 文件夹状态：仅左侧（红）
-pub fn status_left() -> Color32 {
-    Color32::from_rgb(224, 30, 16)
+///
+/// P3：深色主题下设计稿的深色前景（#E01E10 等）在深底上对比度不足，
+/// 深色分支一律取同色相提亮版；浅色分支严格保持设计稿采样值。
+pub fn status_left(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(226, 110, 110)
+    } else {
+        Color32::from_rgb(224, 30, 16)
+    }
 }
 /// 文件夹状态：仅右侧（琥珀/黄）
-pub fn status_right() -> Color32 {
-    Color32::from_rgb(169, 118, 26)
+pub fn status_right(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(217, 169, 58)
+    } else {
+        Color32::from_rgb(169, 118, 26)
+    }
 }
 /// 文件夹状态：已修改 / 内容不同（蓝）
-pub fn status_modified() -> Color32 {
-    Color32::from_rgb(10, 99, 201)
+pub fn status_modified(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(110, 168, 240)
+    } else {
+        Color32::from_rgb(10, 99, 201)
+    }
 }
 /// 文件夹状态：二进制不同（紫）
-pub fn status_binary() -> Color32 {
-    Color32::from_rgb(106, 63, 160)
+pub fn status_binary(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgb(169, 139, 224)
+    } else {
+        Color32::from_rgb(106, 63, 160)
+    }
 }
 /// 文件夹状态行底色：仅左红 / 仅右琥珀 / 已修改蓝 / 二进制紫（设计稿 .drow 各级底）
-pub fn bg_only_left() -> Color32 {
-    Color32::from_rgb(253, 224, 223)
+pub fn bg_only_left(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(226, 110, 110, 70)
+    } else {
+        Color32::from_rgb(253, 224, 223)
+    }
 }
-pub fn bg_only_right() -> Color32 {
-    Color32::from_rgb(251, 240, 200)
+pub fn bg_only_right(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(200, 160, 60, 70)
+    } else {
+        Color32::from_rgb(251, 240, 200)
+    }
 }
-pub fn bg_modified_row() -> Color32 {
-    Color32::from_rgb(220, 233, 250)
+pub fn bg_modified_row(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(86, 148, 240, 70)
+    } else {
+        Color32::from_rgb(220, 233, 250)
+    }
 }
 #[allow(dead_code)]
-pub fn bg_binary_row() -> Color32 {
-    Color32::from_rgb(239, 230, 248)
+pub fn bg_binary_row(dark: bool) -> Color32 {
+    if dark {
+        Color32::from_rgba_unmultiplied(160, 120, 220, 70)
+    } else {
+        Color32::from_rgb(239, 230, 248)
+    }
 }
 /// 文件信息头背景（DiffTab 头部两栏）
 #[allow(dead_code)]
