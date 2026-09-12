@@ -44,7 +44,7 @@ mod tests {
         app.add_tab(Tab::Diff(super::super::difftab::DiffTab::new()));
         assert_eq!(menu_flags(&app), (false, false), "单标签：多标签项置灰");
         app.add_tab(Tab::Diff(super::super::difftab::DiffTab::new()));
-        assert_eq!(menu_flags(&app).0, true, "多标签：多标签项可用");
+        assert!(menu_flags(&app).0, "多标签：多标签项可用");
     }
 
     #[test]
