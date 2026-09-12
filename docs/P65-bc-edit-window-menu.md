@@ -61,7 +61,7 @@ diff / dir / merge / image / csv / media。文本编辑、补丁、文件夹合�
 ## 四、验收
 
 ```bash
-cargo test --bin bcr          # 657 通过 / 12 ignored
+cargo test --bin bcr          # 657 通过 / 12 ignored（基线 621）
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 
@@ -69,9 +69,9 @@ cargo fmt --check
 BCR_SNAP_DIR=/tmp/bcr-snap cargo test --bin bcr -- --ignored gui::ui_snap
 ```
 
-新增测试（21 条）：`edit_ops` 纯函数 5、`textedit` 会话动作 6、`mergetab` 撤销/重做 2、
-`menu_rules` 编辑/窗口规则 4、`windows` 注册表 5、应用级路由与多窗口 4（含用 `/bin/echo`
-注入启动器、临时注册表目录模拟对端窗口）。
+新增测试（36 条）：`edit_ops` 纯函数 5、`textedit` 会话动作 6、`mergetab` 撤销/重做 2、
+`menu_rules` 编辑/窗口规则 4、`native_menu` 命令映射 2、`windows` 注册表 6、
+应用级路由 3、kittest 交互 8（含用 `/bin/echo` 注入启动器、临时注册表目录模拟对端窗口）。
 
 真实 GUI 实测（macOS，AX `kAXEnabledAttribute` + 辅助功能点击 + `pbpaste` 回读）：
 只读会话五项 off / 文本编辑会话五项 on；全选→⌘C 得到整篇文件内容；粘贴→内容追加；

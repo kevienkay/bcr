@@ -18,7 +18,7 @@ bcr — Beyond Compare 风格的文件对比工具（Rust 实现）。本文件�
 - **多窗口置灰规则**：`menu_rules::move_tab_enabled` / `merge_windows_enabled`——单标签时两项都置灰（设计稿窗口菜单规则）；「移动」还要求当前标签有可重建的会话表示，「合并」要求存在心跳有效的对端窗口
 - **顺带收敛**：`save_workspace` / `load_workspace` 改用统一的 `tab_session` / `tab_from_session`（工作空间与多窗口共用一份类型映射，现覆盖 diff/dir/merge/image/csv/media 六种会话往返）；窗口菜单「选择上一个/下一个标签页」快捷键文案对齐设计稿 ⇧⌘[ / ⇧⌘]
 - **i18n**：新增 `MenuCut/MenuCopy/MenuPaste/MenuDelete/MenuMoveTabToWindow/MenuMergeAllWindows` 六键 × 10 语言
-- **验收**：`cargo test` 657 全绿（新增 21 条：纯函数 5、文本编辑会话 6、合并撤销 2、菜单规则 4、窗口注册表 5、应用级路由/多窗口 4 等）；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 干净
+- **验收**：`cargo test` 657 全绿（基线 621，新增 36 条：纯函数 5、文本编辑会话 6、合并撤销 2、菜单规则 4、原生菜单映射 2、窗口注册表 6、应用级路由 3、kittest 交互 8）；`cargo clippy --all-targets -- -D warnings`、`cargo fmt --check` 干净
 - **真实 GUI 实测（macOS，AX + 辅助功能驱动 + 剪贴板回读）**：只读比较会话「剪切/复制/粘贴/删除/全选」全为 off、文本编辑会话全为 on；「编辑>全选」后 ⌘C 复制到整篇文件内容；「编辑>粘贴」把剪贴板追加进缓冲区；「编辑>全选 > 删除 > 粘贴」后读回仅剩粘贴内容（删除生效）；「编辑>剪切 > 撤销」内容恢复；窗口菜单在单标签时「移动标签页到新窗口/合并所有窗口」为 off，多标签时为 on；点击「移动标签页到新窗口」写出 `bcr-move-<pid>-1.toml` 并新起进程（源窗口标签 3→2）；点击「合并所有窗口」后对端窗口自行退出、源窗口标签 2→3
 - **仍缺（已明确边界）**：① 合并会话（左/右/输出三栏）的这 5 项仍置灰——本实现左/右栏是「对齐后的绘制行」、无文本选区模型，输出栏按设计稿为只读（设计稿要求左右栏可编辑，需先补合并栏的文本编辑模型）；② 窗口菜单的「最小化全部 / 缩放 / 缩放全部 / 全部前移 / 在前面排列」为 macOS 系统级窗口项，未实现（画板①中为可用态，但不属于对比工具功能）
 
