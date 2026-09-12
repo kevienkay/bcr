@@ -32,6 +32,10 @@ pub struct MergeTab {
     pub last_save_path: Option<String>,
     /// P2：最近一帧的未解决冲突数（供全局状态栏第二行读取）
     pub last_unresolved: usize,
+    /// P65：冲突解决/行级采用的撤销栈（BC 文本合并 编辑>撤销）
+    undo_stack: Vec<(Vec<crate::mergeview::BlockInfo>, Option<usize>)>,
+    /// P65：重做栈
+    redo_stack: Vec<(Vec<crate::mergeview::BlockInfo>, Option<usize>)>,
 }
 
 impl MergeTab {
@@ -52,6 +56,8 @@ impl MergeTab {
             cur_line: 0,
             last_save_path: None,
             last_unresolved: 0,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         };
         t.reload();
         t
@@ -295,10 +301,57 @@ impl MergeTab {
 
     pub fn resolve_current(&mut self, res: Resolution) {
         if let Some(bi) = self.current_conflict_block() {
+            // 只有确实要写入时才压快照（无当前冲突块时保持撤销栈干净）
+            self.push_snapshot();
             if let Some(blk) = self.view.blocks.get_mut(bi) {
                 blk.resolution = res;
             }
         }
+    }
+
+    // ---- P65：撤销/重做（BC 文本合并 编辑>撤销 ⌘Z / 重做 ⇧⌘Z）----
+
+    /// 修改 `blocks` 前压入快照（冲突解决、行级采用）
+    fn push_snapshot(&mut self) {
+        self.undo_stack
+            .push((self.view.blocks.clone(), self.conflict_idx));
+        if self.undo_stack.len() > 100 {
+            self.undo_stack.remove(0);
+        }
+        self.redo_stack.clear();
+    }
+
+    /// 撤销最近一次冲突解决/行级采用（返回是否生效）
+    pub fn undo(&mut self) -> bool {
+        let Some((blocks, idx)) = self.undo_stack.pop() else {
+            return false;
+        };
+        self.redo_stack
+            .push((self.view.blocks.clone(), self.conflict_idx));
+        self.view.blocks = blocks;
+        self.conflict_idx = idx;
+        self.refresh_unresolved();
+        true
+    }
+
+    /// 重做最近一次撤销（返回是否生效）
+    pub fn redo(&mut self) -> bool {
+        let Some((blocks, idx)) = self.redo_stack.pop() else {
+            return false;
+        };
+        self.undo_stack
+            .push((self.view.blocks.clone(), self.conflict_idx));
+        self.view.blocks = blocks;
+        self.conflict_idx = idx;
+        self.refresh_unresolved();
+        true
+    }
+
+    /// 重算「未解决冲突数」（P2 状态栏第二行读取）
+    fn refresh_unresolved(&mut self) {
+        // 与输出渲染同一口径（行级采用也参与判定）
+        let (_, unresolved) = render_merged(&self.view, &self.label_l, &self.label_r);
+        self.last_unresolved = unresolved;
     }
 
     /// P57-10：解决当前冲突并前进到下一个冲突（BC 行为，不循环回第一个）。
@@ -344,6 +397,12 @@ impl MergeTab {
             blk.line_res.resize(len, None);
         }
         if off < blk.line_res.len() {
+            // 只有确实要写入时才压快照（避免空操作污染撤销栈）
+            let bi_keep = bi;
+            self.push_snapshot();
+            let Some(blk) = self.view.blocks.get_mut(bi_keep) else {
+                return;
+            };
             blk.line_res[off] = Some(res);
         }
     }
@@ -961,5 +1020,70 @@ mod p2_tests {
         assert_eq!(output_label(Some("merged.txt")), "输出: merged.txt");
         assert_eq!(output_label(None), "输出: 未保存");
         assert_eq!(output_label(Some("")), "输出: 未保存");
+    }
+
+    // ---- P65：合并会话的撤销/重做（BC 文本合并 编辑>撤销 ⌘Z / 重做 ⇧⌘Z）----
+
+    /// 构造一个单冲突的合并会话（左/右首行不同）
+    fn conflict_tab(dir: &std::path::Path) -> MergeTab {
+        let w = |name: &str, s: &str| {
+            let p = dir.join(name);
+            std::fs::write(&p, s).unwrap();
+            p.to_str().unwrap().to_string()
+        };
+        let base = w("base.txt", "line1\nline2\n");
+        let left = w("left.txt", "LEFT1\nline2\n");
+        let right = w("right.txt", "RIGHT1\nline2\n");
+        MergeTab::new(&base, &left, &right)
+    }
+
+    #[test]
+    fn undo_redo_restores_conflict_resolution() {
+        let d = tempfile::tempdir().unwrap();
+        let mut t = conflict_tab(d.path());
+        assert_eq!(t.view.conflicts, 1, "样本应有 1 处冲突");
+        // 无历史时撤销/重做是空操作
+        assert!(!t.undo());
+        assert!(!t.redo());
+        // 解决当前冲突（先定位）
+        t.next_conflict();
+        t.resolve_current(Resolution::Right);
+        let resolved = t
+            .view
+            .blocks
+            .iter()
+            .filter(|b| b.resolution == Resolution::Right)
+            .count();
+        assert_eq!(resolved, 1, "取右后应记录 Right");
+        assert!(t.undo(), "撤销应生效");
+        let solved = t
+            .view
+            .blocks
+            .iter()
+            .filter(|b| b.kind == crate::mergeview::BlockKind::Conflict)
+            .filter(|b| b.resolution != Resolution::Auto)
+            .count();
+        assert_eq!(solved, 0, "撤销后冲突块回到未解决");
+        assert!(t.redo(), "重做应生效");
+        let resolved = t
+            .view
+            .blocks
+            .iter()
+            .filter(|b| b.resolution == Resolution::Right)
+            .count();
+        assert_eq!(resolved, 1, "重做后恢复取右");
+    }
+
+    #[test]
+    fn undo_restores_unresolved_count_in_status() {
+        let d = tempfile::tempdir().unwrap();
+        let mut t = conflict_tab(d.path());
+        t.next_conflict();
+        // 触发一次状态刷新（渲染前 undo/redo 也走同一 refresh）
+        t.resolve_current(Resolution::Left);
+        t.undo();
+        let (_, unresolved) = render_merged(&t.view, &t.label_l, &t.label_r);
+        assert_eq!(t.last_unresolved, unresolved, "状态栏未解决数应与输出一致");
+        assert_eq!(unresolved, 1);
     }
 }

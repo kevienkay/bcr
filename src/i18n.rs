@@ -760,6 +760,10 @@ pub enum Key {
     MenuMinimize,
     /// 关闭所有窗口
     MenuCloseAllWindows,
+    /// P65：窗口菜单 移动标签页到新窗口
+    MenuMoveTabToWindow,
+    /// P65：窗口菜单 合并所有窗口
+    MenuMergeAllWindows,
     /// 关闭标签页（⌘W）
     MenuCloseTab,
     /// 关闭其它标签页（⇧⌘W）
@@ -810,6 +814,14 @@ pub enum Key {
     MenuUndo,
     /// 重做
     MenuRedo,
+    /// P65：剪切（BC 编辑菜单 ⌘X）
+    MenuCut,
+    /// P65：复制（⌘C）
+    MenuCopy,
+    /// P65：粘贴（⌘V）
+    MenuPaste,
+    /// P65：删除（无快捷键）
+    MenuDelete,
     /// 查找
     MenuFind,
     /// 下一差异

@@ -6,6 +6,7 @@
 
 use eframe::egui::{self};
 
+use super::edit_ops;
 use super::{widgets, DiffApp, Tab};
 use crate::i18n::{t, Key as I18nKey};
 
@@ -88,7 +89,11 @@ fn menu_item_state(
 
 // P1：菜单可用性判定的纯函数已抽到跨平台共享模块 `super::menu_rules`
 //（macOS/Windows 的 muda 原生菜单也用同一套规则），此处再导出以保持既有调用点不变。
-pub use super::menu_rules::{image_offset_nonzero, menu_flags};
+// P65：新增标准编辑动作可用性 `clipboard_ops_enabled`（只读比较会话置灰）。
+pub use super::menu_rules::{
+    clipboard_ops_enabled, image_offset_nonzero, menu_flags, merge_windows_enabled,
+    move_tab_enabled,
+};
 
 /// 对当前标签为 DiffTab 时执行操作（菜单转发撤销/重做/跳转等）
 fn with_diff_tab(app: &mut DiffApp, f: impl FnOnce(&mut super::difftab::DiffTab)) {
@@ -440,12 +445,16 @@ fn edit_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             with_diff_tab(app, |tab| tab.redo());
         }
         ui.separator();
-        // P1：标准编辑项（BC 编辑菜单）。只读比较会话置灰、可编辑会话可用；
-        // 剪切/复制/粘贴/删除 的剪贴板动作尚未接线，此处按 BC 结构占位。
-        menu_item_state(ui, "剪切", sc("⌘X", "Ctrl+X"), edit_enabled, false);
-        menu_item_state(ui, "复制", sc("⌘C", "Ctrl+C"), edit_enabled, false);
-        menu_item_state(ui, "粘贴", sc("⌘V", "Ctrl+V"), edit_enabled, false);
-        menu_item_state(ui, "删除", String::new(), edit_enabled, false);
+        // P65：标准编辑项（BC 编辑菜单）——剪切/复制/粘贴/删除/全选 接入真实动作。
+        // 可用性：只读比较会话一律置灰；这 5 项需要文本选区，故用
+        // `clipboard_ops_enabled`（当前=文本编辑会话的编辑模式）。
+        let clip_enabled = clipboard_ops_enabled(app);
+        for op in edit_ops::EditOp::ALL {
+            if menu_item_state(ui, t(op.i18n()), op.shortcut(), clip_enabled, false).clicked() {
+                ui.close();
+                app.active_edit_op(op);
+            }
+        }
         ui.separator();
         // P40-1：编辑左/右侧（原工具栏低频按钮，收进菜单）
         if ui.button(t(I18nKey::EditLeft)).clicked() {
@@ -1724,7 +1733,8 @@ fn window_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if menu_item_state(
             ui,
             t(I18nKey::MenuNextTab),
-            sc("⌘]", "Ctrl+]"),
+            // P65：设计稿窗口菜单用 ⇧⌘] / ⇧⌘[（BC 5.2.5 实际快捷键）
+            sc("⇧⌘]", "Ctrl+Shift+]"),
             multi_tab,
             false,
         )
@@ -1736,7 +1746,7 @@ fn window_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
         if menu_item_state(
             ui,
             t(I18nKey::MenuPrevTab),
-            sc("⌘[", "Ctrl+["),
+            sc("⇧⌘[", "Ctrl+Shift+["),
             multi_tab,
             false,
         )
@@ -1745,10 +1755,42 @@ fn window_menu(app: &mut DiffApp, ui: &mut egui::Ui) {
             ui.close();
             app.prev_tab();
         }
-        // 移动标签页到新窗口 / 合并所有窗口：单窗口应用暂无实现，
-        // 按 BC 结构占位并遵守可用性规则（>1 标签时可点，动作待实现）。
-        menu_item_state(ui, "移动标签页到新窗口", String::new(), multi_tab, false);
-        menu_item_state(ui, "合并所有窗口", String::new(), multi_tab, false);
+        // P65：移动标签页到新窗口 / 合并所有窗口（多进程窗口注册表，见 gui::windows）
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuMoveTabToWindow),
+            String::new(),
+            move_tab_enabled(app),
+            false,
+        )
+        .clicked()
+        {
+            ui.close();
+            if let Err(e) = app.move_tab_to_new_window() {
+                app.log(format!("移动标签页到新窗口失败: {e}"));
+                app.report_error = Some(e);
+            }
+        }
+        if menu_item_state(
+            ui,
+            t(I18nKey::MenuMergeAllWindows),
+            String::new(),
+            merge_windows_enabled(app),
+            false,
+        )
+        .clicked()
+        {
+            ui.close();
+            match app.merge_all_windows() {
+                Ok((opened, closed)) => app.log(format!(
+                    "合并窗口：并入 {opened} 个标签，关闭 {closed} 个窗口"
+                )),
+                Err(e) => {
+                    app.log(format!("合并所有窗口失败: {e}"));
+                    app.report_error = Some(e);
+                }
+            }
+        }
         ui.separator();
         if menu_item(ui, t(I18nKey::MenuMinimize), sc("⌘M", "Ctrl+M")).clicked() {
             ui.close();

@@ -100,6 +100,10 @@ pub struct TextEditTab {
     jump_to_line: Option<usize>,
     /// P45-5：编辑选区（char 范围，渲染时从 TextEdit output 捕获，⌘E 使用选择内容查找）
     pub(crate) sel_range: Option<(usize, usize)>,
+    /// P65：待执行的「全选」——需要下一帧写入 egui 的 TextEditState（选区由 egui 持有）
+    pending_select_all: bool,
+    /// P65：上一次编辑动作后的插入点（char 索引），渲染时同步给 egui 光标
+    pending_caret: Option<usize>,
 }
 
 impl TextEditTab {
@@ -129,9 +133,99 @@ impl TextEditTab {
             file_hits_total: 0,
             jump_to_line: None,
             sel_range: None,
+            pending_select_all: false,
+            pending_caret: None,
         };
         t.open(path);
         t
+    }
+
+    /// P65：内容区 `egui::TextEdit` 的固定 id（菜单动作需要它来读写选区状态）
+    fn content_id() -> egui::Id {
+        egui::Id::new("bcr-textedit-content")
+    }
+
+    /// P65：当前是否处于可编辑模式（语法高亮预览为只读渲染，编辑动作不适用）
+    pub fn is_editable(&self) -> bool {
+        !self.show_syntax
+    }
+
+    /// P65：当前选区（char 索引，半开区间）
+    pub fn selection(&self) -> Option<(usize, usize)> {
+        self.sel_range.filter(|(a, b)| a != b)
+    }
+
+    /// P65：执行标准编辑动作（BC 编辑菜单 剪切/复制/粘贴/删除/全选）。
+    /// 返回是否产生了实际修改（复制/全选不算修改）。
+    pub fn apply_edit_op(&mut self, op: super::edit_ops::EditOp) -> bool {
+        use super::edit_ops::{self, EditOp};
+        // 预览模式（语法高亮只读渲染）不接编辑动作
+        if !self.is_editable() {
+            return false;
+        }
+        match op {
+            EditOp::SelectAll => {
+                let Some(range) = edit_ops::all_range(&self.content) else {
+                    return false;
+                };
+                self.sel_range = Some(range);
+                self.pending_select_all = true;
+                false
+            }
+            EditOp::Copy => {
+                let Some(sel) = self.selection() else {
+                    return false;
+                };
+                let text = edit_ops::selection_text(&self.content, sel);
+                if text.is_empty() {
+                    return false;
+                }
+                edit_ops::write_clipboard(&text);
+                false
+            }
+            EditOp::Cut => {
+                let Some(sel) = self.selection() else {
+                    return false;
+                };
+                // 剪贴板不可用（headless）时仍按本工具语义删除选区
+                let text = edit_ops::selection_text(&self.content, sel);
+                if !text.is_empty() {
+                    edit_ops::write_clipboard(&text);
+                }
+                self.replace_selection("", sel, true)
+            }
+            EditOp::Delete => {
+                let Some(sel) = self.selection() else {
+                    return false;
+                };
+                self.replace_selection("", sel, true)
+            }
+            EditOp::Paste => {
+                let Some(text) = edit_ops::read_clipboard() else {
+                    return false;
+                };
+                if text.is_empty() {
+                    return false;
+                }
+                let sel = self.sel_range.unwrap_or_else(|| {
+                    let n = edit_ops::char_len(&self.content);
+                    (n, n)
+                });
+                self.replace_selection(&text, sel, true)
+            }
+        }
+    }
+
+    /// P65：用 `text` 替换选区（写入撤销栈 + 记录新光标）
+    fn replace_selection(&mut self, text: &str, sel: (usize, usize), snapshot: bool) -> bool {
+        if snapshot {
+            self.push_snapshot();
+        }
+        let (new, caret) = super::edit_ops::splice(&self.content, sel, text);
+        self.content = new;
+        self.sel_range = Some((caret, caret));
+        self.pending_caret = Some(caret);
+        true
     }
 
     pub fn title(&self) -> String {
@@ -304,18 +398,24 @@ impl TextEditTab {
         self.redo_stack.clear();
     }
 
-    pub fn undo(&mut self) {
-        if let Some(prev) = self.undo_stack.pop() {
-            self.redo_stack.push(self.content.clone());
-            self.content = prev;
-        }
+    /// P65：撤销（返回是否生效；菜单/快捷键共用）
+    pub fn undo(&mut self) -> bool {
+        let Some(prev) = self.undo_stack.pop() else {
+            return false;
+        };
+        self.redo_stack.push(self.content.clone());
+        self.content = prev;
+        true
     }
 
-    pub fn redo(&mut self) {
-        if let Some(next) = self.redo_stack.pop() {
-            self.undo_stack.push(self.content.clone());
-            self.content = next;
-        }
+    /// P65：重做（返回是否生效）
+    pub fn redo(&mut self) -> bool {
+        let Some(next) = self.redo_stack.pop() else {
+            return false;
+        };
+        self.undo_stack.push(self.content.clone());
+        self.content = next;
+        true
     }
 
     /// BC Convert File：Trim 行尾空白（逐行保留各自行尾风格 CRLF/LF）
@@ -783,7 +883,11 @@ impl TextEditTab {
                     } else {
                         f32::INFINITY
                     };
+                    // P65：把菜单动作产生的选区/光标写回 egui 的 TextEditState
+                    //（选区由 egui 持有；全选与替换后需要显式同步，否则视觉上仍停在旧位置）
+                    self.sync_egui_cursor(ui);
                     let edit = egui::TextEdit::multiline(&mut self.content)
+                        .id(Self::content_id())
                         .font(egui::TextStyle::Monospace)
                         .desired_width(dw)
                         .desired_rows(30)
@@ -805,6 +909,36 @@ impl TextEditTab {
                 self.save_req = false;
             }
         });
+    }
+
+    /// P65：把待定的选区/光标同步给 egui 的 `TextEditState`（全选 / 剪切 / 粘贴 / 删除后）
+    fn sync_egui_cursor(&mut self, ui: &egui::Ui) {
+        if !self.pending_select_all && self.pending_caret.is_none() {
+            return;
+        }
+        let range = if self.pending_select_all {
+            super::edit_ops::all_range(&self.content)
+        } else {
+            self.pending_caret.map(|c| (c, c))
+        };
+        let Some((a, b)) = range else {
+            self.pending_select_all = false;
+            self.pending_caret = None;
+            return;
+        };
+        let id = Self::content_id();
+        let mut state = egui::text_edit::TextEditState::load(ui.ctx(), id).unwrap_or_default();
+        let cursor = egui::text_selection::CCursorRange::two(
+            egui::epaint::text::cursor::CCursor::new(a),
+            egui::epaint::text::cursor::CCursor::new(b),
+        );
+        state.cursor.set_char_range(Some(cursor));
+        state.store(ui.ctx(), id);
+        // 选区变化后让内容区拿回焦点（菜单点击会夺走焦点）
+        ui.memory_mut(|m| m.request_focus(id));
+        self.sel_range = Some((a, b));
+        self.pending_select_all = false;
+        self.pending_caret = None;
     }
 }
 
@@ -968,5 +1102,87 @@ mod tests {
         assert_eq!(t.search_files("", "x"), 0);
         assert_eq!(t.search_files(d.path().to_str().unwrap(), ""), 0);
         assert_eq!(t.file_hits_total, 0);
+    }
+
+    // ---- P65：编辑菜单标准动作（剪切/复制/粘贴/删除/全选）----
+
+    /// 设置选区（模拟内容区 TextEdit 上报的 char 选区）
+    fn with_selection(mut t: TextEditTab, range: (usize, usize)) -> TextEditTab {
+        t.sel_range = Some(range);
+        t
+    }
+
+    #[test]
+    fn apply_edit_op_cut_removes_selection_and_undo_restores() {
+        let d = tempdir().unwrap();
+        let mut t = TextEditTab::new(&write(d.path(), "a.txt", "hello world\n"));
+        t.sel_range = Some((0, 5));
+        assert!(t.apply_edit_op(super::super::edit_ops::EditOp::Cut));
+        assert_eq!(t.content, " world\n", "剪切应删除选区");
+        assert_eq!(t.sel_range, Some((0, 0)), "剪切后光标落到插入点");
+        assert!(t.undo(), "剪切应可撤销");
+        assert_eq!(t.content, "hello world\n");
+    }
+
+    #[test]
+    fn apply_edit_op_delete_only_with_selection() {
+        let d = tempdir().unwrap();
+        let mut t = TextEditTab::new(&write(d.path(), "a.txt", "abcdef\n"));
+        // 无选区：删除是空操作（不产生修改、不入撤销栈）
+        t.sel_range = Some((3, 3));
+        assert!(!t.apply_edit_op(super::super::edit_ops::EditOp::Delete));
+        assert_eq!(t.content, "abcdef\n");
+        // 有选区：删除
+        t.sel_range = Some((1, 4));
+        assert!(t.apply_edit_op(super::super::edit_ops::EditOp::Delete));
+        assert_eq!(t.content, "aef\n");
+    }
+
+    #[test]
+    fn apply_edit_op_select_all_marks_whole_text() {
+        let d = tempdir().unwrap();
+        let mut t = TextEditTab::new(&write(d.path(), "a.txt", "中文ab\n"));
+        assert!(
+            !t.apply_edit_op(super::super::edit_ops::EditOp::SelectAll),
+            "全选不改内容"
+        );
+        assert_eq!(t.sel_range, Some((0, 5)), "char 索引（中文算 1 个）");
+    }
+
+    #[test]
+    fn apply_edit_op_copy_needs_selection() {
+        let d = tempdir().unwrap();
+        let mut t = TextEditTab::new(&write(d.path(), "a.txt", "abcdef\n"));
+        t.sel_range = Some((2, 2));
+        assert!(!t.apply_edit_op(super::super::edit_ops::EditOp::Copy));
+        assert_eq!(t.content, "abcdef\n");
+    }
+
+    #[test]
+    fn apply_edit_op_ignored_in_syntax_preview_mode() {
+        let d = tempdir().unwrap();
+        let mut t = with_selection(
+            TextEditTab::new(&write(d.path(), "a.txt", "abcdef\n")),
+            (0, 3),
+        );
+        t.show_syntax = true; // 语法高亮预览 = 只读渲染
+        assert!(!t.is_editable());
+        assert!(!t.apply_edit_op(super::super::edit_ops::EditOp::Cut));
+        assert_eq!(t.content, "abcdef\n", "预览模式不接编辑动作");
+        t.show_syntax = false;
+        assert!(t.is_editable());
+    }
+
+    #[test]
+    fn apply_edit_op_paste_inserts_clipboard_text_when_available() {
+        let d = tempdir().unwrap();
+        let mut t = TextEditTab::new(&write(d.path(), "a.txt", "ab\n"));
+        t.sel_range = Some((1, 1));
+        // headless/CI 无剪贴板时该动作返回 false 且不改内容，不 panic
+        let ok = t.apply_edit_op(super::super::edit_ops::EditOp::Paste);
+        assert!(t.content.ends_with('\n'), "内容始终以换行结尾");
+        if ok {
+            assert!(t.content.contains('\n') && t.content.len() > 3);
+        }
     }
 }

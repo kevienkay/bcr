@@ -3728,3 +3728,235 @@ fn close_tab_removes_and_fixes_active() {
     assert_eq!(app.tabs.len(), 1, "应关闭一个标签");
     assert_eq!(app.active, 0, "关闭末尾标签后 active 应回退");
 }
+
+// ---- P65：编辑菜单标准动作按会话类型路由（BC 5.2.5 设计稿 menus.html 画板②）----
+
+/// 只读比较会话（含合并会话）：编辑动作置灰（规则）+ 不产生副作用（路由）
+#[test]
+fn edit_ops_grayed_and_noop_for_readonly_sessions() {
+    for tab in [
+        super::Tab::Diff(DiffTab::new()),
+        super::Tab::Dir(DirTab::new("", "")),
+        super::Tab::Csv(CsvTab::new("", "")),
+        super::Tab::Image(ImageTab::new("", "")),
+        super::Tab::Merge(MergeTab::new("", "", "")),
+        super::Tab::Patch(PatchTab::new("")),
+    ] {
+        let mut app = super::DiffApp::new(super::Settings::default());
+        app.add_tab(tab);
+        assert!(
+            !super::menu_rules::clipboard_ops_enabled(&app),
+            "只读比较会话/合并会话：编辑动作应置灰"
+        );
+        for op in super::edit_ops::EditOp::ALL {
+            assert!(!app.active_edit_op(op), "无目标时动作应为空操作: {op:?}");
+        }
+    }
+}
+
+/// 文本编辑会话：菜单动作真实作用到内容（剪切 → 内容变化 → 撤销恢复）
+#[test]
+fn edit_ops_dispatch_to_text_edit_session() {
+    let d = tempdir().unwrap();
+    let p = write(d.path(), "e.txt", "hello world\n");
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::TextEdit(TextEditTab::new(&p)));
+    assert!(
+        super::menu_rules::clipboard_ops_enabled(&app),
+        "文本编辑会话应可用"
+    );
+    if let super::Tab::TextEdit(t) = &mut app.tabs[0] {
+        t.sel_range = Some((0, 5));
+    }
+    assert!(
+        app.active_edit_op(super::edit_ops::EditOp::Cut),
+        "剪切应产生修改"
+    );
+    if let super::Tab::TextEdit(t) = &app.tabs[0] {
+        assert_eq!(t.content, " world\n");
+    }
+    assert!(app.undo_active(), "撤销应路由到文本编辑会话");
+    if let super::Tab::TextEdit(t) = &app.tabs[0] {
+        assert_eq!(t.content, "hello world\n", "撤销后内容恢复");
+    }
+}
+
+/// 合并会话：撤销/重做应路由到 MergeTab（此前只转发 DiffTab，是空操作）
+#[test]
+fn undo_routes_to_merge_session() {
+    let d = tempdir().unwrap();
+    let base = write(d.path(), "b.txt", "line1\nline2\n");
+    let left = write(d.path(), "l.txt", "LEFT1\nline2\n");
+    let right = write(d.path(), "r.txt", "RIGHT1\nline2\n");
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Merge(MergeTab::new(&base, &left, &right)));
+    if let super::Tab::Merge(t) = &mut app.tabs[0] {
+        t.next_conflict();
+        t.resolve_current(crate::mergeview::Resolution::Left);
+    }
+    assert!(app.undo_active(), "合并会话撤销应生效");
+    assert!(app.redo_active(), "合并会话重做应生效");
+}
+
+/// P65：全选后渲染一帧，egui 的 TextEdit 选区状态应被同步（不 panic、选区生效）
+#[test]
+fn edit_op_select_all_syncs_egui_text_edit_state() {
+    let d = tempdir().unwrap();
+    let p = write(d.path(), "se.txt", "one\ntwo\n");
+    let tab = RefCell::new(TextEditTab::new(&p));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    // 编辑模式（默认）下执行菜单「全选」
+    assert!(
+        !tab.borrow_mut()
+            .apply_edit_op(super::edit_ops::EditOp::SelectAll),
+        "全选不改内容"
+    );
+    h.run(); // 触发 sync_egui_cursor（写回 TextEditState + 请求焦点）
+    let sel = tab.borrow().selection().expect("应记录全选选区");
+    assert_eq!(sel, (0, 8), "全选覆盖全部字符（one\\ntwo\\n = 8）");
+    // 随后「复制」应把整段文本写入剪贴板（headless 不可用时也不 panic）
+    assert!(!tab
+        .borrow_mut()
+        .apply_edit_op(super::edit_ops::EditOp::Copy));
+    h.run();
+}
+
+/// P65：剪切/粘贴/删除在渲染循环中与 egui 内容区共存（不 panic，内容一致）
+#[test]
+fn edit_op_cut_then_render_keeps_content_in_sync() {
+    let d = tempdir().unwrap();
+    let p = write(d.path(), "se2.txt", "alpha beta\n");
+    let tab = RefCell::new(TextEditTab::new(&p));
+    let mut h = Harness::new_ui(|ui| tab.borrow_mut().ui(ui));
+    h.run();
+    {
+        let mut t = tab.borrow_mut();
+        t.sel_range = Some((0, 5)); // "alpha"
+    }
+    assert!(tab.borrow_mut().apply_edit_op(super::edit_ops::EditOp::Cut));
+    h.run();
+    assert_eq!(tab.borrow().content, " beta\n");
+    assert!(tab.borrow_mut().undo());
+    h.run();
+    assert_eq!(tab.borrow().content, "alpha beta\n", "撤销后内容恢复");
+}
+
+// ---- P65：窗口菜单「移动标签页到新窗口 / 合并所有窗口」（注入启动器与注册表目录）----
+
+/// 移动标签页到新窗口：写单标签工作空间 → 启动新窗口（测试用 /bin/echo 替身）→ 本窗口移除该标签
+#[test]
+fn move_tab_to_new_window_writes_workspace_and_closes_tab() {
+    let d = tempdir().unwrap();
+    let l = write(d.path(), "l.txt", "a\n");
+    let r = write(d.path(), "r.txt", "b\n");
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Dir(DirTab::new(&l, &r)));
+    app.add_tab(super::Tab::Dir(DirTab::new(&l, &r)));
+    // 注入替身启动器：不真的开窗，但参数（gui --workspace <file>）照常传递
+    app.win_launcher = Some(std::path::PathBuf::from("/bin/echo"));
+    assert!(
+        super::menu_rules::move_tab_enabled(&app),
+        "两个可重建标签 → 移动项应可用"
+    );
+    let res = app.move_tab_to_new_window();
+    assert!(res.is_ok(), "移动应成功: {res:?}");
+    assert_eq!(app.tabs.len(), 1, "被移动的标签应从本窗口移除");
+    // 单标签后该项应置灰（设计稿规则）
+    assert!(!super::menu_rules::move_tab_enabled(&app));
+    // 工作空间临时文件应写出且可解析（新窗口用它重建标签）
+    let ws = super::windows::temp_workspace_path(std::process::id(), 1);
+    let text = fs::read_to_string(&ws).expect("应写出工作空间文件");
+    assert!(text.contains("dir"), "工作空间应含会话类型: {text}");
+    assert!(text.contains(&l), "工作空间应含左侧路径");
+    let _ = fs::remove_file(&ws);
+}
+
+/// 不确定的会话（文本编辑）不能移动到新窗口：返回错误且不改动标签
+#[test]
+fn move_tab_to_new_window_rejects_unsaved_editor() {
+    let d = tempdir().unwrap();
+    let p = write(d.path(), "e.txt", "x\n");
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.add_tab(super::Tab::Dir(DirTab::new(
+        &d.path().to_string_lossy(),
+        "",
+    )));
+    app.add_tab(super::Tab::TextEdit(TextEditTab::new(&p)));
+    app.active = 1;
+    app.win_launcher = Some(std::path::PathBuf::from("/bin/echo"));
+    let res = app.move_tab_to_new_window();
+    assert!(res.is_err(), "文本编辑会话为未保存内存态，应拒绝移动");
+    assert_eq!(app.tabs.len(), 2, "被拒绝时不应关闭标签");
+}
+
+/// 合并所有窗口：把对端窗口的可重建会话并入本窗口，并请求对端退出；
+/// 含未保存编辑缓冲区的对端窗口保持原样（不请求退出）。
+#[test]
+fn merge_all_windows_opens_peer_sessions_and_closes_mergeable_peers() {
+    let d = tempdir().unwrap();
+    let reg = d.path().join("reg");
+    let l = write(d.path(), "l.txt", "a\n");
+    let r = write(d.path(), "r.txt", "b\n");
+    let mut app = super::DiffApp::new(super::Settings::default());
+    app.win_registry = Some(reg.clone());
+    app.add_tab(super::Tab::Dir(DirTab::new(&l, &r)));
+    app.add_tab(super::Tab::Dir(DirTab::new(&r, &l)));
+    // 对端窗口 A：2 个标签全部可重建 → 应被请求退出
+    super::windows::register(
+        &reg,
+        990_001,
+        2,
+        &[
+            super::windows::Session {
+                kind: "dir".into(),
+                left: l.clone(),
+                right: r.clone(),
+            },
+            super::windows::Session {
+                kind: "diff".into(),
+                left: l.clone(),
+                right: r.clone(),
+            },
+        ],
+    )
+    .unwrap();
+    // 对端窗口 B：2 个标签里只有 1 个可重建（另一个是文本编辑）→ 保持原样
+    super::windows::register(
+        &reg,
+        990_002,
+        2,
+        &[super::windows::Session {
+            kind: "dir".into(),
+            left: l.clone(),
+            right: r.clone(),
+        }],
+    )
+    .unwrap();
+    assert!(
+        super::menu_rules::merge_windows_enabled(&app),
+        "有对端 → 可用"
+    );
+    let (opened, closed) = app.merge_all_windows().expect("合并应成功");
+    assert_eq!(opened, 3, "并入对端 A 的 2 个 + 对端 B 的 1 个");
+    assert_eq!(app.tabs.len(), 5, "原有 2 个 + 并入 3 个");
+    assert_eq!(closed, 1, "只请求「全部标签可重建」的窗口退出");
+    assert!(
+        super::windows::exit_requested(&reg, 990_001),
+        "对端 A 应收到退出请求"
+    );
+    assert!(
+        !super::windows::exit_requested(&reg, 990_002),
+        "含未保存编辑缓冲区的对端 B 不应被关闭"
+    );
+    // 并入顺序按对端 pid 升序：990_001 的 dir/diff 在前，990_002 的 dir 在后
+    assert!(
+        app.tabs[2].title().contains("l.txt"),
+        "第 3 个标签应来自对端 A: {}",
+        app.tabs[2].title()
+    );
+    assert!(
+        matches!(app.tabs[3], super::Tab::Diff(_)),
+        "第 4 个标签应是对端 A 的 diff 标签"
+    );
+}

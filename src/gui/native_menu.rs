@@ -119,6 +119,15 @@ pub enum MenuCmd {
     PrevTakenRight,
     InsertCsvCol,
     EditCsvCell,
+    /// P65：编辑菜单标准动作（BC 剪切 ⌘X / 复制 ⌘C / 粘贴 ⌘V / 删除 / 全选 ⌘A）
+    EditCut,
+    EditCopy,
+    EditPaste,
+    EditDelete,
+    EditSelectAll,
+    /// P65：窗口菜单（BC 移动标签页到新窗口 / 合并所有窗口）
+    MoveTabToWindow,
+    MergeAllWindows,
     HexLayoutTop,
     TextConvertCrlf,
     TextConvertLf,
@@ -242,6 +251,13 @@ pub fn cmd_from_id(id: &str) -> Option<MenuCmd> {
         "convert_file" => MenuCmd::ConvertFile,
         "select_all_diff" => MenuCmd::DiffSelectAll,
         "selection_clip" => MenuCmd::SelectionToClipboard,
+        "edit_cut" => MenuCmd::EditCut,
+        "edit_copy" => MenuCmd::EditCopy,
+        "edit_paste" => MenuCmd::EditPaste,
+        "edit_delete" => MenuCmd::EditDelete,
+        "edit_select_all" => MenuCmd::EditSelectAll,
+        "move_tab_window" => MenuCmd::MoveTabToWindow,
+        "merge_windows" => MenuCmd::MergeAllWindows,
         "start_edit" => MenuCmd::StartEdit,
         "next_replace" => MenuCmd::NextReplace,
         "prev_replace" => MenuCmd::PrevReplace,
@@ -313,8 +329,30 @@ pub fn menu_state_plan(app: &crate::gui::DiffApp) -> Vec<(&'static str, bool)> {
     ] {
         plan.push((id, edit_enabled));
     }
+    // P65：标准编辑动作（剪切/复制/粘贴/删除/全选）——设计稿要求只读比较会话置灰，
+    // 且这 5 项需要**文本选区**才能真正生效；当前仅文本编辑会话（编辑模式）具备，
+    // 故用比 edit_enabled 更严的 clipboard_ops_enabled（合并会话暂无文本选区模型）。
+    let clipboard_ops = crate::gui::menu_rules::clipboard_ops_enabled(app);
+    for id in [
+        "edit_cut",
+        "edit_copy",
+        "edit_paste",
+        "edit_delete",
+        "edit_select_all",
+    ] {
+        plan.push((id, clipboard_ops));
+    }
     // 视图：图片「重置差异偏移」在偏移为 0 时置灰
     plan.push(("image_reset_diff", image_offset));
+    // P65：窗口菜单的多窗口项（设计稿：单标签时置灰）
+    plan.push((
+        "move_tab_window",
+        crate::gui::menu_rules::move_tab_enabled(app),
+    ));
+    plan.push((
+        "merge_windows",
+        crate::gui::menu_rules::merge_windows_enabled(app),
+    ));
     plan
 }
 
@@ -322,6 +360,7 @@ pub fn menu_state_plan(app: &crate::gui::DiffApp) -> Vec<(&'static str, bool)> {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod plat {
     use super::*;
+    use muda::accelerator::{Accelerator, Code, Modifiers};
     use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -361,6 +400,22 @@ mod plat {
     fn fixed(id: &str, label: &str) -> MenuItem {
         let it = MenuItem::with_id(id, label, true, None);
         register(id, it.clone());
+        it
+    }
+
+    /// P65：标准编辑动作的原生菜单项（BC 编辑菜单 剪切 ⌘X / 复制 ⌘C / 粘贴 ⌘V /
+    /// 删除 / 全选 ⌘A）。id 与 `EditOp::cmd_id` 一致，供 `cmd_from_id` 还原命令。
+    fn edit_op_item(op: crate::gui::edit_ops::EditOp) -> MenuItem {
+        use crate::gui::edit_ops::EditOp;
+        let accel = match op {
+            EditOp::Cut => Some(Accelerator::new(Some(Modifiers::META), Code::KeyX)),
+            EditOp::Copy => Some(Accelerator::new(Some(Modifiers::META), Code::KeyC)),
+            EditOp::Paste => Some(Accelerator::new(Some(Modifiers::META), Code::KeyV)),
+            EditOp::Delete => None,
+            EditOp::SelectAll => Some(Accelerator::new(Some(Modifiers::META), Code::KeyA)),
+        };
+        let it = MenuItem::with_id(op.cmd_id(), crate::i18n::t(op.i18n()), true, accel);
+        register(op.cmd_id(), it.clone());
         it
     }
 
@@ -454,6 +509,12 @@ mod plat {
             let m = submenu("edit", crate::i18n::Key::MenuEdit);
             m.append(&item("undo", crate::i18n::Key::MenuUndo));
             m.append(&item("redo", crate::i18n::Key::MenuRedo));
+            m.append(&PredefinedMenuItem::separator());
+            // P65：标准编辑动作（cut/copy/paste/delete/select all）
+            // 可用性：只读比较会话一律置灰，文本编辑会话可用（menu_state_plan）
+            for op in crate::gui::edit_ops::EditOp::ALL {
+                m.append(&edit_op_item(op));
+            }
             m.append(&PredefinedMenuItem::separator());
             m.append(&item("copy_right", crate::i18n::Key::CopyToRight));
             m.append(&item("copy_left", crate::i18n::Key::CopyToLeft));
@@ -609,6 +670,16 @@ mod plat {
             let m = submenu("window", crate::i18n::Key::MenuWindow);
             m.append(&item("next_tab", crate::i18n::Key::MenuNextTab));
             m.append(&item("prev_tab", crate::i18n::Key::MenuPrevTab));
+            m.append(&PredefinedMenuItem::separator());
+            // P65：多窗口项（单标签时置灰，见 menu_state_plan）
+            m.append(&item(
+                "move_tab_window",
+                crate::i18n::Key::MenuMoveTabToWindow,
+            ));
+            m.append(&item(
+                "merge_windows",
+                crate::i18n::Key::MenuMergeAllWindows,
+            ));
             m.append(&PredefinedMenuItem::separator());
             m.append(&item("minimize", crate::i18n::Key::MenuMinimize));
             m.append(&item("close_all", crate::i18n::Key::MenuCloseAllWindows));
@@ -811,5 +882,59 @@ mod tests {
             plan_enabled(&app, "close_others"),
             "多标签：关闭其它标签页应可用"
         );
+    }
+
+    // ---- P65：标准编辑动作（剪切/复制/粘贴/删除/全选）----
+
+    #[test]
+    fn edit_op_ids_map_to_commands() {
+        use crate::gui::edit_ops::EditOp;
+        // id 必须与 EditOp::cmd_id 一致（原生菜单点击 → 命令还原）
+        for (id, cmd) in [
+            ("edit_cut", MenuCmd::EditCut),
+            ("edit_copy", MenuCmd::EditCopy),
+            ("edit_paste", MenuCmd::EditPaste),
+            ("edit_delete", MenuCmd::EditDelete),
+            ("edit_select_all", MenuCmd::EditSelectAll),
+        ] {
+            assert_eq!(cmd_from_id(id), Some(cmd), "id `{id}` 应可还原");
+        }
+        // 五个动作的 id 各不相同
+        let ids: Vec<&str> = EditOp::ALL.map(|o| o.cmd_id()).to_vec();
+        let mut uniq = ids.clone();
+        uniq.sort_unstable();
+        uniq.dedup();
+        assert_eq!(uniq.len(), 5, "动作 id 应唯一: {ids:?}");
+    }
+
+    #[test]
+    fn edit_op_items_grayed_in_readonly_and_enabled_in_text_edit() {
+        use crate::gui::edit_ops::EditOp;
+        let ids = EditOp::ALL.map(|o| o.cmd_id());
+        // 只读比较会话（Diff）：5 项全部置灰（设计稿画板②）
+        let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
+        app.add_tab(crate::gui::Tab::Diff(super::super::difftab::DiffTab::new()));
+        for id in ids {
+            assert!(!plan_enabled(&app, id), "只读会话：{id} 应置灰");
+        }
+        // 合并会话：左/右栏无文本选区模型 → 同样置灰（P65 缺口，见 CHANGELOG）
+        let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
+        app.add_tab(crate::gui::Tab::Merge(
+            super::super::mergetab::MergeTab::new("", "", ""),
+        ));
+        for id in ids {
+            assert!(
+                !plan_enabled(&app, id),
+                "合并会话（无选区模型）：{id} 应置灰"
+            );
+        }
+        // 文本编辑会话：5 项全部可用
+        let mut app = crate::gui::DiffApp::new(crate::gui::Settings::default());
+        app.add_tab(crate::gui::Tab::TextEdit(
+            super::super::textedit::TextEditTab::new(""),
+        ));
+        for id in ids {
+            assert!(plan_enabled(&app, id), "文本编辑会话：{id} 应可用");
+        }
     }
 }

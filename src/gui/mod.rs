@@ -9,6 +9,8 @@ mod common;
 mod csvtab;
 mod difftab;
 mod dirtab;
+/// P65：标准编辑动作（剪切/复制/粘贴/删除/全选）的纯逻辑与剪贴板 IO
+mod edit_ops;
 mod foldermergetab;
 mod icons;
 mod imagetab;
@@ -27,6 +29,8 @@ mod ui_snap;
 #[cfg(test)]
 mod uikit_tests;
 mod widgets;
+/// P65：多窗口协调（窗口注册表 / 移动标签页到新窗口 / 合并所有窗口）
+mod windows;
 
 use crate::sideview::ViewOptions;
 use common::*;
@@ -86,6 +90,11 @@ pub struct GuiArgs {
     /// P37-1i：文件夹合并（BASE LEFT RIGHT 输出目录，BC Folder Merge）
     #[arg(long = "merge-dir", num_args = 4, value_names = ["BASE", "LEFT", "RIGHT", "OUT"])]
     pub merge_dir: Option<Vec<String>>,
+
+    /// P65：启动时载入工作空间文件（TOML，含多个会话标签）——
+    /// 「移动标签页到新窗口」用它在新区进程里重建被移动的标签。
+    #[arg(long = "workspace")]
+    pub workspace: Option<String>,
 }
 
 /// 标签页
@@ -312,6 +321,19 @@ struct DiffApp {
     quit_requested: bool,
     /// P58：主题已通过原生菜单切换，下一帧应用
     theme_changed: bool,
+    // ---- P65：多窗口（窗口菜单 移动标签页到新窗口 / 合并所有窗口）----
+    /// 是否参与跨进程窗口注册表（仅真实 GUI 运行开启，测试与 CLI 路径不写文件）
+    multi_window: bool,
+    /// 上次写入注册表心跳的时间
+    win_heartbeat: Option<std::time::Instant>,
+    /// 上次检查「被要求退出」的时间
+    win_exit_poll: Option<std::time::Instant>,
+    /// 移动标签到新窗口的序号（临时文件名唯一）
+    win_move_seq: u64,
+    /// 新窗口启动器（默认 = 当前可执行文件；测试注入 `/bin/echo` 等替身）
+    win_launcher: Option<std::path::PathBuf>,
+    /// 窗口注册表目录覆盖（默认 `~/.bcr-windows`；测试注入临时目录）
+    win_registry: Option<std::path::PathBuf>,
 }
 
 impl DiffApp {
@@ -352,12 +374,26 @@ impl DiffApp {
             show_log: false,
             log: Vec::new(),
             show_info: false,
+            multi_window: false,
+            win_heartbeat: None,
+            win_exit_poll: None,
+            win_move_seq: 0,
+            win_launcher: None,
+            win_registry: None,
         }
     }
 
     fn add_tab(&mut self, tab: Tab) {
         self.tabs.push(tab);
         self.active = self.tabs.len() - 1;
+    }
+
+    /// P65：写一条操作日志（视图>日志面板可见；最多保留 200 条）
+    fn log(&mut self, msg: String) {
+        self.log.push(msg);
+        if self.log.len() > 200 {
+            self.log.remove(0);
+        }
     }
 
     /// P46-5：保存工作空间（BC 会话>保存工作空间为...）——标签布局 TOML 持久化
@@ -372,24 +408,17 @@ impl DiffApp {
         struct WsFile {
             tabs: Vec<WsTab>,
         }
+        // P65：改用统一的 `tab_session`（覆盖 6 种可重建会话，与
+        // 「加载工作空间」「合并所有窗口」保持同一份类型映射）
         let tabs: Vec<WsTab> = self
             .tabs
             .iter()
             .filter_map(|t| {
-                let (l, r) = session_paths(t)?;
-                let kind = match t {
-                    Tab::Diff(_) => "diff".to_string(),
-                    Tab::Dir(_) => "dir".to_string(),
-                    Tab::Merge(_) => "merge".to_string(),
-                    Tab::Image(_) => "image".to_string(),
-                    Tab::Csv(_) => "csv".to_string(),
-                    Tab::Media(_) => "media".to_string(),
-                    _ => return None,
-                };
+                let s = tab_session(t)?;
                 Some(WsTab {
-                    kind,
-                    left: l,
-                    right: r,
+                    kind: s.kind,
+                    left: s.left,
+                    right: s.right,
                 })
             })
             .collect();
@@ -420,23 +449,148 @@ impl DiffApp {
         self.tabs.clear();
         self.active = 0;
         for t in ws.tabs {
-            let tab = match t.kind.as_str() {
-                "diff" => {
-                    let mut d = DiffTab::new();
-                    d.load_pair(&t.left, &t.right, ViewOptions::default());
-                    Tab::Diff(d)
-                }
-                "dir" => Tab::Dir(DirTab::new(&t.left, &t.right)),
-                "merge" => Tab::Merge(MergeTab::new("", &t.left, &t.right)),
-                "image" => Tab::Image(ImageTab::new(&t.left, &t.right)),
-                "csv" => Tab::Csv(CsvTab::new(&t.left, &t.right)),
-                "media" => Tab::Media(MediaTab::new(&t.left, &t.right)),
-                _ => continue,
+            // P65：与「合并所有窗口」共用同一重建路径
+            let s = windows::Session {
+                kind: t.kind,
+                left: t.left,
+                right: t.right,
             };
-            self.tabs.push(tab);
+            if let Some(tab) = tab_from_session(&s) {
+                self.tabs.push(tab);
+            }
         }
         self.active = self.tabs.len().saturating_sub(1);
         Ok(())
+    }
+
+    // ---- P65：窗口菜单「移动标签页到新窗口 / 合并所有窗口」----
+
+    /// 当前标签是否可移动（= 有可重建的会话表示；文本编辑/补丁/文件夹合并为内存态，不参与）
+    fn active_movable_session(&self) -> Option<windows::Session> {
+        tab_session(self.tabs.get(self.active)?)
+    }
+
+    /// 菜单规则查询用：当前标签的可重建会话（`menu_rules` 的 `move_tab_enabled`）
+    pub(crate) fn movable_session(&self) -> Option<windows::Session> {
+        self.active_movable_session()
+    }
+
+    /// 菜单规则查询用：心跳有效的对端窗口数（`menu_rules` 的 `merge_windows_enabled`）
+    pub(crate) fn peer_windows(&self) -> usize {
+        windows::scan_peers(&self.registry_dir(), std::process::id()).len()
+    }
+
+    /// 窗口注册表目录（测试可注入；默认 `~/.bcr-windows`）
+    fn registry_dir(&self) -> std::path::PathBuf {
+        self.win_registry
+            .clone()
+            .unwrap_or_else(windows::registry_dir)
+    }
+
+    /// BC 窗口菜单「移动标签页到新窗口」：把当前标签写成单标签工作空间，
+    /// 启动新进程载入（`gui --workspace <file>`），然后关闭本窗口的该标签。
+    fn move_tab_to_new_window(&mut self) -> Result<(), String> {
+        let session = self.active_movable_session().ok_or_else(|| {
+            "当前会话无法移动到新窗口（文本编辑/补丁视图为未保存的内存态）".to_string()
+        })?;
+        self.win_move_seq += 1;
+        let pid = std::process::id();
+        let ws = windows::temp_workspace_path(pid, self.win_move_seq);
+        windows::write_single_session_workspace(&ws, &session)?;
+        let exe = match self.win_launcher.clone() {
+            Some(p) => p,
+            None => std::env::current_exe().map_err(|e| e.to_string())?,
+        };
+        let spawned = std::process::Command::new(exe)
+            .arg("gui")
+            .arg("--workspace")
+            .arg(&ws)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        match spawned {
+            Ok(child) => {
+                // 新窗口是独立进程：不阻塞、不等待（BC 语义：新窗口立即出现）
+                let moved = self.tabs.get(self.active).map(|t| t.title());
+                self.log(format!(
+                    "移动标签页到新窗口: {} (pid {})",
+                    moved.unwrap_or_default(),
+                    child.id()
+                ));
+                self.close_tab(self.active);
+                Ok(())
+            }
+            Err(e) => Err(format!("启动新窗口失败: {e}")),
+        }
+    }
+
+    /// BC 窗口菜单「合并所有窗口」：把其它窗口的会话在本窗口打开，
+    /// 并请「标签全部可重建」的窗口退出（含未保存编辑缓冲区的窗口保持原样）。
+    /// 返回 (已并入标签数, 已请求退出的窗口数)。
+    fn merge_all_windows(&mut self) -> Result<(usize, usize), String> {
+        let dir = self.registry_dir();
+        let peers = windows::scan_peers(&dir, std::process::id());
+        if peers.is_empty() {
+            return Err("没有其它窗口可合并".to_string());
+        }
+        let mut opened = 0usize;
+        let mut closed = 0usize;
+        for peer in peers {
+            for s in &peer.sessions {
+                if let Some(tab) = tab_from_session(s) {
+                    self.add_tab(tab);
+                    opened += 1;
+                }
+            }
+            if peer.mergeable() {
+                // 仅当对方全部标签都已在本窗口重建，才请求其退出
+                if windows::request_exit(&dir, peer.pid).is_ok() {
+                    closed += 1;
+                }
+            }
+        }
+        if opened == 0 {
+            return Err("其它窗口没有可合并的会话".to_string());
+        }
+        self.log(format!(
+            "合并所有窗口: 并入 {opened} 个标签，关闭 {closed} 个窗口"
+        ));
+        Ok((opened, closed))
+    }
+
+    /// P65：每帧（节流）刷新本窗口注册表心跳 + 检查是否被要求退出
+    fn poll_windows(&mut self, ctx: &egui::Context) {
+        if !self.multi_window {
+            return;
+        }
+        // egui 是事件驱动的：窗口空闲时不会有新帧，心跳与「被请求退出」都会停摆。
+        // 参与多窗口时每秒请求一次重绘，保证心跳与被合并退出都能按时生效。
+        ctx.request_repaint_after(std::time::Duration::from_millis(1000));
+        let dir = self.registry_dir();
+        let pid = std::process::id();
+        let now = std::time::Instant::now();
+        let due_heartbeat = self
+            .win_heartbeat
+            .map(|t| now.duration_since(t).as_secs_f32() > 2.0)
+            .unwrap_or(true);
+        if due_heartbeat {
+            self.win_heartbeat = Some(now);
+            let sessions: Vec<windows::Session> =
+                self.tabs.iter().filter_map(tab_session).collect();
+            let _ = windows::register(&dir, pid, self.tabs.len(), &sessions);
+        }
+        let due_poll = self
+            .win_exit_poll
+            .map(|t| now.duration_since(t).as_secs_f32() > 1.0)
+            .unwrap_or(true);
+        if due_poll {
+            self.win_exit_poll = Some(now);
+            if windows::exit_requested(&dir, pid) {
+                windows::unregister(&dir, pid);
+                self.settings.save();
+                self.quit_requested = true;
+            }
+        }
     }
 
     fn close_tab(&mut self, idx: usize) {
@@ -1725,6 +1879,47 @@ fn session_paths(t: &Tab) -> Option<(String, String)> {
     }
 }
 
+/// P65：标签 → 可重建会话（工作空间保存 / 移动标签到新窗口 / 窗口注册表共用）
+///
+/// 只有「路径即全部状态」的会话类型可重建；文本编辑、补丁、文件夹合并含未保存的
+/// 内存态，返回 `None`（这类标签不会被跨窗口搬运，避免丢内容）。
+fn tab_session(t: &Tab) -> Option<windows::Session> {
+    let (kind, left, right) = match t {
+        Tab::Diff(d) => match (&d.left, &d.right) {
+            (Some(l), Some(r)) => ("diff", l.path.clone(), r.path.clone()),
+            _ => return None,
+        },
+        Tab::Dir(d) => ("dir", d.left.clone(), d.right.clone()),
+        Tab::Merge(m) => ("merge", m.left_path.clone(), m.right_path.clone()),
+        Tab::Image(i) => ("image", i.left.clone(), i.right.clone()),
+        Tab::Csv(c) => ("csv", c.left.clone(), c.right.clone()),
+        Tab::Media(m) => ("media", m.left.clone(), m.right.clone()),
+        _ => return None,
+    };
+    Some(windows::Session {
+        kind: kind.to_string(),
+        left,
+        right,
+    })
+}
+
+/// P65：可重建会话 → 标签（加载工作空间 / 合并窗口共用）
+fn tab_from_session(s: &windows::Session) -> Option<Tab> {
+    Some(match s.kind.as_str() {
+        "diff" => {
+            let mut d = DiffTab::new();
+            d.load_pair(&s.left, &s.right, ViewOptions::default());
+            Tab::Diff(d)
+        }
+        "dir" => Tab::Dir(DirTab::new(&s.left, &s.right)),
+        "merge" => Tab::Merge(MergeTab::new("", &s.left, &s.right)),
+        "image" => Tab::Image(ImageTab::new(&s.left, &s.right)),
+        "csv" => Tab::Csv(CsvTab::new(&s.left, &s.right)),
+        "media" => Tab::Media(MediaTab::new(&s.left, &s.right)),
+        _ => return None,
+    })
+}
+
 /// P39-2c：DiffTab 文本报告预览（统计 + 差异行摘要）
 fn diff_report_preview(t: &crate::gui::difftab::DiffTab) -> String {
     let mut out = String::new();
@@ -1760,6 +1955,8 @@ impl eframe::App for DiffApp {
         for cmd in crate::gui::native_menu::drain() {
             self.run_menu_cmd(ui, cmd);
         }
+        // P65：多窗口心跳 + 「被要求合并退出」检查
+        self.poll_windows(ui.ctx());
         // P1（BC 5.2.5 设计稿）：把菜单置灰规则同步到原生菜单（macOS/Windows）
         crate::gui::native_menu::sync_state(self);
         // P58：空文件对比页(打开对比页面) 的两半分栏 —— 同步最近路径历史 + 汲取其待记历史
@@ -2757,6 +2954,10 @@ impl eframe::App for DiffApp {
 
     fn on_exit(&mut self) {
         self.settings.save();
+        // P65：注销窗口注册表条目（合并退出的窗口同样在此清理）
+        if self.multi_window {
+            windows::unregister(&self.registry_dir(), std::process::id());
+        }
     }
 }
 
@@ -2874,8 +3075,45 @@ impl DiffApp {
             Cmd::OpenLeft => self.open_active_left(),
             Cmd::OpenRight => self.open_active_right(),
             Cmd::Refresh => self.reload_current(),
-            Cmd::Undo => self.with_active_diff(|t| t.undo()),
-            Cmd::Redo => self.with_active_diff(|t| t.redo()),
+            // P65：撤销/重做按会话类型转发（Diff 行编辑 / TextEdit 文本 / Merge 冲突解决）
+            Cmd::Undo => {
+                self.undo_active();
+            }
+            Cmd::Redo => {
+                self.redo_active();
+            }
+            // P65：编辑菜单标准动作（BC 剪切 ⌘X / 复制 ⌘C / 粘贴 ⌘V / 删除 / 全选 ⌘A）
+            Cmd::EditCut => {
+                self.active_edit_op(edit_ops::EditOp::Cut);
+            }
+            Cmd::EditCopy => {
+                self.active_edit_op(edit_ops::EditOp::Copy);
+            }
+            Cmd::EditPaste => {
+                self.active_edit_op(edit_ops::EditOp::Paste);
+            }
+            Cmd::EditDelete => {
+                self.active_edit_op(edit_ops::EditOp::Delete);
+            }
+            Cmd::EditSelectAll => {
+                self.active_edit_op(edit_ops::EditOp::SelectAll);
+            }
+            // P65：窗口菜单多窗口项（BC 移动标签页到新窗口 / 合并所有窗口）
+            Cmd::MoveTabToWindow => {
+                if let Err(e) = self.move_tab_to_new_window() {
+                    self.log(format!("移动标签页到新窗口失败: {e}"));
+                    self.report_error = Some(e);
+                }
+            }
+            Cmd::MergeAllWindows => match self.merge_all_windows() {
+                Ok((opened, closed)) => self.log(format!(
+                    "合并窗口：并入 {opened} 个标签，关闭 {closed} 个窗口"
+                )),
+                Err(e) => {
+                    self.log(format!("合并所有窗口失败: {e}"));
+                    self.report_error = Some(e);
+                }
+            },
             Cmd::CopyRight => self.with_active_diff(|t| t.copy_block_to(EditSide::Right)),
             Cmd::CopyLeft => self.with_active_diff(|t| t.copy_block_to(EditSide::Left)),
             Cmd::NextDiff => self.with_active_diff(|t| t.next_diff()),
@@ -3112,6 +3350,52 @@ impl DiffApp {
     fn with_active_diff<R>(&mut self, f: impl FnOnce(&mut DiffTab) -> R) {
         if let Some(Tab::Diff(t)) = self.tabs.get_mut(self.active) {
             f(t);
+        }
+    }
+
+    // ---- P65：标准编辑动作按会话类型路由 ----
+    //
+    // 设计稿 `menus.html` 画板②把「撤销/重做」放在编辑菜单顶部，并规定
+    // 只读比较会话置灰、可编辑会话（文本编辑/文本合并）可用。此前两个入口都
+    // 只转发给 DiffTab，导致文本编辑/合并会话里点撤销是空操作（P65 修复）。
+
+    /// 撤销：按当前标签类型转发（DiffTab 行编辑 / TextEditTab 文本 / MergeTab 冲突解决）
+    fn undo_active(&mut self) -> bool {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::Diff(t)) => {
+                t.undo();
+                true
+            }
+            Some(Tab::TextEdit(t)) => {
+                t.undo();
+                true
+            }
+            Some(Tab::Merge(t)) => t.undo(),
+            _ => false,
+        }
+    }
+
+    /// 重做：与 `undo_active` 同源
+    fn redo_active(&mut self) -> bool {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::Diff(t)) => {
+                t.redo();
+                true
+            }
+            Some(Tab::TextEdit(t)) => {
+                t.redo();
+                true
+            }
+            Some(Tab::Merge(t)) => t.redo(),
+            _ => false,
+        }
+    }
+
+    /// 标准编辑动作（剪切/复制/粘贴/删除/全选）：转发给当前可编辑会话
+    fn active_edit_op(&mut self, op: edit_ops::EditOp) -> bool {
+        match self.tabs.get_mut(self.active) {
+            Some(Tab::TextEdit(t)) => t.apply_edit_op(op),
+            _ => false,
         }
     }
 
@@ -3979,7 +4263,12 @@ pub fn run(args: &GuiArgs) -> i32 {
     let show_stats = app.settings.show_stats;
 
     // CLI 参数初始化标签
-    if let Some(m) = &args.merge {
+    // P65：工作空间文件优先（「移动标签页到新窗口」启动的窗口走这里）
+    if let Some(ws) = &args.workspace {
+        if let Err(e) = app.load_workspace(std::path::Path::new(ws)) {
+            app.log(format!("载入工作空间失败: {e}"));
+        }
+    } else if let Some(m) = &args.merge {
         if m.len() == 3 {
             app.add_tab(Tab::Merge(MergeTab::new(&m[0], &m[1], &m[2])));
         }
@@ -4041,6 +4330,10 @@ pub fn run(args: &GuiArgs) -> i32 {
             (None, None) => {}
         }
     }
+
+    // P65：参与跨进程窗口注册表（窗口菜单 合并所有窗口 靠它发现对端）；
+    // 仅真实 GUI 运行开启，测试/CLI 路径不写用户目录
+    app.multi_window = true;
 
     match eframe::run_native(
         "bcr",
@@ -4681,5 +4974,98 @@ mod tests {
         assert!(crate::csvcmp::is_csv_file("c.tab"));
         assert!(!crate::csvcmp::is_csv_file("d.txt"));
         assert!(!crate::csvcmp::is_csv_file("e.csv.bak"));
+    }
+
+    // ---- P65：多窗口（窗口菜单 移动标签页到新窗口 / 合并所有窗口）----
+
+    #[test]
+    fn tab_session_covers_rebuildable_kinds_only() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.txt", "a\n");
+        let r = write(d.path(), "r.txt", "b\n");
+        // Diff（双侧已加载）→ 可重建
+        let mut diff = DiffTab::new();
+        diff.load_pair(&l, &r, ViewOptions::default());
+        let s = tab_session(&Tab::Diff(diff)).expect("diff 会话可重建");
+        assert_eq!(s.kind, "diff");
+        assert_eq!(
+            (s.left.as_str(), s.right.as_str()),
+            (l.as_str(), r.as_str())
+        );
+        // Dir / Image / Csv / Media / Merge → 各自类型
+        assert_eq!(
+            tab_session(&Tab::Dir(DirTab::new(&l, &r))).unwrap().kind,
+            "dir"
+        );
+        assert_eq!(
+            tab_session(&Tab::Image(ImageTab::new(&l, &r)))
+                .unwrap()
+                .kind,
+            "image"
+        );
+        assert_eq!(
+            tab_session(&Tab::Csv(CsvTab::new(&l, &r))).unwrap().kind,
+            "csv"
+        );
+        assert_eq!(
+            tab_session(&Tab::Media(MediaTab::new(&l, &r)))
+                .unwrap()
+                .kind,
+            "media"
+        );
+        assert_eq!(
+            tab_session(&Tab::Merge(MergeTab::new("", &l, &r)))
+                .unwrap()
+                .kind,
+            "merge"
+        );
+        // 未保存的内存态会话（文本编辑/补丁/文件夹合并）→ 不可重建
+        assert!(tab_session(&Tab::TextEdit(TextEditTab::new(&l))).is_none());
+        assert!(tab_session(&Tab::Patch(PatchTab::new(""))).is_none());
+        assert!(tab_session(&Tab::FolderMerge(FolderMergeTab::new("", "", "", ""))).is_none());
+        // 空会话（两侧空路径）仍可保存/搬运：工作空间往返要保持标签结构一致
+        let empty = tab_session(&Tab::Dir(DirTab::new("", ""))).expect("空目录会话可序列化");
+        assert!(empty.left.is_empty() && empty.right.is_empty());
+    }
+
+    #[test]
+    fn tab_from_session_rebuilds_same_kind() {
+        let d = tempdir().unwrap();
+        let l = write(d.path(), "l.txt", "a\n");
+        let r = write(d.path(), "r.txt", "b\n");
+        for kind in ["diff", "dir", "image", "csv", "media", "merge"] {
+            let s = windows::Session {
+                kind: kind.to_string(),
+                left: l.clone(),
+                right: r.clone(),
+            };
+            let tab = tab_from_session(&s).unwrap_or_else(|| panic!("{kind} 应可重建"));
+            assert_eq!(
+                tab_session(&tab).map(|s| s.kind),
+                Some(kind.to_string()),
+                "{kind} 重建后类型应保持"
+            );
+        }
+        // 未知类型 → None（不 panic）
+        assert!(tab_from_session(&windows::Session {
+            kind: "nope".to_string(),
+            left: l,
+            right: r,
+        })
+        .is_none());
+    }
+
+    #[test]
+    fn workspace_cli_arg_parses() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Cli {
+            #[command(flatten)]
+            gui: GuiArgs,
+        }
+        let c = Cli::try_parse_from(["bcr", "--workspace", "/tmp/ws.toml"]).unwrap();
+        assert_eq!(c.gui.workspace.as_deref(), Some("/tmp/ws.toml"));
+        let c = Cli::try_parse_from(["bcr"]).unwrap();
+        assert!(c.gui.workspace.is_none());
     }
 }

@@ -33,6 +33,39 @@ pub fn image_offset_nonzero(app: &DiffApp) -> bool {
     }
 }
 
+/// P65：标准编辑动作（剪切/复制/粘贴/删除/全选）当前是否有可作用的目标。
+///
+/// 设计稿规则（`menus.html` 画板②）：只读比较会话
+/// （Diff / Dir / Csv / Image / Media / Patch）这 5 项一律置灰；
+/// 可编辑会话（TextEdit / Merge）可用。本实现中：
+/// - **文本编辑会话**：内容区是 `egui::TextEdit`，有真实选区 → 可用
+///   （语法高亮预览模式为只读渲染，此时置灰）；
+/// - **文本合并会话**：左/右栏是「对齐后的绘制行」、输出栏按设计稿只读，
+///   暂无文本选区模型 → 仍置灰（缺口记录在 CHANGELOG P65）。
+pub fn clipboard_ops_enabled(app: &DiffApp) -> bool {
+    match app.tabs.get(app.active) {
+        Some(Tab::TextEdit(t)) => t.is_editable(),
+        _ => false,
+    }
+}
+
+// P65：窗口菜单「移动标签页到新窗口 / 合并所有窗口」的可用性。
+//
+// 设计稿规则：两者都在 `tabs.len() <= 1` 时置灰。此外：
+// - 「移动标签页到新窗口」要求当前标签有可重建的会话表示
+//   （文本编辑/补丁是未保存的内存态 → 置灰）；
+// - 「合并所有窗口」要求存在心跳有效的对端窗口（多进程模型，见 gui::windows）。
+
+/// 是否有可移动到新窗口的当前标签
+pub fn move_tab_enabled(app: &DiffApp) -> bool {
+    app.tabs.len() > 1 && app.movable_session().is_some()
+}
+
+/// 是否存在可合并的对端窗口
+pub fn merge_windows_enabled(app: &DiffApp) -> bool {
+    app.tabs.len() > 1 && app.peer_windows() > 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,5 +85,65 @@ mod tests {
         let mut app = DiffApp::new(super::super::Settings::default());
         app.add_tab(Tab::Image(super::super::imagetab::ImageTab::new("", "")));
         assert!(!image_offset_nonzero(&app), "偏移为 0 时应置灰");
+    }
+
+    // ---- P65：标准编辑动作可用性（只读比较会话置灰）----
+
+    #[test]
+    fn clipboard_ops_disabled_for_readonly_compare_sessions() {
+        for tab in [
+            Tab::Diff(super::super::difftab::DiffTab::new()),
+            Tab::Dir(super::super::dirtab::DirTab::new("", "")),
+            Tab::Csv(super::super::csvtab::CsvTab::new("", "")),
+            Tab::Image(super::super::imagetab::ImageTab::new("", "")),
+            Tab::Media(super::super::mediatab::MediaTab::new("", "")),
+            Tab::Patch(super::super::patchtab::PatchTab::new("")),
+        ] {
+            let mut app = DiffApp::new(super::super::Settings::default());
+            app.add_tab(tab);
+            assert!(
+                !clipboard_ops_enabled(&app),
+                "只读比较会话：剪切/复制/粘贴/删除/全选 应置灰"
+            );
+        }
+        let app = DiffApp::new(super::super::Settings::default());
+        assert!(!clipboard_ops_enabled(&app), "主页（无标签）应置灰");
+    }
+
+    #[test]
+    fn clipboard_ops_enabled_for_text_edit_session() {
+        let mut app = DiffApp::new(super::super::Settings::default());
+        app.add_tab(Tab::TextEdit(super::super::textedit::TextEditTab::new("")));
+        assert!(clipboard_ops_enabled(&app), "文本编辑会话：编辑项应可用");
+    }
+
+    // ---- P65：窗口菜单多窗口项（设计稿：单标签置灰）----
+
+    #[test]
+    fn window_items_need_more_than_one_tab() {
+        let mut app = DiffApp::new(super::super::Settings::default());
+        app.add_tab(Tab::Dir(super::super::dirtab::DirTab::new("/a", "/b")));
+        // 单标签：两项都置灰（设计稿 §grayedRules 窗口菜单）
+        assert!(!move_tab_enabled(&app), "单标签：移动标签页应置灰");
+        assert!(!merge_windows_enabled(&app), "单标签：合并所有窗口应置灰");
+        // 多标签 + 可重建会话：移动可用（合并仍需真实对端窗口）
+        app.add_tab(Tab::Dir(super::super::dirtab::DirTab::new("/c", "/d")));
+        assert!(move_tab_enabled(&app), "多标签且会话可重建：移动应可用");
+        assert!(
+            !merge_windows_enabled(&app),
+            "无对端窗口时：合并所有窗口保持置灰"
+        );
+    }
+
+    #[test]
+    fn move_tab_disabled_for_unsaved_editor_tabs() {
+        let mut app = DiffApp::new(super::super::Settings::default());
+        app.add_tab(Tab::TextEdit(super::super::textedit::TextEditTab::new("")));
+        app.add_tab(Tab::TextEdit(super::super::textedit::TextEditTab::new("")));
+        app.active = 1;
+        assert!(
+            !move_tab_enabled(&app),
+            "文本编辑会话是未保存内存态：不能搬到新窗口"
+        );
     }
 }
