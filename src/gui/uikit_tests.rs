@@ -3844,6 +3844,20 @@ fn edit_op_cut_then_render_keeps_content_in_sync() {
 
 // ---- P65：窗口菜单「移动标签页到新窗口 / 合并所有窗口」（注入启动器与注册表目录）----
 
+/// 启动器替身：只要求 `spawn` 成功，不真的开窗。
+///
+/// 路径必须按平台取：原先写死 `/bin/echo`，Windows 上 `spawn` 直接
+/// `os error 3（找不到路径）`，导致 windows-latest 的 Unit tests 整条红。
+fn stub_launcher() -> std::path::PathBuf {
+    if cfg!(windows) {
+        std::env::var_os("ComSpec")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("cmd.exe"))
+    } else {
+        std::path::PathBuf::from("/bin/echo")
+    }
+}
+
 /// 移动标签页到新窗口：写单标签工作空间 → 启动新窗口（测试用 /bin/echo 替身）→ 本窗口移除该标签
 #[test]
 fn move_tab_to_new_window_writes_workspace_and_closes_tab() {
@@ -3854,7 +3868,7 @@ fn move_tab_to_new_window_writes_workspace_and_closes_tab() {
     app.add_tab(super::Tab::Dir(DirTab::new(&l, &r)));
     app.add_tab(super::Tab::Dir(DirTab::new(&l, &r)));
     // 注入替身启动器：不真的开窗，但参数（gui --workspace <file>）照常传递
-    app.win_launcher = Some(std::path::PathBuf::from("/bin/echo"));
+    app.win_launcher = Some(stub_launcher());
     assert!(
         super::menu_rules::move_tab_enabled(&app),
         "两个可重建标签 → 移动项应可用"
@@ -3884,7 +3898,7 @@ fn move_tab_to_new_window_rejects_unsaved_editor() {
     )));
     app.add_tab(super::Tab::TextEdit(TextEditTab::new(&p)));
     app.active = 1;
-    app.win_launcher = Some(std::path::PathBuf::from("/bin/echo"));
+    app.win_launcher = Some(stub_launcher());
     let res = app.move_tab_to_new_window();
     assert!(res.is_err(), "文本编辑会话为未保存内存态，应拒绝移动");
     assert_eq!(app.tabs.len(), 2, "被拒绝时不应关闭标签");

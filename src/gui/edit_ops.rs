@@ -69,6 +69,10 @@ impl EditOp {
     }
 
     /// 原生菜单项 id（muda 事件回传用；与 `MenuCmd` 解析表一一对应）
+    ///
+    /// Linux 无原生菜单（`native_menu` 的平台块被 cfg 掉），此方法仅测试调用，
+    /// 故按本仓惯例在 Linux 目标上放行 dead_code（与 `menu_state_plan` 同处理）。
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     pub fn cmd_id(self) -> &'static str {
         match self {
             EditOp::Cut => "edit_cut",
