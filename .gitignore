@@ -6,8 +6,9 @@
 .bcr-gui.toml
 /dist
 
-# UI 截图分析临时产物
+# UI 截图分析临时产物（含对照图目录：均为本地产物，不入库）
 ui_review/
+ui_review_compare/
 
 # macOS 目录元数据
 .DS_Store
