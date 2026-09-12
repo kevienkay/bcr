@@ -327,13 +327,29 @@ impl DirTab {
         // P56-3：记录比较开始时间（状态栏显示耗时）
         self.compare_start = Some(std::time::Instant::now());
         let _handle = std::thread::spawn(move || {
-            let result = compare_dirs(
-                std::path::Path::new(&left),
-                std::path::Path::new(&right),
-                &filter,
-                compare_content,
-                true,
-            );
+            // 压缩包（zip://…）与远程后端不能用本地 Path 扫描：
+            // 任一侧是虚拟后端时改走 VFS 比较（与 CLI `compare` 子命令同一入口）。
+            let remote = crate::vfs::is_remote(&left) || crate::vfs::is_remote(&right);
+            let result = if remote {
+                match (crate::vfs::open(&left), crate::vfs::open(&right)) {
+                    (Ok(l), Ok(r)) => crate::compare::compare_vfs(
+                        l.as_ref(),
+                        r.as_ref(),
+                        &filter,
+                        compare_content,
+                        true,
+                    ),
+                    (Err(e), _) | (_, Err(e)) => Err(e),
+                }
+            } else {
+                compare_dirs(
+                    std::path::Path::new(&left),
+                    std::path::Path::new(&right),
+                    &filter,
+                    compare_content,
+                    true,
+                )
+            };
             // 取消后丢弃结果
             if cancel2.load(std::sync::atomic::Ordering::SeqCst) {
                 return;

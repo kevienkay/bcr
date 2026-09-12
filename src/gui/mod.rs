@@ -904,8 +904,15 @@ impl DiffApp {
                 }
             }
             (_, [a, b]) => {
-                // 两个文件：图片/CSV → 专用标签，否则文本对比
+                // 两个文件：压缩包/图片/CSV/媒体 → 专用标签，否则文本对比
                 let (a, b) = (a.clone(), b.clone());
+                if let (Some(la), Some(lb)) =
+                    (crate::vfs::archive_spec(&a), crate::vfs::archive_spec(&b))
+                {
+                    // BC 语义（设计稿 folder-compare 画板②）：两侧均为压缩包 → 文件夹会话
+                    self.add_tab(Tab::Dir(DirTab::new(&la, &lb)));
+                    return;
+                }
                 if crate::imgcmp::is_image_file(&a) && crate::imgcmp::is_image_file(&b) {
                     self.add_tab(Tab::Image(ImageTab::new(&a, &b)));
                 } else if crate::csvcmp::is_csv_file(&a) && crate::csvcmp::is_csv_file(&b) {
@@ -3980,10 +3987,22 @@ pub fn run(args: &GuiArgs) -> i32 {
                 let rp = std::path::Path::new(r);
                 if lp.is_dir() && rp.is_dir() {
                     app.add_tab(Tab::Dir(DirTab::new(l, r)));
+                } else if let (Some(ls), Some(rs)) =
+                    (crate::vfs::archive_spec(l), crate::vfs::archive_spec(r))
+                {
+                    // BC 语义（设计稿 folder-compare 画板②）：两侧均为压缩包 → 文件夹会话
+                    app.add_tab(Tab::Dir(DirTab::new(&ls, &rs)));
                 } else if crate::imgcmp::is_image_file(l) && crate::imgcmp::is_image_file(r) {
                     app.add_tab(Tab::Image(ImageTab::new(l, r)));
                 } else if crate::csvcmp::is_csv_file(l) && crate::csvcmp::is_csv_file(r) {
                     app.add_tab(Tab::Csv(CsvTab::new(l, r)));
+                } else if crate::mediacmp::read_media_info(l).format.is_some()
+                    && crate::mediacmp::read_media_info(r).format.is_some()
+                    && crate::gui::mediatab::is_media_file(l)
+                    && crate::gui::mediatab::is_media_file(r)
+                {
+                    // 与拖拽路径同一套判定：媒体文件对 → 媒体比较
+                    app.add_tab(Tab::Media(MediaTab::new(l, r)));
                 } else {
                     let mut t = DiffTab::new();
                     t.show_stats = show_stats;

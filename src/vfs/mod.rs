@@ -261,6 +261,35 @@ pub fn is_remote(spec: &str) -> bool {
         || spec.starts_with("dropbox://")
 }
 
+/// 本地归档路径 → vfs 规范（`zip://…` / `tar://…` / `7z://…`）。
+///
+/// BC 语义：压缩包以「文件夹会话」打开（设计稿 folder-compare 画板②
+/// 「压缩包以文件夹会话打开」），GUI 拿到的是普通本地路径，需先转成
+/// vfs 规范再交给 `DirTab`（`DirTab` 内部走 `vfs::open`，见 `dirtab.rs`）。
+///
+/// 只映射**有实现支撑**的格式：zip 走 `ZipVfs`，tar 系与 7z 走 `ArchiveVfs`。
+/// cab / iso 虽在后端里，但依赖外部工具或有额外语义，不在自动路由内。
+pub fn archive_spec(path: &str) -> Option<String> {
+    let lower = path.to_ascii_lowercase();
+    let scheme = if lower.ends_with(".zip") {
+        "zip"
+    } else if lower.ends_with(".7z") {
+        "7z"
+    } else if lower.ends_with(".tar")
+        || lower.ends_with(".tar.gz")
+        || lower.ends_with(".tgz")
+        || lower.ends_with(".tar.bz2")
+        || lower.ends_with(".tbz2")
+        || lower.ends_with(".tar.xz")
+        || lower.ends_with(".txz")
+    {
+        "tar"
+    } else {
+        return None;
+    };
+    Some(format!("{scheme}://{path}"))
+}
+
 /// 跨后端内容比对：流式计算两侧 blake3 哈希比较（内存 O(64KB)，支持超大文件）
 pub fn content_equal_vfs(left: &dyn Vfs, right: &dyn Vfs, rel: &str) -> io::Result<bool> {
     Ok(left.hash(rel)? == right.hash(rel)?)
@@ -308,6 +337,32 @@ mod tests {
         let map = v.scan(&f).unwrap();
         assert!(map.contains_key("a.txt"));
         assert_eq!(v.read("a.txt").unwrap(), b"zip-content");
+    }
+
+    #[test]
+    fn archive_spec_maps_supported_formats() {
+        assert_eq!(
+            archive_spec("/tmp/pkg.zip").as_deref(),
+            Some("zip:///tmp/pkg.zip")
+        );
+        assert_eq!(archive_spec("a.7z").as_deref(), Some("7z://a.7z"));
+        // tar 系（含压缩变体）与大小写不敏感
+        for p in [
+            "x.tar",
+            "x.tar.gz",
+            "x.tgz",
+            "x.tar.bz2",
+            "x.tbz2",
+            "x.tar.xz",
+            "x.txz",
+        ] {
+            assert_eq!(archive_spec(p).as_deref(), Some(&*format!("tar://{p}")));
+        }
+        assert_eq!(archive_spec("X.ZIP").as_deref(), Some("zip://X.ZIP"));
+        // 普通文件/目录不映射
+        assert!(archive_spec("a.txt").is_none());
+        assert!(archive_spec("/tmp/dir").is_none());
+        assert!(archive_spec("a.zip.txt").is_none());
     }
 
     #[test]
